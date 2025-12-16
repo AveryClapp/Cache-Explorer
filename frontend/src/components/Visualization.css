@@ -1,0 +1,120 @@
+.visualization {
+  flex: 1;
+  background-color: #252526;
+  color: #cccccc;
+  overflow-y: auto;
+  padding: 2rem;
+}
+
+.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #888;
+}
+
+.metrics {
+  margin-bottom: 2rem;
+}
+
+.metrics h2,
+.annotations h2 {
+  font-size: 1.25rem;
+  margin-bottom: 1rem;
+  color: #fff;
+}
+
+.metric {
+  margin-bottom: 1rem;
+}
+
+.metric-label {
+  font-weight: 600;
+  margin-right: 0.5rem;
+}
+
+.metric-value {
+  color: #4ec9b0;
+}
+
+.hot-functions {
+  list-style: none;
+  margin-top: 0.5rem;
+  padding-left: 1rem;
+}
+
+.hot-functions li {
+  margin-bottom: 0.25rem;
+  color: #dcdcaa;
+}
+
+.annotations {
+  margin-top: 2rem;
+}
+
+.annotation {
+  background-color: #1e1e1e;
+  border-left: 4px solid;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border-radius: 4px;
+}
+
+.annotation-good {
+  border-color: #4ec9b0;
+}
+
+.annotation-moderate {
+  border-color: #ce9178;
+}
+
+.annotation-bad {
+  border-color: #f48771;
+}
+
+.annotation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.annotation-line {
+  font-weight: 600;
+  color: #fff;
+}
+
+.annotation-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.annotation-badge.good {
+  background-color: rgba(78, 201, 176, 0.2);
+  color: #4ec9b0;
+}
+
+.annotation-badge.moderate {
+  background-color: rgba(206, 145, 120, 0.2);
+  color: #ce9178;
+}
+
+.annotation-badge.bad {
+  background-color: rgba(244, 135, 113, 0.2);
+  color: #f48771;
+}
+
+.annotation-message {
+  margin-bottom: 0.5rem;
+  line-height: 1.5;
+}
+
+.annotation-suggestion {
+  color: #dcdcaa;
+  font-style: italic;
+  font-size: 0.9rem;
+}

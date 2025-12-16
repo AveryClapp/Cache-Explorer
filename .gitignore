@@ -40,5 +40,15 @@
 # debug information files
 *.dwo
 
-CLAUDE.md
 /build/
+src/engine/build/
+compile_commands.json
+
+node_modules/
+dist/
+.vite/
+*.log
+
+.DS_Store
+.vscode/
+.idea/
