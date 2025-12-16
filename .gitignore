@@ -39,3 +39,6 @@
 
 # debug information files
 *.dwo
+
+CLAUDE.md
+/build/
