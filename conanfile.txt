@@ -1,0 +1,25 @@
+[requires]
+# HTTP server - HFT-aligned (zero-copy, low-level)
+boost/1.84.0
+
+# JSON parsing - HFT-grade performance
+simdjson/3.9.1
+
+# Note: LLVM is too large for Conan, install via system package manager:
+# macOS: brew install llvm
+# Linux: apt-get install llvm-17 llvm-17-dev clang-17
+
+[generators]
+CMakeDeps
+CMakeToolchain
+
+[options]
+boost/*:shared=False
+boost/*:header_only=False
+boost/*:without_test=True
+boost/*:without_python=True
+boost/*:without_locale=True
+boost/*:without_graph=True
+
+[layout]
+cmake_layout

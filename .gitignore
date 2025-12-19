@@ -43,6 +43,14 @@
 /build/
 src/engine/build/
 compile_commands.json
+cmake-build-*/
+
+# Conan artifacts
+conan.lock
+conaninfo.txt
+conanbuildinfo.*
+graph_info.json
+CMakeUserPresets.json
 
 node_modules/
 dist/

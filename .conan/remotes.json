@@ -1,0 +1,14 @@
+{
+  "remotes": [
+    {
+      "name": "company-artifactory",
+      "url": "https://artifactory.yourcompany.com/artifactory/api/conan/conan-local",
+      "verify_ssl": true
+    },
+    {
+      "name": "conancenter",
+      "url": "https://center.conan.io",
+      "verify_ssl": true
+    }
+  ]
+}
