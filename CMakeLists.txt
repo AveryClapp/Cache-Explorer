@@ -25,13 +25,14 @@ separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
 add_definitions(${LLVM_DEFINITIONS_LIST})
 
 # Include directories
-include_directories(${CMAKE_SOURCE_DIR}/src/include)
+include_directories(${CMAKE_SOURCE_DIR}/backend/cache-simulator)
 
 # Backend executable
 add_executable(cache_explorer_backend
-    src/engine/main.cpp
-    src/engine/analyzer.cpp
-    src/engine/model.cpp
+    backend/server/main.cpp
+    backend/cache-simulator/analyzer.cpp
+    backend/cache-simulator/model.cpp
+    backend/cache-simulator/generator.cpp
 )
 
 # Link libraries
