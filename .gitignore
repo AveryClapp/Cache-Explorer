@@ -62,3 +62,15 @@ dist/
 .idea/
 
 CLAUDE.md
+
+build/
+*.o
+*.a
+*.so
+CMakeCache.txt
+CMakeFiles/
+compile_commands.json
+.vscode/
+.idea/
+.DS_Store
+third_party/
