@@ -1,11 +1,25 @@
+# Build artifacts
+build/
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+*.app
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+compile_commands.json
+cmake-build-*/
+CMakeUserPresets.json
+
 # Prerequisites
 *.d
-
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
 
 # Precompiled Headers
 *.gch
@@ -16,61 +30,43 @@
 
 # Debugger Files
 *.pdb
+*.dwo
 
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
+# Compiled libraries
+*.slo
+*.lo
+*.obj
+*.lai
+*.la
+*.lib
 
 # Fortran module files
 *.mod
 *.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
-*.exe
-*.out
-*.app
-
-# debug information files
-*.dwo
-
-/build/
-src/engine/build/
-compile_commands.json
-cmake-build-*/
 
 # Conan artifacts
 conan.lock
 conaninfo.txt
 conanbuildinfo.*
 graph_info.json
-CMakeUserPresets.json
 
+# Node/Frontend
 node_modules/
 dist/
+.next/
 .vite/
 *.log
 
-.DS_Store
+# IDEs
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
 
-CLAUDE.md
-
-build/
-*.o
-*.a
-*.so
-CMakeCache.txt
-CMakeFiles/
-compile_commands.json
-.vscode/
-.idea/
+# OS
 .DS_Store
+Thumbs.db
+
+# Third-party
 third_party/

@@ -1,57 +1,39 @@
-cmake_minimum_required(VERSION 3.24)
-project(CacheExplorer CXX)
+cmake_minimum_required(VERSION 3.20)
+project(CacheExplorer VERSION 0.1.0 LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# HFT-inspired compiler flags
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -march=native -flto")
-    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
-endif()
-
-# Development flags
-set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g -fsanitize=address,undefined")
-
-# Find Conan-generated dependencies
-find_package(Boost REQUIRED COMPONENTS system)
-find_package(simdjson REQUIRED)
-
-# Find system LLVM (installed via brew/apt)
+# Find LLVM
 find_package(LLVM REQUIRED CONFIG)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+
 include_directories(${LLVM_INCLUDE_DIRS})
 separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
 add_definitions(${LLVM_DEFINITIONS_LIST})
 
-# Include directories
-include_directories(${CMAKE_SOURCE_DIR}/backend/cache-simulator)
-
-# Backend executable
-add_executable(cache_explorer_backend
-    backend/server/main.cpp
-    backend/cache-simulator/analyzer.cpp
-    backend/cache-simulator/model.cpp
-    backend/cache-simulator/generator.cpp
+llvm_map_components_to_libnames(llvm_libs
+    Core Support ExecutionEngine IRReader BitReader AsmParser
 )
 
-# Link libraries
-target_link_libraries(cache_explorer_backend
-    PRIVATE
-    Boost::system
-    simdjson::simdjson
-    LLVM
-)
+# Add subdirectories (only those that exist)
+if(EXISTS ${CMAKE_SOURCE_DIR}/backend/llvm-pass/CMakeLists.txt)
+    add_subdirectory(backend/llvm-pass)
+endif()
 
-# Compiler warnings (catch bugs early)
-target_compile_options(cache_explorer_backend PRIVATE
-    -Wall
-    -Wextra
-    -Wpedantic
-    -Werror
-)
+if(EXISTS ${CMAKE_SOURCE_DIR}/backend/runtime/CMakeLists.txt)
+    add_subdirectory(backend/runtime)
+endif()
 
-# Install target
-install(TARGETS cache_explorer_backend
-    RUNTIME DESTINATION bin
-)
+if(EXISTS ${CMAKE_SOURCE_DIR}/backend/cache-simulator/CMakeLists.txt)
+    add_subdirectory(backend/cache-simulator)
+endif()
+
+if(EXISTS ${CMAKE_SOURCE_DIR}/backend/server/CMakeLists.txt)
+    add_subdirectory(backend/server)
+endif()
+
+if(EXISTS ${CMAKE_SOURCE_DIR}/backend/cli/CMakeLists.txt)
+    add_subdirectory(backend/cli)
+endif()

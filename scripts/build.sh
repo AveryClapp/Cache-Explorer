@@ -10,14 +10,17 @@ mkdir -p build
 cd build
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
-    cmake ../backend -G Ninja -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+    cmake .. -G Ninja -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
         -DLLVM_DIR="$(brew --prefix llvm)/lib/cmake/llvm"
 else
-    cmake ../backend -G Ninja -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
+    cmake .. -G Ninja -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
 fi
 
 ninja
 
 echo ""
 echo "=== Build Complete ==="
+echo "LLVM Pass: build/backend/llvm-pass/CacheProfiler.so (if built)"
+echo "Server: build/backend/server/cache-explorer-server (if built)"
+echo "CLI: build/backend/cli/cache-explorer (if built)"
 
