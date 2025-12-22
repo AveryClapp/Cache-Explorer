@@ -78,6 +78,31 @@ cd cache-explorer
 ./scripts/build.sh
 ```
 
+## Testing Programs (Manual)
+
+**Quick test with the LLVM pass:**
+
+```bash
+cd backend/llvm-pass
+
+# 1. Build the pass
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build
+
+# 2. Create a test program (test.c)
+# 3. Instrument and run:
+clang -O1 -g test.c -S -emit-llvm -o test.ll
+opt -load-pass-plugin=./build/CacheProfiler.so -passes="function(cache-explorer)" test.ll -S -o test_instrumented.ll
+llc test_instrumented.ll -o test_instrumented.s
+clang test_instrumented.s ../runtime/cache-explorer-rt.c -o test_final
+./test_final
+```
+
+**Output shows memory accesses:**
+```
+STORE: 0x16d62a438 [4 bytes] at test.c:8
+LOAD: 0x16d62a43c [4 bytes] at test.c:13
+```
+
 ## Architecture
 
 **Project structure:**
