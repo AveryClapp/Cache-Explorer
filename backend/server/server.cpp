@@ -1,5 +1,7 @@
+#include <boost/asio.hpp>
 #include <boost/beast.hpp>
 #include <iostream>
+#include <thread>
 
 namespace beast = boost::beast;
 namespace http = beast::http;
@@ -17,7 +19,7 @@ void handle_http(tcp::socket socket) {
   http::write(socket, res);
 }
 
-void handle_websocket(tcp::socket socket) {
+void handle_websocket(websocket::stream<tcp::socket> socket) {
   websocket::stream<tcp::socket> ws{std::move(socket)};
   ws.accept();
 
