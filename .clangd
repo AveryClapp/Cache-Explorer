@@ -1,2 +1,15 @@
 CompileFlags:
-  Add: [-std=c++20]
+  Add:
+    - "-std=c++20"
+    - "-I/opt/homebrew/include"
+    - "-I/opt/homebrew/Cellar/llvm/21.1.8/include"
+  CompilationDatabase: build/
+
+Diagnostics:
+  UnusedIncludes: Strict
+  MissingIncludes: Strict
+
+InlayHints:
+  Enabled: Yes
+  ParameterNames: Yes
+  DeducedTypes: Yes

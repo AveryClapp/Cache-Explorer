@@ -3,17 +3,15 @@ cmake_minimum_required(VERSION 3.20)
 # Web server - orchestrates compilation, execution, and visualization
 # Only builds if you create main.cpp
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp)
-    add_executable(cache-explorer-server main.cpp)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/server.cpp)
+    add_executable(cache-explorer-server server.cpp)
 
     target_link_libraries(cache-explorer-server PRIVATE
         ${llvm_libs}
     )
 
-    # Link with pass, runtime, and simulator when they exist
-    if(TARGET CacheProfiler)
-        target_link_libraries(cache-explorer-server PRIVATE CacheProfiler)
-    endif()
+    # Link with runtime and simulator when they exist
+    # NOTE: CacheProfiler is a plugin (MODULE), not linkable - loaded by Clang at runtime
 
     if(TARGET cache-profiler-rt)
         target_link_libraries(cache-explorer-server PRIVATE cache-profiler-rt)
@@ -29,6 +27,6 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp)
 
     message(STATUS "Building web server: cache-explorer-server")
 else()
-    message(STATUS "Skipping web server - no main.cpp yet")
+    message(STATUS "Skipping web server - no server.cpp yet")
 endif()
 
