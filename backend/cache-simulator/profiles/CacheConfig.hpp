@@ -16,9 +16,9 @@ struct CacheConfig {
 
   bool is_valid() const {
     if (kb_size == 0 || associativity <= 0 || line_size <= 0) return false;
-    if ((line_size & (line_size - 1)) != 0) return false; // must be power of 2
+    if ((line_size & (line_size - 1)) != 0) return false;
     if (num_sets() <= 0) return false;
-    if ((num_sets() & (num_sets() - 1)) != 0) return false; // must be power of 2
+    if ((num_sets() & (num_sets() - 1)) != 0) return false;
     return true;
   }
 

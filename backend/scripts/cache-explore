@@ -1,0 +1,125 @@
+#!/bin/bash
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BACKEND_DIR="$(dirname "$SCRIPT_DIR")"
+
+PASS="$BACKEND_DIR/llvm-pass/build/CacheProfiler.so"
+RUNTIME="$BACKEND_DIR/runtime/build/libcache-explorer-rt.a"
+RUNTIME_INC="$BACKEND_DIR/runtime"
+CACHE_SIM="$BACKEND_DIR/cache-simulator/build/cache-sim"
+
+CONFIG="intel"
+VERBOSE=""
+KEEP_BINARY=""
+JSON_OUTPUT=""
+INPUT_FILE=""
+
+usage() {
+  echo "Usage: cache-explore [options] <source.c>"
+  echo ""
+  echo "Compile, instrument, run, and analyze cache behavior."
+  echo ""
+  echo "Options:"
+  echo "  --config <name>   Cache config: intel|amd|apple|educational (default: intel)"
+  echo "  --verbose         Show each cache event"
+  echo "  --keep            Keep the instrumented binary"
+  echo "  --json            Output JSON format"
+  echo "  -O<level>         Optimization level (default: -O0)"
+  echo "  --help            Show this help"
+  echo ""
+  echo "Example:"
+  echo "  cache-explore matrix.c --config educational --verbose"
+}
+
+OPT_LEVEL="-O0"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --config) CONFIG="$2"; shift 2 ;;
+    --verbose) VERBOSE="--verbose"; shift ;;
+    --keep) KEEP_BINARY="1"; shift ;;
+    --json) JSON_OUTPUT="--json"; shift ;;
+    -O*) OPT_LEVEL="$1"; shift ;;
+    --help) usage; exit 0 ;;
+    -*) echo "Unknown option: $1"; usage; exit 1 ;;
+    *) INPUT_FILE="$1"; shift ;;
+  esac
+done
+
+if [[ -z "$INPUT_FILE" ]]; then
+  echo "Error: No input file specified"
+  usage
+  exit 1
+fi
+
+if [[ ! -f "$INPUT_FILE" ]]; then
+  echo "Error: File not found: $INPUT_FILE"
+  exit 1
+fi
+
+# Check dependencies
+if [[ ! -f "$PASS" ]]; then
+  echo "Error: LLVM pass not built. Run: ./scripts/build.sh"
+  exit 1
+fi
+
+if [[ ! -f "$RUNTIME" ]]; then
+  echo "Error: Runtime not built. Run: ./scripts/build.sh"
+  exit 1
+fi
+
+if [[ ! -f "$CACHE_SIM" ]]; then
+  echo "Error: Cache simulator not built. Run: ./scripts/build.sh"
+  exit 1
+fi
+
+BASENAME=$(basename "$INPUT_FILE" .c)
+BINARY="/tmp/cache-explore-$$-$BASENAME"
+
+if [[ -z "$JSON_OUTPUT" ]]; then
+  echo "=== Cache Explorer ===" >&2
+  echo "Input: $INPUT_FILE" >&2
+  echo "Config: $CONFIG" >&2
+  echo "" >&2
+  echo "[1/3] Compiling with instrumentation..." >&2
+fi
+
+EXTRA_FLAGS=""
+if [[ "$OPT_LEVEL" == "-O0" ]]; then
+  EXTRA_FLAGS="-Xclang -disable-O0-optnone"
+fi
+
+if ! clang $OPT_LEVEL $EXTRA_FLAGS -g -fpass-plugin="$PASS" \
+  -I"$RUNTIME_INC" \
+  "$INPUT_FILE" \
+  "$RUNTIME" \
+  -o "$BINARY" 2>/tmp/cache-explore-compile-err-$$; then
+  if [[ -n "$JSON_OUTPUT" ]]; then
+    echo "{\"error\": \"Compilation failed\", \"details\": \"$(cat /tmp/cache-explore-compile-err-$$ | tr '\n' ' ' | sed 's/"/\\"/g')\"}"
+  else
+    echo "Compilation failed:" >&2
+    cat /tmp/cache-explore-compile-err-$$ >&2
+  fi
+  rm -f /tmp/cache-explore-compile-err-$$
+  exit 1
+fi
+rm -f /tmp/cache-explore-compile-err-$$
+
+if [[ -z "$JSON_OUTPUT" ]]; then
+  echo "[2/3] Running instrumented binary..." >&2
+fi
+
+TRACE=$("$BINARY" 2>&1) || true
+
+if [[ -z "$JSON_OUTPUT" ]]; then
+  echo "[3/3] Analyzing cache behavior..." >&2
+  echo ""
+fi
+
+echo "$TRACE" | "$CACHE_SIM" --config "$CONFIG" $VERBOSE $JSON_OUTPUT
+
+# Cleanup
+if [[ -z "$KEEP_BINARY" ]]; then
+  rm -f "$BINARY"
+fi

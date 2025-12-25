@@ -1,0 +1,203 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #1e1e1e;
+  color: #d4d4d4;
+}
+
+header {
+  padding: 1rem 2rem;
+  background: #252526;
+  border-bottom: 1px solid #3c3c3c;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: #fff;
+}
+
+header p {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+  color: #808080;
+}
+
+.main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.editor-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #3c3c3c;
+}
+
+.toolbar {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: #252526;
+  border-bottom: 1px solid #3c3c3c;
+}
+
+.toolbar select,
+.toolbar button {
+  padding: 0.5rem 1rem;
+  border: 1px solid #3c3c3c;
+  border-radius: 4px;
+  background: #3c3c3c;
+  color: #d4d4d4;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.toolbar select:hover,
+.toolbar button:hover {
+  background: #4c4c4c;
+}
+
+.toolbar button {
+  background: #0e639c;
+  border-color: #1177bb;
+}
+
+.toolbar button:hover {
+  background: #1177bb;
+}
+
+.toolbar button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.results-panel {
+  width: 400px;
+  overflow-y: auto;
+  padding: 1rem;
+  background: #252526;
+}
+
+.error {
+  background: #5a1d1d;
+  border: 1px solid #be1100;
+  border-radius: 4px;
+  padding: 1rem;
+}
+
+.error h3 {
+  margin: 0 0 0.5rem;
+  color: #f48771;
+}
+
+.error pre {
+  margin: 0;
+  white-space: pre-wrap;
+  font-size: 0.8rem;
+}
+
+.summary h3,
+.hot-lines h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  color: #fff;
+}
+
+.meta {
+  font-size: 0.8rem;
+  color: #808080;
+  margin-bottom: 1rem;
+}
+
+.levels {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.level-stats {
+  background: #2d2d2d;
+  border-radius: 4px;
+  padding: 0.75rem;
+}
+
+.level-name {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: #569cd6;
+}
+
+.stat {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.875rem;
+  padding: 0.15rem 0;
+}
+
+.stat .label {
+  color: #808080;
+}
+
+.stat .value.good {
+  color: #4ec9b0;
+}
+
+.stat .value.ok {
+  color: #dcdcaa;
+}
+
+.stat .value.bad {
+  color: #f48771;
+}
+
+.hot-lines {
+  margin-top: 1.5rem;
+}
+
+.hot-lines table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.hot-lines th,
+.hot-lines td {
+  padding: 0.5rem;
+  text-align: left;
+  border-bottom: 1px solid #3c3c3c;
+}
+
+.hot-lines th {
+  color: #808080;
+  font-weight: 500;
+}
+
+.hot-lines .location {
+  font-family: monospace;
+  color: #9cdcfe;
+}
+
+.hot-lines .good {
+  color: #4ec9b0;
+}
+
+.hot-lines .ok {
+  color: #dcdcaa;
+}
+
+.hot-lines .bad {
+  color: #f48771;
+}
+
+.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: #808080;
+  font-style: italic;
+}

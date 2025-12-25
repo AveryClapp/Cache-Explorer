@@ -14,10 +14,6 @@ uint64_t make_address(uint64_t tag, uint64_t index, uint64_t offset = 0) {
   return (tag << 8) | (index << 6) | offset;
 }
 
-//=============================================================================
-// Config Validation Tests
-//=============================================================================
-
 void test_config_validation() {
   // Valid config
   CacheConfig valid = {.kb_size = 1, .associativity = 4, .line_size = 64};
@@ -54,10 +50,6 @@ void test_invalid_config_throws() {
 
   std::cout << "[PASS] test_invalid_config_throws\n";
 }
-
-//=============================================================================
-// Address Parsing Tests
-//=============================================================================
 
 void test_address_parsing() {
   CacheConfig cfg = make_test_config();
@@ -116,10 +108,6 @@ void test_large_address() {
 
   std::cout << "[PASS] test_large_address\n";
 }
-
-//=============================================================================
-// Basic Hit/Miss Tests
-//=============================================================================
 
 void test_basic_hit_miss() {
   CacheConfig cfg = make_test_config();
@@ -186,10 +174,6 @@ void test_different_sets() {
 
   std::cout << "[PASS] test_different_sets\n";
 }
-
-//=============================================================================
-// LRU Eviction Tests
-//=============================================================================
 
 void test_lru_eviction() {
   CacheConfig cfg = make_test_config();
@@ -284,10 +268,6 @@ void test_sequential_evictions() {
 
   std::cout << "[PASS] test_sequential_evictions\n";
 }
-
-//=============================================================================
-// Dirty Bit Tests
-//=============================================================================
 
 void test_dirty_tracking() {
   CacheConfig cfg = make_test_config();
@@ -396,10 +376,6 @@ void test_clean_eviction_no_address() {
   std::cout << "[PASS] test_clean_eviction_no_address\n";
 }
 
-//=============================================================================
-// Utility Method Tests
-//=============================================================================
-
 void test_is_present() {
   CacheConfig cfg = make_test_config();
   CacheLevel cache(cfg);
@@ -498,10 +474,6 @@ void test_install_evicts_dirty() {
 
   std::cout << "[PASS] test_install_evicts_dirty\n";
 }
-
-//=============================================================================
-// Main
-//=============================================================================
 
 int main() {
   std::cout << "Running CacheLevel tests...\n\n";

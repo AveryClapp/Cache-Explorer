@@ -21,11 +21,9 @@ InstrumentationData prepareInstrumentation(Module *M, LLVMContext &Ctx,
                                            Type *AccessType) {
   IRBuilder<> Builder(&I);
 
-  // Get size of memory access
   uint64_t Size = M->getDataLayout().getTypeStoreSize(AccessType);
   Value *SizeVal = ConstantInt::get(Type::getInt32Ty(Ctx), Size);
 
-  // Get file and line from debug info
   const DebugLoc &DbgLoc = I.getDebugLoc();
   Value *File;
   Value *Line;
@@ -48,7 +46,6 @@ PreservedAnalyses CacheExplorerPass::run(Function &F,
   Module *M = F.getParent();
   LLVMContext &Ctx = M->getContext();
 
-  // Declare runtime tracking functions if they don't exist
   Function *TagLoad = M->getFunction("__tag_mem_load");
   if (!TagLoad) {
     FunctionType *LoadFnTy =
@@ -71,25 +68,21 @@ PreservedAnalyses CacheExplorerPass::run(Function &F,
                                 "__tag_mem_store", M);
   }
 
-  // Instrument all load and store instructions
   for (auto &BB : F) {
     for (auto &I : BB) {
+      // Skip compiler-generated code without source location
+      if (!I.getDebugLoc())
+        continue;
 
-      // Handle LOAD instructions
       if (auto *LI = dyn_cast<LoadInst>(&I)) {
         auto data = prepareInstrumentation(M, Ctx, I, LI->getPointerOperand(),
                                            LI->getType());
-
         IRBuilder<> Builder(&I);
         Builder.CreateCall(TagLoad,
                            {data.Addr, data.SizeVal, data.File, data.Line});
-      }
-
-      // Handle STORE instructions
-      else if (auto *SI = dyn_cast<StoreInst>(&I)) {
+      } else if (auto *SI = dyn_cast<StoreInst>(&I)) {
         auto data = prepareInstrumentation(M, Ctx, I, SI->getPointerOperand(),
                                            SI->getValueOperand()->getType());
-
         IRBuilder<> Builder(&I);
         Builder.CreateCall(TagStore,
                            {data.Addr, data.SizeVal, data.File, data.Line});
@@ -100,11 +93,14 @@ PreservedAnalyses CacheExplorerPass::run(Function &F,
   return PreservedAnalyses::none();
 }
 
-// Register this pass with the LLVM Pass Manager
 extern "C" LLVM_ATTRIBUTE_WEAK ::llvm::PassPluginLibraryInfo
 llvmGetPassPluginInfo() {
   return {LLVM_PLUGIN_API_VERSION, "CacheExplorer", LLVM_VERSION_STRING,
           [](PassBuilder &PB) {
+            PB.registerOptimizerLastEPCallback(
+                [](ModulePassManager &MPM, OptimizationLevel, ThinOrFullLTOPhase) {
+                  MPM.addPass(createModuleToFunctionPassAdaptor(CacheExplorerPass()));
+                });
             PB.registerPipelineParsingCallback(
                 [](StringRef Name, FunctionPassManager &FPM,
                    ArrayRef<PassBuilder::PipelineElement>) {
