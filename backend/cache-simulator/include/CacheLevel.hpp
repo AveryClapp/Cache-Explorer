@@ -3,6 +3,7 @@
 #include "../profiles/CacheConfig.hpp"
 #include "CacheLine.hpp"
 #include "EvictionPolicy.hpp"
+#include <stdexcept>
 #include <vector>
 
 enum class AccessResult { Hit, Miss, MissWithEviction };
@@ -32,6 +33,9 @@ public:
   CacheLevel() = delete;
 
   explicit CacheLevel(const CacheConfig &cfg) : config(cfg) {
+    if (!config.is_valid()) {
+      throw std::invalid_argument("Invalid cache configuration");
+    }
     int num_sets = config.num_sets();
     sets.resize(num_sets, std::vector<CacheLine>(config.associativity));
   }
@@ -45,7 +49,7 @@ public:
   EvictionPolicy getEvictionPolicy() const { return config.policy; }
 
   AccessInfo access(uint64_t address, bool is_write);
-  void install(uint64_t address, bool is_dirty = false);
+  AccessInfo install(uint64_t address, bool is_dirty = false);
   bool is_present(uint64_t address) const;
   void invalidate(uint64_t address);
 

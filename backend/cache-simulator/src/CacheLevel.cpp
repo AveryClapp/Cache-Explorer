@@ -53,26 +53,36 @@ AccessInfo CacheLevel::access(uint64_t address, bool is_write) {
   return {result, was_dirty, evicted_addr};
 }
 
-void CacheLevel::install(uint64_t address, bool is_dirty) {
+AccessInfo CacheLevel::install(uint64_t address, bool is_dirty) {
   uint64_t tag = config.get_tag(address);
   uint64_t index = config.get_index(address);
   std::vector<CacheLine> &set = sets[index];
 
   access_time++;
 
+  // Check if already present
   for (int way = 0; way < config.associativity; way++) {
     if (set[way].valid && set[way].tag == tag) {
       set[way].lru_time = access_time;
       set[way].dirty |= is_dirty;
-      return;
+      return {AccessResult::Hit, false, 0};
     }
   }
 
+  // Need to install - find victim
   int victim = find_victim(set);
+  bool was_dirty = set[victim].valid && set[victim].dirty;
+  uint64_t evicted_addr =
+      was_dirty ? rebuild_address(set[victim].tag, index) : 0;
+
   set[victim].tag = tag;
   set[victim].valid = true;
   set[victim].dirty = is_dirty;
   set[victim].lru_time = access_time;
+
+  AccessResult result =
+      was_dirty ? AccessResult::MissWithEviction : AccessResult::Miss;
+  return {result, was_dirty, evicted_addr};
 }
 
 bool CacheLevel::is_present(uint64_t address) const {
