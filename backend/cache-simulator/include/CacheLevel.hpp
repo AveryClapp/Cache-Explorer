@@ -1,26 +1,53 @@
 #pragma once
 
+#include "../profiles/CacheConfig.hpp"
 #include "CacheLine.hpp"
 #include "EvictionPolicy.hpp"
 #include <vector>
 
+enum class AccessResult { Hit, Miss, MissWithEviction };
+
+struct AccessInfo {
+  AccessResult result;
+  bool was_dirty;
+  uint64_t evicted_address;
+};
+
+struct AddressComponents {
+  int offset;
+  int index;
+  int tag;
+};
+
 class CacheLevel {
 private:
-  int kb_size;
-  int set_assoc;
-  int num_sets;
-  EvictionPolicy eviction_policy;
+  CacheConfig config;
   std::vector<std::vector<CacheLine>> sets;
+  uint64_t access_time = 0;
+
+  int find_victim(const std::vector<CacheLine>& set) const;
+  uint64_t rebuild_address(uint64_t tag, uint64_t index) const;
 
 public:
   CacheLevel() = delete;
-  CacheLevel(int kb_size, int associativity, int line_size = 64,
-             EvictionPolicy eviction_policy = EvictionPolicy::PLRU)
-      : kb_size(kb_size), set_assoc(associativity),
-        num_sets(kb_size * 1024 / (line_size * associativity)) {
-    sets.resize(num_sets, std::vector<CacheLine>(set_assoc));
+
+  explicit CacheLevel(const CacheConfig &cfg) : config(cfg) {
+    int num_sets = config.num_sets();
+    sets.resize(num_sets, std::vector<CacheLine>(config.associativity));
   }
-  int getNumSets() const { return num_sets; }
-  int getAssociativity() const { return set_assoc; }
-  int getSizeKB() const { return kb_size; }
+
+  const CacheConfig &getConfig() const { return config; }
+
+  int getNumSets() const { return config.num_sets(); }
+  int getAssociativity() const { return config.associativity; }
+  int getSizeKB() const { return config.kb_size; }
+  int getLineSize() const { return config.line_size; }
+  EvictionPolicy getEvictionPolicy() const { return config.policy; }
+
+  AccessInfo access(uint64_t address, bool is_write);
+  void install(uint64_t address, bool is_dirty = false);
+  bool is_present(uint64_t address) const;
+  void invalidate(uint64_t address);
+
+  bool is_dirty(uint64_t address) const;
 };

@@ -7,9 +7,6 @@ private:
   bool is_inst;
 
 public:
-  L1Cache(int kb_size, int associativity, int line_size = 64,
-          EvictionPolicy eviction_policy = EvictionPolicy::PLRU,
-          bool is_inst = false)
-      : CacheLevel(kb_size, associativity, line_size, eviction_policy),
-        is_inst(is_inst) {};
+  explicit L1Cache(const CacheConfig &cfg, bool is_inst = false)
+      : CacheLevel(cfg), is_inst(is_inst) {};
 };
