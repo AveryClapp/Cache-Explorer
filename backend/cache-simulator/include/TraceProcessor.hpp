@@ -34,13 +34,19 @@ public:
   }
 
   void process(const TraceEvent &event) {
+    // Get the appropriate line size based on event type
+    uint32_t line_size = event.is_icache
+                             ? cache.get_l1i().getLineSize()
+                             : cache.get_l1d().getLineSize();
+
     auto lines = split_access_to_cache_lines(
-        {event.address, event.size, event.is_write},
-        cache.get_l1d().getLineSize());
+        {event.address, event.size, event.is_write}, line_size);
 
     for (const auto &line_access : lines) {
       SystemAccessResult result;
-      if (event.is_write) {
+      if (event.is_icache) {
+        result = cache.fetch(line_access.line_address);
+      } else if (event.is_write) {
         result = cache.write(line_access.line_address);
       } else {
         result = cache.read(line_access.line_address);

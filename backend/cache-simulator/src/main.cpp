@@ -1,4 +1,5 @@
 #include "../include/MultiCoreTraceProcessor.hpp"
+#include "../include/OptimizationSuggester.hpp"
 #include "../include/TraceProcessor.hpp"
 #include "../profiles/HardwarePresets.hpp"
 #include <iomanip>
@@ -9,11 +10,19 @@
 void print_usage(const char *prog) {
   std::cerr << "Usage: " << prog << " [options]\n"
             << "Options:\n"
-            << "  --config <name>   intel|amd|apple|educational (default: intel)\n"
+            << "  --config <name>   intel|amd|apple|educational|custom (default: intel)\n"
             << "  --cores <n>       Number of cores to simulate (default: auto)\n"
             << "  --verbose         Print each cache event\n"
             << "  --json            Output JSON format\n"
-            << "  --help            Show this help\n";
+            << "  --help            Show this help\n"
+            << "\nCustom cache config (use with --config custom):\n"
+            << "  --l1-size <bytes>   L1 cache size (default: 32768)\n"
+            << "  --l1-assoc <n>      L1 associativity (default: 8)\n"
+            << "  --l1-line <bytes>   Cache line size (default: 64)\n"
+            << "  --l2-size <bytes>   L2 cache size (default: 262144)\n"
+            << "  --l2-assoc <n>      L2 associativity (default: 8)\n"
+            << "  --l3-size <bytes>   L3 cache size (default: 8388608)\n"
+            << "  --l3-assoc <n>      L3 associativity (default: 16)\n";
 }
 
 CacheHierarchyConfig get_config(const std::string &name) {
@@ -39,6 +48,10 @@ int main(int argc, char *argv[]) {
   bool verbose = false;
   bool json_output = false;
 
+  // Custom config defaults
+  size_t l1_size = 32768, l2_size = 262144, l3_size = 8388608;
+  int l1_assoc = 8, l2_assoc = 8, l3_assoc = 16, line_size = 64;
+
   for (int i = 1; i < argc; i++) {
     std::string arg = argv[i];
     if (arg == "--config" && i + 1 < argc) {
@@ -49,6 +62,20 @@ int main(int argc, char *argv[]) {
       verbose = true;
     } else if (arg == "--json") {
       json_output = true;
+    } else if (arg == "--l1-size" && i + 1 < argc) {
+      l1_size = std::stoull(argv[++i]);
+    } else if (arg == "--l1-assoc" && i + 1 < argc) {
+      l1_assoc = std::stoi(argv[++i]);
+    } else if (arg == "--l1-line" && i + 1 < argc) {
+      line_size = std::stoi(argv[++i]);
+    } else if (arg == "--l2-size" && i + 1 < argc) {
+      l2_size = std::stoull(argv[++i]);
+    } else if (arg == "--l2-assoc" && i + 1 < argc) {
+      l2_assoc = std::stoi(argv[++i]);
+    } else if (arg == "--l3-size" && i + 1 < argc) {
+      l3_size = std::stoull(argv[++i]);
+    } else if (arg == "--l3-assoc" && i + 1 < argc) {
+      l3_assoc = std::stoi(argv[++i]);
     } else if (arg == "--help") {
       print_usage(argv[0]);
       return 0;
@@ -73,7 +100,14 @@ int main(int argc, char *argv[]) {
     num_cores = multicore ? std::min((int)threads.size(), 8) : 1;
   }
 
-  auto cfg = get_config(config_name);
+  CacheHierarchyConfig cfg;
+  if (config_name == "custom") {
+    cfg.l1_data = {l1_size, l1_assoc, line_size, EvictionPolicy::LRU};
+    cfg.l2 = {l2_size, l2_assoc, line_size, EvictionPolicy::LRU};
+    cfg.l3 = {l3_size, l3_assoc, line_size, EvictionPolicy::LRU};
+  } else {
+    cfg = get_config(config_name);
+  }
 
   if (multicore) {
     // Multi-core mode with coherence and false sharing detection
@@ -149,8 +183,47 @@ int main(int argc, char *argv[]) {
       for (size_t i = 0; i < false_sharing.size(); i++) {
         const auto &fs = false_sharing[i];
         std::cout << "    {\"cacheLineAddr\": \"0x" << std::hex << fs.cache_line_addr << std::dec << "\", "
-                  << "\"accessCount\": " << fs.accesses.size() << "}"
+                  << "\"accessCount\": " << fs.accesses.size() << ", "
+                  << "\"accesses\": [";
+
+        // Group accesses by thread for cleaner output
+        std::unordered_map<uint32_t, std::vector<const FalseSharingEvent*>> by_thread;
+        for (const auto &a : fs.accesses) {
+          by_thread[a.thread_id].push_back(&a);
+        }
+
+        bool first_thread = true;
+        for (const auto &[tid, thread_accesses] : by_thread) {
+          if (!first_thread) std::cout << ", ";
+          first_thread = false;
+
+          // Show first access per thread
+          const auto &a = *thread_accesses[0];
+          std::cout << "{\"threadId\": " << tid << ", "
+                    << "\"offset\": " << a.byte_offset << ", "
+                    << "\"isWrite\": " << (a.is_write ? "true" : "false") << ", "
+                    << "\"file\": \"" << escape_json(a.file) << "\", "
+                    << "\"line\": " << a.line << ", "
+                    << "\"count\": " << thread_accesses.size() << "}";
+        }
+        std::cout << "]}"
                   << (i + 1 < false_sharing.size() ? ",\n" : "\n");
+      }
+      std::cout << "  ],\n";
+
+      // Generate optimization suggestions
+      auto suggestions = OptimizationSuggester::analyze(
+          false_sharing, hot, stats, cfg.l1_data.line_size);
+
+      std::cout << "  \"suggestions\": [\n";
+      for (size_t i = 0; i < suggestions.size(); i++) {
+        const auto &s = suggestions[i];
+        std::cout << "    {\"type\": \"" << s.type << "\", "
+                  << "\"severity\": \"" << s.severity << "\", "
+                  << "\"location\": \"" << escape_json(s.location) << "\", "
+                  << "\"message\": \"" << escape_json(s.message) << "\", "
+                  << "\"fix\": \"" << escape_json(s.fix) << "\"}"
+                  << (i + 1 < suggestions.size() ? ",\n" : "\n");
       }
       std::cout << "  ]\n";
       std::cout << "}\n";
@@ -267,6 +340,7 @@ int main(int argc, char *argv[]) {
       };
 
       json_level("l1d", stats.l1d, false);
+      json_level("l1i", stats.l1i, false);
       json_level("l2", stats.l2, false);
       json_level("l3", stats.l3, true);
 
@@ -283,6 +357,22 @@ int main(int argc, char *argv[]) {
                   << (i + 1 < hot.size() ? ",\n" : "\n");
       }
 
+      std::cout << "  ],\n";
+
+      // Generate optimization suggestions for single-core
+      auto suggestions =
+          OptimizationSuggester::analyze(hot, stats.l1d, stats.l2);
+
+      std::cout << "  \"suggestions\": [\n";
+      for (size_t i = 0; i < suggestions.size(); i++) {
+        const auto &s = suggestions[i];
+        std::cout << "    {\"type\": \"" << s.type << "\", "
+                  << "\"severity\": \"" << s.severity << "\", "
+                  << "\"location\": \"" << escape_json(s.location) << "\", "
+                  << "\"message\": \"" << escape_json(s.message) << "\", "
+                  << "\"fix\": \"" << escape_json(s.fix) << "\"}"
+                  << (i + 1 < suggestions.size() ? ",\n" : "\n");
+      }
       std::cout << "  ]\n";
       std::cout << "}\n";
     } else {
@@ -303,6 +393,7 @@ int main(int argc, char *argv[]) {
       };
 
       print_level("L1d", stats.l1d);
+      print_level("L1i", stats.l1i);
       print_level("L2", stats.l2);
       print_level("L3", stats.l3);
 

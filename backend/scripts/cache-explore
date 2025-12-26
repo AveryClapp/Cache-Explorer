@@ -14,6 +14,7 @@ VERBOSE=""
 KEEP_BINARY=""
 JSON_OUTPUT=""
 INPUT_FILE=""
+DEFINES=()  # Array of -D flags
 
 usage() {
   echo "Usage: cache-explore [options] <source.c>"
@@ -26,10 +27,12 @@ usage() {
   echo "  --keep            Keep the instrumented binary"
   echo "  --json            Output JSON format"
   echo "  -O<level>         Optimization level (default: -O0)"
+  echo "  -D <name>=<val>   Preprocessor define (can be used multiple times)"
   echo "  --help            Show this help"
   echo ""
   echo "Example:"
   echo "  cache-explore matrix.c --config educational --verbose"
+  echo "  cache-explore matrix.c -D N=1000 -D DEBUG"
 }
 
 OPT_LEVEL="-O0"
@@ -41,6 +44,8 @@ while [[ $# -gt 0 ]]; do
     --keep) KEEP_BINARY="1"; shift ;;
     --json) JSON_OUTPUT="--json"; shift ;;
     -O*) OPT_LEVEL="$1"; shift ;;
+    -D) DEFINES+=("-D$2"); shift 2 ;;
+    -D*) DEFINES+=("$1"); shift ;;
     --help) usage; exit 0 ;;
     -*) echo "Unknown option: $1"; usage; exit 1 ;;
     *) INPUT_FILE="$1"; shift ;;
@@ -92,6 +97,7 @@ fi
 
 if ! clang $OPT_LEVEL $EXTRA_FLAGS -g -fpass-plugin="$PASS" \
   -I"$RUNTIME_INC" \
+  "${DEFINES[@]}" \
   "$INPUT_FILE" \
   "$RUNTIME" \
   -o "$BINARY" 2>/tmp/cache-explore-compile-err-$$; then

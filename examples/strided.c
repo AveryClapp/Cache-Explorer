@@ -3,8 +3,12 @@
 
 #include <stdio.h>
 
+#ifndef N
 #define N 1000
+#endif
+#ifndef STRIDE
 #define STRIDE 16  // Skip 16 ints = 64 bytes = 1 cache line
+#endif
 
 int main() {
   int arr[N * STRIDE];

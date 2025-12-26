@@ -80,6 +80,13 @@ void __tag_mem_store(void *addr, uint32_t size, const char *file, uint32_t line)
   emit_event((uint64_t)addr | EVENT_STORE_FLAG, size, file, line);
 }
 
+void __tag_bb_entry(void *bb_addr, uint32_t instr_count, const char *file, uint32_t line) {
+  // Estimate instruction fetch size: instr_count * 4 bytes (average x86-64 instruction)
+  // The address is the basic block address, size is the fetch size
+  uint32_t fetch_size = instr_count * 4;
+  emit_event((uint64_t)bb_addr | EVENT_ICACHE_FLAG, fetch_size, file, line);
+}
+
 void __cache_explorer_init(void) {
   if (atomic_exchange(&initialized, 1))
     return;
@@ -119,11 +126,13 @@ void __cache_explorer_flush(void) {
       CacheEvent *e = &ring_buffer.events[tail];
       uint64_t addr = e->address & EVENT_ADDR_MASK;
       int is_store = (e->address & EVENT_STORE_FLAG) != 0;
+      int is_icache = (e->address & EVENT_ICACHE_FLAG) != 0;
       uint32_t file_id = e->line >> 20;
       uint32_t line = e->line & 0xFFFFF;
 
       const char *file = (file_id < file_table.count) ? file_table.names[file_id] : "?";
-      dprintf(output_fd, "%c 0x%llx %u %s:%u T%u\n", is_store ? 'S' : 'L',
+      char event_type = is_icache ? 'I' : (is_store ? 'S' : 'L');
+      dprintf(output_fd, "%c 0x%llx %u %s:%u T%u\n", event_type,
               (unsigned long long)addr, e->size, file, line, e->thread_id);
 
       tail = (tail + 1) & BUFFER_MASK;

@@ -7,6 +7,7 @@
 
 struct TraceEvent {
   bool is_write;
+  bool is_icache;  // true for instruction fetch events
   uint64_t address;
   uint32_t size;
   std::string file;
@@ -40,6 +41,7 @@ inline std::optional<TraceEvent> parse_trace_event(const std::string &line) {
 
   TraceEvent event;
   event.is_write = (type == 'S' || type == 's');
+  event.is_icache = (type == 'I' || type == 'i');
   event.address = addr;
   event.size = size;
   event.thread_id = 1;

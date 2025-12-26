@@ -82,10 +82,19 @@ WARNING: False sharing detected
   Consider: Add 60 bytes padding between fields
 ```
 
+### Medium Priority
+
+- [ ] Inline source annotations (Monaco decorations for hit/miss lines)
+- [ ] Program input handling (stdin, command-line args via #define injection)
+- [ ] Hardware validation (compare against `perf stat`, cachegrind)
+
 ### Low Priority / Future
 
-- [ ] L1 Instruction cache (via basic block instrumentation - 1 call per BB, not per instruction)
-- [ ] Hardware validation (compare against `perf stat`)
+- [ ] L1 Instruction cache simulation
+  - Approach: Basic block instrumentation (1 call per BB instead of per instruction)
+  - Track instruction fetch patterns
+  - Model I-cache misses separately from D-cache
+  - Challenge: Need to count instructions per BB at compile time
 - [ ] TLB simulation
 - [ ] GCC support via Intel Pin
 - [ ] ARM cache models
