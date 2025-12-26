@@ -84,13 +84,22 @@ interface CacheResult {
   suggestions?: OptimizationSuggestion[]
 }
 
-const EXAMPLES: Record<string, { name: string; code: string; description: string }> = {
+type Language = 'c' | 'cpp' | 'rust'
+
+interface Example {
+  name: string
+  code: string
+  description: string
+  language: Language
+}
+
+const EXAMPLES: Record<string, Example> = {
   matrix: {
     name: 'Matrix Traversal',
-    description: 'Compare row-major vs column-major access',
+    description: 'Row-major vs column-major',
+    language: 'c',
     code: `#include <stdio.h>
 
-// Use the -D button to override N without editing code
 #ifndef N
 #define N 100
 #endif
@@ -98,20 +107,16 @@ const EXAMPLES: Record<string, { name: string; code: string; description: string
 int main() {
     int matrix[N][N];
 
-    // Row-major access (cache-friendly)
-    for (int i = 0; i < N; i++) {
-        for (int j = 0; j < N; j++) {
+    // Row-major (cache-friendly)
+    for (int i = 0; i < N; i++)
+        for (int j = 0; j < N; j++)
             matrix[i][j] = i + j;
-        }
-    }
 
-    // Column-major access (cache-unfriendly)
+    // Column-major (cache-unfriendly)
     int sum = 0;
-    for (int j = 0; j < N; j++) {
-        for (int i = 0; i < N; i++) {
+    for (int j = 0; j < N; j++)
+        for (int i = 0; i < N; i++)
             sum += matrix[i][j];
-        }
-    }
 
     printf("Sum: %d\\n", sum);
     return 0;
@@ -121,6 +126,7 @@ int main() {
   sequential: {
     name: 'Sequential Access',
     description: 'Best case - spatial locality',
+    language: 'c',
     code: `#include <stdio.h>
 
 #ifndef N
@@ -131,15 +137,8 @@ int main() {
     int arr[N];
     int sum = 0;
 
-    // Sequential writes - 1 miss per cache line (16 ints)
-    for (int i = 0; i < N; i++) {
-        arr[i] = i;
-    }
-
-    // Sequential reads - should hit cache
-    for (int i = 0; i < N; i++) {
-        sum += arr[i];
-    }
+    for (int i = 0; i < N; i++) arr[i] = i;
+    for (int i = 0; i < N; i++) sum += arr[i];
 
     printf("Sum: %d\\n", sum);
     return 0;
@@ -149,6 +148,7 @@ int main() {
   strided: {
     name: 'Strided Access',
     description: 'Worst case - skips cache lines',
+    language: 'c',
     code: `#include <stdio.h>
 
 #ifndef N
@@ -156,22 +156,16 @@ int main() {
 #endif
 
 #ifndef STRIDE
-#define STRIDE 16  // Skip 16 ints = 64 bytes = 1 cache line
+#define STRIDE 16  // 64 bytes = 1 cache line
 #endif
 
 int main() {
     int arr[N * STRIDE];
+    for (int i = 0; i < N * STRIDE; i++) arr[i] = i;
+
     int sum = 0;
-
-    // Initialize
-    for (int i = 0; i < N * STRIDE; i++) {
-        arr[i] = i;
-    }
-
-    // Strided access - misses on every access!
-    for (int i = 0; i < N; i++) {
-        sum += arr[i * STRIDE];
-    }
+    for (int i = 0; i < N; i++)
+        sum += arr[i * STRIDE];  // Miss every time!
 
     printf("Sum: %d\\n", sum);
     return 0;
@@ -180,7 +174,8 @@ int main() {
   },
   blocking: {
     name: 'Cache Blocking',
-    description: 'Optimization technique for matrix multiply',
+    description: 'Matrix multiply optimization',
+    language: 'c',
     code: `#include <stdio.h>
 
 #ifndef N
@@ -188,38 +183,30 @@ int main() {
 #endif
 
 #ifndef BLOCK
-#define BLOCK 8  // Block size - try different values!
+#define BLOCK 8
 #endif
 
 int A[N][N], B[N][N], C[N][N];
 
 int main() {
-    // Initialize matrices
-    for (int i = 0; i < N; i++) {
+    for (int i = 0; i < N; i++)
         for (int j = 0; j < N; j++) {
             A[i][j] = i + j;
             B[i][j] = i - j;
             C[i][j] = 0;
         }
-    }
 
-    // Blocked matrix multiply - better cache utilization
-    for (int ii = 0; ii < N; ii += BLOCK) {
-        for (int jj = 0; jj < N; jj += BLOCK) {
-            for (int kk = 0; kk < N; kk += BLOCK) {
-                // Multiply block
-                for (int i = ii; i < ii + BLOCK && i < N; i++) {
+    // Blocked multiply - better cache reuse
+    for (int ii = 0; ii < N; ii += BLOCK)
+        for (int jj = 0; jj < N; jj += BLOCK)
+            for (int kk = 0; kk < N; kk += BLOCK)
+                for (int i = ii; i < ii + BLOCK && i < N; i++)
                     for (int j = jj; j < jj + BLOCK && j < N; j++) {
                         int sum = C[i][j];
-                        for (int k = kk; k < kk + BLOCK && k < N; k++) {
+                        for (int k = kk; k < kk + BLOCK && k < N; k++)
                             sum += A[i][k] * B[k][j];
-                        }
                         C[i][j] = sum;
                     }
-                }
-            }
-        }
-    }
 
     printf("C[0][0] = %d\\n", C[0][0]);
     return 0;
@@ -228,7 +215,8 @@ int main() {
   },
   linkedlist: {
     name: 'Linked List',
-    description: 'Pointer chasing - poor spatial locality',
+    description: 'Pointer chasing - poor locality',
+    language: 'c',
     code: `#include <stdio.h>
 #include <stdlib.h>
 
@@ -236,34 +224,142 @@ int main() {
 #define N 1000
 #endif
 
-struct Node {
-    int value;
-    struct Node* next;
-};
+struct Node { int value; struct Node* next; };
 
 int main() {
-    // Allocate nodes (may not be contiguous!)
     struct Node* head = NULL;
     for (int i = 0; i < N; i++) {
-        struct Node* node = malloc(sizeof(struct Node));
-        node->value = i;
-        node->next = head;
-        head = node;
+        struct Node* n = malloc(sizeof(struct Node));
+        n->value = i;
+        n->next = head;
+        head = n;
     }
 
-    // Traverse - each node may be in different cache line
     int sum = 0;
-    struct Node* curr = head;
-    while (curr) {
-        sum += curr->value;
-        curr = curr->next;
-    }
+    for (struct Node* c = head; c; c = c->next)
+        sum += c->value;
 
     printf("Sum: %d\\n", sum);
     return 0;
 }
 `
-  }
+  },
+  // C++ Examples (using C-compatible constructs for ARM64 compatibility)
+  cpp_struct: {
+    name: 'C++ Structs',
+    description: 'Struct layout and cache behavior',
+    language: 'cpp',
+    code: `#ifndef N
+#define N 1000
+#endif
+
+struct Point {
+    float x, y, z;  // 12 bytes
+};
+
+Point points[N];
+float result;
+
+int main() {
+    // Initialize - sequential access
+    for (int i = 0; i < N; i++) {
+        points[i].x = (float)i;
+        points[i].y = (float)i * 2;
+        points[i].z = (float)i * 3;
+    }
+
+    // Access pattern matters for cache
+    float total = 0;
+    for (int i = 0; i < N; i++) {
+        Point& p = points[i];
+        total += p.x * p.x + p.y * p.y + p.z * p.z;
+    }
+
+    result = total;
+    return 0;
+}
+`
+  },
+  aos_vs_soa: {
+    name: 'AoS vs SoA',
+    description: 'Array of Structs vs Struct of Arrays',
+    language: 'cpp',
+    code: `#ifndef N
+#define N 1000
+#endif
+
+// Array of Structs - poor cache use for single field
+struct ParticleAoS {
+    float x, y, z;
+    float vx, vy, vz;
+    float mass;
+    int id;  // 32 bytes total
+};
+
+// Struct of Arrays - better for field-wise access
+float soa_x[N], soa_y[N], soa_z[N];
+float soa_mass[N];
+
+ParticleAoS aos[N];
+float result_aos, result_soa;
+
+int main() {
+    // Initialize both layouts
+    for (int i = 0; i < N; i++) {
+        aos[i].x = aos[i].y = aos[i].z = (float)i;
+        aos[i].mass = 1.0f;
+        soa_x[i] = soa_y[i] = soa_z[i] = (float)i;
+        soa_mass[i] = 1.0f;
+    }
+
+    // AoS: loads 32 bytes per element, uses only 4
+    float sum_aos = 0;
+    for (int i = 0; i < N; i++)
+        sum_aos += aos[i].x;
+
+    // SoA: contiguous x values, perfect cache use
+    float sum_soa = 0;
+    for (int i = 0; i < N; i++)
+        sum_soa += soa_x[i];
+
+    result_aos = sum_aos;
+    result_soa = sum_soa;
+    return 0;
+}
+`
+  },
+  cpp_template: {
+    name: 'Template Array',
+    description: 'Simple template with cache behavior',
+    language: 'cpp',
+    code: `#ifndef N
+#define N 1000
+#endif
+
+template<typename T, int Size>
+struct Array {
+    T data[Size];
+    T& operator[](int i) { return data[i]; }
+};
+
+Array<int, N> arr;
+int result;
+
+int main() {
+    // Write sequentially
+    for (int i = 0; i < N; i++)
+        arr[i] = i;
+
+    // Read sequentially - cache friendly
+    int sum = 0;
+    for (int i = 0; i < N; i++)
+        sum += arr[i];
+
+    result = sum;
+    return 0;
+}
+`
+  },
 }
 
 const EXAMPLE_CODE = EXAMPLES.matrix.code
@@ -272,70 +368,97 @@ function formatPercent(rate: number): string {
   return (rate * 100).toFixed(1) + '%'
 }
 
-function LevelStats({ name, stats }: { name: string; stats: CacheStats }) {
-  const hitClass = stats.hitRate > 0.9 ? 'good' : stats.hitRate > 0.7 ? 'ok' : 'bad'
+function CacheBar({ result }: { result: CacheResult }) {
+  const l1d = result.levels.l1d || result.levels.l1!
+  const l1i = result.levels.l1i
+  const l2 = result.levels.l2
+  const l3 = result.levels.l3
+
+  const getClass = (rate: number) => rate > 0.95 ? 'excellent' : rate > 0.9 ? 'good' : rate > 0.7 ? 'ok' : 'bad'
+
   return (
-    <div className="level-stats">
-      <div className="level-name">{name}</div>
-      <div className="stat">
-        <span className="label">Hits:</span>
-        <span className="value">{stats.hits.toLocaleString()}</span>
+    <div className="cache-bar">
+      <div className={`cache-item ${getClass(l1d.hitRate)}`}>
+        <span className="cache-label">L1d</span>
+        <span className="cache-rate">{formatPercent(l1d.hitRate)}</span>
       </div>
-      <div className="stat">
-        <span className="label">Misses:</span>
-        <span className="value">{stats.misses.toLocaleString()}</span>
+      {l1i && (
+        <div className={`cache-item ${getClass(l1i.hitRate)}`}>
+          <span className="cache-label">L1i</span>
+          <span className="cache-rate">{formatPercent(l1i.hitRate)}</span>
+        </div>
+      )}
+      <div className={`cache-item ${getClass(l2.hitRate)}`}>
+        <span className="cache-label">L2</span>
+        <span className="cache-rate">{formatPercent(l2.hitRate)}</span>
       </div>
-      <div className="stat">
-        <span className="label">Hit Rate:</span>
-        <span className={`value ${hitClass}`}>{formatPercent(stats.hitRate)}</span>
+      <div className={`cache-item ${getClass(l3.hitRate)}`}>
+        <span className="cache-label">L3</span>
+        <span className="cache-rate">{formatPercent(l3.hitRate)}</span>
+      </div>
+      <div className="cache-item events">
+        <span className="cache-label">Events</span>
+        <span className="cache-rate">{result.events.toLocaleString()}</span>
+      </div>
+    </div>
+  )
+}
+
+function LevelDetail({ name, stats }: { name: string; stats: CacheStats }) {
+  return (
+    <div className="level-detail">
+      <div className="level-header">{name}</div>
+      <div className="level-row">
+        <span>Hits</span>
+        <span className="mono">{stats.hits.toLocaleString()}</span>
+      </div>
+      <div className="level-row">
+        <span>Misses</span>
+        <span className="mono">{stats.misses.toLocaleString()}</span>
+      </div>
+      <div className="level-row">
+        <span>Hit Rate</span>
+        <span className={`mono ${stats.hitRate > 0.9 ? 'good' : stats.hitRate > 0.7 ? 'ok' : 'bad'}`}>
+          {formatPercent(stats.hitRate)}
+        </span>
       </div>
     </div>
   )
 }
 
 function ErrorDisplay({ error }: { error: ErrorResult }) {
-  const errorTitles: Record<string, string> = {
+  const titles: Record<string, string> = {
     compile_error: 'Compilation Failed',
     linker_error: 'Linker Error',
     runtime_error: 'Runtime Error',
-    timeout: 'Execution Timeout',
+    timeout: 'Timeout',
     unknown_error: 'Error',
     validation_error: 'Invalid Request',
     server_error: 'Server Error'
   }
 
   return (
-    <div className="error">
-      <h3>{errorTitles[error.type] || 'Error'}</h3>
+    <div className="error-box">
+      <div className="error-title">{titles[error.type] || 'Error'}</div>
       {error.summary && <div className="error-summary">{error.summary}</div>}
-      {error.errors && error.errors.length > 0 && (
-        <div className="compile-errors">
-          {error.errors.map((e, i) => (
-            <div key={i} className={`compile-error ${e.severity}`}>
-              <span className="location">Line {e.line}:{e.column}</span>
-              <span className="severity">{e.severity}</span>
-              <span className="message">{e.message}</span>
-            </div>
-          ))}
+      {error.errors?.map((e, i) => (
+        <div key={i} className={`error-item ${e.severity}`}>
+          <span className="error-loc">Line {e.line}:{e.column}</span>
+          <span className="error-msg">{e.message}</span>
         </div>
-      )}
-      {error.message && <pre className="error-message">{error.message}</pre>}
-      {error.raw && <pre className="error-raw">{error.raw}</pre>}
-      {error.error && <pre className="error-message">{error.error}</pre>}
+      ))}
+      {error.message && <pre className="error-pre">{error.message}</pre>}
+      {error.raw && <pre className="error-pre">{error.raw}</pre>}
+      {error.error && <pre className="error-pre">{error.error}</pre>}
     </div>
   )
 }
 
 type Stage = 'idle' | 'connecting' | 'preparing' | 'compiling' | 'running' | 'processing' | 'done'
 
-const stageLabels: Record<Stage, string> = {
-  idle: 'Run Analysis',
-  connecting: 'Connecting...',
-  preparing: 'Preparing...',
-  compiling: 'Compiling...',
-  running: 'Running...',
-  processing: 'Processing...',
-  done: 'Done'
+interface DefineEntry {
+  name: string
+  value: string
 }
 
 interface CustomCacheConfig {
@@ -348,11 +471,6 @@ interface CustomCacheConfig {
   l3Assoc: number
 }
 
-interface DefineEntry {
-  name: string
-  value: string
-}
-
 const defaultCustomConfig: CustomCacheConfig = {
   l1Size: 32768,
   l1Assoc: 8,
@@ -363,25 +481,16 @@ const defaultCustomConfig: CustomCacheConfig = {
   l3Assoc: 16
 }
 
-// URL State encoding/decoding for shareable links
 interface ShareableState {
   code: string
   config: string
   optLevel: string
+  language?: Language
   defines?: DefineEntry[]
-  panes?: PaneState[]
-}
-
-interface PaneState {
-  id: string
-  code: string
-  config: string
-  result: CacheResult | null
 }
 
 function encodeState(state: ShareableState): string {
-  const json = JSON.stringify(state)
-  return LZString.compressToEncodedURIComponent(json)
+  return LZString.compressToEncodedURIComponent(JSON.stringify(state))
 }
 
 function decodeState(encoded: string): ShareableState | null {
@@ -394,51 +503,65 @@ function decodeState(encoded: string): ShareableState | null {
   }
 }
 
-function getStateFromURL(): ShareableState | null {
-  const hash = window.location.hash.slice(1)
-  if (!hash) return null
-  return decodeState(hash)
-}
-
-function updateURL(state: ShareableState) {
-  const encoded = encodeState(state)
-  const newURL = `${window.location.pathname}#${encoded}`
-  window.history.replaceState(null, '', newURL)
-}
-
 function App() {
   const [code, setCode] = useState(EXAMPLE_CODE)
+  const [language, setLanguage] = useState<Language>('c')
   const [config, setConfig] = useState('educational')
   const [optLevel, setOptLevel] = useState('-O0')
   const [result, setResult] = useState<CacheResult | null>(null)
-  const [compareResult, setCompareResult] = useState<CacheResult | null>(null)
-  const [compareConfig, setCompareConfig] = useState<string | null>(null)
   const [stage, setStage] = useState<Stage>('idle')
   const [error, setError] = useState<ErrorResult | null>(null)
   const [customConfig, setCustomConfig] = useState<CustomCacheConfig>(defaultCustomConfig)
-  const [showCustom, setShowCustom] = useState(false)
   const [defines, setDefines] = useState<DefineEntry[]>([])
-  const [showDefines, setShowDefines] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [showOptions, setShowOptions] = useState(false)
+  const [showDetails, setShowDetails] = useState(false)
   const [diffMode, setDiffMode] = useState(false)
   const [baselineCode, setBaselineCode] = useState<string | null>(null)
-  const [splitMode, setSplitMode] = useState(false)
-  const [code2, setCode2] = useState(EXAMPLE_CODE)
-  const [config2, setConfig2] = useState('intel')
-  const [result2, setResult2] = useState<CacheResult | null>(null)
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const monacoRef = useRef<Monaco | null>(null)
   const decorationsRef = useRef<string[]>([])
+  const optionsRef = useRef<HTMLDivElement>(null)
+
+  // Monaco language mapping
+  const monacoLanguage = language === 'cpp' ? 'cpp' : language === 'rust' ? 'rust' : 'c'
+
+  // Close options dropdown when clicking outside
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (optionsRef.current && !optionsRef.current.contains(e.target as Node)) {
+        setShowOptions(false)
+      }
+    }
+    document.addEventListener('click', handleClick)
+    return () => document.removeEventListener('click', handleClick)
+  }, [])
 
   const handleEditorMount = (editor: editor.IStandaloneCodeEditor, monaco: Monaco) => {
     editorRef.current = editor
     monacoRef.current = monaco
   }
 
-  // Load state from URL on mount (supports both hash and short links)
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + Enter to run
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault()
+        if (stage === 'idle') runAnalysis()
+      }
+      // Escape to close dropdown
+      if (e.key === 'Escape') {
+        setShowOptions(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  })
+
+  // Load state from URL on mount
   useEffect(() => {
     const loadState = async () => {
-      // Check for short link first
       const params = new URLSearchParams(window.location.search)
       const shortId = params.get('s')
 
@@ -450,106 +573,61 @@ function App() {
             setCode(data.state.code)
             setConfig(data.state.config)
             setOptLevel(data.state.optLevel)
-            if (data.state.defines) {
-              setDefines(data.state.defines)
-              if (data.state.defines.length > 0) setShowDefines(true)
-            }
-            if (data.state.config === 'custom') setShowCustom(true)
+            if (data.state.language) setLanguage(data.state.language)
+            if (data.state.defines) setDefines(data.state.defines)
             return
           }
-        } catch {
-          // Fall through to hash-based loading
-        }
+        } catch { /* ignore */ }
       }
 
-      // Fall back to hash-based state
-      const savedState = getStateFromURL()
-      if (savedState) {
-        setCode(savedState.code)
-        setConfig(savedState.config)
-        setOptLevel(savedState.optLevel)
-        if (savedState.defines) {
-          setDefines(savedState.defines)
-          if (savedState.defines.length > 0) setShowDefines(true)
+      const hash = window.location.hash.slice(1)
+      if (hash) {
+        const saved = decodeState(hash)
+        if (saved) {
+          setCode(saved.code)
+          setConfig(saved.config)
+          setOptLevel(saved.optLevel)
+          if (saved.language) setLanguage(saved.language)
+          if (saved.defines) setDefines(saved.defines)
         }
-        if (savedState.config === 'custom') setShowCustom(true)
       }
     }
-
     loadState()
   }, [])
 
-  // Update URL when state changes (debounced)
+  // Update URL when state changes
   useEffect(() => {
     const timer = setTimeout(() => {
-      updateURL({ code, config, optLevel, defines })
+      const encoded = encodeState({ code, config, optLevel, language, defines })
+      window.history.replaceState(null, '', `${window.location.pathname}#${encoded}`)
     }, 500)
     return () => clearTimeout(timer)
-  }, [code, config, optLevel, defines])
+  }, [code, config, optLevel, language, defines])
 
-  // Share button handler - creates short link
   const handleShare = useCallback(async () => {
     try {
-      const state = { code, config, optLevel, defines }
       const response = await fetch('http://localhost:3001/shorten', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ state }),
+        body: JSON.stringify({ state: { code, config, optLevel, language, defines } }),
       })
       const data = await response.json()
       if (data.id) {
-        const shortUrl = `${window.location.origin}${window.location.pathname}?s=${data.id}`
-        await navigator.clipboard.writeText(shortUrl)
-        setCopied(true)
-        setTimeout(() => setCopied(false), 2000)
-      }
-    } catch {
-      // Fallback to long URL
-      const url = window.location.href
-      try {
+        const url = `${window.location.origin}${window.location.pathname}?s=${data.id}`
         await navigator.clipboard.writeText(url)
         setCopied(true)
         setTimeout(() => setCopied(false), 2000)
-      } catch {
-        const input = document.createElement('input')
-        input.value = url
-        document.body.appendChild(input)
-        input.select()
-        document.execCommand('copy')
-        document.body.removeChild(input)
-        setCopied(true)
-        setTimeout(() => setCopied(false), 2000)
-      }
-    }
-  }, [code, config, optLevel, defines])
-
-  // Run comparison with a different config
-  const runCompare = useCallback(async (cmpConfig: string) => {
-    try {
-      const payload: Record<string, unknown> = { code, config: cmpConfig, optLevel }
-      if (defines.length > 0) {
-        payload.defines = defines.filter(d => d.name.trim())
-      }
-      const response = await fetch('http://localhost:3001/compile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      const data = await response.json()
-      if (data.levels) {
-        setCompareResult(data as CacheResult)
       }
     } catch {
-      // Ignore comparison errors
-    } finally {
-      setStage('idle')
+      await navigator.clipboard.writeText(window.location.href)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
     }
-  }, [code, optLevel, defines])
+  }, [code, config, optLevel, language, defines])
 
-  // Apply decorations when results change
+  // Apply decorations
   useEffect(() => {
     if (!editorRef.current || !monacoRef.current || !result) {
-      // Clear decorations if no result
       if (editorRef.current && decorationsRef.current.length > 0) {
         decorationsRef.current = editorRef.current.deltaDecorations(decorationsRef.current, [])
       }
@@ -563,22 +641,14 @@ function App() {
 
     const decorations: editor.IModelDeltaDecoration[] = []
 
-    // Create decorations for hot lines
     for (const line of result.hotLines) {
-      // Extract just the filename from the path
       const fileName = line.file.split('/').pop() || line.file
-
-      // Only decorate if this looks like user code (not system headers)
       if (fileName.includes('cache-explorer') || fileName.startsWith('/tmp/')) {
         const lineNum = line.line
         if (lineNum > 0 && lineNum <= model.getLineCount()) {
-          // Determine color based on miss rate
-          let className = 'line-annotation-good'
-          if (line.missRate > 0.5) {
-            className = 'line-annotation-bad'
-          } else if (line.missRate > 0.2) {
-            className = 'line-annotation-warn'
-          }
+          let className = 'line-good'
+          if (line.missRate > 0.5) className = 'line-bad'
+          else if (line.missRate > 0.2) className = 'line-warn'
 
           decorations.push({
             range: new monaco.Range(lineNum, 1, lineNum, 1),
@@ -598,43 +668,26 @@ function App() {
     decorationsRef.current = editor.deltaDecorations(decorationsRef.current, decorations)
   }, [result])
 
-  const handleConfigChange = (newConfig: string) => {
-    setConfig(newConfig)
-    setShowCustom(newConfig === 'custom')
-  }
-
   const runAnalysis = () => {
     setStage('connecting')
     setError(null)
     setResult(null)
-    setCompareResult(null)
 
     const ws = new WebSocket('ws://localhost:3001/ws')
 
     ws.onopen = () => {
-      const payload: Record<string, unknown> = { code, config, optLevel }
-      if (config === 'custom') {
-        payload.customConfig = customConfig
-      }
-      if (defines.length > 0) {
-        payload.defines = defines.filter(d => d.name.trim())
-      }
+      const payload: Record<string, unknown> = { code, config, optLevel, language }
+      if (config === 'custom') payload.customConfig = customConfig
+      if (defines.length > 0) payload.defines = defines.filter(d => d.name.trim())
       ws.send(JSON.stringify(payload))
     }
 
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data)
-
-      if (msg.type === 'status') {
-        setStage(msg.stage as Stage)
-      } else if (msg.type === 'result') {
+      if (msg.type === 'status') setStage(msg.stage as Stage)
+      else if (msg.type === 'result') {
         setResult(msg.data as CacheResult)
-        // If compare config is set, run comparison
-        if (compareConfig) {
-          runCompare(compareConfig)
-        } else {
-          setStage('idle')
-        }
+        setStage('idle')
         ws.close()
       } else if (msg.type === 'error') {
         setError(msg as ErrorResult)
@@ -643,47 +696,28 @@ function App() {
       }
     }
 
-    ws.onerror = () => {
-      // Fallback to HTTP if WebSocket fails
-      fallbackToHttp()
-    }
-
-    ws.onclose = (event) => {
-      if (!event.wasClean && stage !== 'idle') {
-        fallbackToHttp()
-      }
-    }
+    ws.onerror = () => fallbackToHttp()
+    ws.onclose = (e) => { if (!e.wasClean && stage !== 'idle') fallbackToHttp() }
 
     const fallbackToHttp = async () => {
       setStage('compiling')
       try {
-        const payload: Record<string, unknown> = { code, config, optLevel }
-        if (config === 'custom') {
-          payload.customConfig = customConfig
-        }
-        if (defines.length > 0) {
-          payload.defines = defines.filter(d => d.name.trim())
-        }
+        const payload: Record<string, unknown> = { code, config, optLevel, language }
+        if (config === 'custom') payload.customConfig = customConfig
+        if (defines.length > 0) payload.defines = defines.filter(d => d.name.trim())
+
         const response = await fetch('http://localhost:3001/compile', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         })
-
         const data = await response.json()
 
-        if (data.type || data.error) {
-          setError(data as ErrorResult)
-        } else if (data.levels) {
-          setResult(data as CacheResult)
-        } else {
-          setError({ type: 'unknown_error', message: 'Unexpected response format' })
-        }
+        if (data.type || data.error) setError(data as ErrorResult)
+        else if (data.levels) setResult(data as CacheResult)
+        else setError({ type: 'unknown_error', message: 'Unexpected response' })
       } catch (err) {
-        setError({
-          type: 'server_error',
-          message: err instanceof Error ? err.message : 'Failed to connect to server'
-        })
+        setError({ type: 'server_error', message: err instanceof Error ? err.message : 'Connection failed' })
       } finally {
         setStage('idle')
       }
@@ -691,373 +725,242 @@ function App() {
   }
 
   const isLoading = stage !== 'idle'
+  const stageText = { idle: '', connecting: 'Connecting...', preparing: 'Preparing...', compiling: 'Compiling...', running: 'Running...', processing: 'Processing...', done: '' }
 
   return (
     <div className="app">
-      <header>
-        <h1>Cache Explorer</h1>
-        <p>Visualize how your code interacts with CPU caches</p>
-      </header>
-
-      <div className={`main ${splitMode ? 'split-mode' : ''}`}>
-        <div className={`editor-panel ${splitMode ? 'split-pane' : ''}`}>
-          <div className="toolbar">
-            <select
-              onChange={(e) => {
-                if (e.target.value && EXAMPLES[e.target.value]) {
-                  setCode(EXAMPLES[e.target.value].code)
-                  e.target.value = ''  // Reset to show "Examples" again
-                }
-              }}
-              defaultValue=""
-              className="examples-select"
-            >
-              <option value="" disabled>Examples</option>
-              {Object.entries(EXAMPLES).map(([key, ex]) => (
+      <div className="toolbar">
+        <div className="toolbar-left">
+          <select
+            className="select-example"
+            onChange={(e) => {
+              const ex = EXAMPLES[e.target.value]
+              if (ex) {
+                setCode(ex.code)
+                setLanguage(ex.language)
+                e.target.value = ''
+              }
+            }}
+            defaultValue=""
+          >
+            <option value="" disabled>Examples</option>
+            <optgroup label="C">
+              {Object.entries(EXAMPLES).filter(([_, ex]) => ex.language === 'c').map(([key, ex]) => (
                 <option key={key} value={key}>{ex.name}</option>
               ))}
-            </select>
-            <select value={config} onChange={(e) => handleConfigChange(e.target.value)}>
-              <option value="educational">Educational (small caches)</option>
-              <option value="intel">Intel 12th Gen</option>
-              <option value="amd">AMD Zen 4</option>
-              <option value="apple">Apple M-series</option>
-              <option value="custom">Custom...</option>
-            </select>
-            <select
-              value={compareConfig || ''}
-              onChange={(e) => setCompareConfig(e.target.value || null)}
-              className="compare-select"
-            >
-              <option value="">vs...</option>
-              {config !== 'educational' && <option value="educational">vs Educational</option>}
-              {config !== 'intel' && <option value="intel">vs Intel 12th Gen</option>}
-              {config !== 'amd' && <option value="amd">vs AMD Zen 4</option>}
-              {config !== 'apple' && <option value="apple">vs Apple M-series</option>}
-            </select>
-            <select value={optLevel} onChange={(e) => setOptLevel(e.target.value)}>
-              <option value="-O0">-O0 (no optimization)</option>
-              <option value="-O1">-O1</option>
-              <option value="-O2">-O2</option>
-              <option value="-O3">-O3</option>
-            </select>
+            </optgroup>
+            <optgroup label="C++">
+              {Object.entries(EXAMPLES).filter(([_, ex]) => ex.language === 'cpp').map(([key, ex]) => (
+                <option key={key} value={key}>{ex.name}</option>
+              ))}
+            </optgroup>
+            <optgroup label="Rust">
+              {Object.entries(EXAMPLES).filter(([_, ex]) => ex.language === 'rust').map(([key, ex]) => (
+                <option key={key} value={key}>{ex.name}</option>
+              ))}
+            </optgroup>
+          </select>
+
+          <select value={language} onChange={(e) => setLanguage(e.target.value as Language)} className="select-lang">
+            <option value="c">C</option>
+            <option value="cpp">C++</option>
+            <option value="rust">Rust</option>
+          </select>
+
+          <select value={config} onChange={(e) => setConfig(e.target.value)} className="select-config">
+            <option value="educational">Educational</option>
+            <option value="intel">Intel 12th Gen</option>
+            <option value="amd">AMD Zen 4</option>
+            <option value="apple">Apple M-series</option>
+            <option value="custom">Custom</option>
+          </select>
+
+          <select value={optLevel} onChange={(e) => setOptLevel(e.target.value)} className="select-opt">
+            <option value="-O0">-O0</option>
+            <option value="-O1">-O1</option>
+            <option value="-O2">-O2</option>
+            <option value="-O3">-O3</option>
+          </select>
+        </div>
+
+        <div className="toolbar-center">
+          <button onClick={runAnalysis} disabled={isLoading} className="btn-run">
+            {isLoading ? stageText[stage] : 'Run'}
+          </button>
+        </div>
+
+        <div className="toolbar-right">
+          <button onClick={handleShare} className="btn-icon" title="Copy link">
+            {copied ? 'Copied!' : 'Share'}
+          </button>
+
+          <div className="options-wrapper" ref={optionsRef}>
             <button
-              className={`toggle-btn ${showDefines ? 'active' : ''}`}
-              onClick={() => setShowDefines(!showDefines)}
-              title="Preprocessor Defines"
+              onClick={(e) => { e.stopPropagation(); setShowOptions(!showOptions) }}
+              className={`btn-icon ${showOptions ? 'active' : ''}`}
             >
-              -D {defines.filter(d => d.name.trim()).length > 0 && `(${defines.filter(d => d.name.trim()).length})`}
+              Options
             </button>
-            <button onClick={runAnalysis} disabled={isLoading}>
-              {stageLabels[stage]}
-            </button>
-            <button onClick={handleShare} className="share-btn">
-              {copied ? 'Copied!' : 'Share'}
-            </button>
-            <button
-              onClick={() => setBaselineCode(code)}
-              className="baseline-btn"
-              title="Save current code as baseline for diff"
-            >
-              Set Baseline
-            </button>
-            {baselineCode && (
-              <button
-                onClick={() => setDiffMode(!diffMode)}
-                className={`diff-btn ${diffMode ? 'active' : ''}`}
-              >
-                {diffMode ? 'Exit Diff' : 'Show Diff'}
-              </button>
-            )}
-            <button
-              onClick={() => {
-                setSplitMode(!splitMode)
-                if (!splitMode) {
-                  setCode2(code)  // Copy current code to pane 2
-                }
-              }}
-              className={`split-btn ${splitMode ? 'active' : ''}`}
-            >
-              {splitMode ? 'Single' : 'Split'}
-            </button>
-          </div>
-          {showCustom && (
-            <div className="custom-config">
-              <div className="config-row">
-                <label>Line Size</label>
-                <input
-                  type="number"
-                  value={customConfig.lineSize}
-                  onChange={(e) => setCustomConfig({ ...customConfig, lineSize: parseInt(e.target.value) || 64 })}
-                />
-              </div>
-              <div className="config-section">
-                <h4>L1 Cache</h4>
-                <div className="config-row">
-                  <label>Size (bytes)</label>
-                  <input
-                    type="number"
-                    value={customConfig.l1Size}
-                    onChange={(e) => setCustomConfig({ ...customConfig, l1Size: parseInt(e.target.value) || 32768 })}
-                  />
-                </div>
-                <div className="config-row">
-                  <label>Associativity</label>
-                  <input
-                    type="number"
-                    value={customConfig.l1Assoc}
-                    onChange={(e) => setCustomConfig({ ...customConfig, l1Assoc: parseInt(e.target.value) || 8 })}
-                  />
-                </div>
-              </div>
-              <div className="config-section">
-                <h4>L2 Cache</h4>
-                <div className="config-row">
-                  <label>Size (bytes)</label>
-                  <input
-                    type="number"
-                    value={customConfig.l2Size}
-                    onChange={(e) => setCustomConfig({ ...customConfig, l2Size: parseInt(e.target.value) || 262144 })}
-                  />
-                </div>
-                <div className="config-row">
-                  <label>Associativity</label>
-                  <input
-                    type="number"
-                    value={customConfig.l2Assoc}
-                    onChange={(e) => setCustomConfig({ ...customConfig, l2Assoc: parseInt(e.target.value) || 8 })}
-                  />
-                </div>
-              </div>
-              <div className="config-section">
-                <h4>L3 Cache</h4>
-                <div className="config-row">
-                  <label>Size (bytes)</label>
-                  <input
-                    type="number"
-                    value={customConfig.l3Size}
-                    onChange={(e) => setCustomConfig({ ...customConfig, l3Size: parseInt(e.target.value) || 8388608 })}
-                  />
-                </div>
-                <div className="config-row">
-                  <label>Associativity</label>
-                  <input
-                    type="number"
-                    value={customConfig.l3Assoc}
-                    onChange={(e) => setCustomConfig({ ...customConfig, l3Assoc: parseInt(e.target.value) || 16 })}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-          {showDefines && (
-            <div className="defines-config">
-              <div className="defines-header">
-                <h4>Preprocessor Defines</h4>
-                <button
-                  className="add-define-btn"
-                  onClick={() => setDefines([...defines, { name: '', value: '' }])}
-                >
-                  + Add
-                </button>
-              </div>
-              <div className="defines-list">
-                {defines.map((def, i) => (
-                  <div key={i} className="define-row">
-                    <span className="define-prefix">-D</span>
-                    <input
-                      type="text"
-                      placeholder="NAME"
-                      value={def.name}
-                      onChange={(e) => {
-                        const newDefines = [...defines]
-                        newDefines[i].name = e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '')
-                        setDefines(newDefines)
-                      }}
-                      className="define-name"
-                    />
-                    <span className="define-eq">=</span>
-                    <input
-                      type="text"
-                      placeholder="value"
-                      value={def.value}
-                      onChange={(e) => {
-                        const newDefines = [...defines]
-                        newDefines[i].value = e.target.value
-                        setDefines(newDefines)
-                      }}
-                      className="define-value"
-                    />
-                    <button
-                      className="remove-define-btn"
-                      onClick={() => setDefines(defines.filter((_, j) => j !== i))}
-                    >
-                      x
+
+            {showOptions && (
+              <div className="options-dropdown">
+                <div className="option-section">
+                  <div className="option-label">Preprocessor Defines</div>
+                  <div className="defines-list">
+                    {defines.map((def, i) => (
+                      <div key={i} className="define-row">
+                        <span className="define-d">-D</span>
+                        <input
+                          type="text"
+                          placeholder="NAME"
+                          value={def.name}
+                          onChange={(e) => {
+                            const newDefs = [...defines]
+                            newDefs[i].name = e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '')
+                            setDefines(newDefs)
+                          }}
+                          className="define-name"
+                        />
+                        <span className="define-eq">=</span>
+                        <input
+                          type="text"
+                          placeholder="value"
+                          value={def.value}
+                          onChange={(e) => {
+                            const newDefs = [...defines]
+                            newDefs[i].value = e.target.value
+                            setDefines(newDefs)
+                          }}
+                          className="define-value"
+                        />
+                        <button className="btn-remove" onClick={() => setDefines(defines.filter((_, j) => j !== i))}>×</button>
+                      </div>
+                    ))}
+                    <button className="btn-add" onClick={() => setDefines([...defines, { name: '', value: '' }])}>
+                      + Add Define
                     </button>
                   </div>
-                ))}
-                {defines.length === 0 && (
-                  <div className="defines-empty">
-                    Override #define values without editing code
-                  </div>
+                </div>
+
+                <div className="option-divider" />
+
+                <div className="option-section">
+                  <div className="option-label">Diff Mode</div>
+                  <button
+                    className={`btn-option ${baselineCode ? '' : 'disabled'}`}
+                    onClick={() => { if (baselineCode) setDiffMode(!diffMode) }}
+                  >
+                    {diffMode ? 'Exit Diff' : 'Show Diff'}
+                  </button>
+                  <button className="btn-option" onClick={() => setBaselineCode(code)}>
+                    Set Current as Baseline
+                  </button>
+                </div>
+
+                {config === 'custom' && (
+                  <>
+                    <div className="option-divider" />
+                    <div className="option-section">
+                      <div className="option-label">Custom Cache Config</div>
+                      <div className="config-grid">
+                        <label>Line Size</label>
+                        <input type="number" value={customConfig.lineSize} onChange={(e) => setCustomConfig({ ...customConfig, lineSize: parseInt(e.target.value) || 64 })} />
+                        <label>L1 Size</label>
+                        <input type="number" value={customConfig.l1Size} onChange={(e) => setCustomConfig({ ...customConfig, l1Size: parseInt(e.target.value) || 32768 })} />
+                        <label>L1 Assoc</label>
+                        <input type="number" value={customConfig.l1Assoc} onChange={(e) => setCustomConfig({ ...customConfig, l1Assoc: parseInt(e.target.value) || 8 })} />
+                        <label>L2 Size</label>
+                        <input type="number" value={customConfig.l2Size} onChange={(e) => setCustomConfig({ ...customConfig, l2Size: parseInt(e.target.value) || 262144 })} />
+                        <label>L2 Assoc</label>
+                        <input type="number" value={customConfig.l2Assoc} onChange={(e) => setCustomConfig({ ...customConfig, l2Assoc: parseInt(e.target.value) || 8 })} />
+                        <label>L3 Size</label>
+                        <input type="number" value={customConfig.l3Size} onChange={(e) => setCustomConfig({ ...customConfig, l3Size: parseInt(e.target.value) || 8388608 })} />
+                        <label>L3 Assoc</label>
+                        <input type="number" value={customConfig.l3Assoc} onChange={(e) => setCustomConfig({ ...customConfig, l3Assoc: parseInt(e.target.value) || 16 })} />
+                      </div>
+                    </div>
+                  </>
                 )}
               </div>
-            </div>
-          )}
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="main">
+        <div className="editor-pane">
           {diffMode && baselineCode ? (
             <DiffEditor
-              height={`calc(100vh - ${180 + (showCustom ? 200 : 0) + (showDefines ? 120 : 0)}px)`}
-              language="c"
+              height="100%"
+              language={monacoLanguage}
               theme="vs-dark"
               original={baselineCode}
               modified={code}
               onMount={(editor) => {
                 const modifiedEditor = editor.getModifiedEditor()
-                modifiedEditor.onDidChangeModelContent(() => {
-                  setCode(modifiedEditor.getValue())
-                })
+                modifiedEditor.onDidChangeModelContent(() => setCode(modifiedEditor.getValue()))
               }}
-              options={{
-                minimap: { enabled: false },
-                fontSize: 14,
-                renderSideBySide: true,
-                readOnly: false,
-              }}
+              options={{ minimap: { enabled: false }, fontSize: 13, renderSideBySide: true }}
             />
           ) : (
             <Editor
-              height={`calc(100vh - ${180 + (showCustom ? 200 : 0) + (showDefines ? 120 : 0)}px)`}
-              defaultLanguage="c"
+              height="100%"
+              language={monacoLanguage}
               theme="vs-dark"
               value={code}
               onChange={(value) => setCode(value || '')}
               onMount={handleEditorMount}
-              options={{
-                minimap: { enabled: false },
-                fontSize: 14,
-                lineNumbers: 'on',
-                scrollBeyondLastLine: false,
-                glyphMargin: true,
-              }}
+              options={{ minimap: { enabled: false }, fontSize: 13, lineNumbers: 'on', scrollBeyondLastLine: false, glyphMargin: true }}
             />
           )}
         </div>
 
-        <div className="results-panel">
+        <div className="results-pane">
           {error && <ErrorDisplay error={error} />}
 
           {result && (
             <>
-              <div className="summary">
-                <h3>Cache Statistics {compareResult && `- ${result.config}`}</h3>
-                <div className="meta">
-                  Config: {result.config} | Events: {result.events.toLocaleString()}
-                  {result.multicore && (
-                    <> | Cores: {result.cores} | Threads: {result.threads}</>
-                  )}
-                </div>
-                <div className="levels">
-                  <LevelStats name="L1d" stats={result.levels.l1d || result.levels.l1!} />
-                  {result.levels.l1i && <LevelStats name="L1i" stats={result.levels.l1i} />}
-                  <LevelStats name="L2" stats={result.levels.l2} />
-                  <LevelStats name="L3" stats={result.levels.l3} />
-                </div>
-              </div>
+              <CacheBar result={result} />
 
-              {compareResult && (
-                <div className="summary compare-summary">
-                  <h3>Comparison - {compareResult.config}</h3>
-                  <div className="meta">
-                    Config: {compareResult.config} | Events: {compareResult.events.toLocaleString()}
-                  </div>
-                  <div className="levels">
-                    <LevelStats name="L1d" stats={compareResult.levels.l1d || compareResult.levels.l1!} />
-                    {compareResult.levels.l1i && <LevelStats name="L1i" stats={compareResult.levels.l1i} />}
-                    <LevelStats name="L2" stats={compareResult.levels.l2} />
-                    <LevelStats name="L3" stats={compareResult.levels.l3} />
-                  </div>
-                  <div className="compare-diff">
-                    <h4>Difference</h4>
-                    {(() => {
-                      const r1 = result.levels.l1d || result.levels.l1!
-                      const r2 = compareResult.levels.l1d || compareResult.levels.l1!
-                      const diff = ((r2.hitRate - r1.hitRate) * 100).toFixed(1)
-                      const better = r2.hitRate > r1.hitRate
-                      return (
-                        <div className={`diff-item ${better ? 'better' : 'worse'}`}>
-                          L1 Hit Rate: {better ? '+' : ''}{diff}%
-                        </div>
-                      )
-                    })()}
-                  </div>
+              <button className="btn-details" onClick={() => setShowDetails(!showDetails)}>
+                {showDetails ? 'Hide Details' : 'Show Details'}
+              </button>
+
+              {showDetails && (
+                <div className="details-grid">
+                  <LevelDetail name="L1 Data" stats={result.levels.l1d || result.levels.l1!} />
+                  {result.levels.l1i && <LevelDetail name="L1 Instruction" stats={result.levels.l1i} />}
+                  <LevelDetail name="L2" stats={result.levels.l2} />
+                  <LevelDetail name="L3" stats={result.levels.l3} />
                 </div>
               )}
 
-              {result.coherence && (
-                <div className="coherence-stats">
-                  <h3>Cache Coherence</h3>
-                  <div className="stat-row">
-                    <span className="label">Invalidations:</span>
-                    <span className="value">{result.coherence.invalidations.toLocaleString()}</span>
-                  </div>
-                  <div className="stat-row">
-                    <span className="label">False Sharing Events:</span>
-                    <span className={`value ${result.coherence.falseSharingEvents > 0 ? 'bad' : 'good'}`}>
-                      {result.coherence.falseSharingEvents}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {result.falseSharing && result.falseSharing.length > 0 && (
-                <div className="false-sharing">
-                  <h3>⚠ False Sharing Detected</h3>
-                  {result.falseSharing.map((fs, i) => (
-                    <div key={i} className="false-sharing-item">
-                      <div className="cache-line">Cache line {fs.cacheLineAddr}</div>
-                      <div className="accesses">
-                        {fs.accesses.map((a, j) => (
-                          <div key={j} className="access">
-                            <span className="thread">T{a.threadId}</span>
-                            <span className={`op ${a.isWrite ? 'write' : 'read'}`}>
-                              {a.isWrite ? 'WRITE' : 'READ'}
-                            </span>
-                            <span className="offset">offset {a.offset}</span>
-                            <span className="location">{a.file}:{a.line}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="suggestion">
-                        Consider adding padding between these fields
-                      </div>
-                    </div>
-                  ))}
+              {result.coherence && result.coherence.falseSharingEvents > 0 && (
+                <div className="warning-box">
+                  <div className="warning-title">False Sharing Detected</div>
+                  <div className="warning-count">{result.coherence.falseSharingEvents} event(s)</div>
                 </div>
               )}
 
               {result.hotLines.length > 0 && (
-                <div className="hot-lines">
-                  <h3>Hottest Lines (by misses)</h3>
+                <div className="hotlines">
+                  <div className="section-title">Hot Lines</div>
                   <table>
                     <thead>
                       <tr>
-                        <th>Location</th>
+                        <th>Line</th>
                         <th>Misses</th>
                         <th>Miss Rate</th>
-                        {result.multicore && <th>Threads</th>}
                       </tr>
                     </thead>
                     <tbody>
-                      {result.hotLines.map((line, i) => (
+                      {result.hotLines.slice(0, 10).map((line, i) => (
                         <tr key={i}>
-                          <td className="location">
-                            {line.file}:{line.line}
-                          </td>
-                          <td>{line.misses}</td>
-                          <td className={line.missRate > 0.5 ? 'bad' : line.missRate > 0.2 ? 'ok' : 'good'}>
+                          <td className="mono">{line.line}</td>
+                          <td className="mono">{line.misses}</td>
+                          <td className={`mono ${line.missRate > 0.5 ? 'bad' : line.missRate > 0.2 ? 'ok' : 'good'}`}>
                             {formatPercent(line.missRate)}
                           </td>
-                          {result.multicore && <td>{line.threads}</td>}
                         </tr>
                       ))}
                     </tbody>
@@ -1067,15 +970,11 @@ function App() {
 
               {result.suggestions && result.suggestions.length > 0 && (
                 <div className="suggestions">
-                  <h3>Optimization Suggestions</h3>
+                  <div className="section-title">Suggestions</div>
                   {result.suggestions.map((s, i) => (
-                    <div key={i} className={`suggestion-item ${s.severity}`}>
-                      <div className="suggestion-header">
-                        <span className={`severity-badge ${s.severity}`}>{s.severity}</span>
-                        <span className="suggestion-location">{s.location}</span>
-                      </div>
-                      <div className="suggestion-message">{s.message}</div>
-                      <div className="suggestion-fix">{s.fix}</div>
+                    <div key={i} className={`suggestion ${s.severity}`}>
+                      <span className={`badge ${s.severity}`}>{s.severity}</span>
+                      <span className="suggestion-msg">{s.message}</span>
                     </div>
                   ))}
                 </div>
@@ -1085,84 +984,17 @@ function App() {
 
           {isLoading && (
             <div className="loading">
-              <div className="spinner"></div>
-              <p>{stageLabels[stage]}</p>
+              <div className="spinner" />
+              <span>{stageText[stage]}</span>
             </div>
           )}
 
           {!result && !error && !isLoading && (
             <div className="placeholder">
-              <p>Click "Run Analysis" to see cache behavior</p>
+              Press Run to analyze cache behavior
             </div>
           )}
         </div>
-
-        {/* Second Pane for Split Mode */}
-        {splitMode && (
-          <>
-            <div className="editor-panel split-pane pane-2">
-              <div className="toolbar pane-toolbar">
-                <span className="pane-label">Pane 2</span>
-                <select value={config2} onChange={(e) => setConfig2(e.target.value)}>
-                  <option value="educational">Educational</option>
-                  <option value="intel">Intel 12th Gen</option>
-                  <option value="amd">AMD Zen 4</option>
-                  <option value="apple">Apple M-series</option>
-                </select>
-                <button
-                  onClick={async () => {
-                    try {
-                      const payload = { code: code2, config: config2, optLevel }
-                      const response = await fetch('http://localhost:3001/compile', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload),
-                      })
-                      const data = await response.json()
-                      if (data.levels) {
-                        setResult2(data as CacheResult)
-                      }
-                    } catch {
-                      // Ignore errors
-                    }
-                  }}
-                >
-                  Run
-                </button>
-              </div>
-              <Editor
-                height="calc(100vh - 220px)"
-                defaultLanguage="c"
-                theme="vs-dark"
-                value={code2}
-                onChange={(value) => setCode2(value || '')}
-                options={{
-                  minimap: { enabled: false },
-                  fontSize: 14,
-                  lineNumbers: 'on',
-                  scrollBeyondLastLine: false,
-                }}
-              />
-            </div>
-            <div className="results-panel split-results">
-              {result2 ? (
-                <div className="summary">
-                  <h3>Pane 2 - {result2.config}</h3>
-                  <div className="levels">
-                    <LevelStats name="L1d" stats={result2.levels.l1d || result2.levels.l1!} />
-                    {result2.levels.l1i && <LevelStats name="L1i" stats={result2.levels.l1i} />}
-                    <LevelStats name="L2" stats={result2.levels.l2} />
-                    <LevelStats name="L3" stats={result2.levels.l3} />
-                  </div>
-                </div>
-              ) : (
-                <div className="placeholder">
-                  <p>Run Pane 2 to see results</p>
-                </div>
-              )}
-            </div>
-          </>
-        )}
       </div>
     </div>
   )
