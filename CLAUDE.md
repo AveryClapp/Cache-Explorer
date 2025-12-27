@@ -1,4 +1,31 @@
 # CLAUDE.md - Cache Explorer Project Guide
+
+## ⚠️ IMPORTANT: Project Requirements
+
+**📋 See `PROJECT_REQUIREMENTS.md` for the complete, authoritative specification.**
+
+That document defines every requirement for Cache Explorer 1.0 release. It includes:
+- Prioritized roadmap (P0/P1/P2/P3)
+- Current completion status (~55%)
+- Release checklists (Alpha → Beta → 1.0)
+- All feature requirements with checkboxes
+
+**🔄 IMPORTANT:** Update `PROJECT_REQUIREMENTS.md` as features are implemented!
+- Check off completed items `[x]`
+- Update completion percentages
+- Move items between priority tiers if needed
+
+**Current Status:** Alpha complete, targeting Beta release.
+
+**Critical Path to Beta (P0):**
+1. ~~WebSocket real-time streaming~~ ✅ DONE
+2. ~~Docker sandbox for code execution~~ ✅ DONE
+3. ~~Quick Start documentation~~ ✅ DONE
+4. Better compilation error messages (1 day)
+5. Hardware validation vs `perf` (2 days)
+
+---
+
 ## Project Overview
 
 **Cache Explorer** is a visual cache profiler that shows how code interacts with CPU cache hierarchies in real-time. Think "Compiler Explorer for cache behavior" - engineers paste code, instantly see cache hits/misses with source-level attribution, understand performance bottlenecks, and learn optimization techniques.

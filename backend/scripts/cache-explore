@@ -13,8 +13,12 @@ CONFIG="intel"
 VERBOSE=""
 KEEP_BINARY=""
 JSON_OUTPUT=""
+STREAM_OUTPUT=""
 INPUT_FILE=""
 DEFINES=()  # Array of -D flags
+SAMPLE_RATE=""
+EVENT_LIMIT=""
+PREFETCH=""
 
 usage() {
   echo "Usage: cache-explore [options] <source.c|.cpp|.rs>"
@@ -27,6 +31,10 @@ usage() {
   echo "  --verbose         Show each cache event"
   echo "  --keep            Keep the instrumented binary"
   echo "  --json            Output JSON format"
+  echo "  --stream          Stream events in real-time (for WebSocket)"
+  echo "  --sample <N>      Sample 1 in N events (e.g., 100 = 1% sampling)"
+  echo "  --limit <N>       Stop after N events (e.g., 1000000 = 1M events max)"
+  echo "  --prefetch <type> Enable prefetching: none|next|stream|stride|adaptive"
   echo "  -O<level>         Optimization level (default: -O0)"
   echo "  -D <name>=<val>   Preprocessor define (can be used multiple times)"
   echo "  --help            Show this help"
@@ -35,6 +43,7 @@ usage() {
   echo "  cache-explore matrix.c --config educational --verbose"
   echo "  cache-explore vector.cpp -O2 --json"
   echo "  cache-explore matrix.c -D N=1000 -D DEBUG"
+  echo "  cache-explore bigprogram.c --sample 100 --limit 1000000"
 }
 
 OPT_LEVEL="-O0"
@@ -45,6 +54,10 @@ while [[ $# -gt 0 ]]; do
     --verbose) VERBOSE="--verbose"; shift ;;
     --keep) KEEP_BINARY="1"; shift ;;
     --json) JSON_OUTPUT="--json"; shift ;;
+    --stream) STREAM_OUTPUT="--stream"; shift ;;
+    --sample) SAMPLE_RATE="$2"; shift 2 ;;
+    --limit) EVENT_LIMIT="$2"; shift 2 ;;
+    --prefetch) PREFETCH="$2"; shift 2 ;;
     -O*) OPT_LEVEL="$1"; shift ;;
     -D) DEFINES+=("-D$2"); shift 2 ;;
     -D*) DEFINES+=("$1"); shift ;;
@@ -158,18 +171,48 @@ elif ! $COMPILER $OPT_LEVEL $EXTRA_FLAGS -g -fpass-plugin="$PASS" \
 fi
 rm -f /tmp/cache-explore-compile-err-$$
 
-if [[ -z "$JSON_OUTPUT" ]]; then
+if [[ -z "$JSON_OUTPUT" ]] && [[ -z "$STREAM_OUTPUT" ]]; then
   echo "[2/3] Running instrumented binary..." >&2
 fi
 
-TRACE=$("$BINARY" 2>&1) || true
-
-if [[ -z "$JSON_OUTPUT" ]]; then
-  echo "[3/3] Analyzing cache behavior..." >&2
-  echo ""
+# Build environment for runtime options
+RUN_ENV=""
+if [[ -n "$SAMPLE_RATE" ]]; then
+  RUN_ENV="CACHE_EXPLORER_SAMPLE_RATE=$SAMPLE_RATE $RUN_ENV"
+fi
+if [[ -n "$EVENT_LIMIT" ]]; then
+  RUN_ENV="CACHE_EXPLORER_MAX_EVENTS=$EVENT_LIMIT $RUN_ENV"
 fi
 
-echo "$TRACE" | "$CACHE_SIM" --config "$CONFIG" $VERBOSE $JSON_OUTPUT
+# Build prefetch flag for cache-sim
+PREFETCH_ARG=""
+if [[ -n "$PREFETCH" ]]; then
+  PREFETCH_ARG="--prefetch $PREFETCH"
+fi
+
+# Streaming mode: pipe directly for real-time output
+if [[ -n "$STREAM_OUTPUT" ]]; then
+  if [[ -n "$RUN_ENV" ]]; then
+    env $RUN_ENV "$BINARY" 2>&1 | "$CACHE_SIM" --config "$CONFIG" $STREAM_OUTPUT $PREFETCH_ARG
+  else
+    "$BINARY" 2>&1 | "$CACHE_SIM" --config "$CONFIG" $STREAM_OUTPUT $PREFETCH_ARG
+  fi
+  EXIT_CODE=${PIPESTATUS[0]}
+else
+  # Batch mode: capture trace then process
+  if [[ -n "$RUN_ENV" ]]; then
+    TRACE=$(env $RUN_ENV "$BINARY" 2>&1) || true
+  else
+    TRACE=$("$BINARY" 2>&1) || true
+  fi
+
+  if [[ -z "$JSON_OUTPUT" ]]; then
+    echo "[3/3] Analyzing cache behavior..." >&2
+    echo ""
+  fi
+
+  echo "$TRACE" | "$CACHE_SIM" --config "$CONFIG" $VERBOSE $JSON_OUTPUT $PREFETCH_ARG
+fi
 
 # Cleanup
 if [[ -z "$KEEP_BINARY" ]]; then

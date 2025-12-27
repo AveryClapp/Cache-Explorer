@@ -27,6 +27,8 @@ private:
   int find_victim_lru(const std::vector<CacheLine> &set) const;
   int find_victim_plru(uint64_t set_index);
   int find_victim_random(const std::vector<CacheLine> &set) const;
+  int find_victim_srrip(std::vector<CacheLine> &set);
+  int find_victim_brrip(std::vector<CacheLine> &set);
   int find_victim(uint64_t set_index);
 
   void update_replacement_state(uint64_t set_index, int way);

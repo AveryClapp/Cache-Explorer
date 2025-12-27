@@ -21,10 +21,32 @@ void CacheSystem::handle_exclusive_eviction(uint64_t evicted_addr,
   to_level.install(evicted_addr, was_dirty);
 }
 
+void CacheSystem::issue_prefetches(const std::vector<uint64_t> &addrs) {
+  for (uint64_t addr : addrs) {
+    // Prefetches go directly to L2 (typical HW behavior)
+    // Only prefetch if not already present
+    if (!l2.is_present(addr) && !l1d.is_present(addr)) {
+      l2.install(addr, false);
+    }
+  }
+}
+
+void CacheSystem::enable_prefetching(PrefetchPolicy policy, int degree) {
+  prefetcher.setPolicy(policy);
+  prefetcher.setDegree(degree);
+  prefetch_enabled = true;
+}
+
+void CacheSystem::disable_prefetching() {
+  prefetch_enabled = false;
+  prefetcher.setPolicy(PrefetchPolicy::NONE);
+}
+
 SystemAccessResult CacheSystem::access_hierarchy(uint64_t address,
                                                   bool is_write,
-                                                  CacheLevel &l1) {
-  SystemAccessResult result = {false, false, false, false, {}};
+                                                  CacheLevel &l1,
+                                                  uint64_t pc) {
+  SystemAccessResult result = {false, false, false, false, {}, 0};
 
   // Try L1
   AccessInfo l1_info = l1.access(address, is_write);
@@ -96,19 +118,26 @@ SystemAccessResult CacheSystem::access_hierarchy(uint64_t address,
     l1i.invalidate(l3_info.evicted_address);
   }
 
+  // Issue prefetches on L3 miss (memory access)
+  if (prefetch_enabled) {
+    auto pf_addrs = prefetcher.on_miss(address, pc);
+    result.prefetches_issued = static_cast<int>(pf_addrs.size());
+    issue_prefetches(pf_addrs);
+  }
+
   return result;
 }
 
-SystemAccessResult CacheSystem::read(uint64_t address) {
-  return access_hierarchy(address, false, l1d);
+SystemAccessResult CacheSystem::read(uint64_t address, uint64_t pc) {
+  return access_hierarchy(address, false, l1d, pc);
 }
 
-SystemAccessResult CacheSystem::write(uint64_t address) {
-  return access_hierarchy(address, true, l1d);
+SystemAccessResult CacheSystem::write(uint64_t address, uint64_t pc) {
+  return access_hierarchy(address, true, l1d, pc);
 }
 
-SystemAccessResult CacheSystem::fetch(uint64_t address) {
-  return access_hierarchy(address, false, l1i);
+SystemAccessResult CacheSystem::fetch(uint64_t address, uint64_t pc) {
+  return access_hierarchy(address, false, l1i, pc);
 }
 
 HierarchyStats CacheSystem::get_stats() const {

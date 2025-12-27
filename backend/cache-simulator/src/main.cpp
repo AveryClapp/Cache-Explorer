@@ -12,8 +12,11 @@ void print_usage(const char *prog) {
             << "Options:\n"
             << "  --config <name>   intel|amd|apple|educational|custom (default: intel)\n"
             << "  --cores <n>       Number of cores to simulate (default: auto)\n"
+            << "  --prefetch <p>    Prefetch policy: none|next|stream|stride|adaptive\n"
+            << "  --prefetch-degree <n>  Number of lines to prefetch (default: 2)\n"
             << "  --verbose         Print each cache event\n"
             << "  --json            Output JSON format\n"
+            << "  --stream          Stream individual events as JSON (for real-time)\n"
             << "  --help            Show this help\n"
             << "\nCustom cache config (use with --config custom):\n"
             << "  --l1-size <bytes>   L1 cache size (default: 32768)\n"
@@ -25,10 +28,47 @@ void print_usage(const char *prog) {
             << "  --l3-assoc <n>      L3 associativity (default: 16)\n";
 }
 
+PrefetchPolicy parse_prefetch_policy(const std::string &name) {
+  if (name == "none") return PrefetchPolicy::NONE;
+  if (name == "next" || name == "nextline") return PrefetchPolicy::NEXT_LINE;
+  if (name == "stream") return PrefetchPolicy::STREAM;
+  if (name == "stride") return PrefetchPolicy::STRIDE;
+  if (name == "adaptive") return PrefetchPolicy::ADAPTIVE;
+  return PrefetchPolicy::NONE;
+}
+
+std::string prefetch_policy_name(PrefetchPolicy p) {
+  switch (p) {
+    case PrefetchPolicy::NONE: return "none";
+    case PrefetchPolicy::NEXT_LINE: return "next_line";
+    case PrefetchPolicy::STREAM: return "stream";
+    case PrefetchPolicy::STRIDE: return "stride";
+    case PrefetchPolicy::ADAPTIVE: return "adaptive";
+  }
+  return "unknown";
+}
+
 CacheHierarchyConfig get_config(const std::string &name) {
-  if (name == "amd") return make_amd_zen4_config();
-  if (name == "apple") return make_apple_m_series_config();
+  // Intel presets
+  if (name == "intel" || name == "intel12") return make_intel_12th_gen_config();
+  if (name == "intel14") return make_intel_14th_gen_config();
+
+  // AMD presets
+  if (name == "amd" || name == "zen4") return make_amd_zen4_config();
+  if (name == "zen3") return make_amd_zen3_config();
+
+  // Apple presets
+  if (name == "apple" || name == "m1") return make_apple_m_series_config();
+  if (name == "m2") return make_apple_m2_config();
+
+  // Cloud/ARM presets
+  if (name == "graviton" || name == "graviton3") return make_aws_graviton3_config();
+  if (name == "embedded") return make_embedded_config();
+
+  // Educational preset
   if (name == "educational") return make_educational_config();
+
+  // Default to Intel 12th gen
   return make_intel_12th_gen_config();
 }
 
@@ -47,6 +87,11 @@ int main(int argc, char *argv[]) {
   int num_cores = 0; // 0 = auto-detect
   bool verbose = false;
   bool json_output = false;
+  bool stream_mode = false;
+
+  // Prefetching options
+  PrefetchPolicy prefetch_policy = PrefetchPolicy::NONE;
+  int prefetch_degree = 2;
 
   // Custom config defaults
   size_t l1_size = 32768, l2_size = 262144, l3_size = 8388608;
@@ -62,6 +107,9 @@ int main(int argc, char *argv[]) {
       verbose = true;
     } else if (arg == "--json") {
       json_output = true;
+    } else if (arg == "--stream") {
+      stream_mode = true;
+      json_output = true;  // Streaming implies JSON
     } else if (arg == "--l1-size" && i + 1 < argc) {
       l1_size = std::stoull(argv[++i]);
     } else if (arg == "--l1-assoc" && i + 1 < argc) {
@@ -76,13 +124,232 @@ int main(int argc, char *argv[]) {
       l3_size = std::stoull(argv[++i]);
     } else if (arg == "--l3-assoc" && i + 1 < argc) {
       l3_assoc = std::stoi(argv[++i]);
+    } else if (arg == "--prefetch" && i + 1 < argc) {
+      prefetch_policy = parse_prefetch_policy(argv[++i]);
+    } else if (arg == "--prefetch-degree" && i + 1 < argc) {
+      prefetch_degree = std::stoi(argv[++i]);
     } else if (arg == "--help") {
       print_usage(argv[0]);
       return 0;
     }
   }
 
-  // Read all events first to detect thread count
+  // Build cache config
+  CacheHierarchyConfig cfg;
+  if (config_name == "custom") {
+    cfg.l1_data = {l1_size, l1_assoc, line_size, EvictionPolicy::LRU};
+    cfg.l2 = {l2_size, l2_assoc, line_size, EvictionPolicy::LRU};
+    cfg.l3 = {l3_size, l3_assoc, line_size, EvictionPolicy::LRU};
+  } else {
+    cfg = get_config(config_name);
+  }
+
+  // Streaming mode: process events as they arrive and output JSON for each
+  // Uses MultiCoreTraceProcessor to handle both single and multi-threaded code
+  if (stream_mode) {
+    // Use 8 cores max - handles both single and multi-threaded transparently
+    MultiCoreTraceProcessor processor(8, cfg.l1_data, cfg.l2, cfg.l3);
+    // TODO: Add prefetching support to MultiCoreCacheSystem
+    // For now, prefetching only works in single-core batch mode
+
+    size_t event_count = 0;
+    size_t batch_size = 50;  // Batch events for efficiency
+    size_t batch_count = 0;
+
+    // Buffer for recent events to include in progress updates
+    struct TimelineEvent {
+      size_t index;
+      bool is_write;
+      bool is_icache;
+      int hit_level;  // 1=L1, 2=L2, 3=L3, 4=memory
+      std::string file;
+      uint32_t line;
+    };
+    std::vector<TimelineEvent> recent_events;
+    recent_events.reserve(batch_size);
+
+    // Track current event for callback
+    const TraceEvent* current_event = nullptr;
+    size_t current_index = 0;
+
+    // Set up callback to capture hit level for each access
+    processor.set_event_callback([&](const EventResult& result) {
+      if (current_event) {
+        int level = 4;  // memory by default
+        if (result.l1_hit) level = 1;
+        else if (result.l2_hit) level = 2;
+        else if (result.l3_hit) level = 3;
+
+        recent_events.push_back({
+          current_index,
+          current_event->is_write,
+          current_event->is_icache,
+          level,
+          current_event->file,
+          current_event->line
+        });
+      }
+    });
+
+    // Output header with multicore info
+    std::cout << "{\"type\":\"start\",\"config\":\"" << config_name << "\",\"multicore\":true}\n" << std::flush;
+
+    std::string line;
+    while (std::getline(std::cin, line)) {
+      auto event = parse_trace_event(line);
+      if (!event) continue;
+
+      event_count++;
+      current_index = event_count;
+      current_event = &(*event);
+      processor.process(*event);
+      current_event = nullptr;
+      batch_count++;
+
+      // Output batch of events periodically
+      if (batch_count >= batch_size) {
+        auto stats = processor.get_stats();
+        // Aggregate L1 stats from all cores
+        CacheStats l1_total;
+        for (const auto &l1 : stats.l1_per_core) {
+          l1_total.hits += l1.hits;
+          l1_total.misses += l1.misses;
+          l1_total.writebacks += l1.writebacks;
+        }
+        std::cout << "{\"type\":\"progress\""
+                  << ",\"events\":" << event_count
+                  << ",\"threads\":" << processor.get_thread_count()
+                  << ",\"l1d\":{\"hits\":" << l1_total.hits << ",\"misses\":" << l1_total.misses << "}"
+                  << ",\"l2\":{\"hits\":" << stats.l2.hits << ",\"misses\":" << stats.l2.misses << "}"
+                  << ",\"l3\":{\"hits\":" << stats.l3.hits << ",\"misses\":" << stats.l3.misses << "}"
+                  << ",\"coherence\":" << stats.coherence_invalidations
+                  << ",\"timeline\":[";
+        // Note: l1i stats not tracked separately in multi-core mode
+
+        // Output recent events for timeline
+        for (size_t i = 0; i < recent_events.size(); i++) {
+          if (i > 0) std::cout << ",";
+          const auto& e = recent_events[i];
+          std::cout << "{\"i\":" << e.index
+                    << ",\"t\":\"" << (e.is_icache ? "I" : (e.is_write ? "W" : "R")) << "\""
+                    << ",\"l\":" << e.hit_level;
+          if (!e.file.empty()) {
+            std::cout << ",\"f\":\"" << escape_json(e.file) << "\",\"n\":" << e.line;
+          }
+          std::cout << "}";
+        }
+        std::cout << "]}\n" << std::flush;
+
+        recent_events.clear();
+        batch_count = 0;
+      }
+    }
+
+    // Output any remaining events as final progress
+    if (!recent_events.empty()) {
+      auto stats = processor.get_stats();
+      CacheStats l1_total;
+      for (const auto &l1 : stats.l1_per_core) {
+        l1_total.hits += l1.hits;
+        l1_total.misses += l1.misses;
+        l1_total.writebacks += l1.writebacks;
+      }
+      std::cout << "{\"type\":\"progress\""
+                << ",\"events\":" << event_count
+                << ",\"threads\":" << processor.get_thread_count()
+                << ",\"l1d\":{\"hits\":" << l1_total.hits << ",\"misses\":" << l1_total.misses << "}"
+                << ",\"l2\":{\"hits\":" << stats.l2.hits << ",\"misses\":" << stats.l2.misses << "}"
+                << ",\"l3\":{\"hits\":" << stats.l3.hits << ",\"misses\":" << stats.l3.misses << "}"
+                << ",\"coherence\":" << stats.coherence_invalidations
+                << ",\"timeline\":[";
+      for (size_t i = 0; i < recent_events.size(); i++) {
+        if (i > 0) std::cout << ",";
+        const auto& e = recent_events[i];
+        std::cout << "{\"i\":" << e.index
+                  << ",\"t\":\"" << (e.is_icache ? "I" : (e.is_write ? "W" : "R")) << "\""
+                  << ",\"l\":" << e.hit_level;
+        if (!e.file.empty()) {
+          std::cout << ",\"f\":\"" << escape_json(e.file) << "\",\"n\":" << e.line;
+        }
+        std::cout << "}";
+      }
+      std::cout << "]}\n" << std::flush;
+    }
+
+    // Output final results
+    auto stats = processor.get_stats();
+    auto hot = processor.get_hot_lines(10);
+    auto false_sharing = processor.get_false_sharing_reports();
+
+    // Aggregate L1 stats
+    CacheStats l1_total;
+    for (const auto &l1 : stats.l1_per_core) {
+      l1_total.hits += l1.hits;
+      l1_total.misses += l1.misses;
+      l1_total.writebacks += l1.writebacks;
+    }
+
+    std::cout << "{\"type\":\"complete\""
+              << ",\"events\":" << event_count
+              << ",\"threads\":" << processor.get_thread_count()
+              << ",\"cores\":" << processor.get_num_cores()
+              << ",\"levels\":{";
+    std::cout << "\"l1d\":{\"hits\":" << l1_total.hits << ",\"misses\":" << l1_total.misses
+              << ",\"hitRate\":" << std::fixed << std::setprecision(3) << l1_total.hit_rate() << "},";
+    std::cout << "\"l2\":{\"hits\":" << stats.l2.hits << ",\"misses\":" << stats.l2.misses
+              << ",\"hitRate\":" << std::fixed << std::setprecision(3) << stats.l2.hit_rate() << "},";
+    std::cout << "\"l3\":{\"hits\":" << stats.l3.hits << ",\"misses\":" << stats.l3.misses
+              << ",\"hitRate\":" << std::fixed << std::setprecision(3) << stats.l3.hit_rate() << "}";
+    std::cout << "}";
+
+    // Coherence stats
+    std::cout << ",\"coherence\":{\"invalidations\":" << stats.coherence_invalidations
+              << ",\"falseSharingEvents\":" << stats.false_sharing_events << "}";
+
+    std::cout << ",\"hotLines\":[";
+    for (size_t i = 0; i < hot.size(); i++) {
+      if (i > 0) std::cout << ",";
+      std::cout << "{\"file\":\"" << escape_json(hot[i].file) << "\""
+                << ",\"line\":" << hot[i].line
+                << ",\"hits\":" << hot[i].hits
+                << ",\"misses\":" << hot[i].misses
+                << ",\"missRate\":" << std::fixed << std::setprecision(3) << hot[i].miss_rate()
+                << ",\"threads\":" << hot[i].threads.size() << "}";
+    }
+    std::cout << "]";
+
+    // False sharing reports (if any)
+    if (!false_sharing.empty()) {
+      std::cout << ",\"falseSharing\":[";
+      for (size_t i = 0; i < false_sharing.size(); i++) {
+        if (i > 0) std::cout << ",";
+        const auto &fs = false_sharing[i];
+        std::cout << "{\"addr\":\"0x" << std::hex << fs.cache_line_addr << std::dec << "\""
+                  << ",\"accesses\":" << fs.accesses.size() << "}";
+      }
+      std::cout << "]";
+    }
+
+    // Generate suggestions (use aggregated L1 stats)
+    std::cout << ",\"suggestions\":[";
+    auto suggestions = OptimizationSuggester::analyze(false_sharing, hot, stats, cfg.l1_data.line_size);
+    for (size_t i = 0; i < suggestions.size(); i++) {
+      const auto &s = suggestions[i];
+      if (i > 0) std::cout << ",";
+      std::cout << "{\"type\":\"" << s.type << "\""
+                << ",\"severity\":\"" << s.severity << "\""
+                << ",\"location\":\"" << escape_json(s.location) << "\""
+                << ",\"message\":\"" << escape_json(s.message) << "\""
+                << ",\"fix\":\"" << escape_json(s.fix) << "\"}";
+    }
+    std::cout << "]";
+
+    // Note: Prefetching not yet supported in multi-core streaming mode
+    std::cout << "}\n" << std::flush;
+    return 0;
+  }
+
+  // Batch mode: Read all events first to detect thread count
   std::vector<TraceEvent> events;
   std::unordered_set<uint32_t> threads;
   std::string line;
@@ -98,15 +365,6 @@ int main(int argc, char *argv[]) {
   bool multicore = threads.size() > 1;
   if (num_cores == 0) {
     num_cores = multicore ? std::min((int)threads.size(), 8) : 1;
-  }
-
-  CacheHierarchyConfig cfg;
-  if (config_name == "custom") {
-    cfg.l1_data = {l1_size, l1_assoc, line_size, EvictionPolicy::LRU};
-    cfg.l2 = {l2_size, l2_assoc, line_size, EvictionPolicy::LRU};
-    cfg.l3 = {l3_size, l3_assoc, line_size, EvictionPolicy::LRU};
-  } else {
-    cfg = get_config(config_name);
   }
 
   if (multicore) {
@@ -306,6 +564,9 @@ int main(int argc, char *argv[]) {
   } else {
     // Single-core mode (original behavior)
     TraceProcessor processor(cfg);
+    if (prefetch_policy != PrefetchPolicy::NONE) {
+      processor.enable_prefetching(prefetch_policy, prefetch_degree);
+    }
 
     if (verbose && !json_output) {
       processor.set_event_callback([](const EventResult &r) {
@@ -328,6 +589,27 @@ int main(int argc, char *argv[]) {
       std::cout << "{\n";
       std::cout << "  \"config\": \"" << config_name << "\",\n";
       std::cout << "  \"events\": " << events.size() << ",\n";
+
+      // Output cache configuration for visualization
+      std::cout << "  \"cacheConfig\": {\n";
+      std::cout << "    \"l1d\": {\"sizeKB\": " << cfg.l1_data.kb_size
+                << ", \"assoc\": " << cfg.l1_data.associativity
+                << ", \"lineSize\": " << cfg.l1_data.line_size
+                << ", \"sets\": " << cfg.l1_data.num_sets() << "},\n";
+      std::cout << "    \"l1i\": {\"sizeKB\": " << cfg.l1_inst.kb_size
+                << ", \"assoc\": " << cfg.l1_inst.associativity
+                << ", \"lineSize\": " << cfg.l1_inst.line_size
+                << ", \"sets\": " << cfg.l1_inst.num_sets() << "},\n";
+      std::cout << "    \"l2\": {\"sizeKB\": " << cfg.l2.kb_size
+                << ", \"assoc\": " << cfg.l2.associativity
+                << ", \"lineSize\": " << cfg.l2.line_size
+                << ", \"sets\": " << cfg.l2.num_sets() << "},\n";
+      std::cout << "    \"l3\": {\"sizeKB\": " << cfg.l3.kb_size
+                << ", \"assoc\": " << cfg.l3.associativity
+                << ", \"lineSize\": " << cfg.l3.line_size
+                << ", \"sets\": " << cfg.l3.num_sets() << "}\n";
+      std::cout << "  },\n";
+
       std::cout << "  \"levels\": {\n";
 
       auto json_level = [](const char *name, const CacheStats &s, bool last) {
@@ -373,8 +655,19 @@ int main(int argc, char *argv[]) {
                   << "\"fix\": \"" << escape_json(s.fix) << "\"}"
                   << (i + 1 < suggestions.size() ? ",\n" : "\n");
       }
-      std::cout << "  ]\n";
-      std::cout << "}\n";
+      std::cout << "  ]";
+      // Add prefetch stats if enabled
+      if (prefetch_policy != PrefetchPolicy::NONE) {
+        auto pf_stats = processor.get_prefetch_stats();
+        std::cout << ",\n  \"prefetch\": {\n"
+                  << "    \"policy\": \"" << prefetch_policy_name(prefetch_policy) << "\",\n"
+                  << "    \"degree\": " << prefetch_degree << ",\n"
+                  << "    \"issued\": " << pf_stats.prefetches_issued << ",\n"
+                  << "    \"useful\": " << pf_stats.prefetches_useful << ",\n"
+                  << "    \"accuracy\": " << std::fixed << std::setprecision(3) << pf_stats.accuracy() << "\n"
+                  << "  }";
+      }
+      std::cout << "\n}\n";
     } else {
       std::cout << "\n=== Cache Simulation Results ===\n";
       std::cout << "Config: " << config_name << "\n";

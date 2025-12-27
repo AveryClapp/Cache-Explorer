@@ -46,6 +46,10 @@ interface CompileError {
   column: number
   severity: 'error' | 'warning'
   message: string
+  suggestion?: string
+  notes?: string[]
+  sourceLine?: string
+  caret?: string
 }
 
 interface ErrorResult {
@@ -53,6 +57,7 @@ interface ErrorResult {
   errors?: CompileError[]
   summary?: string
   message?: string
+  suggestion?: string
   raw?: string
   error?: string
 }
@@ -65,12 +70,44 @@ interface OptimizationSuggestion {
   fix: string
 }
 
+interface CacheLevelConfig {
+  sizeKB: number
+  assoc: number
+  lineSize: number
+  sets: number
+}
+
+interface CacheConfig {
+  l1d: CacheLevelConfig
+  l1i: CacheLevelConfig
+  l2: CacheLevelConfig
+  l3: CacheLevelConfig
+}
+
+// Timeline event from streaming progress
+interface TimelineEvent {
+  i: number       // event index
+  t: 'R' | 'W' | 'I'  // type: Read, Write, Instruction fetch
+  l: 1 | 2 | 3 | 4    // hit level: 1=L1, 2=L2, 3=L3, 4=memory
+  f?: string      // file (optional)
+  n?: number      // line number (optional)
+}
+
+interface PrefetchStats {
+  policy: string
+  degree: number
+  issued: number
+  useful: number
+  accuracy: number
+}
+
 interface CacheResult {
   config: string
   events: number
   multicore?: boolean
   cores?: number
   threads?: number
+  cacheConfig?: CacheConfig
   levels: {
     l1?: CacheStats
     l1d?: CacheStats
@@ -82,6 +119,8 @@ interface CacheResult {
   hotLines: HotLine[]
   falseSharing?: FalseSharingEvent[]
   suggestions?: OptimizationSuggestion[]
+  timeline?: TimelineEvent[]  // collected timeline events
+  prefetch?: PrefetchStats
 }
 
 type Language = 'c' | 'cpp' | 'rust'
@@ -368,7 +407,7 @@ function formatPercent(rate: number): string {
   return (rate * 100).toFixed(1) + '%'
 }
 
-function CacheBar({ result }: { result: CacheResult }) {
+function CacheBar({ result, sampled }: { result: CacheResult; sampled?: boolean }) {
   const l1d = result.levels.l1d || result.levels.l1!
   const l1i = result.levels.l1i
   const l2 = result.levels.l2
@@ -378,26 +417,26 @@ function CacheBar({ result }: { result: CacheResult }) {
 
   return (
     <div className="cache-bar">
-      <div className={`cache-item ${getClass(l1d.hitRate)}`}>
+      <div className={`cache-item ${getClass(l1d.hitRate)}`} title={`${l1d.hits.toLocaleString()} hits, ${l1d.misses.toLocaleString()} misses`}>
         <span className="cache-label">L1d</span>
         <span className="cache-rate">{formatPercent(l1d.hitRate)}</span>
       </div>
       {l1i && (
-        <div className={`cache-item ${getClass(l1i.hitRate)}`}>
+        <div className={`cache-item ${getClass(l1i.hitRate)}`} title={`${l1i.hits.toLocaleString()} hits, ${l1i.misses.toLocaleString()} misses`}>
           <span className="cache-label">L1i</span>
           <span className="cache-rate">{formatPercent(l1i.hitRate)}</span>
         </div>
       )}
-      <div className={`cache-item ${getClass(l2.hitRate)}`}>
+      <div className={`cache-item ${getClass(l2.hitRate)}`} title={`${l2.hits.toLocaleString()} hits, ${l2.misses.toLocaleString()} misses`}>
         <span className="cache-label">L2</span>
         <span className="cache-rate">{formatPercent(l2.hitRate)}</span>
       </div>
-      <div className={`cache-item ${getClass(l3.hitRate)}`}>
+      <div className={`cache-item ${getClass(l3.hitRate)}`} title={`${l3.hits.toLocaleString()} hits, ${l3.misses.toLocaleString()} misses`}>
         <span className="cache-label">L3</span>
         <span className="cache-rate">{formatPercent(l3.hitRate)}</span>
       </div>
-      <div className="cache-item events">
-        <span className="cache-label">Events</span>
+      <div className="cache-item events" title={sampled ? 'Sampled - actual count may be higher' : 'Total memory access events'}>
+        <span className="cache-label">{sampled ? 'Sampled' : 'Events'}</span>
         <span className="cache-rate">{result.events.toLocaleString()}</span>
       </div>
     </div>
@@ -426,6 +465,239 @@ function LevelDetail({ name, stats }: { name: string; stats: CacheStats }) {
   )
 }
 
+function CacheHierarchyViz({ result }: { result: CacheResult }) {
+  const config = result.cacheConfig
+  const levels = result.levels
+
+  const l1d = levels.l1d || levels.l1
+  const l1i = levels.l1i
+  const l2 = levels.l2
+  const l3 = levels.l3
+
+  if (!l1d) return null
+
+  const formatSize = (kb: number) => {
+    if (kb >= 1024) return `${kb / 1024} MB`
+    return `${kb} KB`
+  }
+
+  const getHitRateClass = (rate: number) => {
+    if (rate >= 0.95) return 'excellent'
+    if (rate >= 0.8) return 'good'
+    if (rate >= 0.5) return 'moderate'
+    return 'poor'
+  }
+
+  const HitRateBar = ({ rate, label }: { rate: number; label: string }) => (
+    <div className="hit-rate-bar">
+      <div className="hit-rate-label">{label}</div>
+      <div className="hit-rate-track">
+        <div
+          className={`hit-rate-fill ${getHitRateClass(rate)}`}
+          style={{ width: `${rate * 100}%` }}
+        />
+      </div>
+      <div className="hit-rate-value">{(rate * 100).toFixed(1)}%</div>
+    </div>
+  )
+
+  return (
+    <div className="cache-hierarchy-viz">
+      <div className="hierarchy-title">Cache Hierarchy</div>
+
+      <div className="hierarchy-diagram">
+        {/* CPU Core */}
+        <div className="hierarchy-level cpu">
+          <div className="level-box cpu-box">
+            <div className="box-label">CPU Core</div>
+          </div>
+        </div>
+
+        {/* L1 Caches */}
+        <div className="hierarchy-level l1">
+          <div className={`level-box l1-box ${getHitRateClass(l1d.hitRate)}`}>
+            <div className="box-label">L1 Data</div>
+            {config && <div className="box-size">{formatSize(config.l1d.sizeKB)}</div>}
+            <div className="box-stats">
+              {l1d.hits} hits / {l1d.misses} misses
+            </div>
+          </div>
+          {l1i && (
+            <div className={`level-box l1-box ${getHitRateClass(l1i.hitRate)}`}>
+              <div className="box-label">L1 Instr</div>
+              {config && <div className="box-size">{formatSize(config.l1i.sizeKB)}</div>}
+              <div className="box-stats">
+                {l1i.hits} hits / {l1i.misses} misses
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="hierarchy-connector" />
+
+        {/* L2 Cache */}
+        <div className="hierarchy-level l2">
+          <div className={`level-box l2-box ${getHitRateClass(l2.hitRate)}`}>
+            <div className="box-label">L2 Unified</div>
+            {config && <div className="box-size">{formatSize(config.l2.sizeKB)}</div>}
+            <div className="box-stats">
+              {l2.hits} hits / {l2.misses} misses
+            </div>
+          </div>
+        </div>
+
+        <div className="hierarchy-connector" />
+
+        {/* L3 Cache */}
+        <div className="hierarchy-level l3">
+          <div className={`level-box l3-box ${getHitRateClass(l3.hitRate)}`}>
+            <div className="box-label">L3 Shared</div>
+            {config && <div className="box-size">{formatSize(config.l3.sizeKB)}</div>}
+            <div className="box-stats">
+              {l3.hits} hits / {l3.misses} misses
+            </div>
+          </div>
+        </div>
+
+        <div className="hierarchy-connector" />
+
+        {/* Main Memory */}
+        <div className="hierarchy-level memory">
+          <div className="level-box memory-box">
+            <div className="box-label">Main Memory</div>
+            <div className="box-stats">{l3.misses} accesses</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Hit Rate Bars */}
+      <div className="hit-rates-section">
+        <div className="hit-rates-title">Hit Rates</div>
+        <HitRateBar rate={l1d.hitRate} label="L1 Data" />
+        {l1i && <HitRateBar rate={l1i.hitRate} label="L1 Instr" />}
+        <HitRateBar rate={l2.hitRate} label="L2" />
+        <HitRateBar rate={l3.hitRate} label="L3" />
+      </div>
+
+      {/* Cache Grid (L1D visualization) */}
+      {config && config.l1d.sets <= 32 && (
+        <div className="cache-grid-section">
+          <div className="cache-grid-title">
+            L1 Data Cache Structure ({config.l1d.sets} sets × {config.l1d.assoc} ways)
+          </div>
+          <div className="cache-grid">
+            <div className="grid-header">
+              <div className="grid-corner">Set</div>
+              {Array.from({ length: config.l1d.assoc }, (_, i) => (
+                <div key={i} className="grid-way-label">Way {i}</div>
+              ))}
+            </div>
+            {Array.from({ length: Math.min(config.l1d.sets, 16) }, (_, setIdx) => (
+              <div key={setIdx} className="grid-row">
+                <div className="grid-set-label">{setIdx}</div>
+                {Array.from({ length: config.l1d.assoc }, (_, wayIdx) => (
+                  <div key={wayIdx} className="grid-cell" title={`Set ${setIdx}, Way ${wayIdx}`} />
+                ))}
+              </div>
+            ))}
+            {config.l1d.sets > 16 && (
+              <div className="grid-ellipsis">... {config.l1d.sets - 16} more sets</div>
+            )}
+          </div>
+          <div className="cache-grid-legend">
+            <span className="legend-item"><span className="legend-color empty" /> Empty</span>
+            <span className="legend-item"><span className="legend-color valid" /> Valid</span>
+            <span className="legend-item"><span className="legend-color dirty" /> Dirty</span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AccessTimeline({ events, onEventClick }: { events: TimelineEvent[], onEventClick?: (line: number) => void }) {
+  const maxEvents = 500  // Limit display for performance
+  const displayEvents = events.slice(-maxEvents)
+
+  const getLevelColor = (level: number) => {
+    switch (level) {
+      case 1: return 'level-l1'  // L1 hit - green
+      case 2: return 'level-l2'  // L2 hit - yellow
+      case 3: return 'level-l3'  // L3 hit - orange
+      case 4: return 'level-mem' // Memory - red
+      default: return 'level-mem'
+    }
+  }
+
+  const getLevelName = (level: number) => {
+    switch (level) {
+      case 1: return 'L1'
+      case 2: return 'L2'
+      case 3: return 'L3'
+      case 4: return 'Mem'
+      default: return '?'
+    }
+  }
+
+  const getTypeName = (type: string) => {
+    switch (type) {
+      case 'R': return 'Read'
+      case 'W': return 'Write'
+      case 'I': return 'Fetch'
+      default: return type
+    }
+  }
+
+  // Count events by level
+  const counts = { l1: 0, l2: 0, l3: 0, mem: 0 }
+  for (const e of events) {
+    if (e.l === 1) counts.l1++
+    else if (e.l === 2) counts.l2++
+    else if (e.l === 3) counts.l3++
+    else counts.mem++
+  }
+
+  return (
+    <div className="access-timeline">
+      <div className="timeline-header">
+        <span className="timeline-title">Access Timeline</span>
+        <span className="timeline-count">{events.length.toLocaleString()} events</span>
+      </div>
+
+      <div className="timeline-summary">
+        <span className="timeline-stat level-l1">{counts.l1} L1</span>
+        <span className="timeline-stat level-l2">{counts.l2} L2</span>
+        <span className="timeline-stat level-l3">{counts.l3} L3</span>
+        <span className="timeline-stat level-mem">{counts.mem} Mem</span>
+      </div>
+
+      <div className="timeline-strip">
+        {displayEvents.map((e, idx) => (
+          <div
+            key={idx}
+            className={`timeline-event ${getLevelColor(e.l)}`}
+            title={`#${e.i}: ${getTypeName(e.t)} → ${getLevelName(e.l)}${e.f ? ` (${e.f}:${e.n})` : ''}`}
+            onClick={() => e.n && onEventClick?.(e.n)}
+          />
+        ))}
+      </div>
+
+      <div className="timeline-legend">
+        <span className="legend-item"><span className="legend-dot level-l1" /> L1 Hit</span>
+        <span className="legend-item"><span className="legend-dot level-l2" /> L2 Hit</span>
+        <span className="legend-item"><span className="legend-dot level-l3" /> L3 Hit</span>
+        <span className="legend-item"><span className="legend-dot level-mem" /> Memory</span>
+      </div>
+
+      {events.length > maxEvents && (
+        <div className="timeline-truncated">
+          Showing last {maxEvents} of {events.length.toLocaleString()} events
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ErrorDisplay({ error }: { error: ErrorResult }) {
   const titles: Record<string, string> = {
     compile_error: 'Compilation Failed',
@@ -437,17 +709,66 @@ function ErrorDisplay({ error }: { error: ErrorResult }) {
     server_error: 'Server Error'
   }
 
+  const icons: Record<string, string> = {
+    compile_error: '\u2717',
+    linker_error: '\u26D4',
+    runtime_error: '\u26A0',
+    timeout: '\u23F1',
+    unknown_error: '\u2753',
+    validation_error: '\u26A0',
+    server_error: '\u26A0'
+  }
+
   return (
     <div className="error-box">
-      <div className="error-title">{titles[error.type] || 'Error'}</div>
-      {error.summary && <div className="error-summary">{error.summary}</div>}
+      <div className="error-header">
+        <span className="error-icon">{icons[error.type] || '\u2717'}</span>
+        <span className="error-title">{titles[error.type] || 'Error'}</span>
+        {error.summary && <span className="error-summary">{error.summary}</span>}
+      </div>
+
       {error.errors?.map((e, i) => (
         <div key={i} className={`error-item ${e.severity}`}>
-          <span className="error-loc">Line {e.line}:{e.column}</span>
-          <span className="error-msg">{e.message}</span>
+          <div className="error-item-header">
+            <span className="error-loc">Line {e.line}:{e.column}</span>
+            <span className={`error-severity ${e.severity}`}>{e.severity}</span>
+          </div>
+          <div className="error-msg">{e.message}</div>
+
+          {e.sourceLine && (
+            <pre className="error-source">
+              <code>{e.sourceLine}</code>
+              {e.caret && <code className="error-caret">{e.caret}</code>}
+            </pre>
+          )}
+
+          {e.suggestion && (
+            <div className="error-suggestion">
+              <span className="suggestion-icon">{'\u{1F4A1}'}</span> {e.suggestion}
+            </div>
+          )}
+
+          {e.notes && e.notes.length > 0 && (
+            <div className="error-notes">
+              {e.notes.map((note, j) => (
+                <div key={j} className="error-note">\u2192 {note}</div>
+              ))}
+            </div>
+          )}
         </div>
       ))}
-      {error.message && <pre className="error-pre">{error.message}</pre>}
+
+      {error.message && (
+        <div className="error-message-box">
+          <div className="error-msg">{error.message}</div>
+          {error.suggestion && (
+            <div className="error-suggestion">
+              <span className="suggestion-icon">{'\u{1F4A1}'}</span> {error.suggestion}
+            </div>
+          )}
+        </div>
+      )}
+
       {error.raw && <pre className="error-pre">{error.raw}</pre>}
       {error.error && <pre className="error-pre">{error.error}</pre>}
     </div>
@@ -503,11 +824,37 @@ function decodeState(encoded: string): ShareableState | null {
   }
 }
 
+type PrefetchPolicy = 'none' | 'next' | 'stream' | 'stride' | 'adaptive'
+
+// Default prefetch policies for hardware presets (based on real hardware behavior)
+const PREFETCH_DEFAULTS: Record<string, PrefetchPolicy> = {
+  // Intel uses aggressive stream prefetchers + adjacent line prefetcher
+  intel: 'stream',
+  intel14: 'stream',
+  // AMD Zen uses stride + stream detection
+  amd: 'adaptive',
+  zen3: 'adaptive',
+  zen4: 'adaptive',
+  // Apple Silicon has very aggressive stream prefetchers
+  apple: 'stream',
+  m1: 'stream',
+  m2: 'stream',
+  // ARM Graviton uses stream prefetching
+  graviton: 'stream',
+  // Embedded often has simple or no prefetching
+  embedded: 'next',
+  // Educational - no prefetch to show raw behavior
+  educational: 'none',
+  // Custom - user decides
+  custom: 'none',
+}
+
 function App() {
   const [code, setCode] = useState(EXAMPLE_CODE)
   const [language, setLanguage] = useState<Language>('c')
   const [config, setConfig] = useState('educational')
   const [optLevel, setOptLevel] = useState('-O0')
+  const [prefetchPolicy, setPrefetchPolicy] = useState<PrefetchPolicy>('none')
   const [result, setResult] = useState<CacheResult | null>(null)
   const [stage, setStage] = useState<Stage>('idle')
   const [error, setError] = useState<ErrorResult | null>(null)
@@ -516,8 +863,14 @@ function App() {
   const [copied, setCopied] = useState(false)
   const [showOptions, setShowOptions] = useState(false)
   const [showDetails, setShowDetails] = useState(false)
+  const [showTimeline, setShowTimeline] = useState(false)
   const [diffMode, setDiffMode] = useState(false)
+  const [sampleRate, setSampleRate] = useState(1)  // 1 = no sampling
+  const [eventLimit, setEventLimit] = useState(1000000)  // 1M default
+  const [longRunning, setLongRunning] = useState(false)
   const [baselineCode, setBaselineCode] = useState<string | null>(null)
+  const [timeline, setTimeline] = useState<TimelineEvent[]>([])
+  const timelineRef = useRef<TimelineEvent[]>([])  // Accumulator during streaming
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const monacoRef = useRef<Monaco | null>(null)
   const decorationsRef = useRef<string[]>([])
@@ -647,9 +1000,16 @@ function App() {
         const lineNum = line.line
         if (lineNum > 0 && lineNum <= model.getLineCount()) {
           let className = 'line-good'
-          if (line.missRate > 0.5) className = 'line-bad'
-          else if (line.missRate > 0.2) className = 'line-warn'
+          let inlineClass = 'inline-good'
+          if (line.missRate > 0.5) {
+            className = 'line-bad'
+            inlineClass = 'inline-bad'
+          } else if (line.missRate > 0.2) {
+            className = 'line-warn'
+            inlineClass = 'inline-warn'
+          }
 
+          // Background highlight for the whole line
           decorations.push({
             range: new monaco.Range(lineNum, 1, lineNum, 1),
             options: {
@@ -657,7 +1017,19 @@ function App() {
               className,
               glyphMarginClassName: className.replace('line-', 'glyph-'),
               glyphMarginHoverMessage: {
-                value: `**${line.misses} misses** (${(line.missRate * 100).toFixed(1)}% miss rate)`
+                value: `**${line.misses.toLocaleString()} misses** (${(line.missRate * 100).toFixed(1)}% miss rate)\n\n${line.hits.toLocaleString()} hits total`
+              }
+            }
+          })
+
+          // Inline annotation at end of line showing miss info
+          const lineContent = model.getLineContent(lineNum)
+          decorations.push({
+            range: new monaco.Range(lineNum, lineContent.length + 1, lineNum, lineContent.length + 1),
+            options: {
+              after: {
+                content: ` // ${line.misses} misses (${(line.missRate * 100).toFixed(0)}%)`,
+                inlineClassName: inlineClass
               }
             }
           })
@@ -669,9 +1041,25 @@ function App() {
   }, [result])
 
   const runAnalysis = () => {
+    // Input validation
+    if (code.length > 100000) {
+      setError({ type: 'validation_error', message: 'Code too long (max 100KB)', suggestion: 'Try a smaller program or use sampling' })
+      return
+    }
+    if (code.trim().length === 0) {
+      setError({ type: 'validation_error', message: 'No code to analyze', suggestion: 'Write or paste some code first' })
+      return
+    }
+
     setStage('connecting')
     setError(null)
     setResult(null)
+    setTimeline([])
+    setLongRunning(false)
+    timelineRef.current = []
+
+    // Set long-running warning after 10 seconds
+    const longRunTimeout = setTimeout(() => setLongRunning(true), 10000)
 
     const ws = new WebSocket('ws://localhost:3001/ws')
 
@@ -679,17 +1067,35 @@ function App() {
       const payload: Record<string, unknown> = { code, config, optLevel, language }
       if (config === 'custom') payload.customConfig = customConfig
       if (defines.length > 0) payload.defines = defines.filter(d => d.name.trim())
+      if (prefetchPolicy !== 'none') payload.prefetch = prefetchPolicy
+      if (sampleRate > 1) payload.sample = sampleRate
+      if (eventLimit > 0) payload.limit = eventLimit
       ws.send(JSON.stringify(payload))
     }
 
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data)
       if (msg.type === 'status') setStage(msg.stage as Stage)
-      else if (msg.type === 'result') {
-        setResult(msg.data as CacheResult)
+      else if (msg.type === 'progress') {
+        // Collect timeline events from streaming progress
+        if (msg.timeline && Array.isArray(msg.timeline)) {
+          timelineRef.current = [...timelineRef.current, ...msg.timeline]
+          // Update timeline state periodically (every 200 events)
+          if (timelineRef.current.length % 200 < msg.timeline.length) {
+            setTimeline([...timelineRef.current])
+          }
+        }
+      } else if (msg.type === 'result') {
+        clearTimeout(longRunTimeout)
+        setLongRunning(false)
+        // Finalize timeline and set result
+        setTimeline([...timelineRef.current])
+        setResult({ ...(msg.data as CacheResult), timeline: timelineRef.current })
         setStage('idle')
         ws.close()
       } else if (msg.type === 'error') {
+        clearTimeout(longRunTimeout)
+        setLongRunning(false)
         setError(msg as ErrorResult)
         setStage('idle')
         ws.close()
@@ -705,6 +1111,9 @@ function App() {
         const payload: Record<string, unknown> = { code, config, optLevel, language }
         if (config === 'custom') payload.customConfig = customConfig
         if (defines.length > 0) payload.defines = defines.filter(d => d.name.trim())
+        if (prefetchPolicy !== 'none') payload.prefetch = prefetchPolicy
+        if (sampleRate > 1) payload.sample = sampleRate
+        if (eventLimit > 0) payload.limit = eventLimit
 
         const response = await fetch('http://localhost:3001/compile', {
           method: 'POST',
@@ -761,25 +1170,56 @@ function App() {
             </optgroup>
           </select>
 
-          <select value={language} onChange={(e) => setLanguage(e.target.value as Language)} className="select-lang">
+          <select value={language} onChange={(e) => setLanguage(e.target.value as Language)} className="select-lang" title="Programming language">
             <option value="c">C</option>
             <option value="cpp">C++</option>
             <option value="rust">Rust</option>
           </select>
 
-          <select value={config} onChange={(e) => setConfig(e.target.value)} className="select-config">
-            <option value="educational">Educational</option>
-            <option value="intel">Intel 12th Gen</option>
-            <option value="amd">AMD Zen 4</option>
-            <option value="apple">Apple M-series</option>
-            <option value="custom">Custom</option>
+          <select value={config} title="Simulated CPU cache configuration" onChange={(e) => {
+            const newConfig = e.target.value
+            setConfig(newConfig)
+            // Auto-select default prefetch policy for this hardware
+            const defaultPrefetch = PREFETCH_DEFAULTS[newConfig] || 'none'
+            setPrefetchPolicy(defaultPrefetch)
+          }} className="select-config">
+            <optgroup label="Learning">
+              <option value="educational">Educational (tiny)</option>
+            </optgroup>
+            <optgroup label="Intel">
+              <option value="intel">Intel 12th Gen</option>
+              <option value="intel14">Intel 14th Gen</option>
+            </optgroup>
+            <optgroup label="AMD">
+              <option value="zen3">AMD Zen 3</option>
+              <option value="amd">AMD Zen 4</option>
+            </optgroup>
+            <optgroup label="Apple">
+              <option value="apple">Apple M1</option>
+              <option value="m2">Apple M2</option>
+            </optgroup>
+            <optgroup label="Cloud/ARM">
+              <option value="graviton">AWS Graviton 3</option>
+              <option value="embedded">Embedded (Cortex-A53)</option>
+            </optgroup>
+            <optgroup label="Custom">
+              <option value="custom">Custom Config</option>
+            </optgroup>
           </select>
 
-          <select value={optLevel} onChange={(e) => setOptLevel(e.target.value)} className="select-opt">
+          <select value={optLevel} onChange={(e) => setOptLevel(e.target.value)} className="select-opt" title="Compiler optimization level (-O0 shows more detail, -O2/-O3 show optimized behavior)">
             <option value="-O0">-O0</option>
             <option value="-O1">-O1</option>
             <option value="-O2">-O2</option>
             <option value="-O3">-O3</option>
+          </select>
+
+          <select value={prefetchPolicy} onChange={(e) => setPrefetchPolicy(e.target.value as PrefetchPolicy)} className="select-prefetch" title="Simulate hardware prefetching (auto-selected based on CPU)">
+            <option value="none">No Prefetch</option>
+            <option value="next">Next Line</option>
+            <option value="stream">Stream</option>
+            <option value="stride">Stride</option>
+            <option value="adaptive">Adaptive</option>
           </select>
         </div>
 
@@ -787,6 +1227,7 @@ function App() {
           <button onClick={runAnalysis} disabled={isLoading} className="btn-run">
             {isLoading ? stageText[stage] : 'Run'}
           </button>
+          <span className="shortcut-hint">⌘↵</span>
         </div>
 
         <div className="toolbar-right">
@@ -839,6 +1280,36 @@ function App() {
                     <button className="btn-add" onClick={() => setDefines([...defines, { name: '', value: '' }])}>
                       + Add Define
                     </button>
+                  </div>
+                </div>
+
+                <div className="option-divider" />
+
+                <div className="option-section">
+                  <div className="option-label">Performance</div>
+                  <div className="perf-controls">
+                    <div className="perf-row">
+                      <label>Event Limit</label>
+                      <select value={eventLimit} onChange={(e) => setEventLimit(Number(e.target.value))}>
+                        <option value={100000}>100K</option>
+                        <option value={500000}>500K</option>
+                        <option value={1000000}>1M (default)</option>
+                        <option value={5000000}>5M</option>
+                        <option value={0}>No limit</option>
+                      </select>
+                    </div>
+                    <div className="perf-row">
+                      <label>Sampling</label>
+                      <select value={sampleRate} onChange={(e) => setSampleRate(Number(e.target.value))}>
+                        <option value={1}>All events</option>
+                        <option value={10}>1:10 (10%)</option>
+                        <option value={100}>1:100 (1%)</option>
+                        <option value={1000}>1:1000 (0.1%)</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="perf-hint">
+                    Use sampling for large programs to prevent timeouts
                   </div>
                 </div>
 
@@ -920,19 +1391,65 @@ function App() {
 
           {result && (
             <>
-              <CacheBar result={result} />
+              <CacheBar result={result} sampled={sampleRate > 1} />
 
-              <button className="btn-details" onClick={() => setShowDetails(!showDetails)}>
-                {showDetails ? 'Hide Details' : 'Show Details'}
-              </button>
+              {result.prefetch && (
+                <div className="prefetch-stats">
+                  <div className="prefetch-header">
+                    <span className="prefetch-icon">⚡</span>
+                    <span className="prefetch-title">Prefetching: {result.prefetch.policy}</span>
+                  </div>
+                  <div className="prefetch-details">
+                    <span className="prefetch-stat">
+                      <span className="stat-label">Issued</span>
+                      <span className="stat-value">{result.prefetch.issued.toLocaleString()}</span>
+                    </span>
+                    <span className="prefetch-stat">
+                      <span className="stat-label">Useful</span>
+                      <span className="stat-value">{result.prefetch.useful.toLocaleString()}</span>
+                    </span>
+                    <span className="prefetch-stat">
+                      <span className="stat-label">Accuracy</span>
+                      <span className={`stat-value ${result.prefetch.accuracy > 0.5 ? 'good' : result.prefetch.accuracy > 0.2 ? 'ok' : ''}`}>
+                        {(result.prefetch.accuracy * 100).toFixed(1)}%
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="btn-row">
+                <button className="btn-toggle" onClick={() => setShowDetails(!showDetails)}>
+                  {showDetails ? 'Hide Details' : 'Details'}
+                </button>
+                <button className="btn-toggle" onClick={() => setShowTimeline(!showTimeline)}>
+                  {showTimeline ? 'Hide Timeline' : 'Timeline'}
+                </button>
+              </div>
+
+              {showTimeline && timeline.length > 0 && (
+                <AccessTimeline
+                  events={timeline}
+                  onEventClick={(line) => {
+                    if (editorRef.current) {
+                      editorRef.current.revealLineInCenter(line)
+                      editorRef.current.setPosition({ lineNumber: line, column: 1 })
+                      editorRef.current.focus()
+                    }
+                  }}
+                />
+              )}
 
               {showDetails && (
-                <div className="details-grid">
-                  <LevelDetail name="L1 Data" stats={result.levels.l1d || result.levels.l1!} />
-                  {result.levels.l1i && <LevelDetail name="L1 Instruction" stats={result.levels.l1i} />}
-                  <LevelDetail name="L2" stats={result.levels.l2} />
-                  <LevelDetail name="L3" stats={result.levels.l3} />
-                </div>
+                <>
+                  <div className="details-grid">
+                    <LevelDetail name="L1 Data" stats={result.levels.l1d || result.levels.l1!} />
+                    {result.levels.l1i && <LevelDetail name="L1 Instruction" stats={result.levels.l1i} />}
+                    <LevelDetail name="L2" stats={result.levels.l2} />
+                    <LevelDetail name="L3" stats={result.levels.l3} />
+                  </div>
+                  <CacheHierarchyViz result={result} />
+                </>
               )}
 
               {result.coherence && result.coherence.falseSharingEvents > 0 && (
@@ -954,12 +1471,22 @@ function App() {
                       </tr>
                     </thead>
                     <tbody>
-                      {result.hotLines.slice(0, 10).map((line, i) => (
-                        <tr key={i}>
-                          <td className="mono">{line.line}</td>
-                          <td className="mono">{line.misses}</td>
-                          <td className={`mono ${line.missRate > 0.5 ? 'bad' : line.missRate > 0.2 ? 'ok' : 'good'}`}>
-                            {formatPercent(line.missRate)}
+                      {result.hotLines.slice(0, 10).map((hotLine, i) => (
+                        <tr
+                          key={i}
+                          className="clickable-row"
+                          onClick={() => {
+                            if (editorRef.current && hotLine.line > 0) {
+                              editorRef.current.revealLineInCenter(hotLine.line)
+                              editorRef.current.setPosition({ lineNumber: hotLine.line, column: 1 })
+                              editorRef.current.focus()
+                            }
+                          }}
+                        >
+                          <td className="mono">{hotLine.line}</td>
+                          <td className="mono">{hotLine.misses.toLocaleString()}</td>
+                          <td className={`mono ${hotLine.missRate > 0.5 ? 'bad' : hotLine.missRate > 0.2 ? 'ok' : 'good'}`}>
+                            {formatPercent(hotLine.missRate)}
                           </td>
                         </tr>
                       ))}
@@ -986,12 +1513,25 @@ function App() {
             <div className="loading">
               <div className="spinner" />
               <span>{stageText[stage]}</span>
+              {longRunning && (
+                <div className="long-running-warning">
+                  Taking longer than expected. Try enabling sampling in Options.
+                </div>
+              )}
             </div>
           )}
 
           {!result && !error && !isLoading && (
             <div className="placeholder">
-              Press Run to analyze cache behavior
+              <div className="placeholder-icon">📊</div>
+              <div className="placeholder-title">Cache Explorer</div>
+              <div className="placeholder-text">
+                Write or paste code, then press <kbd>⌘</kbd>+<kbd>↵</kbd> to analyze cache behavior
+              </div>
+              <div className="placeholder-tips">
+                <div className="tip">💡 Try the Examples dropdown for common patterns</div>
+                <div className="tip">⚙️ Change hardware preset to simulate different CPUs</div>
+              </div>
             </div>
           )}
         </div>

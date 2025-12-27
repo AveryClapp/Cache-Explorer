@@ -75,8 +75,53 @@ int CacheLevel::find_victim_random(const std::vector<CacheLine> &set) const {
   return std::rand() % config.associativity;
 }
 
+// Static RRIP: Insert with RRPV=2 (long re-reference), hit sets RRPV=0
+// Evict line with RRPV=3, increment all if none found
+int CacheLevel::find_victim_srrip(std::vector<CacheLine> &set) {
+  // First check for invalid lines
+  for (int i = 0; i < config.associativity; i++) {
+    if (!set[i].valid)
+      return i;
+  }
+
+  // Find line with RRPV=3 (distant re-reference)
+  while (true) {
+    for (int i = 0; i < config.associativity; i++) {
+      if (set[i].rrip_value >= 3)
+        return i;
+    }
+    // No line with max RRPV, increment all
+    for (int i = 0; i < config.associativity; i++) {
+      if (set[i].rrip_value < 3)
+        set[i].rrip_value++;
+    }
+  }
+}
+
+// Bimodal RRIP: Most inserts with RRPV=3 (distant), occasional RRPV=2
+// Better for scan-resistant behavior
+int CacheLevel::find_victim_brrip(std::vector<CacheLine> &set) {
+  // First check for invalid lines
+  for (int i = 0; i < config.associativity; i++) {
+    if (!set[i].valid)
+      return i;
+  }
+
+  // Same eviction as SRRIP
+  while (true) {
+    for (int i = 0; i < config.associativity; i++) {
+      if (set[i].rrip_value >= 3)
+        return i;
+    }
+    for (int i = 0; i < config.associativity; i++) {
+      if (set[i].rrip_value < 3)
+        set[i].rrip_value++;
+    }
+  }
+}
+
 int CacheLevel::find_victim(uint64_t set_index) {
-  const std::vector<CacheLine> &set = sets[set_index];
+  std::vector<CacheLine> &set = sets[set_index];
 
   switch (config.policy) {
   case EvictionPolicy::LRU:
@@ -85,6 +130,10 @@ int CacheLevel::find_victim(uint64_t set_index) {
     return find_victim_plru(set_index);
   case EvictionPolicy::RANDOM:
     return find_victim_random(set);
+  case EvictionPolicy::SRRIP:
+    return find_victim_srrip(set);
+  case EvictionPolicy::BRRIP:
+    return find_victim_brrip(set);
   default:
     return find_victim_lru(set);
   }
@@ -105,6 +154,10 @@ AccessInfo CacheLevel::access(uint64_t address, bool is_write) {
   for (int way = 0; way < config.associativity; way++) {
     if (set[way].valid && set[way].tag == tag) {
       set[way].lru_time = access_time;
+      // RRIP: promote to near-immediate on hit
+      if (config.policy == EvictionPolicy::SRRIP || config.policy == EvictionPolicy::BRRIP) {
+        set[way].rrip_value = 0;
+      }
       update_replacement_state(index, way);
       if (is_write)
         set[way].dirty = true;
@@ -126,6 +179,13 @@ AccessInfo CacheLevel::access(uint64_t address, bool is_write) {
   set[victim].valid = true;
   set[victim].dirty = is_write;
   set[victim].lru_time = access_time;
+  // RRIP: insert with long re-reference prediction
+  if (config.policy == EvictionPolicy::SRRIP) {
+    set[victim].rrip_value = 2;  // SRRIP inserts at 2
+  } else if (config.policy == EvictionPolicy::BRRIP) {
+    // BRRIP: mostly insert at 3, occasionally at 2 (1/32 chance)
+    set[victim].rrip_value = (std::rand() % 32 == 0) ? 2 : 3;
+  }
   update_replacement_state(index, victim);
 
   AccessResult result =
@@ -144,6 +204,10 @@ AccessInfo CacheLevel::install(uint64_t address, bool is_dirty) {
     if (set[way].valid && set[way].tag == tag) {
       set[way].lru_time = access_time;
       set[way].dirty |= is_dirty;
+      // RRIP: promote to near-immediate on hit
+      if (config.policy == EvictionPolicy::SRRIP || config.policy == EvictionPolicy::BRRIP) {
+        set[way].rrip_value = 0;
+      }
       update_replacement_state(index, way);
       return {AccessResult::Hit, false, 0};
     }
@@ -161,6 +225,13 @@ AccessInfo CacheLevel::install(uint64_t address, bool is_dirty) {
   set[victim].valid = true;
   set[victim].dirty = is_dirty;
   set[victim].lru_time = access_time;
+  // RRIP: insert with long re-reference prediction
+  if (config.policy == EvictionPolicy::SRRIP) {
+    set[victim].rrip_value = 2;  // SRRIP inserts at 2
+  } else if (config.policy == EvictionPolicy::BRRIP) {
+    // BRRIP: mostly insert at 3, occasionally at 2 (1/32 chance)
+    set[victim].rrip_value = (std::rand() % 32 == 0) ? 2 : 3;
+  }
   update_replacement_state(index, victim);
 
   AccessResult result =

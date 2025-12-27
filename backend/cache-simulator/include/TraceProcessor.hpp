@@ -33,6 +33,26 @@ public:
     event_callback = cb;
   }
 
+  void enable_prefetching(PrefetchPolicy policy, int degree = 2) {
+    cache.enable_prefetching(policy, degree);
+  }
+
+  void disable_prefetching() {
+    cache.disable_prefetching();
+  }
+
+  bool is_prefetching_enabled() const {
+    return cache.is_prefetching_enabled();
+  }
+
+  PrefetchPolicy get_prefetch_policy() const {
+    return cache.get_prefetch_policy();
+  }
+
+  const PrefetchStats &get_prefetch_stats() const {
+    return cache.get_prefetch_stats();
+  }
+
   void process(const TraceEvent &event) {
     // Get the appropriate line size based on event type
     uint32_t line_size = event.is_icache

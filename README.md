@@ -6,20 +6,31 @@ Paste your code, see cache hits/misses in real-time with source-level attributio
 
 ## Quick Start
 
-### Web (Try Now)
+See [docs/QUICK_START.md](docs/QUICK_START.md) for the full guide.
 
-Visit [cache-explorer.dev](https://cache-explorer.dev):
-
-1. Paste C/C++/Rust code
-2. Click "Run"
-3. See cache behavior instantly
-
-### CLI (Local)
+### Web UI
 
 ```bash
-cache-explorer compile mycode.c -O2
-cache-explorer run ./a.out
-cache-explorer report
+# Start backend
+cd backend/server && npm install && npm start
+
+# Start frontend (new terminal)
+cd frontend && npm install && npm run dev
+
+# Open http://localhost:5173
+```
+
+### CLI
+
+```bash
+# Build first
+./scripts/build.sh
+
+# Analyze a C file
+./backend/scripts/cache-explore mycode.c
+
+# With options
+./backend/scripts/cache-explore mycode.c -O2 --config educational --json
 ```
 
 ## How It Works

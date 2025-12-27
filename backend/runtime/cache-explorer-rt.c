@@ -38,6 +38,14 @@ static int output_fd = -1;
 static int text_mode = 1;
 static atomic_int initialized = 0;
 
+// Sampling: only emit every Nth event (1 = no sampling, 100 = 1% of events)
+static uint32_t sample_rate = 1;
+static _Thread_local uint32_t sample_counter = 0;
+
+// Event limit: stop after this many events (0 = no limit)
+static uint64_t max_events = 0;
+static atomic_uint_fast64_t total_events = 0;
+
 static uint32_t intern_filename(const char *file) {
   for (uint32_t i = 0; i < file_table.count; i++) {
     if (strcmp(file_table.names[i], file) == 0)
@@ -52,6 +60,23 @@ static uint32_t intern_filename(const char *file) {
 
 static inline void emit_event(uint64_t addr_with_flag, uint32_t size,
                                const char *file, uint32_t line) {
+  // Sampling: skip events based on sample rate
+  if (sample_rate > 1) {
+    sample_counter++;
+    if (sample_counter < sample_rate) {
+      return;  // Skip this event
+    }
+    sample_counter = 0;  // Reset counter, emit this one
+  }
+
+  // Event limit: stop emitting after max_events
+  if (max_events > 0) {
+    uint64_t count = atomic_fetch_add(&total_events, 1);
+    if (count >= max_events) {
+      return;  // Hit limit, skip remaining events
+    }
+  }
+
   uint64_t head = atomic_load_explicit(&ring_buffer.head, memory_order_relaxed);
   uint64_t next = (head + 1) & BUFFER_MASK;
 
@@ -93,11 +118,25 @@ void __cache_explorer_init(void) {
 
   atomic_store(&ring_buffer.head, 0);
   atomic_store(&ring_buffer.tail, 0);
+  atomic_store(&total_events, 0);
   file_table.count = 0;
 
   const char *out = getenv("CACHE_EXPLORER_OUTPUT");
   if (out) {
     __cache_explorer_set_output(out);
+  }
+
+  // Sample rate: emit 1 in N events (1 = all, 100 = 1%, 1000 = 0.1%)
+  const char *rate = getenv("CACHE_EXPLORER_SAMPLE_RATE");
+  if (rate) {
+    sample_rate = (uint32_t)atoi(rate);
+    if (sample_rate < 1) sample_rate = 1;
+  }
+
+  // Max events: stop after this many (0 = no limit)
+  const char *limit = getenv("CACHE_EXPLORER_MAX_EVENTS");
+  if (limit) {
+    max_events = (uint64_t)atoll(limit);
   }
 }
 
