@@ -80,11 +80,11 @@ void __tag_mem_store(void *addr, uint32_t size, const char *file, uint32_t line)
   emit_event((uint64_t)addr | EVENT_STORE_FLAG, size, file, line);
 }
 
-void __tag_bb_entry(void *bb_addr, uint32_t instr_count, const char *file, uint32_t line) {
-  // Estimate instruction fetch size: instr_count * 4 bytes (average x86-64 instruction)
-  // The address is the basic block address, size is the fetch size
+void __tag_bb_entry(uint64_t bb_id, uint32_t instr_count, const char *file, uint32_t line) {
+  // Estimate instruction fetch size: instr_count * 4 bytes (average instruction size)
+  // bb_id is a unique identifier for this basic block
   uint32_t fetch_size = instr_count * 4;
-  emit_event((uint64_t)bb_addr | EVENT_ICACHE_FLAG, fetch_size, file, line);
+  emit_event(bb_id | EVENT_ICACHE_FLAG, fetch_size, file, line);
 }
 
 void __cache_explorer_init(void) {

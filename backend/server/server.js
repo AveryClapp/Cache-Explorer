@@ -78,13 +78,16 @@ function parseCompileErrors(stderr, tempFile) {
 }
 
 app.post('/compile', async (req, res) => {
-  const { code, config = 'educational', optLevel = '-O0' } = req.body;
+  const { code, config = 'educational', optLevel = '-O0', language = 'c' } = req.body;
 
   if (!code) {
     return res.status(400).json({ error: 'No code provided', type: 'validation_error' });
   }
 
-  const tempFile = `/tmp/cache-explorer-${randomUUID()}.c`;
+  // Determine file extension based on language
+  const extensions = { c: '.c', cpp: '.cpp', rust: '.rs' };
+  const ext = extensions[language] || '.c';
+  const tempFile = `/tmp/cache-explorer-${randomUUID()}${ext}`;
 
   try {
     await writeFile(tempFile, code);
@@ -218,14 +221,17 @@ wss.on('connection', (ws) => {
       return;
     }
 
-    const { code, config = 'educational', optLevel = '-O0', customConfig, defines } = data;
+    const { code, config = 'educational', optLevel = '-O0', customConfig, defines, language = 'c' } = data;
 
     if (!code) {
       ws.send(JSON.stringify({ type: 'error', error: 'No code provided' }));
       return;
     }
 
-    const tempFile = `/tmp/cache-explorer-${randomUUID()}.c`;
+    // Determine file extension based on language
+    const extensions = { c: '.c', cpp: '.cpp', rust: '.rs' };
+    const ext = extensions[language] || '.c';
+    const tempFile = `/tmp/cache-explorer-${randomUUID()}${ext}`;
 
     try {
       // Status: writing file

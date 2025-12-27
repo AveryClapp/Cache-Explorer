@@ -24,7 +24,8 @@ typedef struct {
 void __tag_mem_load(void *addr, uint32_t size, const char *file, uint32_t line);
 void __tag_mem_store(void *addr, uint32_t size, const char *file,
                      uint32_t line);
-void __tag_bb_entry(void *bb_addr, uint32_t instr_count, const char *file,
+// bb_id is a unique identifier for the basic block (not an address)
+void __tag_bb_entry(uint64_t bb_id, uint32_t instr_count, const char *file,
                     uint32_t line);
 
 void __cache_explorer_init(void);

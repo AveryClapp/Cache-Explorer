@@ -17,9 +17,10 @@ INPUT_FILE=""
 DEFINES=()  # Array of -D flags
 
 usage() {
-  echo "Usage: cache-explore [options] <source.c>"
+  echo "Usage: cache-explore [options] <source.c|.cpp|.rs>"
   echo ""
   echo "Compile, instrument, run, and analyze cache behavior."
+  echo "Supports C, C++, and Rust source files."
   echo ""
   echo "Options:"
   echo "  --config <name>   Cache config: intel|amd|apple|educational (default: intel)"
@@ -32,6 +33,7 @@ usage() {
   echo ""
   echo "Example:"
   echo "  cache-explore matrix.c --config educational --verbose"
+  echo "  cache-explore vector.cpp -O2 --json"
   echo "  cache-explore matrix.c -D N=1000 -D DEBUG"
 }
 
@@ -79,12 +81,37 @@ if [[ ! -f "$CACHE_SIM" ]]; then
   exit 1
 fi
 
-BASENAME=$(basename "$INPUT_FILE" .c)
+# Detect language from file extension
+EXT="${INPUT_FILE##*.}"
+case "$EXT" in
+  c)
+    LANG="c"
+    COMPILER="clang"
+    BASENAME=$(basename "$INPUT_FILE" .c)
+    ;;
+  cpp|cc|cxx|C)
+    LANG="c++"
+    COMPILER="clang++"
+    BASENAME=$(basename "$INPUT_FILE" ."$EXT")
+    ;;
+  rs)
+    LANG="rust"
+    COMPILER="rustc"
+    BASENAME=$(basename "$INPUT_FILE" .rs)
+    ;;
+  *)
+    echo "Error: Unsupported file extension: .$EXT"
+    echo "Supported: .c, .cpp, .cc, .cxx, .rs"
+    exit 1
+    ;;
+esac
+
 BINARY="/tmp/cache-explore-$$-$BASENAME"
 
 if [[ -z "$JSON_OUTPUT" ]]; then
   echo "=== Cache Explorer ===" >&2
   echo "Input: $INPUT_FILE" >&2
+  echo "Language: $LANG" >&2
   echo "Config: $CONFIG" >&2
   echo "" >&2
   echo "[1/3] Compiling with instrumentation..." >&2
@@ -95,7 +122,26 @@ if [[ "$OPT_LEVEL" == "-O0" ]]; then
   EXTRA_FLAGS="-Xclang -disable-O0-optnone"
 fi
 
-if ! clang $OPT_LEVEL $EXTRA_FLAGS -g -fpass-plugin="$PASS" \
+# Compile based on language
+if [[ "$LANG" == "rust" ]]; then
+  # Rust compilation with LLVM pass
+  # Note: Rust support requires rustc with LLVM pass plugin support
+  if ! rustc --edition 2021 -C opt-level=0 -g \
+    -C llvm-args=-load="$PASS" \
+    -L "$BACKEND_DIR/runtime/build" \
+    -l static=cache-explorer-rt \
+    "$INPUT_FILE" \
+    -o "$BINARY" 2>/tmp/cache-explore-compile-err-$$; then
+    if [[ -n "$JSON_OUTPUT" ]]; then
+      echo "{\"error\": \"Compilation failed\", \"details\": \"$(cat /tmp/cache-explore-compile-err-$$ | tr '\n' ' ' | sed 's/"/\\"/g')\"}"
+    else
+      echo "Compilation failed:" >&2
+      cat /tmp/cache-explore-compile-err-$$ >&2
+    fi
+    rm -f /tmp/cache-explore-compile-err-$$
+    exit 1
+  fi
+elif ! $COMPILER $OPT_LEVEL $EXTRA_FLAGS -g -fpass-plugin="$PASS" \
   -I"$RUNTIME_INC" \
   "${DEFINES[@]}" \
   "$INPUT_FILE" \
