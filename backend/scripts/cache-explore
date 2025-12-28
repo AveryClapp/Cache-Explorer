@@ -8,7 +8,74 @@ PASS="$BACKEND_DIR/llvm-pass/build/CacheProfiler.so"
 RUNTIME="$BACKEND_DIR/runtime/build/libcache-explorer-rt.a"
 RUNTIME_INC="$BACKEND_DIR/runtime"
 CACHE_SIM="$BACKEND_DIR/cache-simulator/build/cache-sim"
+CMAKE_MODULE="$BACKEND_DIR/integration/cmake"
 
+# Export for subcommands
+export CACHE_EXPLORER_PATH="$BACKEND_DIR"
+export CACHE_EXPLORER_PASS="$PASS"
+export CACHE_EXPLORER_RUNTIME="$RUNTIME"
+export CACHE_EXPLORER_SIM="$CACHE_SIM"
+
+main_usage() {
+  echo "Cache Explorer - Visualize CPU cache behavior"
+  echo ""
+  echo "Usage: cache-explore <command> [options]"
+  echo ""
+  echo "Commands:"
+  echo "  <source.c|cpp>    Compile and analyze a single source file"
+  echo "  run <binary>      Analyze an already-instrumented binary"
+  echo "  cmake <path>      Configure a CMake project with profiling"
+  echo "  make <target>     Build and analyze a Makefile target"
+  echo "  compare           Compare cache behavior across configs"
+  echo "  cc/c++            Compiler wrapper for build system integration"
+  echo ""
+  echo "Examples:"
+  echo "  cache-explore matrix.c --config educational"
+  echo "  cache-explore run ./my_program --json"
+  echo "  cache-explore cmake /path/to/project -DCMAKE_BUILD_TYPE=Release"
+  echo "  cache-explore compare matrix.c --configs intel,amd,apple"
+  echo ""
+  echo "Run 'cache-explore <command> --help' for command-specific help."
+}
+
+# Check if first arg is a subcommand
+if [[ $# -eq 0 ]]; then
+  main_usage
+  exit 0
+fi
+
+case "$1" in
+  run)
+    shift
+    exec "$SCRIPT_DIR/cache-explore-run" "$@"
+    ;;
+  cmake)
+    shift
+    exec "$SCRIPT_DIR/cache-explore-cmake" "$@"
+    ;;
+  make)
+    shift
+    exec "$SCRIPT_DIR/cache-explore-make" "$@"
+    ;;
+  compare)
+    shift
+    exec "$SCRIPT_DIR/cache-explore-compare" "$@"
+    ;;
+  cc)
+    shift
+    exec "$SCRIPT_DIR/cache-explore-cc" "$@"
+    ;;
+  c++)
+    shift
+    exec "$SCRIPT_DIR/cache-explore-cxx" "$@"
+    ;;
+  --help|-h)
+    main_usage
+    exit 0
+    ;;
+esac
+
+# Default: compile and analyze a source file
 CONFIG="intel"
 VERBOSE=""
 KEEP_BINARY=""
@@ -27,7 +94,8 @@ usage() {
   echo "Supports C, C++, and Rust source files."
   echo ""
   echo "Options:"
-  echo "  --config <name>   Cache config: intel|amd|apple|educational (default: intel)"
+  echo "  --config <name>   Cache config: intel|intel14|xeon|amd|zen3|epyc|"
+  echo "                    apple|m2|m3|graviton|rpi4|embedded|educational"
   echo "  --verbose         Show each cache event"
   echo "  --keep            Keep the instrumented binary"
   echo "  --json            Output JSON format"
@@ -39,7 +107,7 @@ usage() {
   echo "  -D <name>=<val>   Preprocessor define (can be used multiple times)"
   echo "  --help            Show this help"
   echo ""
-  echo "Example:"
+  echo "Examples:"
   echo "  cache-explore matrix.c --config educational --verbose"
   echo "  cache-explore vector.cpp -O2 --json"
   echo "  cache-explore matrix.c -D N=1000 -D DEBUG"

@@ -1,0 +1,126 @@
+#!/bin/bash
+# cache-explore cmake - Configure a CMake project with cache profiling
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BACKEND_DIR="$(dirname "$SCRIPT_DIR")"
+CMAKE_MODULE="$BACKEND_DIR/integration/cmake"
+TOOLCHAIN="$CMAKE_MODULE/CacheExplorerToolchain.cmake"
+
+usage() {
+  echo "Usage: cache-explore cmake [options] <project-path> [cmake-args...]"
+  echo ""
+  echo "Configure a CMake project with Cache Explorer instrumentation."
+  echo "After configuration, build normally and run the binary to get cache traces."
+  echo ""
+  echo "Options:"
+  echo "  --build-dir <dir>   Build directory (default: <project>/build-cache-explorer)"
+  echo "  --include-stl       Include STL in profiling (slower compilation)"
+  echo "  --help              Show this help"
+  echo ""
+  echo "Examples:"
+  echo "  cache-explore cmake /path/to/project"
+  echo "  cache-explore cmake . -DCMAKE_BUILD_TYPE=Release"
+  echo "  cache-explore cmake . --build-dir build-prof"
+  echo ""
+  echo "After configuration:"
+  echo "  cd build-cache-explorer && make"
+  echo "  ./my_program 2>&1 | cache-explore run --json"
+  echo ""
+  echo "Or use CMake's built-in analysis targets:"
+  echo "  make analyze-my_target"
+}
+
+PROJECT_PATH=""
+BUILD_DIR=""
+INCLUDE_STL=""
+CMAKE_ARGS=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --build-dir) BUILD_DIR="$2"; shift 2 ;;
+    --include-stl) INCLUDE_STL="ON"; shift ;;
+    --help) usage; exit 0 ;;
+    -*)
+      CMAKE_ARGS+=("$1")
+      if [[ "$1" == "-D"* ]] && [[ "$1" != *"="* ]]; then
+        # -D FLAG value form
+        shift
+        CMAKE_ARGS+=("$1")
+      fi
+      shift
+      ;;
+    *)
+      if [[ -z "$PROJECT_PATH" ]]; then
+        PROJECT_PATH="$1"
+      else
+        CMAKE_ARGS+=("$1")
+      fi
+      shift
+      ;;
+  esac
+done
+
+if [[ -z "$PROJECT_PATH" ]]; then
+  echo "Error: No project path specified"
+  usage
+  exit 1
+fi
+
+# Resolve to absolute path
+PROJECT_PATH="$(cd "$PROJECT_PATH" && pwd)"
+
+if [[ ! -f "$PROJECT_PATH/CMakeLists.txt" ]]; then
+  echo "Error: No CMakeLists.txt found in $PROJECT_PATH"
+  exit 1
+fi
+
+# Default build dir
+if [[ -z "$BUILD_DIR" ]]; then
+  BUILD_DIR="$PROJECT_PATH/build-cache-explorer"
+fi
+
+# Verify toolchain exists
+if [[ ! -f "$TOOLCHAIN" ]]; then
+  echo "Error: CMake toolchain not found: $TOOLCHAIN"
+  exit 1
+fi
+
+echo "=== Cache Explorer CMake Integration ===" >&2
+echo "Project: $PROJECT_PATH" >&2
+echo "Build:   $BUILD_DIR" >&2
+echo "" >&2
+
+# Create build directory
+mkdir -p "$BUILD_DIR"
+
+# Configure with toolchain
+cd "$BUILD_DIR"
+
+CMAKE_CMD=(cmake
+  -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN"
+  -DCACHE_EXPLORER_PATH="$BACKEND_DIR"
+)
+
+if [[ -n "$INCLUDE_STL" ]]; then
+  CMAKE_CMD+=(-DCACHE_EXPLORER_INCLUDE_STL=ON)
+fi
+
+CMAKE_CMD+=("${CMAKE_ARGS[@]}")
+CMAKE_CMD+=("$PROJECT_PATH")
+
+echo "Running: ${CMAKE_CMD[*]}" >&2
+echo "" >&2
+
+"${CMAKE_CMD[@]}"
+
+echo "" >&2
+echo "=== Configuration Complete ===" >&2
+echo "" >&2
+echo "Next steps:" >&2
+echo "  cd $BUILD_DIR" >&2
+echo "  make                              # Build your project" >&2
+echo "  ./your_binary 2>&1 | cache-sim    # Analyze cache behavior" >&2
+echo "" >&2
+echo "Or use the analyze targets:" >&2
+echo "  make analyze-<target>             # If using cache_explorer_profile()" >&2

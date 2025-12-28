@@ -1,0 +1,93 @@
+#!/bin/bash
+# cache-explore make - Build a Makefile target with cache profiling
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BACKEND_DIR="$(dirname "$SCRIPT_DIR")"
+
+PASS="${CACHE_EXPLORER_PASS:-$BACKEND_DIR/llvm-pass/build/CacheProfiler.so}"
+RUNTIME="${CACHE_EXPLORER_RUNTIME:-$BACKEND_DIR/runtime/build/libcache-explorer-rt.a}"
+RUNTIME_INC="$BACKEND_DIR/runtime"
+CACHE_SIM="${CACHE_EXPLORER_SIM:-$BACKEND_DIR/cache-simulator/build/cache-sim}"
+
+usage() {
+  echo "Usage: cache-explore make [options] [target] [make-args...]"
+  echo ""
+  echo "Build a Makefile target with Cache Explorer instrumentation."
+  echo "This overrides CC/CXX to use instrumented compilation."
+  echo ""
+  echo "Options:"
+  echo "  --config <name>    Cache config for analysis (default: intel)"
+  echo "  --run <binary>     Run and analyze the built binary"
+  echo "  --json             Output JSON format (with --run)"
+  echo "  --include-stl      Include STL in profiling"
+  echo "  --help             Show this help"
+  echo ""
+  echo "Examples:"
+  echo "  cache-explore make                      # Build default target"
+  echo "  cache-explore make my_program           # Build specific target"
+  echo "  cache-explore make --run ./my_program   # Build and analyze"
+  echo "  cache-explore make clean all --run ./a.out"
+  echo ""
+  echo "For complex projects, consider using the CMake integration instead."
+}
+
+CONFIG="intel"
+RUN_BINARY=""
+JSON_OUTPUT=""
+INCLUDE_STL=""
+MAKE_ARGS=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --config) CONFIG="$2"; shift 2 ;;
+    --run) RUN_BINARY="$2"; shift 2 ;;
+    --json) JSON_OUTPUT="--json"; shift ;;
+    --include-stl) INCLUDE_STL="1"; shift ;;
+    --help) usage; exit 0 ;;
+    *) MAKE_ARGS+=("$1"); shift ;;
+  esac
+done
+
+# Build compiler flags
+CFLAGS="-fpass-plugin=$PASS -g -I$RUNTIME_INC"
+LDFLAGS="$RUNTIME"
+
+if [[ -z "$INCLUDE_STL" ]]; then
+  # STL filtering is default (faster)
+  :
+else
+  CFLAGS="$CFLAGS -DCACHE_EXPLORER_INCLUDE_STL=1"
+fi
+
+echo "=== Cache Explorer Make Integration ===" >&2
+echo "Building with instrumentation..." >&2
+echo "" >&2
+
+# Run make with overridden compilers
+CC="clang" \
+CXX="clang++" \
+CFLAGS="$CFLAGS $CFLAGS" \
+CXXFLAGS="$CFLAGS $CXXFLAGS" \
+LDFLAGS="$LDFLAGS $LDFLAGS" \
+make "${MAKE_ARGS[@]}"
+
+echo "" >&2
+echo "Build complete." >&2
+
+# Optionally run and analyze
+if [[ -n "$RUN_BINARY" ]]; then
+  echo "" >&2
+  echo "=== Analyzing $RUN_BINARY ===" >&2
+
+  if [[ ! -x "$RUN_BINARY" ]]; then
+    echo "Error: Binary not found or not executable: $RUN_BINARY" >&2
+    exit 1
+  fi
+
+  "$RUN_BINARY" 2>&1 | "$CACHE_SIM" --config "$CONFIG" $JSON_OUTPUT
+else
+  echo "" >&2
+  echo "To analyze, run:" >&2
+  echo "  ./your_binary 2>&1 | $CACHE_SIM --config $CONFIG" >&2
+fi

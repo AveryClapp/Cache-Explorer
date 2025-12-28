@@ -1,0 +1,112 @@
+#!/bin/bash
+# cache-explore run - Analyze an already-instrumented binary
+set -e
+
+CACHE_SIM="${CACHE_EXPLORER_SIM:-$(dirname "$0")/../cache-simulator/build/cache-sim}"
+
+usage() {
+  echo "Usage: cache-explore run [options] <binary> [args...]"
+  echo ""
+  echo "Run an instrumented binary and analyze its cache behavior."
+  echo "The binary must be compiled with Cache Explorer instrumentation."
+  echo ""
+  echo "Options:"
+  echo "  --config <name>   Cache config (default: intel)"
+  echo "  --json            Output JSON format"
+  echo "  --verbose         Show each cache event"
+  echo "  --sample <N>      Sample 1 in N events"
+  echo "  --limit <N>       Max events to process"
+  echo "  --prefetch <type> Prefetching: none|next|stream|stride|adaptive"
+  echo "  --help            Show this help"
+  echo ""
+  echo "Examples:"
+  echo "  cache-explore run ./my_program"
+  echo "  cache-explore run ./my_program --config amd --json"
+  echo "  cache-explore run ./my_program -- arg1 arg2"
+}
+
+CONFIG="intel"
+VERBOSE=""
+JSON_OUTPUT=""
+SAMPLE_RATE=""
+EVENT_LIMIT=""
+PREFETCH=""
+BINARY=""
+BINARY_ARGS=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --config) CONFIG="$2"; shift 2 ;;
+    --verbose) VERBOSE="--verbose"; shift ;;
+    --json) JSON_OUTPUT="--json"; shift ;;
+    --sample) SAMPLE_RATE="$2"; shift 2 ;;
+    --limit) EVENT_LIMIT="$2"; shift 2 ;;
+    --prefetch) PREFETCH="$2"; shift 2 ;;
+    --help) usage; exit 0 ;;
+    --)
+      shift
+      BINARY_ARGS=("$@")
+      break
+      ;;
+    -*)
+      echo "Unknown option: $1"
+      usage
+      exit 1
+      ;;
+    *)
+      if [[ -z "$BINARY" ]]; then
+        BINARY="$1"
+      else
+        BINARY_ARGS+=("$1")
+      fi
+      shift
+      ;;
+  esac
+done
+
+if [[ -z "$BINARY" ]]; then
+  echo "Error: No binary specified"
+  usage
+  exit 1
+fi
+
+if [[ ! -x "$BINARY" ]]; then
+  echo "Error: Binary not found or not executable: $BINARY"
+  exit 1
+fi
+
+# Build environment for runtime options
+RUN_ENV=""
+if [[ -n "$SAMPLE_RATE" ]]; then
+  RUN_ENV="CACHE_EXPLORER_SAMPLE_RATE=$SAMPLE_RATE"
+fi
+if [[ -n "$EVENT_LIMIT" ]]; then
+  RUN_ENV="$RUN_ENV CACHE_EXPLORER_MAX_EVENTS=$EVENT_LIMIT"
+fi
+
+# Build cache-sim args
+SIM_ARGS="--config $CONFIG"
+if [[ -n "$VERBOSE" ]]; then
+  SIM_ARGS="$SIM_ARGS --verbose"
+fi
+if [[ -n "$JSON_OUTPUT" ]]; then
+  SIM_ARGS="$SIM_ARGS --json"
+fi
+if [[ -n "$PREFETCH" ]]; then
+  SIM_ARGS="$SIM_ARGS --prefetch $PREFETCH"
+fi
+
+if [[ -z "$JSON_OUTPUT" ]]; then
+  echo "=== Cache Explorer ===" >&2
+  echo "Binary: $BINARY" >&2
+  echo "Config: $CONFIG" >&2
+  echo "" >&2
+  echo "Running and analyzing..." >&2
+fi
+
+# Run binary and pipe to cache-sim
+if [[ -n "$RUN_ENV" ]]; then
+  env $RUN_ENV "$BINARY" "${BINARY_ARGS[@]}" 2>&1 | "$CACHE_SIM" $SIM_ARGS
+else
+  "$BINARY" "${BINARY_ARGS[@]}" 2>&1 | "$CACHE_SIM" $SIM_ARGS
+fi

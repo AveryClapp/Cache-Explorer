@@ -1,0 +1,198 @@
+#!/bin/bash
+# cache-explore compare - Compare cache behavior across multiple configurations
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BACKEND_DIR="$(dirname "$SCRIPT_DIR")"
+
+PASS="${CACHE_EXPLORER_PASS:-$BACKEND_DIR/llvm-pass/build/CacheProfiler.so}"
+RUNTIME="${CACHE_EXPLORER_RUNTIME:-$BACKEND_DIR/runtime/build/libcache-explorer-rt.a}"
+RUNTIME_INC="$BACKEND_DIR/runtime"
+CACHE_SIM="${CACHE_EXPLORER_SIM:-$BACKEND_DIR/cache-simulator/build/cache-sim}"
+
+usage() {
+  echo "Usage: cache-explore compare [options] <source.c|.cpp>"
+  echo ""
+  echo "Compare cache behavior across multiple hardware configurations."
+  echo ""
+  echo "Options:"
+  echo "  --configs <list>   Comma-separated list of configs to compare"
+  echo "                     (default: intel,amd,apple,educational)"
+  echo "  --json             Output JSON format"
+  echo "  -O<level>          Optimization level (default: -O0)"
+  echo "  -D <name>=<val>    Preprocessor define"
+  echo "  --sample <N>       Sample 1 in N events"
+  echo "  --limit <N>        Max events to process"
+  echo "  --help             Show this help"
+  echo ""
+  echo "Available configs:"
+  echo "  Intel:   intel, intel14, xeon"
+  echo "  AMD:     amd (zen4), zen3, epyc"
+  echo "  Apple:   apple (m1), m2, m3"
+  echo "  ARM:     graviton, rpi4, embedded"
+  echo "  Other:   educational"
+  echo ""
+  echo "Examples:"
+  echo "  cache-explore compare matrix.c"
+  echo "  cache-explore compare matrix.c --configs intel,amd,apple"
+  echo "  cache-explore compare matrix.c --configs intel,xeon,epyc --json"
+}
+
+CONFIGS="intel,amd,apple,educational"
+JSON_OUTPUT=""
+OPT_LEVEL="-O0"
+DEFINES=()
+SAMPLE_RATE=""
+EVENT_LIMIT=""
+INPUT_FILE=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --configs) CONFIGS="$2"; shift 2 ;;
+    --json) JSON_OUTPUT="1"; shift ;;
+    --sample) SAMPLE_RATE="$2"; shift 2 ;;
+    --limit) EVENT_LIMIT="$2"; shift 2 ;;
+    -O*) OPT_LEVEL="$1"; shift ;;
+    -D) DEFINES+=("-D$2"); shift 2 ;;
+    -D*) DEFINES+=("$1"); shift ;;
+    --help) usage; exit 0 ;;
+    -*) echo "Unknown option: $1"; usage; exit 1 ;;
+    *) INPUT_FILE="$1"; shift ;;
+  esac
+done
+
+if [[ -z "$INPUT_FILE" ]]; then
+  echo "Error: No input file specified"
+  usage
+  exit 1
+fi
+
+if [[ ! -f "$INPUT_FILE" ]]; then
+  echo "Error: File not found: $INPUT_FILE"
+  exit 1
+fi
+
+# Detect compiler
+EXT="${INPUT_FILE##*.}"
+case "$EXT" in
+  c) COMPILER="clang"; BASENAME=$(basename "$INPUT_FILE" .c) ;;
+  cpp|cc|cxx|C) COMPILER="clang++"; BASENAME=$(basename "$INPUT_FILE" ."$EXT") ;;
+  *) echo "Error: Unsupported extension: .$EXT"; exit 1 ;;
+esac
+
+BINARY="/tmp/cache-explore-compare-$$-$BASENAME"
+
+# Compile once
+EXTRA_FLAGS=""
+if [[ "$OPT_LEVEL" == "-O0" ]]; then
+  EXTRA_FLAGS="-Xclang -disable-O0-optnone"
+fi
+
+if [[ -z "$JSON_OUTPUT" ]]; then
+  echo "=== Cache Explorer Compare ===" >&2
+  echo "Source: $INPUT_FILE" >&2
+  echo "Configs: $CONFIGS" >&2
+  echo "" >&2
+  echo "Compiling..." >&2
+fi
+
+if ! $COMPILER $OPT_LEVEL $EXTRA_FLAGS -g -fpass-plugin="$PASS" \
+  -I"$RUNTIME_INC" \
+  "${DEFINES[@]}" \
+  "$INPUT_FILE" \
+  "$RUNTIME" \
+  -o "$BINARY" 2>/tmp/cache-explore-compare-err-$$; then
+  echo "Compilation failed:" >&2
+  cat /tmp/cache-explore-compare-err-$$ >&2
+  rm -f /tmp/cache-explore-compare-err-$$
+  exit 1
+fi
+rm -f /tmp/cache-explore-compare-err-$$
+
+# Build runtime env
+RUN_ENV=""
+if [[ -n "$SAMPLE_RATE" ]]; then
+  RUN_ENV="CACHE_EXPLORER_SAMPLE_RATE=$SAMPLE_RATE"
+fi
+if [[ -n "$EVENT_LIMIT" ]]; then
+  RUN_ENV="$RUN_ENV CACHE_EXPLORER_MAX_EVENTS=$EVENT_LIMIT"
+fi
+
+# Run once to capture trace
+if [[ -z "$JSON_OUTPUT" ]]; then
+  echo "Running instrumented binary..." >&2
+fi
+
+if [[ -n "$RUN_ENV" ]]; then
+  TRACE=$(env $RUN_ENV "$BINARY" 2>&1) || true
+else
+  TRACE=$("$BINARY" 2>&1) || true
+fi
+
+# Split configs
+IFS=',' read -ra CONFIG_ARRAY <<< "$CONFIGS"
+
+if [[ -n "$JSON_OUTPUT" ]]; then
+  # JSON output
+  echo "{"
+  echo "  \"source\": \"$INPUT_FILE\","
+  echo "  \"configs\": {"
+
+  FIRST=1
+  for cfg in "${CONFIG_ARRAY[@]}"; do
+    if [[ $FIRST -eq 0 ]]; then
+      echo ","
+    fi
+    FIRST=0
+
+    echo -n "    \"$cfg\": "
+    echo "$TRACE" | "$CACHE_SIM" --config "$cfg" --json 2>/dev/null | sed 's/^/    /'
+  done
+
+  echo ""
+  echo "  }"
+  echo "}"
+else
+  # Human-readable output
+  echo ""
+  echo "=== Comparison Results ==="
+  echo ""
+
+  # Header
+  printf "%-15s %10s %10s %10s %10s\n" "Config" "L1D Hit%" "L2 Hit%" "L3 Hit%" "Events"
+  printf "%-15s %10s %10s %10s %10s\n" "---------------" "----------" "----------" "----------" "----------"
+
+  for cfg in "${CONFIG_ARRAY[@]}"; do
+    # Get JSON and parse
+    RESULT=$(echo "$TRACE" | "$CACHE_SIM" --config "$cfg" --json 2>/dev/null)
+
+    # Extract hit rates using python for reliable JSON parsing
+    STATS=$(echo "$RESULT" | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    l1 = d.get('levels', {}).get('l1d', d.get('levels', {}).get('l1', {}))
+    l2 = d.get('levels', {}).get('l2', {})
+    l3 = d.get('levels', {}).get('l3', {})
+    events = d.get('events', 0)
+
+    l1_rate = l1.get('hitRate', 0) * 100
+    l2_rate = l2.get('hitRate', 0) * 100
+    l3_rate = l3.get('hitRate', 0) * 100
+
+    print(f'{l1_rate:.1f} {l2_rate:.1f} {l3_rate:.1f} {events}')
+except:
+    print('N/A N/A N/A N/A')
+" 2>/dev/null)
+
+    read L1_RATE L2_RATE L3_RATE EVENTS <<< "$STATS"
+
+    printf "%-15s %9s%% %9s%% %9s%% %10s\n" "$cfg" "$L1_RATE" "$L2_RATE" "$L3_RATE" "$EVENTS"
+  done
+
+  echo ""
+  echo "Tip: Use --json for detailed results"
+fi
+
+# Cleanup
+rm -f "$BINARY"
