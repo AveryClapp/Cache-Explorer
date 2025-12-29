@@ -141,16 +141,21 @@ function parseCompileErrors(stderr, tempFile) {
         };
         errors.push(currentError);
       }
-    } else if (currentError && line.trim().startsWith('^')) {
-      // This is the caret line showing error position - capture source context
-      // The previous line should be the source code
-      if (i > 0) {
-        const sourceLine = lines[i - 1];
-        // Only capture if it looks like source code (not another error message)
-        if (!sourceLine.includes(': error:') && !sourceLine.includes(': warning:')) {
-          currentError.sourceLine = sourceLine.replace(fileRegex, 'input');
-          currentError.caret = line;
-        }
+    } else if (currentError) {
+      // Check for source line (contains | followed by code) or caret line (contains ^)
+      const trimmed = line.trim();
+
+      // Modern clang format: "    3 |   int y = undefined_var;"
+      const sourceMatch = line.match(/^\s*\d+\s*\|\s*(.+)$/);
+      if (sourceMatch && !currentError.sourceLine) {
+        currentError.sourceLine = sourceMatch[1];
+      }
+
+      // Caret line: "      |           ^~~~~~~~~~~~~" or just "      ^"
+      if (trimmed.includes('^') && !currentError.caret) {
+        // Extract just the caret portion
+        const caretMatch = line.match(/\|\s*(.*)$/) || [null, trimmed];
+        currentError.caret = caretMatch[1] || trimmed;
       }
     }
   }

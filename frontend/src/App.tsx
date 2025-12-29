@@ -1537,6 +1537,49 @@ function App() {
     }
   }, [code, config, optLevel, language, defines])
 
+  // Open current code in Compiler Explorer
+  const openInCompilerExplorer = useCallback(() => {
+    // Get active file's code
+    const activeFile = files.find(f => f.id === activeFileId)
+    const sourceCode = activeFile?.code || ''
+    const lang = activeFile?.language || 'c'
+
+    // Map our language to CE compiler IDs
+    const compilerMap: Record<string, string> = {
+      c: 'cclang1800',      // Clang trunk for C
+      cpp: 'clang1800',     // Clang trunk for C++
+      rust: 'r1830'         // Rust stable
+    }
+
+    // Map our opt levels to CE format
+    const optMap: Record<string, string> = {
+      '-O0': '-O0',
+      '-O1': '-O1',
+      '-O2': '-O2',
+      '-O3': '-O3',
+      '-Os': '-Os',
+      '-Oz': '-Oz'
+    }
+
+    // Build CE ClientState
+    const ceState = {
+      sessions: [{
+        id: 1,
+        language: lang === 'cpp' ? 'c++' : lang,
+        source: sourceCode,
+        compilers: [{
+          id: compilerMap[lang] || 'cclang1800',
+          options: optMap[optLevel] || '-O2'
+        }]
+      }]
+    }
+
+    // Compress using LZString (same as our share feature)
+    const compressed = LZString.compressToBase64(JSON.stringify(ceState))
+    const ceUrl = `https://godbolt.org/#z:${compressed}`
+    window.open(ceUrl, '_blank', 'noopener,noreferrer')
+  }, [files, activeFileId, optLevel])
+
   // Apply error markers (red squiggles) for compile errors
   useEffect(() => {
     if (!editorRef.current || !monacoRef.current) return
@@ -1695,7 +1738,8 @@ function App() {
         setScrubberIndex(timelineRef.current.length)  // Start at end of timeline
         setStage('idle')
         ws.close()
-      } else if (msg.type === 'error') {
+      } else if (msg.type === 'error' || msg.type?.includes('error') || msg.errors) {
+        // Handle all error types: 'error', 'compile_error', 'linker_error', etc.
         clearTimeout(longRunTimeout)
         setLongRunning(false)
         setError(msg as ErrorResult)
@@ -1852,6 +1896,9 @@ function App() {
         </div>
 
         <div className="toolbar-right">
+          <button onClick={openInCompilerExplorer} className="btn-icon" title="View assembly in Compiler Explorer">
+            CE ↗
+          </button>
           <button onClick={handleShare} className="btn-icon" title="Copy link">
             {copied ? 'Copied!' : 'Share'}
           </button>

@@ -262,7 +262,9 @@ if [[ "$LANG" == "rust" ]]; then
     "$INPUT_FILE" \
     -o "$BINARY" 2>/tmp/cache-explore-compile-err-$$; then
     if [[ -n "$JSON_OUTPUT" ]]; then
-      echo "{\"error\": \"Compilation failed\", \"details\": \"$(cat /tmp/cache-explore-compile-err-$$ | tr '\n' ' ' | sed 's/"/\\"/g')\"}"
+      # Properly escape JSON: preserve newlines as \n, escape quotes
+      ESCAPED=$(cat /tmp/cache-explore-compile-err-$$ | python3 -c "import sys,json; print(json.dumps(sys.stdin.read())[1:-1])")
+      echo "{\"error\": \"Compilation failed\", \"details\": \"$ESCAPED\"}"
     else
       echo "Compilation failed:" >&2
       cat /tmp/cache-explore-compile-err-$$ >&2
@@ -278,7 +280,9 @@ elif ! $COMPILER $OPT_LEVEL $EXTRA_FLAGS -g -fpass-plugin="$PASS" \
   "$RUNTIME" \
   -o "$BINARY" 2>/tmp/cache-explore-compile-err-$$; then
   if [[ -n "$JSON_OUTPUT" ]]; then
-    echo "{\"error\": \"Compilation failed\", \"details\": \"$(cat /tmp/cache-explore-compile-err-$$ | tr '\n' ' ' | sed 's/"/\\"/g')\"}"
+    # Properly escape JSON: preserve newlines as \n, escape quotes
+    ESCAPED=$(cat /tmp/cache-explore-compile-err-$$ | python3 -c "import sys,json; print(json.dumps(sys.stdin.read())[1:-1])")
+    echo "{\"error\": \"Compilation failed\", \"details\": \"$ESCAPED\"}"
   else
     echo "Compilation failed:" >&2
     cat /tmp/cache-explore-compile-err-$$ >&2
