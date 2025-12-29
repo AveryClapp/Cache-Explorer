@@ -27,6 +27,7 @@ void CacheSystem::issue_prefetches(const std::vector<uint64_t> &addrs) {
     // Only prefetch if not already present
     if (!l2.is_present(addr) && !l1d.is_present(addr)) {
       l2.install(addr, false);
+      prefetched_addresses.insert(addr);  // Track this prefetch
     }
   }
 }
@@ -52,6 +53,11 @@ SystemAccessResult CacheSystem::access_hierarchy(uint64_t address,
   AccessInfo l1_info = l1.access(address, is_write);
   if (l1_info.result == AccessResult::Hit) {
     result.l1_hit = true;
+    // Check if this was a prefetched line (promoted from L2 to L1)
+    if (prefetch_enabled && prefetched_addresses.count(address)) {
+      prefetcher.record_useful_prefetch();
+      prefetched_addresses.erase(address);
+    }
     return result;
   }
 
@@ -69,6 +75,12 @@ SystemAccessResult CacheSystem::access_hierarchy(uint64_t address,
   AccessInfo l2_info = l2.access(address, is_write);
   if (l2_info.result == AccessResult::Hit) {
     result.l2_hit = true;
+
+    // Check if this was a prefetched line - prefetches go to L2
+    if (prefetch_enabled && prefetched_addresses.count(address)) {
+      prefetcher.record_useful_prefetch();
+      prefetched_addresses.erase(address);
+    }
 
     if (inclusion_policy == InclusionPolicy::Exclusive) {
       // Exclusive: move from L2 to L1, remove from L2

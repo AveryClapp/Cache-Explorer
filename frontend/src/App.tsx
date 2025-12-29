@@ -133,6 +133,13 @@ interface CacheResult {
 
 type Language = 'c' | 'cpp' | 'rust'
 
+interface FileTab {
+  id: string
+  name: string
+  code: string
+  language: Language
+}
+
 interface Example {
   name: string
   code: string
@@ -410,6 +417,107 @@ int main() {
 }
 
 const EXAMPLE_CODE = EXAMPLES.matrix.code
+
+// Helper to generate unique file IDs
+let fileIdCounter = 0
+function generateFileId(): string {
+  return `file_${++fileIdCounter}_${Date.now()}`
+}
+
+// Helper to get file extension from language
+function getFileExtension(lang: Language): string {
+  switch (lang) {
+    case 'cpp': return '.cpp'
+    case 'rust': return '.rs'
+    default: return '.c'
+  }
+}
+
+// Create a default file tab
+function createFileTab(name: string, code: string, language: Language): FileTab {
+  return { id: generateFileId(), name, code, language }
+}
+
+// Tab bar component for multi-file support
+function TabBar({
+  files,
+  activeId,
+  onSelect,
+  onClose,
+  onAdd,
+  onRename
+}: {
+  files: FileTab[]
+  activeId: string
+  onSelect: (id: string) => void
+  onClose: (id: string) => void
+  onAdd: () => void
+  onRename: (id: string, name: string) => void
+}) {
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+
+  const handleDoubleClick = (file: FileTab) => {
+    setEditingId(file.id)
+    setEditName(file.name)
+  }
+
+  const handleRenameSubmit = (id: string) => {
+    if (editName.trim()) {
+      onRename(id, editName.trim())
+    }
+    setEditingId(null)
+  }
+
+  return (
+    <div className="tab-bar">
+      {files.map((file) => (
+        <div
+          key={file.id}
+          className={`tab ${file.id === activeId ? 'active' : ''}`}
+          onClick={() => onSelect(file.id)}
+          onDoubleClick={() => handleDoubleClick(file)}
+        >
+          {editingId === file.id ? (
+            <input
+              type="text"
+              className="tab-rename-input"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              onBlur={() => handleRenameSubmit(file.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleRenameSubmit(file.id)
+                if (e.key === 'Escape') setEditingId(null)
+              }}
+              autoFocus
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <>
+              <span className="tab-name">{file.name}</span>
+              <span className="tab-lang">{file.language}</span>
+            </>
+          )}
+          {files.length > 1 && (
+            <button
+              className="tab-close"
+              onClick={(e) => {
+                e.stopPropagation()
+                onClose(file.id)
+              }}
+              title="Close file"
+            >
+              ×
+            </button>
+          )}
+        </div>
+      ))}
+      <button className="tab-add" onClick={onAdd} title="Add new file">
+        +
+      </button>
+    </div>
+  )
+}
 
 function formatPercent(rate: number): string {
   return (rate * 100).toFixed(1) + '%'
@@ -1226,8 +1334,60 @@ const PREFETCH_DEFAULTS: Record<string, PrefetchPolicy> = {
 }
 
 function App() {
-  const [code, setCode] = useState(EXAMPLE_CODE)
-  const [language, setLanguage] = useState<Language>('c')
+  // Multi-file state - use files array instead of single code
+  const [files, setFiles] = useState<FileTab[]>(() => [
+    createFileTab('main.c', EXAMPLE_CODE, 'c')
+  ])
+  const [activeFileId, setActiveFileId] = useState<string>(() => files[0]?.id || '')
+
+  // Derived state for current file
+  const activeFile = files.find(f => f.id === activeFileId) || files[0]
+  const code = activeFile?.code || ''
+  const language = activeFile?.language || 'c'
+
+  // File management functions
+  const updateActiveCode = useCallback((newCode: string) => {
+    setFiles(prev => prev.map(f =>
+      f.id === activeFileId ? { ...f, code: newCode } : f
+    ))
+  }, [activeFileId])
+
+  const updateActiveLanguage = useCallback((newLang: Language) => {
+    setFiles(prev => prev.map(f => {
+      if (f.id !== activeFileId) return f
+      // Update extension if name has one
+      const ext = getFileExtension(newLang)
+      const baseName = f.name.replace(/\.(c|cpp|rs)$/, '')
+      return { ...f, language: newLang, name: baseName + ext }
+    }))
+  }, [activeFileId])
+
+  const addFile = useCallback(() => {
+    const lang: Language = 'c'
+    const num = files.length + 1
+    const newFile = createFileTab(`file${num}.c`, '', lang)
+    setFiles(prev => [...prev, newFile])
+    setActiveFileId(newFile.id)
+  }, [files.length])
+
+  const closeFile = useCallback((id: string) => {
+    if (files.length <= 1) return // Don't close last file
+    const idx = files.findIndex(f => f.id === id)
+    setFiles(prev => prev.filter(f => f.id !== id))
+    // If closing active file, switch to adjacent
+    if (id === activeFileId) {
+      const newIdx = Math.min(idx, files.length - 2)
+      const newActive = files.filter(f => f.id !== id)[newIdx]
+      if (newActive) setActiveFileId(newActive.id)
+    }
+  }, [files, activeFileId])
+
+  const renameFile = useCallback((id: string, name: string) => {
+    setFiles(prev => prev.map(f =>
+      f.id === id ? { ...f, name } : f
+    ))
+  }, [])
+
   const [config, setConfig] = useState('educational')
   const [optLevel, setOptLevel] = useState('-O0')
   const [prefetchPolicy, setPrefetchPolicy] = useState<PrefetchPolicy>('none')
@@ -1316,16 +1476,21 @@ function App() {
       const params = new URLSearchParams(window.location.search)
       const shortId = params.get('s')
 
+      // Helper to apply loaded state to the first file
+      const applyState = (state: { code: string; config: string; optLevel: string; language?: Language; defines?: DefineEntry[] }) => {
+        const lang = state.language || 'c'
+        setFiles([createFileTab(`main${getFileExtension(lang)}`, state.code, lang)])
+        setConfig(state.config)
+        setOptLevel(state.optLevel)
+        if (state.defines) setDefines(state.defines)
+      }
+
       if (shortId) {
         try {
           const response = await fetch(`${API_BASE}/s/${shortId}`)
           const data = await response.json()
           if (data.state) {
-            setCode(data.state.code)
-            setConfig(data.state.config)
-            setOptLevel(data.state.optLevel)
-            if (data.state.language) setLanguage(data.state.language)
-            if (data.state.defines) setDefines(data.state.defines)
+            applyState(data.state)
             return
           }
         } catch { /* ignore */ }
@@ -1335,11 +1500,7 @@ function App() {
       if (hash) {
         const saved = decodeState(hash)
         if (saved) {
-          setCode(saved.code)
-          setConfig(saved.config)
-          setOptLevel(saved.optLevel)
-          if (saved.language) setLanguage(saved.language)
-          if (saved.defines) setDefines(saved.defines)
+          applyState(saved)
         }
       }
     }
@@ -1472,12 +1633,13 @@ function App() {
   }, [result])
 
   const runAnalysis = () => {
-    // Input validation
-    if (code.length > 100000) {
-      setError({ type: 'validation_error', message: 'Code too long (max 100KB)', suggestion: 'Try a smaller program or use sampling' })
+    // Input validation - check total size across all files
+    const totalSize = files.reduce((sum, f) => sum + f.code.length, 0)
+    if (totalSize > 100000) {
+      setError({ type: 'validation_error', message: 'Code too long (max 100KB total)', suggestion: 'Try smaller programs or use sampling' })
       return
     }
-    if (code.trim().length === 0) {
+    if (files.every(f => f.code.trim().length === 0)) {
       setError({ type: 'validation_error', message: 'No code to analyze', suggestion: 'Write or paste some code first' })
       return
     }
@@ -1495,7 +1657,15 @@ function App() {
     const ws = new WebSocket(WS_URL)
 
     ws.onopen = () => {
-      const payload: Record<string, unknown> = { code, config, optLevel, language }
+      const payload: Record<string, unknown> = { config, optLevel }
+      // Send files array for multi-file support, single code for backward compatibility
+      if (files.length === 1) {
+        payload.code = files[0].code
+        payload.language = files[0].language
+      } else {
+        payload.files = files.map(f => ({ name: f.name, code: f.code, language: f.language }))
+        payload.language = files[0].language // Primary language for compilation
+      }
       if (config === 'custom') payload.customConfig = customConfig
       if (defines.length > 0) payload.defines = defines.filter(d => d.name.trim())
       if (prefetchPolicy !== 'none') payload.prefetch = prefetchPolicy
@@ -1540,7 +1710,15 @@ function App() {
     const fallbackToHttp = async () => {
       setStage('compiling')
       try {
-        const payload: Record<string, unknown> = { code, config, optLevel, language }
+        const payload: Record<string, unknown> = { config, optLevel }
+        // Send files array for multi-file support, single code for backward compatibility
+        if (files.length === 1) {
+          payload.code = files[0].code
+          payload.language = files[0].language
+        } else {
+          payload.files = files.map(f => ({ name: f.name, code: f.code, language: f.language }))
+          payload.language = files[0].language
+        }
         if (config === 'custom') payload.customConfig = customConfig
         if (defines.length > 0) payload.defines = defines.filter(d => d.name.trim())
         if (prefetchPolicy !== 'none') payload.prefetch = prefetchPolicy
@@ -1577,8 +1755,15 @@ function App() {
             onChange={(e) => {
               const ex = EXAMPLES[e.target.value]
               if (ex) {
-                setCode(ex.code)
-                setLanguage(ex.language)
+                // Update active file with example code and language
+                setFiles(prev => prev.map(f =>
+                  f.id === activeFileId ? {
+                    ...f,
+                    code: ex.code,
+                    language: ex.language,
+                    name: f.name.replace(/\.(c|cpp|rs)$/, '') + getFileExtension(ex.language)
+                  } : f
+                ))
                 e.target.value = ''
               }
             }}
@@ -1602,7 +1787,7 @@ function App() {
             </optgroup>
           </select>
 
-          <select value={language} onChange={(e) => setLanguage(e.target.value as Language)} className="select-lang" title="Programming language">
+          <select value={language} onChange={(e) => updateActiveLanguage(e.target.value as Language)} className="select-lang" title="Programming language">
             <option value="c">C</option>
             <option value="cpp">C++</option>
             <option value="rust">Rust</option>
@@ -1809,26 +1994,34 @@ function App() {
 
       <div className="main">
         <div className="editor-pane">
+          <TabBar
+            files={files}
+            activeId={activeFileId}
+            onSelect={setActiveFileId}
+            onClose={closeFile}
+            onAdd={addFile}
+            onRename={renameFile}
+          />
           {diffMode && baselineCode ? (
             <DiffEditor
-              height="100%"
+              height="calc(100% - 32px)"
               language={monacoLanguage}
               theme="vs-dark"
               original={baselineCode}
               modified={code}
               onMount={(editor) => {
                 const modifiedEditor = editor.getModifiedEditor()
-                modifiedEditor.onDidChangeModelContent(() => setCode(modifiedEditor.getValue()))
+                modifiedEditor.onDidChangeModelContent(() => updateActiveCode(modifiedEditor.getValue()))
               }}
               options={{ minimap: { enabled: false }, fontSize: 13, renderSideBySide: true }}
             />
           ) : (
             <Editor
-              height={vimMode ? "calc(100% - 24px)" : "100%"}
+              height={vimMode ? "calc(100% - 56px)" : "calc(100% - 32px)"}
               language={monacoLanguage}
               theme="vs-dark"
               value={code}
-              onChange={(value) => setCode(value || '')}
+              onChange={(value) => updateActiveCode(value || '')}
               onMount={handleEditorMount}
               options={{ minimap: { enabled: false }, fontSize: 13, lineNumbers: 'on', scrollBeyondLastLine: false, glyphMargin: true }}
             />

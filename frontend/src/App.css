@@ -312,6 +312,130 @@ button:disabled {
   flex-direction: column;
 }
 
+/* Tab Bar for Multi-file Support */
+.tab-bar {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  background: #252526;
+  border-bottom: 1px solid #3c3c3c;
+  padding: 0 4px;
+  gap: 2px;
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+
+.tab-bar::-webkit-scrollbar {
+  height: 4px;
+}
+
+.tab-bar::-webkit-scrollbar-track {
+  background: #252526;
+}
+
+.tab-bar::-webkit-scrollbar-thumb {
+  background: #3c3c3c;
+  border-radius: 2px;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px 0 12px;
+  background: #2d2d2d;
+  border: 1px solid transparent;
+  border-radius: 4px 4px 0 0;
+  cursor: pointer;
+  font-size: 12px;
+  color: #969696;
+  white-space: nowrap;
+  transition: background 0.1s, color 0.1s;
+}
+
+.tab:hover {
+  background: #37373d;
+  color: #d4d4d4;
+}
+
+.tab.active {
+  background: #1e1e1e;
+  color: #fff;
+  border-color: #3c3c3c;
+  border-bottom-color: #1e1e1e;
+}
+
+.tab-name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab-lang {
+  font-size: 10px;
+  color: #569cd6;
+  padding: 1px 4px;
+  background: rgba(86, 156, 214, 0.15);
+  border-radius: 2px;
+}
+
+.tab-close {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: #808080;
+  font-size: 14px;
+  line-height: 1;
+  border-radius: 2px;
+  opacity: 0.6;
+  transition: opacity 0.1s, background 0.1s;
+}
+
+.tab:hover .tab-close {
+  opacity: 1;
+}
+
+.tab-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.tab-add {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: 1px dashed #3c3c3c;
+  color: #808080;
+  font-size: 16px;
+  line-height: 1;
+  border-radius: 3px;
+  cursor: pointer;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+
+.tab-add:hover {
+  background: #2d2d2d;
+  border-color: #569cd6;
+  color: #569cd6;
+}
+
+.tab-rename-input {
+  width: 100px;
+  height: 20px;
+  padding: 0 4px;
+  background: #3c3c3c;
+  border: 1px solid #007acc;
+  border-radius: 2px;
+  color: #fff;
+  font-size: 12px;
+  outline: none;
+}
+
 .vim-status-bar {
   height: 24px;
   background: #007acc;

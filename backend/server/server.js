@@ -1,13 +1,47 @@
 import express from 'express';
 import cors from 'cors';
 import { spawn } from 'child_process';
-import { writeFile, unlink } from 'fs/promises';
+import { writeFile, unlink, mkdir, rm, readdir } from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { checkSandboxAvailable, runInSandbox, parseSandboxError } from './sandbox.js';
+
+// Helper to create temp directory with files
+async function createTempProject(files, language = 'c') {
+  const extensions = { c: '.c', cpp: '.cpp', rust: '.rs' };
+  const ext = extensions[language] || '.c';
+  const tempDir = `/tmp/cache-explorer-${randomUUID()}`;
+
+  await mkdir(tempDir, { recursive: true });
+
+  // If files is an array, write all files
+  if (Array.isArray(files)) {
+    for (const file of files) {
+      const filePath = join(tempDir, file.name);
+      await writeFile(filePath, file.code);
+    }
+    // Return the first file as the main file (or one containing main())
+    const mainFile = files.find(f => f.code.includes('int main') || f.code.includes('fn main')) || files[0];
+    return { tempDir, mainFile: join(tempDir, mainFile.name) };
+  }
+
+  // Backward compatibility: single code string
+  const mainFile = join(tempDir, `main${ext}`);
+  await writeFile(mainFile, files);
+  return { tempDir, mainFile };
+}
+
+// Helper to cleanup temp directory
+async function cleanupTempProject(tempDir) {
+  try {
+    await rm(tempDir, { recursive: true, force: true });
+  } catch {
+    // Ignore cleanup errors
+  }
+}
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const BACKEND_DIR = dirname(__dirname);
@@ -188,9 +222,11 @@ function parseCompileErrors(stderr, tempFile) {
 }
 
 app.post('/compile', async (req, res) => {
-  const { code, config = 'educational', optLevel = '-O0', language = 'c', sample, limit } = req.body;
+  const { code, files, config = 'educational', optLevel = '-O0', language = 'c', sample, limit } = req.body;
 
-  if (!code) {
+  // Support both single code string and files array
+  const inputFiles = files || (code ? code : null);
+  if (!inputFiles) {
     return res.status(400).json({ error: 'No code provided', type: 'validation_error' });
   }
 
@@ -202,7 +238,8 @@ app.post('/compile', async (req, res) => {
   if (sandboxAvailable) {
     try {
       const result = await runInSandbox({
-        code,
+        code: Array.isArray(inputFiles) ? inputFiles[0].code : inputFiles,
+        files: Array.isArray(inputFiles) ? inputFiles : undefined,
         language,
         config,
         optLevel,
@@ -226,15 +263,20 @@ app.post('/compile', async (req, res) => {
 
   // Fallback: Direct execution (development mode only)
   // WARNING: This executes untrusted code without sandboxing
-  const extensions = { c: '.c', cpp: '.cpp', rust: '.rs' };
-  const ext = extensions[language] || '.c';
-  const tempFile = `/tmp/cache-explorer-${randomUUID()}${ext}`;
+  let tempDir, mainFile;
 
   try {
-    await writeFile(tempFile, code);
+    const project = await createTempProject(inputFiles, language);
+    tempDir = project.tempDir;
+    mainFile = project.mainFile;
 
     const result = await new Promise((resolve, reject) => {
-      const args = [tempFile, '--config', config, optLevel, '--json'];
+      const args = [mainFile, '--config', config, optLevel, '--json'];
+
+      // Add include path for multi-file projects
+      if (Array.isArray(inputFiles) && inputFiles.length > 1) {
+        args.push('-I', tempDir);
+      }
 
       // Add custom cache config args if provided
       if (req.body.customConfig) {
@@ -281,7 +323,7 @@ app.post('/compile', async (req, res) => {
 
       proc.on('close', (exitCode) => {
         if (exitCode !== 0) {
-          reject({ stdout, stderr, exitCode, tempFile });
+          reject({ stdout, stderr, exitCode, mainFile });
         } else {
           resolve({ stdout, stderr });
         }
@@ -307,8 +349,9 @@ app.post('/compile', async (req, res) => {
         const jsonError = JSON.parse(err.stdout.trim());
         if (jsonError.error) {
           // Parse the error details if present
+          const errorFile = err.mainFile || mainFile;
           const parsed = jsonError.details
-            ? parseCompileErrors(jsonError.details, tempFile)
+            ? parseCompileErrors(jsonError.details, errorFile)
             : { type: 'compile_error', message: jsonError.error };
 
           parsed.raw = jsonError.details || err.stdout;
@@ -325,7 +368,8 @@ app.post('/compile', async (req, res) => {
 
     // Fallback: parse stderr for compile errors
     if (err.stderr) {
-      const parsed = parseCompileErrors(err.stderr, tempFile);
+      const errorFile = err.mainFile || mainFile;
+      const parsed = parseCompileErrors(err.stderr, errorFile);
       parsed.raw = err.stderr;
       if (err.exitCode !== undefined) {
         parsed.exitCode = err.exitCode;
@@ -345,7 +389,9 @@ app.post('/compile', async (req, res) => {
       });
     }
   } finally {
-    unlink(tempFile).catch(() => {});
+    if (tempDir) {
+      await cleanupTempProject(tempDir);
+    }
   }
 });
 
@@ -418,9 +464,11 @@ wss.on('connection', (ws) => {
       return;
     }
 
-    const { code, config = 'educational', optLevel = '-O0', customConfig, defines, language = 'c', prefetch, sample, limit } = data;
+    const { code, files, config = 'educational', optLevel = '-O0', customConfig, defines, language = 'c', prefetch, sample, limit } = data;
 
-    if (!code) {
+    // Support both single code string and files array
+    const inputFiles = files || (code ? code : null);
+    if (!inputFiles) {
       ws.send(JSON.stringify({ type: 'error', error: 'No code provided' }));
       return;
     }
@@ -462,21 +510,26 @@ wss.on('connection', (ws) => {
     }
 
     // Fallback: Direct execution (development mode) with real-time streaming
-    const extensions = { c: '.c', cpp: '.cpp', rust: '.rs' };
-    const ext = extensions[language] || '.c';
-    const tempFile = `/tmp/cache-explorer-${randomUUID()}${ext}`;
+    let tempDir, mainFile;
 
     try {
       // Status: writing file
       ws.send(JSON.stringify({ type: 'status', stage: 'preparing' }));
-      await writeFile(tempFile, code);
+      const project = await createTempProject(inputFiles, language);
+      tempDir = project.tempDir;
+      mainFile = project.mainFile;
 
       // Status: compiling
       ws.send(JSON.stringify({ type: 'status', stage: 'compiling' }));
 
       const result = await new Promise((resolve, reject) => {
         // Use --stream for real-time updates
-        const args = [tempFile, '--config', config, optLevel, '--stream'];
+        const args = [mainFile, '--config', config, optLevel, '--stream'];
+
+        // Add include path for multi-file projects
+        if (Array.isArray(inputFiles) && inputFiles.length > 1) {
+          args.push('-I', tempDir);
+        }
 
         // Add custom cache config args if provided
         if (customConfig) {
@@ -568,7 +621,7 @@ wss.on('connection', (ws) => {
 
           if (exitCode !== 0) {
             // Include lineBuffer as stdout for error parsing
-            reject({ stdout: lineBuffer, stderr, exitCode, tempFile });
+            reject({ stdout: lineBuffer, stderr, exitCode, mainFile });
           } else {
             resolve({ data: finalResult, stderr });
           }
@@ -594,8 +647,9 @@ wss.on('connection', (ws) => {
           const jsonError = JSON.parse(err.stdout.trim());
           if (jsonError.error) {
             // Parse the error details if present
+            const errorFile = err.mainFile || mainFile;
             const parsed = jsonError.details
-              ? parseCompileErrors(jsonError.details, tempFile)
+              ? parseCompileErrors(jsonError.details, errorFile)
               : { type: 'compile_error', message: jsonError.error };
 
             parsed.raw = jsonError.details || err.stdout;
@@ -612,7 +666,8 @@ wss.on('connection', (ws) => {
 
       // Fallback: parse stderr for compile errors
       if (err.stderr) {
-        const parsed = parseCompileErrors(err.stderr, tempFile);
+        const errorFile = err.mainFile || mainFile;
+        const parsed = parseCompileErrors(err.stderr, errorFile);
         parsed.raw = err.stderr;
         if (err.exitCode !== undefined) {
           parsed.exitCode = err.exitCode;
@@ -633,7 +688,9 @@ wss.on('connection', (ws) => {
         }));
       }
     } finally {
-      unlink(tempFile).catch(() => {});
+      if (tempDir) {
+        await cleanupTempProject(tempDir);
+      }
     }
   });
 

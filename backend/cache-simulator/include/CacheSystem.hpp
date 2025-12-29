@@ -6,6 +6,7 @@
 #include "InclusionPolicy.hpp"
 #include "Prefetcher.hpp"
 #include <optional>
+#include <unordered_set>
 
 enum class AccessType { Read, Write, InstructionFetch };
 
@@ -27,6 +28,7 @@ private:
   CacheLevel l3;
   Prefetcher prefetcher;
   bool prefetch_enabled;
+  std::unordered_set<uint64_t> prefetched_addresses;  // Track prefetched lines
 
   void handle_inclusive_eviction(uint64_t evicted_addr, CacheLevel &from_level);
   void handle_exclusive_eviction(uint64_t evicted_addr, CacheLevel &from_level,
