@@ -1,0 +1,249 @@
+name: 'Cache Explorer Analysis'
+description: 'Analyze CPU cache behavior of your C/C++ code'
+author: 'Cache Explorer'
+
+branding:
+  icon: 'cpu'
+  color: 'blue'
+
+inputs:
+  source:
+    description: 'Path to source file or directory to analyze'
+    required: true
+  config:
+    description: 'Cache configuration preset (intel, amd, apple, educational, etc.)'
+    required: false
+    default: 'educational'
+  threshold:
+    description: 'Minimum L1 hit rate to pass (0.0-1.0)'
+    required: false
+    default: '0.0'
+  fail-on-regression:
+    description: 'Fail if cache performance regresses from baseline'
+    required: false
+    default: 'false'
+  baseline-file:
+    description: 'Path to baseline JSON file for regression detection'
+    required: false
+    default: ''
+  comment-on-pr:
+    description: 'Post results as a PR comment (requires GITHUB_TOKEN)'
+    required: false
+    default: 'false'
+  github-token:
+    description: 'GitHub token for PR comments (defaults to github.token)'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  l1-hit-rate:
+    description: 'L1 data cache hit rate'
+    value: ${{ steps.analyze.outputs.l1_hit_rate }}
+  l2-hit-rate:
+    description: 'L2 cache hit rate'
+    value: ${{ steps.analyze.outputs.l2_hit_rate }}
+  l3-hit-rate:
+    description: 'L3 cache hit rate'
+    value: ${{ steps.analyze.outputs.l3_hit_rate }}
+  total-events:
+    description: 'Total memory access events'
+    value: ${{ steps.analyze.outputs.total_events }}
+  result-json:
+    description: 'Path to JSON result file'
+    value: ${{ steps.analyze.outputs.result_json }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install LLVM 18
+      shell: bash
+      run: |
+        wget -qO- https://apt.llvm.org/llvm.sh | sudo bash -s 18
+        sudo apt-get install -y llvm-18-dev clang-18
+
+    - name: Build Cache Explorer
+      shell: bash
+      run: |
+        cd ${{ github.action_path }}/..
+
+        # Build LLVM pass
+        mkdir -p backend/llvm-pass/build && cd backend/llvm-pass/build
+        cmake .. -G Ninja -DLLVM_DIR=/usr/lib/llvm-18/lib/cmake/llvm \
+          -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18
+        ninja
+        cd ../../..
+
+        # Build runtime
+        mkdir -p backend/runtime/build && cd backend/runtime/build
+        cmake .. -G Ninja -DCMAKE_C_COMPILER=clang-18
+        ninja
+        cd ../../..
+
+        # Build cache simulator
+        mkdir -p backend/cache-simulator/build && cd backend/cache-simulator/build
+        cmake .. -G Ninja -DCMAKE_CXX_COMPILER=clang++-18
+        ninja
+
+    - name: Analyze cache behavior
+      id: analyze
+      shell: bash
+      run: |
+        export PATH="/usr/lib/llvm-18/bin:$PATH"
+        CACHE_EXPLORE="${{ github.action_path }}/../backend/scripts/cache-explore"
+
+        # Run analysis
+        RESULT_FILE="${{ runner.temp }}/cache-result.json"
+        $CACHE_EXPLORE "${{ inputs.source }}" --config "${{ inputs.config }}" --json > "$RESULT_FILE"
+
+        # Parse results
+        L1_HITS=$(jq -r '.levels.l1d.hits // .levels.l1.hits // 0' "$RESULT_FILE")
+        L1_MISSES=$(jq -r '.levels.l1d.misses // .levels.l1.misses // 0' "$RESULT_FILE")
+        L2_HIT_RATE=$(jq -r '.levels.l2.hitRate // 0' "$RESULT_FILE")
+        L3_HIT_RATE=$(jq -r '.levels.l3.hitRate // 0' "$RESULT_FILE")
+        EVENTS=$(jq -r '.events // 0' "$RESULT_FILE")
+
+        # Calculate L1 hit rate
+        if [ "$L1_HITS" -gt 0 ] || [ "$L1_MISSES" -gt 0 ]; then
+          L1_HIT_RATE=$(echo "scale=4; $L1_HITS / ($L1_HITS + $L1_MISSES)" | bc)
+        else
+          L1_HIT_RATE="0"
+        fi
+
+        echo "l1_hit_rate=$L1_HIT_RATE" >> $GITHUB_OUTPUT
+        echo "l2_hit_rate=$L2_HIT_RATE" >> $GITHUB_OUTPUT
+        echo "l3_hit_rate=$L3_HIT_RATE" >> $GITHUB_OUTPUT
+        echo "total_events=$EVENTS" >> $GITHUB_OUTPUT
+        echo "result_json=$RESULT_FILE" >> $GITHUB_OUTPUT
+
+        # Print summary
+        echo "## Cache Analysis Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+        echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+        echo "| L1 Hit Rate | ${L1_HIT_RATE} |" >> $GITHUB_STEP_SUMMARY
+        echo "| L2 Hit Rate | ${L2_HIT_RATE} |" >> $GITHUB_STEP_SUMMARY
+        echo "| L3 Hit Rate | ${L3_HIT_RATE} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Total Events | ${EVENTS} |" >> $GITHUB_STEP_SUMMARY
+
+        # Check threshold
+        if [ -n "${{ inputs.threshold }}" ] && [ "${{ inputs.threshold }}" != "0.0" ]; then
+          THRESHOLD="${{ inputs.threshold }}"
+          if (( $(echo "$L1_HIT_RATE < $THRESHOLD" | bc -l) )); then
+            echo ""
+            echo "::error::L1 hit rate ($L1_HIT_RATE) is below threshold ($THRESHOLD)"
+            exit 1
+          fi
+        fi
+
+        # Check regression
+        if [ "${{ inputs.fail-on-regression }}" = "true" ] && [ -n "${{ inputs.baseline-file }}" ]; then
+          if [ -f "${{ inputs.baseline-file }}" ]; then
+            BASELINE_L1=$(jq -r '.levels.l1d.hitRate // .levels.l1.hitRate // 0' "${{ inputs.baseline-file }}")
+            if (( $(echo "$L1_HIT_RATE < $BASELINE_L1 - 0.01" | bc -l) )); then
+              echo ""
+              echo "::error::L1 hit rate regressed from $BASELINE_L1 to $L1_HIT_RATE"
+              exit 1
+            fi
+          fi
+        fi
+
+    - name: Upload results artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: cache-analysis-results
+        path: ${{ steps.analyze.outputs.result_json }}
+
+    - name: Post PR comment
+      if: inputs.comment-on-pr == 'true' && github.event_name == 'pull_request'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: |
+        RESULT_FILE="${{ steps.analyze.outputs.result_json }}"
+
+        # Parse results for comment
+        L1_HIT_RATE=$(jq -r '.levels.l1d.hitRate // .levels.l1.hitRate // 0' "$RESULT_FILE")
+        L2_HIT_RATE=$(jq -r '.levels.l2.hitRate // 0' "$RESULT_FILE")
+        L3_HIT_RATE=$(jq -r '.levels.l3.hitRate // 0' "$RESULT_FILE")
+        EVENTS=$(jq -r '.events // 0' "$RESULT_FILE")
+
+        # Format percentages
+        L1_PCT=$(echo "scale=1; $L1_HIT_RATE * 100" | bc)
+        L2_PCT=$(echo "scale=1; $L2_HIT_RATE * 100" | bc)
+        L3_PCT=$(echo "scale=1; $L3_HIT_RATE * 100" | bc)
+
+        # Determine status emoji
+        if (( $(echo "$L1_HIT_RATE >= 0.95" | bc -l) )); then
+          STATUS="✅"
+          STATUS_TEXT="Excellent"
+        elif (( $(echo "$L1_HIT_RATE >= 0.90" | bc -l) )); then
+          STATUS="🟡"
+          STATUS_TEXT="Good"
+        elif (( $(echo "$L1_HIT_RATE >= 0.70" | bc -l) )); then
+          STATUS="🟠"
+          STATUS_TEXT="Fair"
+        else
+          STATUS="🔴"
+          STATUS_TEXT="Poor"
+        fi
+
+        # Get hot lines
+        HOT_LINES=$(jq -r '.hotLines[:5] | map("| \(.line) | \(.misses) | \((.missRate * 100) | floor)% |") | join("\n")' "$RESULT_FILE")
+
+        # Build comment body
+        COMMENT_BODY=$(cat << EOF
+        ## 📊 Cache Explorer Analysis
+
+        **Status:** ${STATUS} ${STATUS_TEXT}
+        **Source:** \`${{ inputs.source }}\`
+        **Config:** \`${{ inputs.config }}\`
+
+        ### Cache Hit Rates
+
+        | Level | Hit Rate |
+        |-------|----------|
+        | L1 Data | ${L1_PCT}% |
+        | L2 | ${L2_PCT}% |
+        | L3 | ${L3_PCT}% |
+
+        **Total Events:** ${EVENTS}
+
+        ### Hot Lines (Top 5)
+
+        | Line | Misses | Miss Rate |
+        |------|--------|-----------|
+        ${HOT_LINES}
+
+        ---
+        *Analyzed with [Cache Explorer](https://github.com/cache-explorer/cache-explorer)*
+        EOF
+        )
+
+        # Post comment using GitHub API
+        PR_NUMBER="${{ github.event.pull_request.number }}"
+        REPO="${{ github.repository }}"
+
+        # Check for existing comment to update
+        EXISTING_COMMENT_ID=$(gh api \
+          -H "Accept: application/vnd.github+json" \
+          "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+          --jq '.[] | select(.body | contains("Cache Explorer Analysis")) | .id' \
+          | head -1)
+
+        if [ -n "$EXISTING_COMMENT_ID" ]; then
+          # Update existing comment
+          gh api \
+            --method PATCH \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${REPO}/issues/comments/${EXISTING_COMMENT_ID}" \
+            -f body="$COMMENT_BODY"
+          echo "Updated existing PR comment"
+        else
+          # Create new comment
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            -f body="$COMMENT_BODY"
+          echo "Created new PR comment"
+        fi

@@ -1,0 +1,129 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install LLVM 18
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 18
+          sudo apt-get install -y llvm-18-dev clang-18 lld-18
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            ninja-build \
+            bc
+
+      - name: Set up LLVM environment
+        run: |
+          echo "PATH=/usr/lib/llvm-18/bin:$PATH" >> $GITHUB_ENV
+          echo "LLVM_DIR=/usr/lib/llvm-18/lib/cmake/llvm" >> $GITHUB_ENV
+
+      - name: Build LLVM pass
+        working-directory: backend/llvm-pass
+        run: |
+          mkdir -p build && cd build
+          cmake .. \
+            -G Ninja \
+            -DLLVM_DIR=$LLVM_DIR \
+            -DCMAKE_C_COMPILER=clang-18 \
+            -DCMAKE_CXX_COMPILER=clang++-18
+          ninja
+
+      - name: Build runtime library
+        working-directory: backend/runtime
+        run: |
+          mkdir -p build && cd build
+          cmake .. \
+            -G Ninja \
+            -DCMAKE_C_COMPILER=clang-18
+          ninja
+
+      - name: Build cache simulator
+        working-directory: backend/cache-simulator
+        run: |
+          mkdir -p build && cd build
+          cmake .. \
+            -G Ninja \
+            -DCMAKE_CXX_COMPILER=clang++-18
+          ninja
+
+      - name: Run unit tests
+        working-directory: backend/cache-simulator/build
+        run: |
+          ./CacheLevelTest
+
+      - name: Verify CLI tools exist
+        run: |
+          ls -la backend/scripts/cache-explore*
+
+      - name: Run E2E tests
+        run: |
+          export PATH="/usr/lib/llvm-18/bin:$PATH"
+          ./tests/e2e/run_tests.sh
+
+  frontend:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Type check
+        working-directory: frontend
+        run: npm run build
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint || true  # Don't fail on lint warnings for now
+
+  server:
+    name: Server Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/server/package-lock.json
+
+      - name: Install dependencies
+        working-directory: backend/server
+        run: npm ci
+
+      - name: Lint (if available)
+        working-directory: backend/server
+        run: npm run lint || true

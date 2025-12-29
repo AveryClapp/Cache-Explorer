@@ -27,6 +27,7 @@ main_usage() {
   echo "  cmake <path>      Configure a CMake project with profiling"
   echo "  make <target>     Build and analyze a Makefile target"
   echo "  compare           Compare cache behavior across configs"
+  echo "  report            Generate HTML report from analysis"
   echo "  cc/c++            Compiler wrapper for build system integration"
   echo ""
   echo "Examples:"
@@ -60,6 +61,10 @@ case "$1" in
   compare)
     shift
     exec "$SCRIPT_DIR/cache-explore-compare" "$@"
+    ;;
+  report)
+    shift
+    exec "$SCRIPT_DIR/cache-explore-report" "$@"
     ;;
   cc)
     shift
@@ -162,17 +167,57 @@ if [[ ! -f "$CACHE_SIM" ]]; then
   exit 1
 fi
 
+# Find clang - prefer versioned (CI) or unversioned (local)
+find_clang() {
+  # Check environment override
+  if [[ -n "${CACHE_EXPLORER_CC:-}" ]]; then
+    echo "$CACHE_EXPLORER_CC"
+    return
+  fi
+  # Check for clang (macOS homebrew, PATH)
+  if command -v clang &>/dev/null; then
+    echo "clang"
+    return
+  fi
+  # Check for versioned clang (Ubuntu CI)
+  for ver in 18 17 16 15; do
+    if command -v "clang-$ver" &>/dev/null; then
+      echo "clang-$ver"
+      return
+    fi
+  done
+  echo "clang"  # fallback
+}
+
+find_clangxx() {
+  if [[ -n "${CACHE_EXPLORER_CXX:-}" ]]; then
+    echo "$CACHE_EXPLORER_CXX"
+    return
+  fi
+  if command -v clang++ &>/dev/null; then
+    echo "clang++"
+    return
+  fi
+  for ver in 18 17 16 15; do
+    if command -v "clang++-$ver" &>/dev/null; then
+      echo "clang++-$ver"
+      return
+    fi
+  done
+  echo "clang++"
+}
+
 # Detect language from file extension
 EXT="${INPUT_FILE##*.}"
 case "$EXT" in
   c)
     LANG="c"
-    COMPILER="clang"
+    COMPILER="$(find_clang)"
     BASENAME=$(basename "$INPUT_FILE" .c)
     ;;
   cpp|cc|cxx|C)
     LANG="c++"
-    COMPILER="clang++"
+    COMPILER="$(find_clangxx)"
     BASENAME=$(basename "$INPUT_FILE" ."$EXT")
     ;;
   rs)

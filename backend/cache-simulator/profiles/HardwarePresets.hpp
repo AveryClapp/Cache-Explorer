@@ -206,6 +206,110 @@ inline CacheHierarchyConfig make_embedded_config() {
       .inclusion_policy = InclusionPolicy::Inclusive};
 }
 
+// Intel Xeon Scalable (Ice Lake Server)
+inline CacheHierarchyConfig make_intel_xeon_config() {
+  return {
+      .l1_data = {.kb_size = 48,
+                  .associativity = 12,
+                  .line_size = 64,
+                  .policy = EvictionPolicy::PLRU,
+                  .write_policy = WritePolicy::Back},
+      .l1_inst = {.kb_size = 32,
+                  .associativity = 8,
+                  .line_size = 64,
+                  .policy = EvictionPolicy::PLRU,
+                  .write_policy = WritePolicy::ReadOnly},
+      .l2 = {.kb_size = 1280,          // 1.25MB L2 per core
+             .associativity = 20,
+             .line_size = 64,
+             .policy = EvictionPolicy::PLRU,
+             .write_policy = WritePolicy::Back},
+      .l3 = {.kb_size = 49152,         // 48MB shared L3
+             .associativity = 12,
+             .line_size = 64,
+             .policy = EvictionPolicy::PLRU,
+             .write_policy = WritePolicy::Back},
+      .inclusion_policy = InclusionPolicy::NINE};
+}
+
+// AMD EPYC (Milan/Genoa)
+inline CacheHierarchyConfig make_amd_epyc_config() {
+  return {
+      .l1_data = {.kb_size = 32,
+                  .associativity = 8,
+                  .line_size = 64,
+                  .policy = EvictionPolicy::LRU,
+                  .write_policy = WritePolicy::Back},
+      .l1_inst = {.kb_size = 32,
+                  .associativity = 8,
+                  .line_size = 64,
+                  .policy = EvictionPolicy::LRU,
+                  .write_policy = WritePolicy::ReadOnly},
+      .l2 = {.kb_size = 512,
+             .associativity = 8,
+             .line_size = 64,
+             .policy = EvictionPolicy::LRU,
+             .write_policy = WritePolicy::Back},
+      .l3 = {.kb_size = 262144,        // 256MB shared L3 (full socket)
+             .associativity = 16,
+             .line_size = 64,
+             .policy = EvictionPolicy::LRU,
+             .write_policy = WritePolicy::Back},
+      .inclusion_policy = InclusionPolicy::Exclusive};
+}
+
+// Raspberry Pi 4 (Cortex-A72)
+inline CacheHierarchyConfig make_raspberry_pi4_config() {
+  return {
+      .l1_data = {.kb_size = 32,
+                  .associativity = 2,
+                  .line_size = 64,
+                  .policy = EvictionPolicy::LRU,
+                  .write_policy = WritePolicy::Back},
+      .l1_inst = {.kb_size = 48,
+                  .associativity = 3,
+                  .line_size = 64,
+                  .policy = EvictionPolicy::LRU,
+                  .write_policy = WritePolicy::ReadOnly},
+      .l2 = {.kb_size = 1024,          // 1MB shared L2
+             .associativity = 16,
+             .line_size = 64,
+             .policy = EvictionPolicy::LRU,
+             .write_policy = WritePolicy::Back},
+      .l3 = {.kb_size = 0,             // No L3
+             .associativity = 1,
+             .line_size = 64,
+             .policy = EvictionPolicy::LRU,
+             .write_policy = WritePolicy::Back},
+      .inclusion_policy = InclusionPolicy::Inclusive};
+}
+
+// Apple M3 Pro/Max (latest)
+inline CacheHierarchyConfig make_apple_m3_config() {
+  return {
+      .l1_data = {.kb_size = 128,      // 128KB L1D (P-cores)
+                  .associativity = 8,
+                  .line_size = 64,
+                  .policy = EvictionPolicy::PLRU,
+                  .write_policy = WritePolicy::Back},
+      .l1_inst = {.kb_size = 192,      // 192KB L1I (P-cores)
+                  .associativity = 6,
+                  .line_size = 64,
+                  .policy = EvictionPolicy::PLRU,
+                  .write_policy = WritePolicy::ReadOnly},
+      .l2 = {.kb_size = 32768,         // 32MB shared L2 (P-core cluster)
+             .associativity = 16,
+             .line_size = 64,
+             .policy = EvictionPolicy::PLRU,
+             .write_policy = WritePolicy::Back},
+      .l3 = {.kb_size = 32768,         // 32MB SLC
+             .associativity = 16,
+             .line_size = 64,
+             .policy = EvictionPolicy::PLRU,
+             .write_policy = WritePolicy::Back},
+      .inclusion_policy = InclusionPolicy::NINE};
+}
+
 inline CacheHierarchyConfig make_educational_config() {
   return {
       .l1_data = {.kb_size = 1,

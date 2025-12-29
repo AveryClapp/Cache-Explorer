@@ -1,9 +1,16 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import Editor, { DiffEditor } from '@monaco-editor/react'
 import type { Monaco } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
+import { initVimMode } from 'monaco-vim'
 import LZString from 'lz-string'
 import './App.css'
+
+// API base URL - in production (Docker), use relative paths; in dev, use localhost
+const API_BASE = import.meta.env.PROD ? '' : 'http://localhost:3001'
+const WS_URL = import.meta.env.PROD
+  ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`
+  : 'ws://localhost:3001/ws'
 
 interface CacheStats {
   hits: number
@@ -89,6 +96,7 @@ interface TimelineEvent {
   i: number       // event index
   t: 'R' | 'W' | 'I'  // type: Read, Write, Instruction fetch
   l: 1 | 2 | 3 | 4    // hit level: 1=L1, 2=L2, 3=L3, 4=memory
+  a?: number      // memory address (for cache visualization)
   f?: string      // file (optional)
   n?: number      // line number (optional)
 }
@@ -465,7 +473,361 @@ function LevelDetail({ name, stats }: { name: string; stats: CacheStats }) {
   )
 }
 
-function CacheHierarchyViz({ result }: { result: CacheResult }) {
+// Cache line state for visualization
+interface CacheLine {
+  valid: boolean
+  tag: number
+  dirty: boolean
+  lastAccess: number  // event index when last accessed
+  accessCount: number
+}
+
+// Interactive cache grid with timeline scrubber
+function InteractiveCacheGrid({
+  config,
+  timeline,
+  currentIndex,
+  onIndexChange
+}: {
+  config: CacheLevelConfig
+  timeline: TimelineEvent[]
+  currentIndex: number
+  onIndexChange: (idx: number) => void
+}) {
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [playSpeed, setPlaySpeed] = useState(10)  // events per second
+  const playRef = useRef<number | null>(null)
+
+  // Compute cache state up to currentIndex
+  const cacheState = useMemo(() => {
+    const numSets = config.sets
+    const assoc = config.assoc
+    const lineSize = config.lineSize
+
+    // Initialize empty cache
+    const cache: CacheLine[][] = Array.from({ length: numSets }, () =>
+      Array.from({ length: assoc }, () => ({
+        valid: false,
+        tag: 0,
+        dirty: false,
+        lastAccess: -1,
+        accessCount: 0
+      }))
+    )
+
+    // LRU tracking per set
+    const lruOrder: number[][] = Array.from({ length: numSets }, () =>
+      Array.from({ length: assoc }, (_, i) => i)
+    )
+
+    // Process events up to currentIndex
+    for (let i = 0; i < Math.min(currentIndex, timeline.length); i++) {
+      const event = timeline[i]
+      if (!event.a || event.t === 'I') continue  // Skip instruction fetches for L1D
+
+      const addr = event.a
+      const setIndex = Math.floor(addr / lineSize) % numSets
+      const tag = Math.floor(addr / lineSize / numSets)
+      const isWrite = event.t === 'W'
+
+      const set = cache[setIndex]
+      const lru = lruOrder[setIndex]
+
+      // Check for hit
+      let hitWay = -1
+      for (let way = 0; way < assoc; way++) {
+        if (set[way].valid && set[way].tag === tag) {
+          hitWay = way
+          break
+        }
+      }
+
+      if (hitWay >= 0) {
+        // Hit - update LRU and access info
+        set[hitWay].lastAccess = i
+        set[hitWay].accessCount++
+        if (isWrite) set[hitWay].dirty = true
+
+        // Move to MRU position
+        const idx = lru.indexOf(hitWay)
+        lru.splice(idx, 1)
+        lru.push(hitWay)
+      } else {
+        // Miss - find victim (LRU) and replace
+        const victimWay = lru[0]
+        set[victimWay] = {
+          valid: true,
+          tag,
+          dirty: isWrite,
+          lastAccess: i,
+          accessCount: 1
+        }
+
+        // Move to MRU position
+        lru.shift()
+        lru.push(victimWay)
+      }
+    }
+
+    return cache
+  }, [config, timeline, currentIndex])
+
+  // Playback control
+  useEffect(() => {
+    if (isPlaying && currentIndex < timeline.length) {
+      playRef.current = window.setInterval(() => {
+        onIndexChange(Math.min(currentIndex + 1, timeline.length))
+      }, 1000 / playSpeed)
+    }
+    return () => {
+      if (playRef.current) {
+        clearInterval(playRef.current)
+        playRef.current = null
+      }
+    }
+  }, [isPlaying, currentIndex, timeline.length, playSpeed, onIndexChange])
+
+  // Stop playing when reaching end
+  useEffect(() => {
+    if (currentIndex >= timeline.length) {
+      setIsPlaying(false)
+    }
+  }, [currentIndex, timeline.length])
+
+  const getHeatColor = (line: CacheLine, maxIndex: number) => {
+    if (!line.valid) return 'empty'
+    const recency = maxIndex > 0 ? (line.lastAccess / maxIndex) : 0
+    if (recency > 0.9) return 'hot'
+    if (recency > 0.5) return 'warm'
+    if (recency > 0.1) return 'cool'
+    return 'cold'
+  }
+
+  const currentEvent = timeline[currentIndex - 1]
+  const currentSet = currentEvent?.a
+    ? Math.floor(currentEvent.a / config.lineSize) % config.sets
+    : -1
+
+  return (
+    <div className="interactive-cache-grid">
+      <div className="cache-grid-header">
+        <div className="cache-grid-title">
+          L1D Cache State ({config.sets} sets × {config.assoc} ways)
+        </div>
+        <div className="scrubber-controls">
+          <button
+            className="play-btn"
+            onClick={() => setIsPlaying(!isPlaying)}
+            disabled={currentIndex >= timeline.length}
+          >
+            {isPlaying ? '⏸' : '▶'}
+          </button>
+          <button
+            className="step-btn"
+            onClick={() => onIndexChange(Math.max(0, currentIndex - 1))}
+            disabled={currentIndex <= 0}
+          >
+            ◀
+          </button>
+          <button
+            className="step-btn"
+            onClick={() => onIndexChange(Math.min(timeline.length, currentIndex + 1))}
+            disabled={currentIndex >= timeline.length}
+          >
+            ▶
+          </button>
+          <select
+            className="speed-select"
+            value={playSpeed}
+            onChange={(e) => setPlaySpeed(Number(e.target.value))}
+          >
+            <option value={1}>1x</option>
+            <option value={5}>5x</option>
+            <option value={10}>10x</option>
+            <option value={50}>50x</option>
+            <option value={100}>100x</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Timeline scrubber */}
+      <div className="timeline-scrubber">
+        <input
+          type="range"
+          min={0}
+          max={timeline.length}
+          value={currentIndex}
+          onChange={(e) => onIndexChange(Number(e.target.value))}
+          className="scrubber-slider"
+        />
+        <div className="scrubber-info">
+          <span>Event {currentIndex} / {timeline.length}</span>
+          {currentEvent && (
+            <span className="current-event-info">
+              {currentEvent.t === 'R' ? 'Read' : currentEvent.t === 'W' ? 'Write' : 'Fetch'}
+              {currentEvent.l === 1 ? ' → L1 Hit' : currentEvent.l === 2 ? ' → L2 Hit' : currentEvent.l === 3 ? ' → L3 Hit' : ' → Memory'}
+              {currentSet >= 0 && ` (Set ${currentSet})`}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Cache grid */}
+      <div className="cache-grid animated">
+        <div className="grid-header">
+          <div className="grid-corner">Set</div>
+          {Array.from({ length: config.assoc }, (_, i) => (
+            <div key={i} className="grid-way-label">W{i}</div>
+          ))}
+        </div>
+        {Array.from({ length: Math.min(config.sets, 16) }, (_, setIdx) => (
+          <div
+            key={setIdx}
+            className={`grid-row ${setIdx === currentSet ? 'active-set' : ''}`}
+          >
+            <div className="grid-set-label">{setIdx}</div>
+            {cacheState[setIdx].map((line: CacheLine, wayIdx: number) => (
+              <div
+                key={wayIdx}
+                className={`grid-cell ${getHeatColor(line, currentIndex)} ${line.dirty ? 'dirty' : ''}`}
+                title={line.valid
+                  ? `Tag: 0x${line.tag.toString(16)}\nAccesses: ${line.accessCount}\nLast: #${line.lastAccess}${line.dirty ? '\n(dirty)' : ''}`
+                  : 'Empty'
+                }
+              >
+                {line.valid && (
+                  <span className="cell-tag">
+                    {line.accessCount > 1 ? line.accessCount : ''}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        ))}
+        {config.sets > 16 && (
+          <div className="grid-ellipsis">... {config.sets - 16} more sets</div>
+        )}
+      </div>
+
+      <div className="cache-grid-legend">
+        <span className="legend-item"><span className="legend-color empty" /> Empty</span>
+        <span className="legend-item"><span className="legend-color cold" /> Cold</span>
+        <span className="legend-item"><span className="legend-color cool" /> Cool</span>
+        <span className="legend-item"><span className="legend-color warm" /> Warm</span>
+        <span className="legend-item"><span className="legend-color hot" /> Hot</span>
+        <span className="legend-item"><span className="legend-color dirty" /> Dirty</span>
+      </div>
+    </div>
+  )
+}
+
+// False Sharing Visualization Component
+function FalseSharingViz({ falseSharing, lineSize = 64 }: {
+  falseSharing: FalseSharingEvent[]
+  lineSize?: number
+}) {
+  if (!falseSharing || falseSharing.length === 0) return null
+
+  // Get unique thread IDs for color assignment
+  const threadColors: Record<number, string> = {}
+  const colors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22', '#34495e']
+  let colorIdx = 0
+
+  falseSharing.forEach(fs => {
+    fs.accesses.forEach(a => {
+      if (!(a.threadId in threadColors)) {
+        threadColors[a.threadId] = colors[colorIdx % colors.length]
+        colorIdx++
+      }
+    })
+  })
+
+  return (
+    <div className="false-sharing-viz">
+      <div className="section-title">False Sharing Details</div>
+      <p className="viz-description">
+        Multiple threads accessing different bytes in the same {lineSize}-byte cache line.
+        This causes cache invalidations and performance loss.
+      </p>
+
+      {falseSharing.slice(0, 5).map((fs, idx) => {
+        // Build byte access map
+        const byteAccess: { threadId: number; isWrite: boolean; count: number }[] = Array(lineSize).fill(null)
+
+        fs.accesses.forEach(a => {
+          const offset = a.offset % lineSize
+          if (!byteAccess[offset]) {
+            byteAccess[offset] = { threadId: a.threadId, isWrite: a.isWrite, count: a.count }
+          } else {
+            byteAccess[offset].count += a.count
+          }
+        })
+
+        // Get unique threads for this cache line
+        const threads = [...new Set(fs.accesses.map(a => a.threadId))]
+
+        return (
+          <div key={idx} className="cache-line-viz">
+            <div className="cache-line-header">
+              <code>Cache Line {fs.cacheLineAddr}</code>
+              <span className="access-count">{fs.accessCount.toLocaleString()} accesses</span>
+            </div>
+
+            <div className="byte-grid" style={{ gridTemplateColumns: `repeat(${Math.min(lineSize, 32)}, 1fr)` }}>
+              {byteAccess.slice(0, Math.min(lineSize, 32)).map((access, byteIdx) => (
+                <div
+                  key={byteIdx}
+                  className={`byte-cell ${access ? (access.isWrite ? 'write' : 'read') : 'unused'}`}
+                  style={access ? { backgroundColor: threadColors[access.threadId] } : undefined}
+                  title={access ? `Thread ${access.threadId}: ${access.count} ${access.isWrite ? 'writes' : 'reads'} at offset ${byteIdx}` : `Byte ${byteIdx}`}
+                />
+              ))}
+            </div>
+            {lineSize > 32 && <div className="byte-ellipsis">... {lineSize - 32} more bytes</div>}
+
+            <div className="thread-legend">
+              {threads.map(tid => (
+                <span key={tid} className="thread-tag" style={{ backgroundColor: threadColors[tid] }}>
+                  Thread {tid}
+                </span>
+              ))}
+            </div>
+
+            <div className="access-details">
+              {fs.accesses.slice(0, 4).map((a, i) => (
+                <div key={i} className="access-item">
+                  <span className="thread-dot" style={{ backgroundColor: threadColors[a.threadId] }} />
+                  <code>{a.file}:{a.line}</code>
+                  <span className="access-type">{a.isWrite ? 'W' : 'R'}</span>
+                  <span className="access-offset">+{a.offset}</span>
+                </div>
+              ))}
+              {fs.accesses.length > 4 && (
+                <div className="access-more">... and {fs.accesses.length - 4} more</div>
+              )}
+            </div>
+          </div>
+        )
+      })}
+
+      {falseSharing.length > 5 && (
+        <div className="more-events">... {falseSharing.length - 5} more false sharing events</div>
+      )}
+
+      <div className="fix-suggestion">
+        <strong>Fix:</strong> Add padding between fields accessed by different threads to ensure they're on separate cache lines.
+        For a {lineSize}-byte line, add at least {lineSize} bytes of padding.
+      </div>
+    </div>
+  )
+}
+
+function CacheHierarchyViz({ result, timeline, scrubberIndex, onScrubberChange }: {
+  result: CacheResult
+  timeline?: TimelineEvent[]
+  scrubberIndex?: number
+  onScrubberChange?: (idx: number) => void
+}) {
   const config = result.cacheConfig
   const levels = result.levels
 
@@ -579,8 +941,18 @@ function CacheHierarchyViz({ result }: { result: CacheResult }) {
         <HitRateBar rate={l3.hitRate} label="L3" />
       </div>
 
-      {/* Cache Grid (L1D visualization) */}
-      {config && config.l1d.sets <= 32 && (
+      {/* Interactive Cache Grid with Timeline Scrubber */}
+      {config && config.l1d.sets <= 32 && timeline && timeline.length > 0 && onScrubberChange && (
+        <InteractiveCacheGrid
+          config={config.l1d}
+          timeline={timeline}
+          currentIndex={scrubberIndex ?? timeline.length}
+          onIndexChange={onScrubberChange}
+        />
+      )}
+
+      {/* Static grid fallback when no timeline */}
+      {config && config.l1d.sets <= 32 && (!timeline || timeline.length === 0) && (
         <div className="cache-grid-section">
           <div className="cache-grid-title">
             L1 Data Cache Structure ({config.l1d.sets} sets × {config.l1d.assoc} ways)
@@ -831,16 +1203,20 @@ const PREFETCH_DEFAULTS: Record<string, PrefetchPolicy> = {
   // Intel uses aggressive stream prefetchers + adjacent line prefetcher
   intel: 'stream',
   intel14: 'stream',
+  xeon: 'stream',
   // AMD Zen uses stride + stream detection
   amd: 'adaptive',
   zen3: 'adaptive',
   zen4: 'adaptive',
+  epyc: 'adaptive',
   // Apple Silicon has very aggressive stream prefetchers
   apple: 'stream',
   m1: 'stream',
   m2: 'stream',
-  // ARM Graviton uses stream prefetching
+  m3: 'stream',
+  // ARM uses stream prefetching
   graviton: 'stream',
+  rpi4: 'next',
   // Embedded often has simple or no prefetching
   embedded: 'next',
   // Educational - no prefetch to show raw behavior
@@ -866,15 +1242,19 @@ function App() {
   const [showTimeline, setShowTimeline] = useState(false)
   const [diffMode, setDiffMode] = useState(false)
   const [sampleRate, setSampleRate] = useState(1)  // 1 = no sampling
-  const [eventLimit, setEventLimit] = useState(1000000)  // 1M default
+  const [eventLimit, setEventLimit] = useState(5000000)  // 5M default (~30s max runtime)
   const [longRunning, setLongRunning] = useState(false)
   const [baselineCode, setBaselineCode] = useState<string | null>(null)
   const [timeline, setTimeline] = useState<TimelineEvent[]>([])
+  const [scrubberIndex, setScrubberIndex] = useState<number>(0)  // For interactive cache grid
+  const [vimMode, setVimMode] = useState(false)  // Vim keybindings toggle
   const timelineRef = useRef<TimelineEvent[]>([])  // Accumulator during streaming
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const monacoRef = useRef<Monaco | null>(null)
   const decorationsRef = useRef<string[]>([])
   const optionsRef = useRef<HTMLDivElement>(null)
+  const vimStatusRef = useRef<HTMLDivElement>(null)
+  const vimModeRef = useRef<{ dispose: () => void } | null>(null)
 
   // Monaco language mapping
   const monacoLanguage = language === 'cpp' ? 'cpp' : language === 'rust' ? 'rust' : 'c'
@@ -894,6 +1274,24 @@ function App() {
     editorRef.current = editor
     monacoRef.current = monaco
   }
+
+  // Vim mode initialization
+  useEffect(() => {
+    if (vimMode && editorRef.current && vimStatusRef.current) {
+      // Initialize vim mode
+      vimModeRef.current = initVimMode(editorRef.current, vimStatusRef.current)
+    } else if (vimModeRef.current) {
+      // Cleanup vim mode
+      vimModeRef.current.dispose()
+      vimModeRef.current = null
+    }
+    return () => {
+      if (vimModeRef.current) {
+        vimModeRef.current.dispose()
+        vimModeRef.current = null
+      }
+    }
+  }, [vimMode])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -920,7 +1318,7 @@ function App() {
 
       if (shortId) {
         try {
-          const response = await fetch(`http://localhost:3001/s/${shortId}`)
+          const response = await fetch(`${API_BASE}/s/${shortId}`)
           const data = await response.json()
           if (data.state) {
             setCode(data.state.code)
@@ -959,7 +1357,7 @@ function App() {
 
   const handleShare = useCallback(async () => {
     try {
-      const response = await fetch('http://localhost:3001/shorten', {
+      const response = await fetch(`${API_BASE}/shorten`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ state: { code, config, optLevel, language, defines } }),
@@ -978,7 +1376,40 @@ function App() {
     }
   }, [code, config, optLevel, language, defines])
 
-  // Apply decorations
+  // Apply error markers (red squiggles) for compile errors
+  useEffect(() => {
+    if (!editorRef.current || !monacoRef.current) return
+
+    const monaco = monacoRef.current
+    const editor = editorRef.current
+    const model = editor.getModel()
+    if (!model) return
+
+    // Clear existing markers
+    monaco.editor.setModelMarkers(model, 'cache-explorer', [])
+
+    if (!error || !error.errors || error.errors.length === 0) return
+
+    // Create markers for each error
+    const markers: editor.IMarkerData[] = error.errors.map(err => ({
+      severity: err.severity === 'error'
+        ? monaco.MarkerSeverity.Error
+        : monaco.MarkerSeverity.Warning,
+      message: err.message + (err.suggestion ? `\n\n💡 ${err.suggestion}` : ''),
+      startLineNumber: err.line,
+      startColumn: err.column,
+      endLineNumber: err.line,
+      // Estimate end column: find the end of the problematic token/line
+      endColumn: err.column + (err.sourceLine
+        ? Math.min(20, err.sourceLine.length - err.column + 1)
+        : 10),
+      source: 'Cache Explorer'
+    }))
+
+    monaco.editor.setModelMarkers(model, 'cache-explorer', markers)
+  }, [error])
+
+  // Apply decorations for cache analysis results
   useEffect(() => {
     if (!editorRef.current || !monacoRef.current || !result) {
       if (editorRef.current && decorationsRef.current.length > 0) {
@@ -1061,7 +1492,7 @@ function App() {
     // Set long-running warning after 10 seconds
     const longRunTimeout = setTimeout(() => setLongRunning(true), 10000)
 
-    const ws = new WebSocket('ws://localhost:3001/ws')
+    const ws = new WebSocket(WS_URL)
 
     ws.onopen = () => {
       const payload: Record<string, unknown> = { code, config, optLevel, language }
@@ -1091,6 +1522,7 @@ function App() {
         // Finalize timeline and set result
         setTimeline([...timelineRef.current])
         setResult({ ...(msg.data as CacheResult), timeline: timelineRef.current })
+        setScrubberIndex(timelineRef.current.length)  // Start at end of timeline
         setStage('idle')
         ws.close()
       } else if (msg.type === 'error') {
@@ -1115,7 +1547,7 @@ function App() {
         if (sampleRate > 1) payload.sample = sampleRate
         if (eventLimit > 0) payload.limit = eventLimit
 
-        const response = await fetch('http://localhost:3001/compile', {
+        const response = await fetch(`${API_BASE}/compile`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -1189,17 +1621,21 @@ function App() {
             <optgroup label="Intel">
               <option value="intel">Intel 12th Gen</option>
               <option value="intel14">Intel 14th Gen</option>
+              <option value="xeon">Intel Xeon (Server)</option>
             </optgroup>
             <optgroup label="AMD">
               <option value="zen3">AMD Zen 3</option>
               <option value="amd">AMD Zen 4</option>
+              <option value="epyc">AMD EPYC (Server)</option>
             </optgroup>
             <optgroup label="Apple">
               <option value="apple">Apple M1</option>
               <option value="m2">Apple M2</option>
+              <option value="m3">Apple M3</option>
             </optgroup>
             <optgroup label="Cloud/ARM">
               <option value="graviton">AWS Graviton 3</option>
+              <option value="rpi4">Raspberry Pi 4</option>
               <option value="embedded">Embedded (Cortex-A53)</option>
             </optgroup>
             <optgroup label="Custom">
@@ -1293,8 +1729,9 @@ function App() {
                       <select value={eventLimit} onChange={(e) => setEventLimit(Number(e.target.value))}>
                         <option value={100000}>100K</option>
                         <option value={500000}>500K</option>
-                        <option value={1000000}>1M (default)</option>
-                        <option value={5000000}>5M</option>
+                        <option value={1000000}>1M</option>
+                        <option value={5000000}>5M (default)</option>
+                        <option value={10000000}>10M</option>
                         <option value={0}>No limit</option>
                       </select>
                     </div>
@@ -1325,6 +1762,18 @@ function App() {
                   </button>
                   <button className="btn-option" onClick={() => setBaselineCode(code)}>
                     Set Current as Baseline
+                  </button>
+                </div>
+
+                <div className="option-divider" />
+
+                <div className="option-section">
+                  <div className="option-label">Editor Mode</div>
+                  <button
+                    className={`btn-option ${vimMode ? 'active' : ''}`}
+                    onClick={() => setVimMode(!vimMode)}
+                  >
+                    {vimMode ? 'Vim Mode ON' : 'Vim Mode OFF'}
                   </button>
                 </div>
 
@@ -1375,7 +1824,7 @@ function App() {
             />
           ) : (
             <Editor
-              height="100%"
+              height={vimMode ? "calc(100% - 24px)" : "100%"}
               language={monacoLanguage}
               theme="vs-dark"
               value={code}
@@ -1384,6 +1833,7 @@ function App() {
               options={{ minimap: { enabled: false }, fontSize: 13, lineNumbers: 'on', scrollBeyondLastLine: false, glyphMargin: true }}
             />
           )}
+          {vimMode && <div ref={vimStatusRef} className="vim-status-bar" />}
         </div>
 
         <div className="results-pane">
@@ -1448,7 +1898,12 @@ function App() {
                     <LevelDetail name="L2" stats={result.levels.l2} />
                     <LevelDetail name="L3" stats={result.levels.l3} />
                   </div>
-                  <CacheHierarchyViz result={result} />
+                  <CacheHierarchyViz
+                    result={result}
+                    timeline={timeline}
+                    scrubberIndex={scrubberIndex}
+                    onScrubberChange={setScrubberIndex}
+                  />
                 </>
               )}
 
@@ -1457,6 +1912,13 @@ function App() {
                   <div className="warning-title">False Sharing Detected</div>
                   <div className="warning-count">{result.coherence.falseSharingEvents} event(s)</div>
                 </div>
+              )}
+
+              {result.falseSharing && result.falseSharing.length > 0 && (
+                <FalseSharingViz
+                  falseSharing={result.falseSharing}
+                  lineSize={result.cacheConfig?.l1d?.lineSize || 64}
+                />
               )}
 
               {result.hotLines.length > 0 && (

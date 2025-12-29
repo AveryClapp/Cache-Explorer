@@ -36,10 +36,13 @@ const errorSuggestions = {
   'undeclared identifier': 'Check spelling or add the necessary #include',
   "expected ';'": 'Missing semicolon at end of statement',
   "expected '}'": 'Missing closing brace - check matching brackets',
+  "expected ')'": 'Missing closing parenthesis',
   'expected expression': 'Syntax error - check for missing operands or typos',
   'use of undeclared': 'Variable or function not declared - check spelling or add declaration',
+  'call to undeclared': 'Function not declared - add #include or forward declaration',
   'incompatible pointer': 'Type mismatch - check pointer types match',
   'implicit declaration': 'Function used before declaration - add #include or forward declaration',
+  'implicit function': 'Function used before declaration - add #include or forward declaration',
   'too few arguments': 'Function call missing required arguments',
   'too many arguments': 'Function call has extra arguments',
   'conflicting types': 'Function declared differently in multiple places',
@@ -49,6 +52,17 @@ const errorSuggestions = {
   'lvalue required': 'Cannot assign to this expression (not a variable)',
   'control reaches end': 'Function missing return statement',
   'uninitialized': 'Variable used before being assigned a value',
+  'no member named': 'Struct/class has no field with that name - check spelling',
+  'incomplete type': 'Type not fully defined - add #include or forward declaration',
+  'invalid operands': 'Cannot use these types with this operator',
+  'no matching function': 'No function matches these argument types',
+  'cannot convert': 'Type conversion not allowed - use explicit cast if intended',
+  'no viable conversion': 'No way to convert between these types',
+  'non-void function': 'Function must return a value',
+  'excess elements': 'Too many initializers for array or struct',
+  'subscripted value': 'Using [] on something that is not an array or pointer',
+  'member reference': 'Using . or -> incorrectly - check if pointer or value',
+  'called object': 'Trying to call something that is not a function',
 };
 
 // Parse clang error output into structured format
@@ -181,7 +195,7 @@ app.post('/compile', async (req, res) => {
   }
 
   // Apply sensible defaults for web UI to prevent timeouts
-  const eventLimit = limit !== undefined ? limit : 1000000;  // 1M events max
+  const eventLimit = limit !== undefined ? limit : 5000000;  // 5M events max (~30s runtime)
   const sampleRate = sample !== undefined ? sample : 1;       // No sampling by default
 
   // Use Docker sandbox if available (production), otherwise direct execution (development)
@@ -413,7 +427,7 @@ wss.on('connection', (ws) => {
 
     // Apply sensible defaults for web UI to prevent timeouts
     // Default: 1M event limit, no sampling (user can override)
-    const eventLimit = limit !== undefined ? limit : 1000000;  // 1M events max
+    const eventLimit = limit !== undefined ? limit : 5000000;  // 5M events max (~30s runtime)
     const sampleRate = sample !== undefined ? sample : 1;       // No sampling by default
 
     // Use Docker sandbox if available

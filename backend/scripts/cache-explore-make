@@ -67,9 +67,9 @@ echo "" >&2
 # Run make with overridden compilers
 CC="clang" \
 CXX="clang++" \
-CFLAGS="$CFLAGS $CFLAGS" \
-CXXFLAGS="$CFLAGS $CXXFLAGS" \
-LDFLAGS="$LDFLAGS $LDFLAGS" \
+CFLAGS="$CFLAGS" \
+CXXFLAGS="$CFLAGS" \
+LDFLAGS="$LDFLAGS" \
 make "${MAKE_ARGS[@]}"
 
 echo "" >&2

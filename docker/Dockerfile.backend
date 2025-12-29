@@ -1,0 +1,96 @@
+# Cache Explorer Backend
+# Builds: LLVM pass, runtime library, cache simulator, and server
+
+FROM ubuntu:24.04 AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    wget \
+    cmake \
+    ninja-build \
+    git \
+    bc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install LLVM 18
+RUN wget -qO- https://apt.llvm.org/llvm.sh | bash -s 18
+RUN apt-get install -y llvm-18-dev clang-18 lld-18
+
+# Set LLVM paths
+ENV PATH="/usr/lib/llvm-18/bin:${PATH}"
+ENV LLVM_DIR="/usr/lib/llvm-18/lib/cmake/llvm"
+
+# Copy source
+WORKDIR /build
+COPY backend/ ./backend/
+
+# Build LLVM pass
+WORKDIR /build/backend/llvm-pass
+RUN mkdir -p build && cd build && \
+    cmake .. -G Ninja \
+      -DLLVM_DIR=$LLVM_DIR \
+      -DCMAKE_C_COMPILER=clang-18 \
+      -DCMAKE_CXX_COMPILER=clang++-18 && \
+    ninja
+
+# Build runtime library
+WORKDIR /build/backend/runtime
+RUN mkdir -p build && cd build && \
+    cmake .. -G Ninja -DCMAKE_C_COMPILER=clang-18 && \
+    ninja
+
+# Build cache simulator
+WORKDIR /build/backend/cache-simulator
+RUN mkdir -p build && cd build && \
+    cmake .. -G Ninja -DCMAKE_CXX_COMPILER=clang++-18 && \
+    ninja
+
+# Runtime image
+FROM ubuntu:24.04
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    wget \
+    bc \
+    nodejs \
+    npm \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install LLVM 18 runtime components
+RUN wget -qO- https://apt.llvm.org/llvm.sh | bash -s 18
+RUN apt-get install -y clang-18
+
+# Set LLVM paths
+ENV PATH="/usr/lib/llvm-18/bin:${PATH}"
+
+# Create non-root user for security
+RUN useradd -m -s /bin/bash cache-explorer
+WORKDIR /app
+
+# Copy built artifacts
+COPY --from=builder /build/backend/llvm-pass/build/CacheProfiler.so ./backend/llvm-pass/build/
+COPY --from=builder /build/backend/runtime/build/libcache-explorer-rt.a ./backend/runtime/build/
+COPY --from=builder /build/backend/cache-simulator/build/cache-sim ./backend/cache-simulator/build/
+
+# Copy runtime source and scripts
+COPY backend/runtime/*.h ./backend/runtime/
+COPY backend/scripts/ ./backend/scripts/
+COPY backend/server/ ./backend/server/
+
+# Make scripts executable
+RUN chmod +x ./backend/scripts/*
+
+# Install Node.js dependencies
+WORKDIR /app/backend/server
+RUN npm ci --only=production
+
+# Set environment
+ENV CACHE_EXPLORER_PATH=/app/backend
+ENV NODE_ENV=production
+
+# Switch to non-root user
+USER cache-explorer
+
+EXPOSE 3001
+
+CMD ["node", "server.js"]

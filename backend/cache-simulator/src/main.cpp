@@ -52,18 +52,22 @@ CacheHierarchyConfig get_config(const std::string &name) {
   // Intel presets
   if (name == "intel" || name == "intel12") return make_intel_12th_gen_config();
   if (name == "intel14") return make_intel_14th_gen_config();
+  if (name == "xeon") return make_intel_xeon_config();
 
   // AMD presets
   if (name == "amd" || name == "zen4") return make_amd_zen4_config();
   if (name == "zen3") return make_amd_zen3_config();
+  if (name == "epyc") return make_amd_epyc_config();
 
   // Apple presets
   if (name == "apple" || name == "m1") return make_apple_m_series_config();
   if (name == "m2") return make_apple_m2_config();
+  if (name == "m3") return make_apple_m3_config();
 
   // Cloud/ARM presets
   if (name == "graviton" || name == "graviton3") return make_aws_graviton3_config();
   if (name == "embedded") return make_embedded_config();
+  if (name == "rpi4" || name == "raspberry") return make_raspberry_pi4_config();
 
   // Educational preset
   if (name == "educational") return make_educational_config();
@@ -162,6 +166,7 @@ int main(int argc, char *argv[]) {
       bool is_write;
       bool is_icache;
       int hit_level;  // 1=L1, 2=L2, 3=L3, 4=memory
+      uint64_t address;  // Memory address for cache visualization
       std::string file;
       uint32_t line;
     };
@@ -185,6 +190,7 @@ int main(int argc, char *argv[]) {
           current_event->is_write,
           current_event->is_icache,
           level,
+          current_event->address,
           current_event->file,
           current_event->line
         });
@@ -232,7 +238,8 @@ int main(int argc, char *argv[]) {
           const auto& e = recent_events[i];
           std::cout << "{\"i\":" << e.index
                     << ",\"t\":\"" << (e.is_icache ? "I" : (e.is_write ? "W" : "R")) << "\""
-                    << ",\"l\":" << e.hit_level;
+                    << ",\"l\":" << e.hit_level
+                    << ",\"a\":" << e.address;
           if (!e.file.empty()) {
             std::cout << ",\"f\":\"" << escape_json(e.file) << "\",\"n\":" << e.line;
           }
@@ -267,7 +274,8 @@ int main(int argc, char *argv[]) {
         const auto& e = recent_events[i];
         std::cout << "{\"i\":" << e.index
                   << ",\"t\":\"" << (e.is_icache ? "I" : (e.is_write ? "W" : "R")) << "\""
-                  << ",\"l\":" << e.hit_level;
+                  << ",\"l\":" << e.hit_level
+                  << ",\"a\":" << e.address;
         if (!e.file.empty()) {
           std::cout << ",\"f\":\"" << escape_json(e.file) << "\",\"n\":" << e.line;
         }

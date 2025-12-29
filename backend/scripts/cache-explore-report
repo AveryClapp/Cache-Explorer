@@ -1,0 +1,290 @@
+#!/bin/bash
+# cache-explore report - Generate HTML report from cache analysis
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+usage() {
+  echo "Usage: cache-explore report [options] <source.c|.cpp> -o <output.html>"
+  echo "       cache-explore report [options] --json <results.json> -o <output.html>"
+  echo ""
+  echo "Generate a standalone HTML report from cache analysis."
+  echo ""
+  echo "Options:"
+  echo "  --config <name>   Cache config (default: intel)"
+  echo "  --json <file>     Use existing JSON results instead of analyzing"
+  echo "  -o, --output      Output HTML file (required)"
+  echo "  --title <text>    Report title"
+  echo "  --sample <N>      Sample 1 in N events"
+  echo "  --limit <N>       Max events to process"
+  echo "  --help            Show this help"
+  echo ""
+  echo "Examples:"
+  echo "  cache-explore report matrix.c -o report.html"
+  echo "  cache-explore report matrix.c --config amd -o report.html"
+  echo "  cache-explore run ./program --json > results.json"
+  echo "  cache-explore report --json results.json -o report.html"
+}
+
+CONFIG="intel"
+INPUT_FILE=""
+JSON_FILE=""
+OUTPUT_FILE=""
+TITLE=""
+SAMPLE_RATE=""
+EVENT_LIMIT=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --config) CONFIG="$2"; shift 2 ;;
+    --json) JSON_FILE="$2"; shift 2 ;;
+    -o|--output) OUTPUT_FILE="$2"; shift 2 ;;
+    --title) TITLE="$2"; shift 2 ;;
+    --sample) SAMPLE_RATE="$2"; shift 2 ;;
+    --limit) EVENT_LIMIT="$2"; shift 2 ;;
+    --help) usage; exit 0 ;;
+    -*) echo "Unknown option: $1"; usage; exit 1 ;;
+    *) INPUT_FILE="$1"; shift ;;
+  esac
+done
+
+if [[ -z "$OUTPUT_FILE" ]]; then
+  echo "Error: Output file required (-o <file.html>)"
+  usage
+  exit 1
+fi
+
+# Get JSON results
+if [[ -n "$JSON_FILE" ]]; then
+  if [[ ! -f "$JSON_FILE" ]]; then
+    echo "Error: JSON file not found: $JSON_FILE"
+    exit 1
+  fi
+  JSON_DATA=$(cat "$JSON_FILE")
+  if [[ -z "$TITLE" ]]; then
+    TITLE="Cache Analysis Report"
+  fi
+else
+  if [[ -z "$INPUT_FILE" ]]; then
+    echo "Error: No input file specified"
+    usage
+    exit 1
+  fi
+  if [[ -z "$TITLE" ]]; then
+    TITLE="Cache Analysis: $(basename "$INPUT_FILE")"
+  fi
+
+  # Build analysis command
+  ANALYZE_CMD="$SCRIPT_DIR/cache-explore $INPUT_FILE --config $CONFIG --json"
+  if [[ -n "$SAMPLE_RATE" ]]; then
+    ANALYZE_CMD="$ANALYZE_CMD --sample $SAMPLE_RATE"
+  fi
+  if [[ -n "$EVENT_LIMIT" ]]; then
+    ANALYZE_CMD="$ANALYZE_CMD --limit $EVENT_LIMIT"
+  fi
+
+  echo "Analyzing $INPUT_FILE..." >&2
+  JSON_DATA=$($ANALYZE_CMD 2>/dev/null)
+fi
+
+# Generate HTML report
+cat > "$OUTPUT_FILE" << 'HTMLHEAD'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>REPORT_TITLE</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+      color: #333;
+    }
+    h1 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
+    h2 { color: #34495e; margin-top: 30px; }
+    .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0; }
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .card-title { font-size: 14px; color: #7f8c8d; text-transform: uppercase; margin-bottom: 8px; }
+    .card-value { font-size: 28px; font-weight: bold; color: #2c3e50; }
+    .card-subtitle { font-size: 12px; color: #95a5a6; margin-top: 5px; }
+    .hit-rate { color: #27ae60; }
+    .miss-rate { color: #e74c3c; }
+
+    .cache-bar { display: flex; height: 30px; border-radius: 4px; overflow: hidden; margin: 10px 0; }
+    .cache-bar .hit { background: #27ae60; }
+    .cache-bar .miss { background: #e74c3c; }
+
+    table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    th { background: #34495e; color: white; padding: 12px; text-align: left; }
+    td { padding: 12px; border-bottom: 1px solid #ecf0f1; }
+    tr:hover { background: #f8f9fa; }
+
+    .hot-line { background: #fff3cd !important; }
+    .suggestion { background: #d4edda; border-left: 4px solid #28a745; padding: 15px; margin: 10px 0; border-radius: 4px; }
+    .suggestion.high { background: #f8d7da; border-left-color: #dc3545; }
+    .suggestion-type { font-weight: bold; text-transform: uppercase; font-size: 12px; }
+
+    .coherence-section { background: #e8f4fd; padding: 15px; border-radius: 8px; margin: 20px 0; }
+    .false-sharing { background: #ffeaa7; padding: 15px; border-radius: 8px; margin: 10px 0; }
+
+    .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; color: #7f8c8d; font-size: 12px; text-align: center; }
+
+    @media print {
+      body { background: white; }
+      .card { box-shadow: none; border: 1px solid #ddd; }
+    }
+  </style>
+</head>
+<body>
+HTMLHEAD
+
+# Replace title placeholder
+sed -i.bak "s/REPORT_TITLE/$TITLE/" "$OUTPUT_FILE"
+rm -f "$OUTPUT_FILE.bak"
+
+# Parse JSON and generate body
+python3 << PYTHON >> "$OUTPUT_FILE"
+import json
+import sys
+from datetime import datetime
+
+data = json.loads('''$JSON_DATA''')
+
+config = data.get('config', 'unknown')
+events = data.get('events', 0)
+threads = data.get('threads', 1)
+cores = data.get('cores', 1)
+multicore = data.get('multicore', False)
+
+levels = data.get('levels', {})
+l1 = levels.get('l1d', levels.get('l1', {}))
+l2 = levels.get('l2', {})
+l3 = levels.get('l3', {})
+
+hot_lines = data.get('hotLines', [])
+suggestions = data.get('suggestions', [])
+coherence = data.get('coherence', {})
+false_sharing = data.get('falseSharing', [])
+
+# Calculate rates
+l1_rate = l1.get('hitRate', 0) * 100 if l1.get('hitRate', 0) <= 1 else l1.get('hitRate', 0)
+l2_rate = l2.get('hitRate', 0) * 100 if l2.get('hitRate', 0) <= 1 else l2.get('hitRate', 0)
+l3_rate = l3.get('hitRate', 0) * 100 if l3.get('hitRate', 0) <= 1 else l3.get('hitRate', 0)
+
+print(f'''
+<h1>$TITLE</h1>
+<p>Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Config: <strong>{config}</strong></p>
+
+<h2>Summary</h2>
+<div class="summary">
+  <div class="card">
+    <div class="card-title">Total Events</div>
+    <div class="card-value">{events:,}</div>
+    <div class="card-subtitle">{threads} thread(s), {cores} core(s)</div>
+  </div>
+  <div class="card">
+    <div class="card-title">L1 Cache</div>
+    <div class="card-value hit-rate">{l1_rate:.1f}%</div>
+    <div class="card-subtitle">{l1.get('hits', 0):,} hits / {l1.get('misses', 0):,} misses</div>
+  </div>
+  <div class="card">
+    <div class="card-title">L2 Cache</div>
+    <div class="card-value">{l2_rate:.1f}%</div>
+    <div class="card-subtitle">{l2.get('hits', 0):,} hits / {l2.get('misses', 0):,} misses</div>
+  </div>
+  <div class="card">
+    <div class="card-title">L3 Cache</div>
+    <div class="card-value">{l3_rate:.1f}%</div>
+    <div class="card-subtitle">{l3.get('hits', 0):,} hits / {l3.get('misses', 0):,} misses</div>
+  </div>
+</div>
+
+<h2>Cache Hit Rates</h2>
+<div class="card">
+  <strong>L1 Data Cache</strong>
+  <div class="cache-bar">
+    <div class="hit" style="width: {l1_rate}%"></div>
+    <div class="miss" style="width: {100 - l1_rate}%"></div>
+  </div>
+  <strong>L2 Cache</strong>
+  <div class="cache-bar">
+    <div class="hit" style="width: {l2_rate}%"></div>
+    <div class="miss" style="width: {100 - l2_rate}%"></div>
+  </div>
+  <strong>L3 Cache</strong>
+  <div class="cache-bar">
+    <div class="hit" style="width: {l3_rate}%"></div>
+    <div class="miss" style="width: {100 - l3_rate}%"></div>
+  </div>
+</div>
+''')
+
+if coherence:
+    inv = coherence.get('invalidations', 0)
+    fs_count = coherence.get('falseSharingEvents', 0)
+    print(f'''
+<h2>Coherence (Multi-Core)</h2>
+<div class="coherence-section">
+  <strong>Cache Invalidations:</strong> {inv:,}<br>
+  <strong>False Sharing Events:</strong> {fs_count}
+</div>
+''')
+
+if hot_lines:
+    print('<h2>Hottest Lines (Most Cache Misses)</h2>')
+    print('<table><thead><tr><th>Location</th><th>Hits</th><th>Misses</th><th>Miss Rate</th></tr></thead><tbody>')
+    for i, line in enumerate(hot_lines[:10]):
+        cls = 'hot-line' if line.get('misses', 0) > 10 else ''
+        miss_rate = line.get('missRate', 0)
+        if miss_rate <= 1:
+            miss_rate *= 100
+        print(f'<tr class="{cls}"><td>{line.get("file", "?")}:{line.get("line", 0)}</td><td>{line.get("hits", 0):,}</td><td>{line.get("misses", 0):,}</td><td>{miss_rate:.1f}%</td></tr>')
+    print('</tbody></table>')
+
+if false_sharing:
+    print('<h2>False Sharing Detected</h2>')
+    for fs in false_sharing[:5]:
+        addr = fs.get('cacheLineAddr', '?')
+        count = fs.get('accessCount', 0)
+        print(f'''
+<div class="false-sharing">
+  <strong>Cache Line:</strong> {addr}<br>
+  <strong>Total Accesses:</strong> {count:,}<br>
+  <em>Multiple threads accessing different bytes in the same cache line causes invalidations.</em>
+</div>
+''')
+
+if suggestions:
+    print('<h2>Optimization Suggestions</h2>')
+    for s in suggestions:
+        sev = s.get('severity', 'medium')
+        cls = 'high' if sev == 'high' else ''
+        print(f'''
+<div class="suggestion {cls}">
+  <div class="suggestion-type">{s.get('type', 'tip')} ({sev})</div>
+  <strong>{s.get('location', '')}</strong>: {s.get('message', '')}
+  {f"<br><em>Fix: {s.get('fix', '')}</em>" if s.get('fix') else ''}
+</div>
+''')
+
+print('''
+<div class="footer">
+  Generated by <strong>Cache Explorer</strong> |
+  <a href="https://github.com/cache-explorer">github.com/cache-explorer</a>
+</div>
+</body>
+</html>
+''')
+PYTHON
+
+echo "Report generated: $OUTPUT_FILE" >&2

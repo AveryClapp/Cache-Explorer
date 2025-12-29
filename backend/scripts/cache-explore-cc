@@ -1,0 +1,31 @@
+#!/bin/bash
+# cache-explore cc - Drop-in replacement for cc/clang with cache profiling
+# Use: CC="cache-explore cc" make
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BACKEND_DIR="$(dirname "$SCRIPT_DIR")"
+
+PASS="${CACHE_EXPLORER_PASS:-$BACKEND_DIR/llvm-pass/build/CacheProfiler.so}"
+RUNTIME="${CACHE_EXPLORER_RUNTIME:-$BACKEND_DIR/runtime/build/libcache-explorer-rt.a}"
+RUNTIME_INC="$BACKEND_DIR/runtime"
+
+# Check if we're just compiling (-c) or linking
+LINKING=1
+for arg in "$@"; do
+  if [[ "$arg" == "-c" ]]; then
+    LINKING=0
+    break
+  fi
+done
+
+# Common flags: pass plugin + debug info + disable-O0-optnone for instrumentation at -O0
+COMMON_FLAGS="-fpass-plugin=$PASS -I$RUNTIME_INC -g -Xclang -disable-O0-optnone"
+
+# Build command
+if [[ $LINKING -eq 1 ]]; then
+  # Linking: add runtime library
+  exec clang $COMMON_FLAGS "$@" "$RUNTIME"
+else
+  # Compiling only: just add pass
+  exec clang $COMMON_FLAGS "$@"
+fi
