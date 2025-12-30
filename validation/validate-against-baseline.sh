@@ -105,7 +105,8 @@ for bench in "${BENCHMARKS[@]}"; do
     SIM_OUTPUT=$("$CACHE_EXPLORE" "$BENCH_FILE" --config intel -O2 --json 2>/dev/null || echo "{}")
 
     # Parse L1 data cache results from "levels": {"l1d": {"hits": N, "misses": M, ...}}
-    L1D_BLOCK=$(echo "$SIM_OUTPUT" | grep -o '"l1d":[^}]*}' | head -1)
+    # Note: "l1d" appears twice (cacheConfig and levels), we need the one with "hits"
+    L1D_BLOCK=$(echo "$SIM_OUTPUT" | grep -o '"l1d":[^}]*}' | grep '"hits"' | head -1)
     SIM_HITS=$(echo "$L1D_BLOCK" | grep -o '"hits":[0-9]*' | grep -o '[0-9]*' || echo "0")
     SIM_MISSES=$(echo "$L1D_BLOCK" | grep -o '"misses":[0-9]*' | grep -o '[0-9]*' || echo "0")
 
