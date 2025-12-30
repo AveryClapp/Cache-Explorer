@@ -153,10 +153,7 @@ const EXAMPLES: Record<string, Example> = {
     description: 'Row-major vs column-major',
     language: 'c',
     code: `#include <stdio.h>
-
-#ifndef N
 #define N 100
-#endif
 
 int main() {
     int matrix[N][N];
@@ -182,10 +179,7 @@ int main() {
     description: 'Best case - spatial locality',
     language: 'c',
     code: `#include <stdio.h>
-
-#ifndef N
 #define N 1000
-#endif
 
 int main() {
     int arr[N];
@@ -204,14 +198,8 @@ int main() {
     description: 'Worst case - skips cache lines',
     language: 'c',
     code: `#include <stdio.h>
-
-#ifndef N
 #define N 1000
-#endif
-
-#ifndef STRIDE
 #define STRIDE 16  // 64 bytes = 1 cache line
-#endif
 
 int main() {
     int arr[N * STRIDE];
@@ -231,14 +219,8 @@ int main() {
     description: 'Matrix multiply optimization',
     language: 'c',
     code: `#include <stdio.h>
-
-#ifndef N
 #define N 64
-#endif
-
-#ifndef BLOCK
 #define BLOCK 8
-#endif
 
 int A[N][N], B[N][N], C[N][N];
 
@@ -273,10 +255,7 @@ int main() {
     language: 'c',
     code: `#include <stdio.h>
 #include <stdlib.h>
-
-#ifndef N
 #define N 1000
-#endif
 
 struct Node { int value; struct Node* next; };
 
@@ -298,14 +277,11 @@ int main() {
 }
 `
   },
-  // C++ Examples (using C-compatible constructs for ARM64 compatibility)
   cpp_struct: {
     name: 'C++ Structs',
     description: 'Struct layout and cache behavior',
     language: 'cpp',
-    code: `#ifndef N
-#define N 1000
-#endif
+    code: `#define N 1000
 
 struct Point {
     float x, y, z;  // 12 bytes
@@ -338,9 +314,7 @@ int main() {
     name: 'AoS vs SoA',
     description: 'Array of Structs vs Struct of Arrays',
     language: 'cpp',
-    code: `#ifndef N
-#define N 1000
-#endif
+    code: `#define N 1000
 
 // Array of Structs - poor cache use for single field
 struct ParticleAoS {
@@ -386,9 +360,7 @@ int main() {
     name: 'Template Array',
     description: 'Simple template with cache behavior',
     language: 'cpp',
-    code: `#ifndef N
-#define N 1000
-#endif
+    code: `#define N 1000
 
 template<typename T, int Size>
 struct Array {
@@ -523,37 +495,269 @@ function formatPercent(rate: number): string {
   return (rate * 100).toFixed(1) + '%'
 }
 
-function CacheBar({ result, sampled }: { result: CacheResult; sampled?: boolean }) {
+function CacheHierarchy({ result }: { result: CacheResult }) {
   const l1d = result.levels.l1d || result.levels.l1!
   const l1i = result.levels.l1i
   const l2 = result.levels.l2
   const l3 = result.levels.l3
 
-  const getClass = (rate: number) => rate > 0.95 ? 'excellent' : rate > 0.9 ? 'good' : rate > 0.7 ? 'ok' : 'bad'
+  const getRateClass = (rate: number) => rate > 0.95 ? 'excellent' : rate > 0.80 ? 'good' : 'poor'
 
   return (
-    <div className="cache-bar">
-      <div className={`cache-item ${getClass(l1d.hitRate)}`} title={`${l1d.hits.toLocaleString()} hits, ${l1d.misses.toLocaleString()} misses`}>
-        <span className="cache-label">L1d</span>
-        <span className="cache-rate">{formatPercent(l1d.hitRate)}</span>
-      </div>
-      {l1i && (
-        <div className={`cache-item ${getClass(l1i.hitRate)}`} title={`${l1i.hits.toLocaleString()} hits, ${l1i.misses.toLocaleString()} misses`}>
-          <span className="cache-label">L1i</span>
-          <span className="cache-rate">{formatPercent(l1i.hitRate)}</span>
+    <div className="cache-hierarchy">
+      {/* L1 Row */}
+      <div className="cache-level-row">
+        <div className={`cache-box ${getRateClass(l1d.hitRate)}`} title={`${l1d.hits.toLocaleString()} hits, ${l1d.misses.toLocaleString()} misses`}>
+          <span className="cache-box-rate">{formatPercent(l1d.hitRate)}</span>
+          <span className="cache-box-label">L1 Data</span>
         </div>
-      )}
-      <div className={`cache-item ${getClass(l2.hitRate)}`} title={`${l2.hits.toLocaleString()} hits, ${l2.misses.toLocaleString()} misses`}>
-        <span className="cache-label">L2</span>
-        <span className="cache-rate">{formatPercent(l2.hitRate)}</span>
+        {l1i && (
+          <div className={`cache-box ${getRateClass(l1i.hitRate)}`} title={`${l1i.hits.toLocaleString()} hits, ${l1i.misses.toLocaleString()} misses`}>
+            <span className="cache-box-rate">{formatPercent(l1i.hitRate)}</span>
+            <span className="cache-box-label">L1 Instr</span>
+          </div>
+        )}
       </div>
-      <div className={`cache-item ${getClass(l3.hitRate)}`} title={`${l3.hits.toLocaleString()} hits, ${l3.misses.toLocaleString()} misses`}>
-        <span className="cache-label">L3</span>
-        <span className="cache-rate">{formatPercent(l3.hitRate)}</span>
+
+      <div className="cache-connector" />
+
+      {/* L2 */}
+      <div className={`cache-box ${getRateClass(l2.hitRate)}`} title={`${l2.hits.toLocaleString()} hits, ${l2.misses.toLocaleString()} misses`}>
+        <span className="cache-box-rate">{formatPercent(l2.hitRate)}</span>
+        <span className="cache-box-label">L2 Cache</span>
       </div>
-      <div className="cache-item events" title={sampled ? 'Sampled - actual count may be higher' : 'Total memory access events'}>
-        <span className="cache-label">{sampled ? 'Sampled' : 'Events'}</span>
-        <span className="cache-rate">{result.events.toLocaleString()}</span>
+
+      <div className="cache-connector" />
+
+      {/* L3 */}
+      <div className={`cache-box ${getRateClass(l3.hitRate)}`} title={`${l3.hits.toLocaleString()} hits, ${l3.misses.toLocaleString()} misses`}>
+        <span className="cache-box-rate">{formatPercent(l3.hitRate)}</span>
+        <span className="cache-box-label">L3 Cache</span>
+      </div>
+
+      <div className="cache-connector" />
+
+      {/* Memory */}
+      <div className="cache-memory">
+        Memory ({(l1d.misses + (l1i?.misses || 0) - l2.hits - l3.hits).toLocaleString()} accesses)
+      </div>
+    </div>
+  )
+}
+
+function CacheStats({ result }: { result: CacheResult }) {
+  const l1d = result.levels.l1d || result.levels.l1!
+  const l2 = result.levels.l2
+  const l3 = result.levels.l3
+
+  const getRateClass = (rate: number) => rate > 0.95 ? 'excellent' : rate > 0.80 ? 'good' : 'poor'
+
+  return (
+    <div className="cache-stats">
+      <div className="cache-stat">
+        <span className="cache-stat-label">L1 Hit Rate</span>
+        <span className={`cache-stat-value ${getRateClass(l1d.hitRate)}`}>{formatPercent(l1d.hitRate)}</span>
+        <span className="cache-stat-detail">{l1d.hits.toLocaleString()} / {(l1d.hits + l1d.misses).toLocaleString()}</span>
+      </div>
+      <div className="cache-stat">
+        <span className="cache-stat-label">L2 Hit Rate</span>
+        <span className={`cache-stat-value ${getRateClass(l2.hitRate)}`}>{formatPercent(l2.hitRate)}</span>
+        <span className="cache-stat-detail">{l2.hits.toLocaleString()} / {(l2.hits + l2.misses).toLocaleString()}</span>
+      </div>
+      <div className="cache-stat">
+        <span className="cache-stat-label">L3 Hit Rate</span>
+        <span className={`cache-stat-value ${getRateClass(l3.hitRate)}`}>{formatPercent(l3.hitRate)}</span>
+        <span className="cache-stat-detail">{l3.hits.toLocaleString()} / {(l3.hits + l3.misses).toLocaleString()}</span>
+      </div>
+      <div className="cache-stat">
+        <span className="cache-stat-label">Total Events</span>
+        <span className="cache-stat-value">{result.events.toLocaleString()}</span>
+        <span className="cache-stat-detail">{result.config}</span>
+      </div>
+    </div>
+  )
+}
+
+// Command palette item definition
+interface CommandItem {
+  id: string
+  icon: string
+  label: string
+  shortcut?: string
+  action: () => void
+  category?: string
+}
+
+// Fuzzy match helper
+function fuzzyMatch(query: string, text: string): boolean {
+  const q = query.toLowerCase()
+  const t = text.toLowerCase()
+  let qi = 0
+  for (let ti = 0; ti < t.length && qi < q.length; ti++) {
+    if (t[ti] === q[qi]) qi++
+  }
+  return qi === q.length
+}
+
+// Command Palette Component
+function CommandPalette({
+  isOpen,
+  query,
+  selectedIndex,
+  onQueryChange,
+  onSelect,
+  onClose,
+  onNavigate,
+  inputRef,
+  commands
+}: {
+  isOpen: boolean
+  query: string
+  selectedIndex: number
+  onQueryChange: (q: string) => void
+  onSelect: (cmd: CommandItem) => void
+  onClose: () => void
+  onNavigate: (delta: number) => void
+  inputRef: React.RefObject<HTMLInputElement | null>
+  commands: CommandItem[]
+}) {
+  if (!isOpen) return null
+
+  const filtered = query
+    ? commands.filter(cmd => fuzzyMatch(query, cmd.label) || fuzzyMatch(query, cmd.category || ''))
+    : commands
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      onNavigate(1)
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      onNavigate(-1)
+    } else if (e.key === 'Enter' && filtered[selectedIndex]) {
+      e.preventDefault()
+      onSelect(filtered[selectedIndex])
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      onClose()
+    }
+  }
+
+  return (
+    <div className="command-palette-overlay" onClick={onClose}>
+      <div className="command-palette" onClick={e => e.stopPropagation()}>
+        <div className="command-input-wrapper">
+          <span className="command-icon">⌘</span>
+          <input
+            ref={inputRef}
+            type="text"
+            className="command-input"
+            placeholder="What do you want to do?"
+            value={query}
+            onChange={e => onQueryChange(e.target.value)}
+            onKeyDown={handleKeyDown}
+            autoFocus
+          />
+        </div>
+        <div className="command-list">
+          {filtered.map((cmd, i) => (
+            <div
+              key={cmd.id}
+              className={`command-item ${i === selectedIndex ? 'selected' : ''}`}
+              onClick={() => onSelect(cmd)}
+              onMouseEnter={() => onNavigate(i - selectedIndex)}
+            >
+              <span className="command-item-icon">{cmd.icon}</span>
+              <span className="command-item-label">{cmd.label}</span>
+              {cmd.shortcut && <span className="command-item-shortcut">{cmd.shortcut}</span>}
+            </div>
+          ))}
+          {filtered.length === 0 && (
+            <div className="command-empty">No matching commands</div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Quick Config Panel Component
+function QuickConfigPanel({
+  isOpen,
+  config,
+  optLevel,
+  prefetchPolicy,
+  onConfigChange,
+  onOptLevelChange,
+  onPrefetchChange,
+  onClose
+}: {
+  isOpen: boolean
+  config: string
+  optLevel: string
+  prefetchPolicy: string
+  onConfigChange: (c: string) => void
+  onOptLevelChange: (o: string) => void
+  onPrefetchChange: (p: string) => void
+  onClose: () => void
+}) {
+  if (!isOpen) return null
+
+  return (
+    <div className="quick-config-overlay" onClick={onClose}>
+      <div className="quick-config" onClick={e => e.stopPropagation()}>
+        <div className="quick-config-header">
+          <span>Quick Settings</span>
+          <button className="quick-config-close" onClick={onClose}>×</button>
+        </div>
+        <div className="quick-config-body">
+          <div className="quick-config-row">
+            <label>Hardware</label>
+            <select value={config} onChange={e => onConfigChange(e.target.value)}>
+              <optgroup label="Learning">
+                <option value="educational">Educational (tiny)</option>
+              </optgroup>
+              <optgroup label="Intel">
+                <option value="intel">Intel 12th Gen</option>
+                <option value="intel14">Intel 14th Gen</option>
+                <option value="xeon">Intel Xeon</option>
+              </optgroup>
+              <optgroup label="AMD">
+                <option value="zen3">AMD Zen 3</option>
+                <option value="amd">AMD Zen 4</option>
+                <option value="epyc">AMD EPYC</option>
+              </optgroup>
+              <optgroup label="Apple">
+                <option value="apple">Apple M1</option>
+                <option value="m2">Apple M2</option>
+                <option value="m3">Apple M3</option>
+              </optgroup>
+              <optgroup label="ARM">
+                <option value="graviton">AWS Graviton 3</option>
+                <option value="rpi4">Raspberry Pi 4</option>
+              </optgroup>
+            </select>
+          </div>
+          <div className="quick-config-row">
+            <label>Optimization</label>
+            <select value={optLevel} onChange={e => onOptLevelChange(e.target.value)}>
+              <option value="-O0">-O0 (debug)</option>
+              <option value="-O1">-O1</option>
+              <option value="-O2">-O2 (recommended)</option>
+              <option value="-O3">-O3 (aggressive)</option>
+            </select>
+          </div>
+          <div className="quick-config-row">
+            <label>Prefetch</label>
+            <select value={prefetchPolicy} onChange={e => onPrefetchChange(e.target.value)}>
+              <option value="none">None</option>
+              <option value="next">Next Line</option>
+              <option value="stream">Stream</option>
+              <option value="stride">Stride</option>
+              <option value="adaptive">Adaptive</option>
+            </select>
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -1408,6 +1612,11 @@ function App() {
   const [timeline, setTimeline] = useState<TimelineEvent[]>([])
   const [scrubberIndex, setScrubberIndex] = useState<number>(0)  // For interactive cache grid
   const [vimMode, setVimMode] = useState(false)  // Vim keybindings toggle
+  const [showCommandPalette, setShowCommandPalette] = useState(false)
+  const [commandQuery, setCommandQuery] = useState('')
+  const [showQuickConfig, setShowQuickConfig] = useState(false)
+  const [selectedCommandIndex, setSelectedCommandIndex] = useState(0)
+  const commandInputRef = useRef<HTMLInputElement>(null)
   const timelineRef = useRef<TimelineEvent[]>([])  // Accumulator during streaming
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const monacoRef = useRef<Monaco | null>(null)
@@ -1456,14 +1665,23 @@ function App() {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd+K to open command palette
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault()
+        setShowCommandPalette(true)
+        setCommandQuery('')
+        setSelectedCommandIndex(0)
+      }
       // Ctrl/Cmd + Enter to run
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault()
         if (stage === 'idle') runAnalysis()
       }
-      // Escape to close dropdown
+      // Escape to close modals
       if (e.key === 'Escape') {
         setShowOptions(false)
+        setShowCommandPalette(false)
+        setShowQuickConfig(false)
       }
     }
     window.addEventListener('keydown', handleKeyDown)
@@ -1574,9 +1792,9 @@ function App() {
       }]
     }
 
-    // Compress using LZString (same as our share feature)
-    const compressed = LZString.compressToBase64(JSON.stringify(ceState))
-    const ceUrl = `https://godbolt.org/#z:${compressed}`
+    // Compress using LZString with URL-safe encoding (CE uses this format)
+    const compressed = LZString.compressToEncodedURIComponent(JSON.stringify(ceState))
+    const ceUrl = `https://godbolt.org/clientstate/${compressed}`
     window.open(ceUrl, '_blank', 'noopener,noreferrer')
   }, [files, activeFileId, optLevel])
 
@@ -1790,254 +2008,234 @@ function App() {
   const isLoading = stage !== 'idle'
   const stageText = { idle: '', connecting: 'Connecting...', preparing: 'Preparing...', compiling: 'Compiling...', running: 'Running...', processing: 'Processing...', done: '' }
 
+  // Config display names
+  const configNames: Record<string, string> = {
+    educational: 'Educational',
+    intel: 'Intel 12th Gen',
+    intel14: 'Intel 14th Gen',
+    xeon: 'Intel Xeon',
+    zen3: 'AMD Zen 3',
+    amd: 'AMD Zen 4',
+    epyc: 'AMD EPYC',
+    apple: 'Apple M1',
+    m2: 'Apple M2',
+    m3: 'Apple M3',
+    graviton: 'AWS Graviton 3',
+    rpi4: 'Raspberry Pi 4',
+    embedded: 'Embedded',
+    custom: 'Custom'
+  }
+
+  // Command palette commands
+  const commands: CommandItem[] = useMemo(() => [
+    { id: 'run', icon: '▶', label: 'Run analysis', shortcut: '⌘↵', action: () => { if (!isLoading) runAnalysis() }, category: 'action' },
+    { id: 'example-matrix', icon: '📋', label: 'Load: Matrix Traversal', action: () => {
+      const ex = EXAMPLES.matrix
+      setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, code: ex.code, language: ex.language, name: 'main' + getFileExtension(ex.language) } : f))
+    }, category: 'examples' },
+    { id: 'example-sequential', icon: '📋', label: 'Load: Sequential Access', action: () => {
+      const ex = EXAMPLES.sequential
+      setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, code: ex.code, language: ex.language, name: 'main' + getFileExtension(ex.language) } : f))
+    }, category: 'examples' },
+    { id: 'example-strided', icon: '📋', label: 'Load: Strided Access', action: () => {
+      const ex = EXAMPLES.strided
+      setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, code: ex.code, language: ex.language, name: 'main' + getFileExtension(ex.language) } : f))
+    }, category: 'examples' },
+    { id: 'example-blocking', icon: '📋', label: 'Load: Cache Blocking', action: () => {
+      const ex = EXAMPLES.blocking
+      setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, code: ex.code, language: ex.language, name: 'main' + getFileExtension(ex.language) } : f))
+    }, category: 'examples' },
+    { id: 'example-linkedlist', icon: '📋', label: 'Load: Linked List', action: () => {
+      const ex = EXAMPLES.linkedlist
+      setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, code: ex.code, language: ex.language, name: 'main' + getFileExtension(ex.language) } : f))
+    }, category: 'examples' },
+    { id: 'config', icon: '⚙️', label: 'Change hardware config...', action: () => setShowQuickConfig(true), category: 'settings' },
+    { id: 'share', icon: '📤', label: 'Share / Copy link', shortcut: '⌘S', action: () => { handleShare(); setCopied(true); setTimeout(() => setCopied(false), 2000) }, category: 'action' },
+    { id: 'ce', icon: '🔗', label: 'View in Compiler Explorer', action: openInCompilerExplorer, category: 'action' },
+    { id: 'vim', icon: '⌨️', label: vimMode ? 'Disable Vim mode' : 'Enable Vim mode', action: () => setVimMode(!vimMode), category: 'settings' },
+    { id: 'lang-c', icon: '🔤', label: 'Set language: C', action: () => updateActiveLanguage('c'), category: 'language' },
+    { id: 'lang-cpp', icon: '🔤', label: 'Set language: C++', action: () => updateActiveLanguage('cpp'), category: 'language' },
+    { id: 'lang-rust', icon: '🔤', label: 'Set language: Rust', action: () => updateActiveLanguage('rust'), category: 'language' },
+    { id: 'sampling-none', icon: '📊', label: 'Sampling: All events', action: () => setSampleRate(1), category: 'performance' },
+    { id: 'sampling-10', icon: '📊', label: 'Sampling: 1:10 (10%)', action: () => setSampleRate(10), category: 'performance' },
+    { id: 'sampling-100', icon: '📊', label: 'Sampling: 1:100 (1%)', action: () => setSampleRate(100), category: 'performance' },
+    { id: 'limit-1m', icon: '🔢', label: 'Event limit: 1M', action: () => setEventLimit(1000000), category: 'performance' },
+    { id: 'limit-5m', icon: '🔢', label: 'Event limit: 5M (default)', action: () => setEventLimit(5000000), category: 'performance' },
+    { id: 'limit-none', icon: '🔢', label: 'Event limit: None', action: () => setEventLimit(0), category: 'performance' },
+    { id: 'diff-baseline', icon: '📝', label: 'Set current as diff baseline', action: () => setBaselineCode(code), category: 'diff' },
+    { id: 'diff-toggle', icon: '🔀', label: diffMode ? 'Exit diff mode' : 'Show diff mode', action: () => { if (baselineCode) setDiffMode(!diffMode) }, category: 'diff' },
+    { id: 'options', icon: '⚙️', label: 'Advanced options...', action: () => setShowOptions(true), category: 'settings' },
+  ], [isLoading, activeFileId, vimMode, diffMode, baselineCode, code, handleShare, openInCompilerExplorer, updateActiveLanguage])
+
+  // Command palette handlers
+  const handleCommandSelect = useCallback((cmd: CommandItem) => {
+    cmd.action()
+    setShowCommandPalette(false)
+  }, [])
+
+  const handleCommandNavigate = useCallback((delta: number) => {
+    const filtered = commandQuery
+      ? commands.filter(cmd => fuzzyMatch(commandQuery, cmd.label) || fuzzyMatch(commandQuery, cmd.category || ''))
+      : commands
+    setSelectedCommandIndex(prev => Math.max(0, Math.min(filtered.length - 1, prev + delta)))
+  }, [commandQuery, commands])
+
   return (
     <div className="app">
-      <div className="toolbar">
-        <div className="toolbar-left">
-          <select
-            className="select-example"
-            onChange={(e) => {
-              const ex = EXAMPLES[e.target.value]
-              if (ex) {
-                // Update active file with example code and language
-                setFiles(prev => prev.map(f =>
-                  f.id === activeFileId ? {
-                    ...f,
-                    code: ex.code,
-                    language: ex.language,
-                    name: f.name.replace(/\.(c|cpp|rs)$/, '') + getFileExtension(ex.language)
-                  } : f
-                ))
-                e.target.value = ''
-              }
+      {/* Command Palette */}
+      <CommandPalette
+        isOpen={showCommandPalette}
+        query={commandQuery}
+        selectedIndex={selectedCommandIndex}
+        onQueryChange={setCommandQuery}
+        onSelect={handleCommandSelect}
+        onClose={() => setShowCommandPalette(false)}
+        onNavigate={handleCommandNavigate}
+        inputRef={commandInputRef}
+        commands={commands}
+      />
+
+      {/* Quick Config Panel */}
+      <QuickConfigPanel
+        isOpen={showQuickConfig}
+        config={config}
+        optLevel={optLevel}
+        prefetchPolicy={prefetchPolicy}
+        onConfigChange={(c) => {
+          setConfig(c)
+          setPrefetchPolicy(PREFETCH_DEFAULTS[c] || 'none')
+        }}
+        onOptLevelChange={setOptLevel}
+        onPrefetchChange={(p) => setPrefetchPolicy(p as PrefetchPolicy)}
+        onClose={() => setShowQuickConfig(false)}
+      />
+
+      {/* Minimal Top Bar */}
+      <div className="topbar">
+        <div className="topbar-left">
+          <button
+            className="topbar-logo"
+            onClick={() => {
+              setShowCommandPalette(true)
+              setCommandQuery('')
+              setSelectedCommandIndex(0)
             }}
-            defaultValue=""
+            title="Open command palette (⌘K)"
           >
-            <option value="" disabled>Examples</option>
-            <optgroup label="C">
-              {Object.entries(EXAMPLES).filter(([_, ex]) => ex.language === 'c').map(([key, ex]) => (
-                <option key={key} value={key}>{ex.name}</option>
-              ))}
-            </optgroup>
-            <optgroup label="C++">
-              {Object.entries(EXAMPLES).filter(([_, ex]) => ex.language === 'cpp').map(([key, ex]) => (
-                <option key={key} value={key}>{ex.name}</option>
-              ))}
-            </optgroup>
-            <optgroup label="Rust">
-              {Object.entries(EXAMPLES).filter(([_, ex]) => ex.language === 'rust').map(([key, ex]) => (
-                <option key={key} value={key}>{ex.name}</option>
-              ))}
-            </optgroup>
-          </select>
-
-          <select value={language} onChange={(e) => updateActiveLanguage(e.target.value as Language)} className="select-lang" title="Programming language">
-            <option value="c">C</option>
-            <option value="cpp">C++</option>
-            <option value="rust">Rust</option>
-          </select>
-
-          <select value={config} title="Simulated CPU cache configuration" onChange={(e) => {
-            const newConfig = e.target.value
-            setConfig(newConfig)
-            // Auto-select default prefetch policy for this hardware
-            const defaultPrefetch = PREFETCH_DEFAULTS[newConfig] || 'none'
-            setPrefetchPolicy(defaultPrefetch)
-          }} className="select-config">
-            <optgroup label="Learning">
-              <option value="educational">Educational (tiny)</option>
-            </optgroup>
-            <optgroup label="Intel">
-              <option value="intel">Intel 12th Gen</option>
-              <option value="intel14">Intel 14th Gen</option>
-              <option value="xeon">Intel Xeon (Server)</option>
-            </optgroup>
-            <optgroup label="AMD">
-              <option value="zen3">AMD Zen 3</option>
-              <option value="amd">AMD Zen 4</option>
-              <option value="epyc">AMD EPYC (Server)</option>
-            </optgroup>
-            <optgroup label="Apple">
-              <option value="apple">Apple M1</option>
-              <option value="m2">Apple M2</option>
-              <option value="m3">Apple M3</option>
-            </optgroup>
-            <optgroup label="Cloud/ARM">
-              <option value="graviton">AWS Graviton 3</option>
-              <option value="rpi4">Raspberry Pi 4</option>
-              <option value="embedded">Embedded (Cortex-A53)</option>
-            </optgroup>
-            <optgroup label="Custom">
-              <option value="custom">Custom Config</option>
-            </optgroup>
-          </select>
-
-          <select value={optLevel} onChange={(e) => setOptLevel(e.target.value)} className="select-opt" title="Compiler optimization level (-O0 shows more detail, -O2/-O3 show optimized behavior)">
-            <option value="-O0">-O0</option>
-            <option value="-O1">-O1</option>
-            <option value="-O2">-O2</option>
-            <option value="-O3">-O3</option>
-          </select>
-
-          <select value={prefetchPolicy} onChange={(e) => setPrefetchPolicy(e.target.value as PrefetchPolicy)} className="select-prefetch" title="Simulate hardware prefetching (auto-selected based on CPU)">
-            <option value="none">No Prefetch</option>
-            <option value="next">Next Line</option>
-            <option value="stream">Stream</option>
-            <option value="stride">Stride</option>
-            <option value="adaptive">Adaptive</option>
-          </select>
+            ⌘
+          </button>
+          <span className="topbar-title">Cache Explorer</span>
         </div>
 
-        <div className="toolbar-center">
-          <button onClick={runAnalysis} disabled={isLoading} className="btn-run">
-            {isLoading ? stageText[stage] : 'Run'}
-          </button>
-          <span className="shortcut-hint">⌘↵</span>
+        <div className="topbar-center">
+          <span className="topbar-filename">{activeFile?.name || 'main.c'}</span>
         </div>
 
-        <div className="toolbar-right">
-          <button onClick={openInCompilerExplorer} className="btn-icon" title="View assembly in Compiler Explorer">
-            CE ↗
+        <div className="topbar-right">
+          <button
+            className="config-badge"
+            onClick={() => setShowQuickConfig(true)}
+            title="Change configuration"
+          >
+            <span>{configNames[config] || config}</span>
+            <span className="config-badge-divider" />
+            <span>{optLevel}</span>
           </button>
-          <button onClick={handleShare} className="btn-icon" title="Copy link">
-            {copied ? 'Copied!' : 'Share'}
-          </button>
 
-          <div className="options-wrapper" ref={optionsRef}>
-            <button
-              onClick={(e) => { e.stopPropagation(); setShowOptions(!showOptions) }}
-              className={`btn-icon ${showOptions ? 'active' : ''}`}
-            >
-              Options
-            </button>
-
-            {showOptions && (
-              <div className="options-dropdown">
-                <div className="option-section">
-                  <div className="option-label">Preprocessor Defines</div>
-                  <div className="defines-list">
-                    {defines.map((def, i) => (
-                      <div key={i} className="define-row">
-                        <span className="define-d">-D</span>
-                        <input
-                          type="text"
-                          placeholder="NAME"
-                          value={def.name}
-                          onChange={(e) => {
-                            const newDefs = [...defines]
-                            newDefs[i].name = e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '')
-                            setDefines(newDefs)
-                          }}
-                          className="define-name"
-                        />
-                        <span className="define-eq">=</span>
-                        <input
-                          type="text"
-                          placeholder="value"
-                          value={def.value}
-                          onChange={(e) => {
-                            const newDefs = [...defines]
-                            newDefs[i].value = e.target.value
-                            setDefines(newDefs)
-                          }}
-                          className="define-value"
-                        />
-                        <button className="btn-remove" onClick={() => setDefines(defines.filter((_, j) => j !== i))}>×</button>
-                      </div>
-                    ))}
-                    <button className="btn-add" onClick={() => setDefines([...defines, { name: '', value: '' }])}>
-                      + Add Define
-                    </button>
-                  </div>
-                </div>
-
-                <div className="option-divider" />
-
-                <div className="option-section">
-                  <div className="option-label">Performance</div>
-                  <div className="perf-controls">
-                    <div className="perf-row">
-                      <label>Event Limit</label>
-                      <select value={eventLimit} onChange={(e) => setEventLimit(Number(e.target.value))}>
-                        <option value={100000}>100K</option>
-                        <option value={500000}>500K</option>
-                        <option value={1000000}>1M</option>
-                        <option value={5000000}>5M (default)</option>
-                        <option value={10000000}>10M</option>
-                        <option value={0}>No limit</option>
-                      </select>
-                    </div>
-                    <div className="perf-row">
-                      <label>Sampling</label>
-                      <select value={sampleRate} onChange={(e) => setSampleRate(Number(e.target.value))}>
-                        <option value={1}>All events</option>
-                        <option value={10}>1:10 (10%)</option>
-                        <option value={100}>1:100 (1%)</option>
-                        <option value={1000}>1:1000 (0.1%)</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="perf-hint">
-                    Use sampling for large programs to prevent timeouts
-                  </div>
-                </div>
-
-                <div className="option-divider" />
-
-                <div className="option-section">
-                  <div className="option-label">Diff Mode</div>
-                  <button
-                    className={`btn-option ${baselineCode ? '' : 'disabled'}`}
-                    onClick={() => { if (baselineCode) setDiffMode(!diffMode) }}
-                  >
-                    {diffMode ? 'Exit Diff' : 'Show Diff'}
-                  </button>
-                  <button className="btn-option" onClick={() => setBaselineCode(code)}>
-                    Set Current as Baseline
-                  </button>
-                </div>
-
-                <div className="option-divider" />
-
-                <div className="option-section">
-                  <div className="option-label">Editor Mode</div>
-                  <button
-                    className={`btn-option ${vimMode ? 'active' : ''}`}
-                    onClick={() => setVimMode(!vimMode)}
-                  >
-                    {vimMode ? 'Vim Mode ON' : 'Vim Mode OFF'}
-                  </button>
-                </div>
-
-                {config === 'custom' && (
-                  <>
-                    <div className="option-divider" />
-                    <div className="option-section">
-                      <div className="option-label">Custom Cache Config</div>
-                      <div className="config-grid">
-                        <label>Line Size</label>
-                        <input type="number" value={customConfig.lineSize} onChange={(e) => setCustomConfig({ ...customConfig, lineSize: parseInt(e.target.value) || 64 })} />
-                        <label>L1 Size</label>
-                        <input type="number" value={customConfig.l1Size} onChange={(e) => setCustomConfig({ ...customConfig, l1Size: parseInt(e.target.value) || 32768 })} />
-                        <label>L1 Assoc</label>
-                        <input type="number" value={customConfig.l1Assoc} onChange={(e) => setCustomConfig({ ...customConfig, l1Assoc: parseInt(e.target.value) || 8 })} />
-                        <label>L2 Size</label>
-                        <input type="number" value={customConfig.l2Size} onChange={(e) => setCustomConfig({ ...customConfig, l2Size: parseInt(e.target.value) || 262144 })} />
-                        <label>L2 Assoc</label>
-                        <input type="number" value={customConfig.l2Assoc} onChange={(e) => setCustomConfig({ ...customConfig, l2Assoc: parseInt(e.target.value) || 8 })} />
-                        <label>L3 Size</label>
-                        <input type="number" value={customConfig.l3Size} onChange={(e) => setCustomConfig({ ...customConfig, l3Size: parseInt(e.target.value) || 8388608 })} />
-                        <label>L3 Assoc</label>
-                        <input type="number" value={customConfig.l3Assoc} onChange={(e) => setCustomConfig({ ...customConfig, l3Assoc: parseInt(e.target.value) || 16 })} />
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
+          <button
+            onClick={runAnalysis}
+            disabled={isLoading}
+            className={`btn-run-cinema ${isLoading ? 'loading' : ''}`}
+          >
+            {isLoading ? (
+              <>
+                <span className="run-spinner" />
+                {stageText[stage]}
+              </>
+            ) : (
+              <>▶ Run</>
             )}
-          </div>
+          </button>
         </div>
       </div>
+
+      {/* Copied Toast */}
+      {copied && (
+        <div className="toast">Link copied!</div>
+      )}
+
+      {/* Advanced Options Modal */}
+      {showOptions && (
+        <div className="options-modal-overlay" onClick={() => setShowOptions(false)}>
+          <div className="options-modal" onClick={e => e.stopPropagation()}>
+            <div className="options-modal-header">
+              <span>Advanced Options</span>
+              <button className="quick-config-close" onClick={() => setShowOptions(false)}>×</button>
+            </div>
+            <div className="options-modal-body">
+              <div className="option-section">
+                <div className="option-label">Preprocessor Defines</div>
+                <div className="defines-list">
+                  {defines.map((def, i) => (
+                    <div key={i} className="define-row">
+                      <span className="define-d">-D</span>
+                      <input
+                        type="text"
+                        placeholder="NAME"
+                        value={def.name}
+                        onChange={(e) => {
+                          const newDefs = [...defines]
+                          newDefs[i].name = e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '')
+                          setDefines(newDefs)
+                        }}
+                        className="define-name"
+                      />
+                      <span className="define-eq">=</span>
+                      <input
+                        type="text"
+                        placeholder="value"
+                        value={def.value}
+                        onChange={(e) => {
+                          const newDefs = [...defines]
+                          newDefs[i].value = e.target.value
+                          setDefines(newDefs)
+                        }}
+                        className="define-value"
+                      />
+                      <button className="btn-remove" onClick={() => setDefines(defines.filter((_, j) => j !== i))}>×</button>
+                    </div>
+                  ))}
+                  <button className="btn-add" onClick={() => setDefines([...defines, { name: '', value: '' }])}>
+                    + Add Define
+                  </button>
+                </div>
+              </div>
+
+              {config === 'custom' && (
+                <div className="option-section">
+                  <div className="option-label">Custom Cache Config</div>
+                  <div className="config-grid">
+                    <label>Line Size</label>
+                    <input type="number" value={customConfig.lineSize} onChange={(e) => setCustomConfig({ ...customConfig, lineSize: parseInt(e.target.value) || 64 })} />
+                    <label>L1 Size</label>
+                    <input type="number" value={customConfig.l1Size} onChange={(e) => setCustomConfig({ ...customConfig, l1Size: parseInt(e.target.value) || 32768 })} />
+                    <label>L1 Assoc</label>
+                    <input type="number" value={customConfig.l1Assoc} onChange={(e) => setCustomConfig({ ...customConfig, l1Assoc: parseInt(e.target.value) || 8 })} />
+                    <label>L2 Size</label>
+                    <input type="number" value={customConfig.l2Size} onChange={(e) => setCustomConfig({ ...customConfig, l2Size: parseInt(e.target.value) || 262144 })} />
+                    <label>L2 Assoc</label>
+                    <input type="number" value={customConfig.l2Assoc} onChange={(e) => setCustomConfig({ ...customConfig, l2Assoc: parseInt(e.target.value) || 8 })} />
+                    <label>L3 Size</label>
+                    <input type="number" value={customConfig.l3Size} onChange={(e) => setCustomConfig({ ...customConfig, l3Size: parseInt(e.target.value) || 8388608 })} />
+                    <label>L3 Assoc</label>
+                    <input type="number" value={customConfig.l3Assoc} onChange={(e) => setCustomConfig({ ...customConfig, l3Assoc: parseInt(e.target.value) || 16 })} />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="main">
         <div className="editor-pane">
@@ -2077,45 +2275,74 @@ function App() {
         </div>
 
         <div className="results-pane">
-          {error && <ErrorDisplay error={error} />}
+          <div className="results-scroll">
+            {error && <ErrorDisplay error={error} />}
 
-          {result && (
-            <>
-              <CacheBar result={result} sampled={sampleRate > 1} />
-
-              {result.prefetch && (
-                <div className="prefetch-stats">
-                  <div className="prefetch-header">
-                    <span className="prefetch-icon">⚡</span>
-                    <span className="prefetch-title">Prefetching: {result.prefetch.policy}</span>
-                  </div>
-                  <div className="prefetch-details">
-                    <span className="prefetch-stat">
-                      <span className="stat-label">Issued</span>
-                      <span className="stat-value">{result.prefetch.issued.toLocaleString()}</span>
-                    </span>
-                    <span className="prefetch-stat">
-                      <span className="stat-label">Useful</span>
-                      <span className="stat-value">{result.prefetch.useful.toLocaleString()}</span>
-                    </span>
-                    <span className="prefetch-stat">
-                      <span className="stat-label">Accuracy</span>
-                      <span className={`stat-value ${result.prefetch.accuracy > 0.5 ? 'good' : result.prefetch.accuracy > 0.2 ? 'ok' : ''}`}>
-                        {(result.prefetch.accuracy * 100).toFixed(1)}%
-                      </span>
-                    </span>
+            {result && (
+              <>
+                {/* Status Banner */}
+                <div className="status-banner success">
+                  <div className="status-title">Analysis Complete</div>
+                  <div className="status-meta">
+                    {result.events.toLocaleString()} events | {result.config} config
+                    {sampleRate > 1 && ` | ${sampleRate}x sampling`}
                   </div>
                 </div>
-              )}
 
-              <div className="btn-row">
-                <button className="btn-toggle" onClick={() => setShowDetails(!showDetails)}>
-                  {showDetails ? 'Hide Details' : 'Details'}
-                </button>
-                <button className="btn-toggle" onClick={() => setShowTimeline(!showTimeline)}>
-                  {showTimeline ? 'Hide Timeline' : 'Timeline'}
-                </button>
-              </div>
+                {/* Cache Hierarchy Diagram */}
+                <div className="panel">
+                  <div className="panel-header">
+                    <span className="panel-title">Cache Hierarchy</span>
+                  </div>
+                  <CacheHierarchy result={result} />
+                </div>
+
+                {/* Cache Stats Grid */}
+                <div className="panel">
+                  <div className="panel-header">
+                    <span className="panel-title">Statistics</span>
+                  </div>
+                  <div className="panel-body">
+                    <CacheStats result={result} />
+                  </div>
+                </div>
+
+                {/* Prefetch Stats */}
+                {result.prefetch && (
+                  <div className="panel">
+                    <div className="panel-header">
+                      <span className="panel-title">Prefetching: {result.prefetch.policy}</span>
+                    </div>
+                    <div className="panel-body">
+                      <div className="prefetch-stats">
+                        <div className="prefetch-stat">
+                          <span className="prefetch-stat-value">{result.prefetch.issued.toLocaleString()}</span>
+                          <span className="prefetch-stat-label">Issued</span>
+                        </div>
+                        <div className="prefetch-stat">
+                          <span className="prefetch-stat-value">{result.prefetch.useful.toLocaleString()}</span>
+                          <span className="prefetch-stat-label">Useful</span>
+                        </div>
+                        <div className="prefetch-stat">
+                          <span className={`prefetch-stat-value ${result.prefetch.accuracy > 0.5 ? 'excellent' : result.prefetch.accuracy > 0.2 ? 'good' : 'poor'}`}>
+                            {(result.prefetch.accuracy * 100).toFixed(1)}%
+                          </span>
+                          <span className="prefetch-stat-label">Accuracy</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Toggle Buttons */}
+                <div className="toggle-buttons">
+                  <button className={`btn-toggle ${showDetails ? 'active' : ''}`} onClick={() => setShowDetails(!showDetails)}>
+                    {showDetails ? '▼ Details' : '▶ Details'}
+                  </button>
+                  <button className={`btn-toggle ${showTimeline ? 'active' : ''}`} onClick={() => setShowTimeline(!showTimeline)}>
+                    {showTimeline ? '▼ Timeline' : '▶ Timeline'}
+                  </button>
+                </div>
 
               {showTimeline && timeline.length > 0 && (
                 <AccessTimeline
@@ -2148,9 +2375,11 @@ function App() {
               )}
 
               {result.coherence && result.coherence.falseSharingEvents > 0 && (
-                <div className="warning-box">
-                  <div className="warning-title">False Sharing Detected</div>
-                  <div className="warning-count">{result.coherence.falseSharingEvents} event(s)</div>
+                <div className="panel warning">
+                  <div className="panel-header">
+                    <span className="panel-title">⚠ False Sharing Detected</span>
+                    <span className="panel-badge">{result.coherence.falseSharingEvents}</span>
+                  </div>
                 </div>
               )}
 
@@ -2162,21 +2391,19 @@ function App() {
               )}
 
               {result.hotLines.length > 0 && (
-                <div className="hotlines">
-                  <div className="section-title">Hot Lines</div>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Line</th>
-                        <th>Misses</th>
-                        <th>Miss Rate</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {result.hotLines.slice(0, 10).map((hotLine, i) => (
-                        <tr
+                <div className="panel">
+                  <div className="panel-header">
+                    <span className="panel-title">Hot Lines</span>
+                    <span className="panel-badge">{result.hotLines.length}</span>
+                  </div>
+                  <div className="hotspots">
+                    {result.hotLines.slice(0, 10).map((hotLine, i) => {
+                      const maxMisses = Math.max(...result.hotLines.slice(0, 10).map(h => h.misses))
+                      const barWidth = maxMisses > 0 ? (hotLine.misses / maxMisses) * 100 : 0
+                      return (
+                        <div
                           key={i}
-                          className="clickable-row"
+                          className="hotspot"
                           onClick={() => {
                             if (editorRef.current && hotLine.line > 0) {
                               editorRef.current.revealLineInCenter(hotLine.line)
@@ -2185,27 +2412,39 @@ function App() {
                             }
                           }}
                         >
-                          <td className="mono">{hotLine.line}</td>
-                          <td className="mono">{hotLine.misses.toLocaleString()}</td>
-                          <td className={`mono ${hotLine.missRate > 0.5 ? 'bad' : hotLine.missRate > 0.2 ? 'ok' : 'good'}`}>
-                            {formatPercent(hotLine.missRate)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                          <div className="hotspot-header">
+                            <span className="hotspot-location">Line {hotLine.line}</span>
+                            <span className="hotspot-stats">
+                              {hotLine.misses.toLocaleString()} misses ({formatPercent(hotLine.missRate)})
+                            </span>
+                          </div>
+                          <div className="hotspot-bar">
+                            <div
+                              className="hotspot-bar-fill"
+                              style={{ width: `${barWidth}%` }}
+                            />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
               )}
 
               {result.suggestions && result.suggestions.length > 0 && (
-                <div className="suggestions">
-                  <div className="section-title">Suggestions</div>
-                  {result.suggestions.map((s, i) => (
-                    <div key={i} className={`suggestion ${s.severity}`}>
-                      <span className={`badge ${s.severity}`}>{s.severity}</span>
-                      <span className="suggestion-msg">{s.message}</span>
-                    </div>
-                  ))}
+                <div className="panel">
+                  <div className="panel-header">
+                    <span className="panel-title">Suggestions</span>
+                    <span className="panel-badge">{result.suggestions.length}</span>
+                  </div>
+                  <div className="suggestions">
+                    {result.suggestions.map((s, i) => (
+                      <div key={i} className={`suggestion ${s.severity}`}>
+                        <span className={`badge ${s.severity}`}>{s.severity}</span>
+                        <span className="suggestion-msg">{s.message}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </>
@@ -2236,8 +2475,36 @@ function App() {
               </div>
             </div>
           )}
+          </div>
         </div>
       </div>
+
+      {/* Bottom Control Strip - appears after run */}
+      {result && timeline.length > 0 && (
+        <div className="bottom-strip">
+          <div className="bottom-strip-left">
+            <span className="strip-stat">{result.events.toLocaleString()} events</span>
+            <span className="strip-divider" />
+            <span className="strip-stat">{((result.levels.l1d || result.levels.l1!).hitRate * 100).toFixed(1)}% L1</span>
+          </div>
+          <div className="bottom-strip-center">
+            <input
+              type="range"
+              className="timeline-slider"
+              min={0}
+              max={timeline.length - 1}
+              value={scrubberIndex}
+              onChange={(e) => setScrubberIndex(Number(e.target.value))}
+              title="Scrub through cache events"
+            />
+            <span className="timeline-position">{scrubberIndex + 1} / {timeline.length}</span>
+          </div>
+          <div className="bottom-strip-right">
+            <button className="strip-btn" onClick={openInCompilerExplorer} title="View in Compiler Explorer">CE ↗</button>
+            <button className="strip-btn" onClick={handleShare} title="Share">Share</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
