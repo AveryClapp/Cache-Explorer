@@ -3,11 +3,21 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BACKEND_DIR="$(dirname "$SCRIPT_DIR")"
+PROJECT_ROOT="$(dirname "$BACKEND_DIR")"
 
-PASS="$BACKEND_DIR/llvm-pass/build/CacheProfiler.so"
-RUNTIME="$BACKEND_DIR/runtime/build/libcache-explorer-rt.a"
+# Support both build layouts:
+# 1. Top-level build/ directory (cmake from project root)
+# 2. Per-component build/ directories (legacy)
+if [[ -f "$PROJECT_ROOT/build/backend/llvm-pass/CacheProfiler.so" ]]; then
+  PASS="$PROJECT_ROOT/build/backend/llvm-pass/CacheProfiler.so"
+  RUNTIME="$PROJECT_ROOT/build/backend/runtime/libcache-explorer-rt.a"
+  CACHE_SIM="$PROJECT_ROOT/build/backend/cache-simulator/cache-sim"
+else
+  PASS="$BACKEND_DIR/llvm-pass/build/CacheProfiler.so"
+  RUNTIME="$BACKEND_DIR/runtime/build/libcache-explorer-rt.a"
+  CACHE_SIM="$BACKEND_DIR/cache-simulator/build/cache-sim"
+fi
 RUNTIME_INC="$BACKEND_DIR/runtime"
-CACHE_SIM="$BACKEND_DIR/cache-simulator/build/cache-sim"
 CMAKE_MODULE="$BACKEND_DIR/integration/cmake"
 
 # Export for subcommands

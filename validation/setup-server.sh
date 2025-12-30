@@ -56,14 +56,17 @@ if command -v apt-get &> /dev/null; then
     apt-get update -qq
     apt-get install -y -qq \
         linux-tools-generic \
-        linux-tools-$(uname -r) \
+        linux-tools-$(uname -r) 2>/dev/null || apt-get install -y -qq linux-tools-aws 2>/dev/null || true
+    apt-get install -y -qq \
         clang \
         llvm-dev \
         cmake \
         ninja-build \
         bc \
         jq \
-        git
+        git \
+        libzstd-dev \
+        libcurl4-openssl-dev
 elif command -v dnf &> /dev/null; then
     dnf install -y \
         perf \
