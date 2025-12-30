@@ -98,8 +98,8 @@ for bench in "${BENCHMARKS[@]}"; do
     # Parse L1 data cache results from "levels": {"l1d": {"hits": N, "misses": M, ...}}
     # Note: "l1d" appears twice (cacheConfig and levels), we need the one with "hits"
     L1D_BLOCK=$(echo "$SIM_OUTPUT" | grep -o '"l1d":[^}]*}' | grep '"hits"' | head -1)
-    SIM_L1_HITS[$bench]=$(echo "$L1D_BLOCK" | grep -o '"hits":[0-9]*' | grep -o '[0-9]*' || echo "0")
-    SIM_L1_MISSES[$bench]=$(echo "$L1D_BLOCK" | grep -o '"misses":[0-9]*' | grep -o '[0-9]*' || echo "0")
+    SIM_L1_HITS[$bench]=$(echo "$L1D_BLOCK" | grep -oE '"hits":[[:space:]]*[0-9]+' | grep -o '[0-9]*' || echo "0")
+    SIM_L1_MISSES[$bench]=$(echo "$L1D_BLOCK" | grep -oE '"misses":[[:space:]]*[0-9]+' | grep -o '[0-9]*' || echo "0")
 
     SIM_TOTAL=$((${SIM_L1_HITS[$bench]:-0} + ${SIM_L1_MISSES[$bench]:-0}))
     if [[ $SIM_TOTAL -gt 0 ]]; then
