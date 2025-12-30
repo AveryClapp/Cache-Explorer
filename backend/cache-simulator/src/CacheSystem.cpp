@@ -23,11 +23,23 @@ void CacheSystem::handle_exclusive_eviction(uint64_t evicted_addr,
 
 void CacheSystem::issue_prefetches(const std::vector<uint64_t> &addrs) {
   for (uint64_t addr : addrs) {
-    // Prefetches go directly to L2 (typical HW behavior)
-    // Only prefetch if not already present
-    if (!l2.is_present(addr) && !l1d.is_present(addr)) {
-      l2.install(addr, false);
-      prefetched_addresses.insert(addr);  // Track this prefetch
+    // Intel DCU prefetcher brings data directly to L1
+    // This means next access to prefetched address is an L1 HIT
+    if (!l1d.is_present(addr)) {
+      // Install in L1 (like Intel DCU prefetcher)
+      l1d.install(addr, false);
+
+      // Also install in L2 for inclusive hierarchy
+      if (!l2.is_present(addr)) {
+        l2.install(addr, false);
+      }
+
+      // Also install in L3 for inclusive hierarchy
+      if (!l3.is_present(addr)) {
+        l3.install(addr, false);
+      }
+
+      prefetched_addresses.insert(addr);
     }
   }
 }
@@ -59,6 +71,14 @@ SystemAccessResult CacheSystem::access_hierarchy(uint64_t address,
       prefetched_addresses.erase(address);
     }
     return result;
+  }
+
+  // L1 miss - trigger prefetching (like Intel DCU prefetcher)
+  // Real hardware prefetches on L1 miss, not just L3 miss
+  if (prefetch_enabled) {
+    auto pf_addrs = prefetcher.on_miss(address, pc);
+    result.prefetches_issued = static_cast<int>(pf_addrs.size());
+    issue_prefetches(pf_addrs);
   }
 
   // L1 miss - handle eviction
@@ -130,12 +150,8 @@ SystemAccessResult CacheSystem::access_hierarchy(uint64_t address,
     l1i.invalidate(l3_info.evicted_address);
   }
 
-  // Issue prefetches on L3 miss (memory access)
-  if (prefetch_enabled) {
-    auto pf_addrs = prefetcher.on_miss(address, pc);
-    result.prefetches_issued = static_cast<int>(pf_addrs.size());
-    issue_prefetches(pf_addrs);
-  }
+  // Note: Prefetching is now triggered on L1 miss (earlier in hierarchy)
+  // This matches Intel DCU prefetcher behavior
 
   return result;
 }
