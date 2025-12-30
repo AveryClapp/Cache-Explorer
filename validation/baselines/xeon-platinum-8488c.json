@@ -1,0 +1,79 @@
+{
+  "hardware": "Intel(R) Xeon(R) Platinum 8488C (invalid) CPU @ 0.0GHz",
+  "kernel": "6.14.0-1013-aws",
+  "date": "2025-12-30T21:40:10+00:00",
+  "benchmarks": {
+    "sequential": {
+      "simulator_hit_rate": 97.7,
+      "hardware_hit_rate": 97.0,
+      "simulator_hits": 2956270,
+      "simulator_misses": 68732,
+      "hardware_loads": 2373214,
+      "hardware_misses": 70443
+    }
+,
+    "strided_16": {
+      "simulator_hit_rate": 91.1,
+      "hardware_hit_rate": 91.9,
+      "simulator_hits": 706270,
+      "simulator_misses": 68732,
+      "hardware_loads": 868761,
+      "hardware_misses": 69861
+    }
+,
+    "strided_64": {
+      "simulator_hit_rate": 67.6,
+      "hardware_hit_rate": 85.8,
+      "simulator_hits": 143780,
+      "simulator_misses": 68722,
+      "hardware_loads": 494820,
+      "hardware_misses": 70042
+    }
+,
+    "random": {
+      "simulator_hit_rate": 79.2,
+      "hardware_hit_rate": 92.5,
+      "simulator_hits": 337598,
+      "simulator_misses": 88405,
+      "hardware_loads": 673988,
+      "hardware_misses": 50435
+    }
+,
+    "matrix_row": {
+      "simulator_hit_rate": 96.1,
+      "hardware_hit_rate": 99.3,
+      "simulator_hits": 782752,
+      "simulator_misses": 31250,
+      "hardware_loads": 1043118,
+      "hardware_misses": 7204
+    }
+,
+    "matrix_col": {
+      "simulator_hit_rate": 96.1,
+      "hardware_hit_rate": 97.8,
+      "simulator_hits": 961071,
+      "simulator_misses": 38931,
+      "hardware_loads": 1054413,
+      "hardware_misses": 22874
+    }
+,
+    "linked_list": {
+      "simulator_hit_rate": 71.7,
+      "hardware_hit_rate": 82.7,
+      "simulator_hits": 2884051,
+      "simulator_misses": 1135951,
+      "hardware_loads": 3470206,
+      "hardware_misses": 596892
+    }
+,
+    "working_set": {
+      "simulator_hit_rate": 98.1,
+      "hardware_hit_rate": 97.9,
+      "simulator_hits": 1893627,
+      "simulator_misses": 36103,
+      "hardware_loads": 1687135,
+      "hardware_misses": 34870
+    }
+
+  }
+}
