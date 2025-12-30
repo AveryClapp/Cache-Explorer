@@ -1060,14 +1060,26 @@ function InteractiveCacheGrid({
         />
         <div className="scrubber-info">
           <span>Event {currentIndex} / {timeline.length}</span>
-          {currentEvent && (
-            <span className="current-event-info">
-              {currentEvent.t === 'R' ? 'Read' : currentEvent.t === 'W' ? 'Write' : 'Fetch'}
-              {currentEvent.l === 1 ? ' → L1 Hit' : currentEvent.l === 2 ? ' → L2 Hit' : currentEvent.l === 3 ? ' → L3 Hit' : ' → Memory'}
-              {currentSet >= 0 && ` (Set ${currentSet})`}
-            </span>
-          )}
         </div>
+        {currentEvent && (
+          <div className="current-event-details">
+            <span className={`event-type ${currentEvent.t === 'R' ? 'read' : currentEvent.t === 'W' ? 'write' : 'fetch'}`}>
+              {currentEvent.t === 'R' ? 'READ' : currentEvent.t === 'W' ? 'WRITE' : 'FETCH'}
+            </span>
+            <span className={`event-result ${currentEvent.l === 1 ? 'l1' : currentEvent.l === 2 ? 'l2' : currentEvent.l === 3 ? 'l3' : 'mem'}`}>
+              {currentEvent.l === 1 ? 'L1 Hit' : currentEvent.l === 2 ? 'L2 Hit' : currentEvent.l === 3 ? 'L3 Hit' : 'Memory'}
+            </span>
+            {currentEvent.a && (
+              <span className="event-address">0x{currentEvent.a.toString(16).padStart(8, '0')}</span>
+            )}
+            {currentSet >= 0 && (
+              <span className="event-set">Set {currentSet}</span>
+            )}
+            {currentEvent.f && currentEvent.n && (
+              <span className="event-source">{currentEvent.f}:{currentEvent.n}</span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Cache grid */}
@@ -1340,7 +1352,7 @@ function CacheHierarchyViz({ result, timeline, scrubberIndex, onScrubberChange }
       </div>
 
       {/* Interactive Cache Grid with Timeline Scrubber */}
-      {config && config.l1d.sets <= 32 && timeline && timeline.length > 0 && onScrubberChange && (
+      {config && config.l1d.sets <= 64 && timeline && timeline.length > 0 && onScrubberChange && (
         <InteractiveCacheGrid
           config={config.l1d}
           timeline={timeline}
@@ -1350,7 +1362,7 @@ function CacheHierarchyViz({ result, timeline, scrubberIndex, onScrubberChange }
       )}
 
       {/* Static grid fallback when no timeline */}
-      {config && config.l1d.sets <= 32 && (!timeline || timeline.length === 0) && (
+      {config && config.l1d.sets <= 64 && (!timeline || timeline.length === 0) && (
         <div className="cache-grid-section">
           <div className="cache-grid-title">
             L1 Data Cache Structure ({config.l1d.sets} sets × {config.l1d.assoc} ways)
@@ -1707,6 +1719,7 @@ function App() {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const monacoRef = useRef<Monaco | null>(null)
   const decorationsRef = useRef<string[]>([])
+  const stepDecorationsRef = useRef<string[]>([])  // For step-through highlighting
   const optionsRef = useRef<HTMLDivElement>(null)
   const vimStatusRef = useRef<HTMLDivElement>(null)
   const vimModeRef = useRef<{ dispose: () => void } | null>(null)
@@ -1974,6 +1987,40 @@ function App() {
 
     decorationsRef.current = editor.deltaDecorations(decorationsRef.current, decorations)
   }, [result])
+
+  // Highlight current line when stepping through timeline
+  useEffect(() => {
+    if (!editorRef.current || !monacoRef.current || !timeline.length) {
+      if (editorRef.current && stepDecorationsRef.current.length > 0) {
+        stepDecorationsRef.current = editorRef.current.deltaDecorations(stepDecorationsRef.current, [])
+      }
+      return
+    }
+
+    const monaco = monacoRef.current
+    const editor = editorRef.current
+    const model = editor.getModel()
+    if (!model) return
+
+    const currentEvent = timeline[scrubberIndex - 1]
+    const decorations: editor.IModelDeltaDecoration[] = []
+
+    if (currentEvent?.n && currentEvent.n > 0 && currentEvent.n <= model.getLineCount()) {
+      const lineNum = currentEvent.n
+      decorations.push({
+        range: new monaco.Range(lineNum, 1, lineNum, 1),
+        options: {
+          isWholeLine: true,
+          className: 'line-step-highlight',
+          glyphMarginClassName: 'glyph-step',
+        }
+      })
+      // Scroll the line into view
+      editor.revealLineInCenterIfOutsideViewport(lineNum)
+    }
+
+    stepDecorationsRef.current = editor.deltaDecorations(stepDecorationsRef.current, decorations)
+  }, [timeline, scrubberIndex])
 
   const runAnalysis = () => {
     // Input validation - check total size across all files
@@ -2504,14 +2551,18 @@ function App() {
               {result.suggestions && result.suggestions.length > 0 && (
                 <div className="panel">
                   <div className="panel-header">
-                    <span className="panel-title">Suggestions</span>
+                    <span className="panel-title">Optimization Suggestions</span>
                     <span className="panel-badge">{result.suggestions.length}</span>
                   </div>
                   <div className="suggestions">
                     {result.suggestions.map((s, i) => (
                       <div key={i} className={`suggestion ${s.severity}`}>
-                        <span className={`badge ${s.severity}`}>{s.severity}</span>
-                        <span className="suggestion-msg">{s.message}</span>
+                        <div className="suggestion-header">
+                          <span className={`suggestion-severity ${s.severity}`}>{s.severity}</span>
+                          {s.location && <span className="suggestion-location">{s.location}</span>}
+                        </div>
+                        <div className="suggestion-message">{s.message}</div>
+                        {s.fix && <div className="suggestion-fix">{s.fix}</div>}
                       </div>
                     ))}
                   </div>
