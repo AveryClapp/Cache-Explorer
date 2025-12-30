@@ -95,9 +95,10 @@ for bench in "${BENCHMARKS[@]}"; do
     echo "  Running simulator..."
     SIM_OUTPUT=$("$CACHE_EXPLORE" "$BENCH_FILE" --config intel -O2 --json 2>/dev/null || echo "{}")
 
-    # Parse L1 data cache results
-    SIM_L1_HITS[$bench]=$(echo "$SIM_OUTPUT" | grep -o '"l1d":{[^}]*}' | grep -o '"hits":[0-9]*' | grep -o '[0-9]*' || echo "0")
-    SIM_L1_MISSES[$bench]=$(echo "$SIM_OUTPUT" | grep -o '"l1d":{[^}]*}' | grep -o '"misses":[0-9]*' | grep -o '[0-9]*' || echo "0")
+    # Parse L1 data cache results from "levels": {"l1d": {"hits": N, "misses": M, ...}}
+    L1D_BLOCK=$(echo "$SIM_OUTPUT" | grep -o '"l1d":[^}]*}' | head -1)
+    SIM_L1_HITS[$bench]=$(echo "$L1D_BLOCK" | grep -o '"hits":[0-9]*' | grep -o '[0-9]*' || echo "0")
+    SIM_L1_MISSES[$bench]=$(echo "$L1D_BLOCK" | grep -o '"misses":[0-9]*' | grep -o '[0-9]*' || echo "0")
 
     SIM_TOTAL=$((${SIM_L1_HITS[$bench]:-0} + ${SIM_L1_MISSES[$bench]:-0}))
     if [[ $SIM_TOTAL -gt 0 ]]; then

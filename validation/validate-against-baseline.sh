@@ -104,9 +104,10 @@ for bench in "${BENCHMARKS[@]}"; do
     # Run simulator
     SIM_OUTPUT=$("$CACHE_EXPLORE" "$BENCH_FILE" --config intel -O2 --json 2>/dev/null || echo "{}")
 
-    # Parse L1 data cache results
-    SIM_HITS=$(echo "$SIM_OUTPUT" | grep -o '"l1d":{[^}]*}' | grep -o '"hits":[0-9]*' | grep -o '[0-9]*' || echo "0")
-    SIM_MISSES=$(echo "$SIM_OUTPUT" | grep -o '"l1d":{[^}]*}' | grep -o '"misses":[0-9]*' | grep -o '[0-9]*' || echo "0")
+    # Parse L1 data cache results from "levels": {"l1d": {"hits": N, "misses": M, ...}}
+    L1D_BLOCK=$(echo "$SIM_OUTPUT" | grep -o '"l1d":[^}]*}' | head -1)
+    SIM_HITS=$(echo "$L1D_BLOCK" | grep -o '"hits":[0-9]*' | grep -o '[0-9]*' || echo "0")
+    SIM_MISSES=$(echo "$L1D_BLOCK" | grep -o '"misses":[0-9]*' | grep -o '[0-9]*' || echo "0")
 
     SIM_TOTAL=$((${SIM_HITS:-0} + ${SIM_MISSES:-0}))
     if [[ $SIM_TOTAL -gt 0 ]]; then
