@@ -92,8 +92,9 @@ for bench in "${BENCHMARKS[@]}"; do
     echo -e "${BLUE}[$bench]${NC}"
 
     # 1. Run with Cache Explorer simulator
+    # Use adaptive prefetching to match real Intel hardware behavior
     echo "  Running simulator..."
-    SIM_OUTPUT=$("$CACHE_EXPLORE" "$BENCH_FILE" --config intel -O2 --json 2>/dev/null || echo "{}")
+    SIM_OUTPUT=$("$CACHE_EXPLORE" "$BENCH_FILE" --config intel -O2 --prefetch adaptive --json 2>/dev/null || echo "{}")
 
     # Parse L1 data cache results from "levels": {"l1d": {"hits": N, "misses": M, ...}}
     # Note: "l1d" appears twice (cacheConfig and levels), we need the one with "hits"

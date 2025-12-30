@@ -102,6 +102,7 @@ INCLUDES=() # Array of -I flags
 SAMPLE_RATE=""
 EVENT_LIMIT=""
 PREFETCH=""
+PREFETCH_DEGREE=""
 
 usage() {
   echo "Usage: cache-explore [options] <source.c|.cpp|.rs>"
@@ -119,6 +120,7 @@ usage() {
   echo "  --sample <N>      Sample 1 in N events (e.g., 100 = 1% sampling)"
   echo "  --limit <N>       Stop after N events (e.g., 1000000 = 1M events max)"
   echo "  --prefetch <type> Enable prefetching: none|next|stream|stride|adaptive"
+  echo "  --prefetch-degree <N>  How many lines to prefetch ahead (default: 4)"
   echo "  -O<level>         Optimization level (default: -O0)"
   echo "  -D <name>=<val>   Preprocessor define (can be used multiple times)"
   echo "  --help            Show this help"
@@ -142,6 +144,7 @@ while [[ $# -gt 0 ]]; do
     --sample) SAMPLE_RATE="$2"; shift 2 ;;
     --limit) EVENT_LIMIT="$2"; shift 2 ;;
     --prefetch) PREFETCH="$2"; shift 2 ;;
+    --prefetch-degree) PREFETCH_DEGREE="$2"; shift 2 ;;
     -O*) OPT_LEVEL="$1"; shift ;;
     -D) DEFINES+=("-D$2"); shift 2 ;;
     -D*) DEFINES+=("$1"); shift ;;
@@ -315,10 +318,16 @@ if [[ -n "$EVENT_LIMIT" ]]; then
   RUN_ENV="CACHE_EXPLORER_MAX_EVENTS=$EVENT_LIMIT $RUN_ENV"
 fi
 
-# Build prefetch flag for cache-sim
+# Build prefetch flags for cache-sim
 PREFETCH_ARG=""
 if [[ -n "$PREFETCH" ]]; then
   PREFETCH_ARG="--prefetch $PREFETCH"
+  # Default to aggressive prefetching (4 lines) to match Intel hardware
+  if [[ -n "$PREFETCH_DEGREE" ]]; then
+    PREFETCH_ARG="$PREFETCH_ARG --prefetch-degree $PREFETCH_DEGREE"
+  else
+    PREFETCH_ARG="$PREFETCH_ARG --prefetch-degree 4"
+  fi
 fi
 
 # Streaming mode: pipe directly for real-time output
