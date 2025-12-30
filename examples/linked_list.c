@@ -8,9 +8,7 @@ struct Node {
     struct Node* next;
 };
 
-#ifndef N
 #define N 10000
-#endif
 
 int main() {
     // Create linked list with scattered allocations

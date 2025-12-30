@@ -2,13 +2,8 @@
 // Compares naive vs blocked implementation
 #include <stdio.h>
 
-#ifndef N
 #define N 256
-#endif
-
-#ifndef BLOCK
 #define BLOCK 32  // Should be tuned to L1 cache size
-#endif
 
 float A[N][N], B[N][N], C[N][N];
 

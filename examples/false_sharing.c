@@ -3,9 +3,7 @@
 #include <stdio.h>
 #include <pthread.h>
 
-#ifndef ITERATIONS
 #define ITERATIONS 1000000
-#endif
 
 // BAD: Both counters on same cache line (64 bytes)
 struct {

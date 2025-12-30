@@ -2,9 +2,7 @@
 // Compare with array_of_structs.c to see the difference
 #include <stdio.h>
 
-#ifndef N
 #define N 10000
-#endif
 
 // Fields separated - access only what you need
 struct Particles {

@@ -2,9 +2,7 @@
 // Single pass over data instead of multiple passes
 #include <stdio.h>
 
-#ifndef N
 #define N 100000
-#endif
 
 float a[N], b[N], c[N], d[N];
 

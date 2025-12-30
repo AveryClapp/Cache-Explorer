@@ -3,9 +3,7 @@
 
 #include <stdio.h>
 
-#ifndef N
 #define N 1000
-#endif
 
 int main() {
   int arr[N];

@@ -3,9 +3,7 @@
 
 #include <stdio.h>
 
-#ifndef N
 #define N 64
-#endif
 
 int main() {
   int matrix[N][N];

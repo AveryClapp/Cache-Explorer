@@ -2,9 +2,7 @@
 // Each probe is a cache miss until working set fits in cache
 #include <stdio.h>
 
-#ifndef N
 #define N 1000000
-#endif
 
 int arr[N];
 

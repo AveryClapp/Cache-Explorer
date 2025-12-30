@@ -2,9 +2,7 @@
 // Shows how loop order affects cache performance
 #include <stdio.h>
 
-#ifndef N
 #define N 512
-#endif
 
 int matrix[N][N];
 

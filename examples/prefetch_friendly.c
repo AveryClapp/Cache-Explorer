@@ -2,9 +2,7 @@
 // Sequential access allows hardware prefetcher to work effectively
 #include <stdio.h>
 
-#ifndef N
 #define N 1000000
-#endif
 
 int data[N];
 

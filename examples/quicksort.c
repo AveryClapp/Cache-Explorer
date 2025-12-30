@@ -2,9 +2,7 @@
 // Good cache behavior due to working on smaller and smaller partitions
 #include <stdio.h>
 
-#ifndef N
 #define N 10000
-#endif
 
 int arr[N];
 

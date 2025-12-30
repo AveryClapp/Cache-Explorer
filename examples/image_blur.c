@@ -2,13 +2,8 @@
 // 3x3 box blur demonstrating 2D stencil access
 #include <stdio.h>
 
-#ifndef WIDTH
 #define WIDTH 512
-#endif
-
-#ifndef HEIGHT
 #define HEIGHT 512
-#endif
 
 unsigned char input[HEIGHT][WIDTH];
 unsigned char output[HEIGHT][WIDTH];

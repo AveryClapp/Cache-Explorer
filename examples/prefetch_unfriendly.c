@@ -3,9 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#ifndef N
 #define N 1000000
-#endif
 
 int data[N];
 int indices[N];

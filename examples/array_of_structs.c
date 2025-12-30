@@ -2,9 +2,7 @@
 // Good for accessing all fields, wasteful if only accessing one field
 #include <stdio.h>
 
-#ifndef N
 #define N 10000
-#endif
 
 // All fields together - if you only need 'x', you still load 'y' and 'z'
 struct Particle {

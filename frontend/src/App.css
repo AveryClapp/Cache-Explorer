@@ -1449,42 +1449,13 @@ input:focus:not(:focus-visible) {
 .topbar-left {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
-}
-
-.topbar-logo {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-hover);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  color: var(--accent);
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.topbar-logo:hover {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-  box-shadow: 0 0 12px rgba(86, 156, 214, 0.4);
+  gap: var(--space-lg);
 }
 
 .topbar-title {
   font-size: var(--text-subsection);
   font-weight: 600;
   color: var(--text-primary);
-}
-
-.topbar-center {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
 }
 
 .topbar-filename {
@@ -1677,6 +1648,56 @@ input:focus:not(:focus-visible) {
   text-align: center;
   color: var(--text-muted);
   font-size: var(--text-body);
+}
+
+.command-filter-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(86, 156, 214, 0.2);
+  border: 1px solid rgba(86, 156, 214, 0.4);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-small);
+  color: var(--accent);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+}
+
+.command-filter-badge:hover {
+  background: rgba(86, 156, 214, 0.3);
+}
+
+.command-filter-badge .badge-clear {
+  font-size: 14px;
+  opacity: 0.6;
+}
+
+.command-filter-badge:hover .badge-clear {
+  opacity: 1;
+}
+
+.command-group {
+  margin-bottom: var(--space-sm);
+}
+
+.command-group:last-child {
+  margin-bottom: 0;
+}
+
+.command-group-header {
+  padding: 8px 20px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.command-group:first-child .command-group-header {
+  border-top: none;
 }
 
 /* ===== Quick Config Panel ===== */

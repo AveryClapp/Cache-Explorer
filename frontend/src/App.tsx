@@ -405,12 +405,11 @@ function getFileExtension(lang: Language): string {
   }
 }
 
-// Create a default file tab
 function createFileTab(name: string, code: string, language: Language): FileTab {
   return { id: generateFileId(), name, code, language }
 }
 
-// Tab bar component for multi-file support
+// Tab bar for multi-file editing
 function TabBar({
   files,
   activeId,
@@ -599,6 +598,23 @@ function fuzzyMatch(query: string, text: string): boolean {
   return qi === q.length
 }
 
+// Prefix-to-category mapping for command palette
+const PREFIX_CATEGORIES: Record<string, string> = {
+  '>': 'examples',
+  ':': 'settings',
+  '@': 'actions',
+  '*': 'config',
+}
+
+const CATEGORY_LABELS: Record<string, string> = {
+  'examples': 'Examples',
+  'settings': 'Settings',
+  'actions': 'Actions',
+  'config': 'Config',
+}
+
+const CATEGORY_ORDER = ['actions', 'examples', 'settings', 'config']
+
 // Command Palette Component
 function CommandPalette({
   isOpen,
@@ -623,9 +639,41 @@ function CommandPalette({
 }) {
   if (!isOpen) return null
 
-  const filtered = query
-    ? commands.filter(cmd => fuzzyMatch(query, cmd.label) || fuzzyMatch(query, cmd.category || ''))
-    : commands
+  // Parse prefix from query
+  const firstChar = query.charAt(0)
+  const activePrefix = PREFIX_CATEGORIES[firstChar] ? firstChar : null
+  const activeCategory = activePrefix ? PREFIX_CATEGORIES[activePrefix] : null
+  const searchQuery = activePrefix ? query.slice(1).trim() : query
+
+  // Filter commands
+  let filtered: CommandItem[]
+  if (activeCategory) {
+    filtered = commands.filter(cmd => cmd.category === activeCategory)
+    if (searchQuery) {
+      filtered = filtered.filter(cmd => fuzzyMatch(searchQuery, cmd.label))
+    }
+  } else if (searchQuery) {
+    filtered = commands.filter(cmd => fuzzyMatch(searchQuery, cmd.label) || fuzzyMatch(searchQuery, cmd.category || ''))
+  } else {
+    filtered = commands
+  }
+
+  // Group by category when showing all (no prefix, no search)
+  const showGrouped = !activePrefix && !searchQuery
+  const groupedCommands: { category: string; items: CommandItem[] }[] = []
+  if (showGrouped) {
+    for (const cat of CATEGORY_ORDER) {
+      const items = filtered.filter(cmd => cmd.category === cat)
+      if (items.length > 0) {
+        groupedCommands.push({ category: cat, items })
+      }
+    }
+  }
+
+  // Flatten for keyboard navigation
+  const flatFiltered = showGrouped
+    ? groupedCommands.flatMap(g => g.items)
+    : filtered
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
@@ -634,25 +682,78 @@ function CommandPalette({
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
       onNavigate(-1)
-    } else if (e.key === 'Enter' && filtered[selectedIndex]) {
+    } else if (e.key === 'Enter' && flatFiltered[selectedIndex]) {
       e.preventDefault()
-      onSelect(filtered[selectedIndex])
+      onSelect(flatFiltered[selectedIndex])
     } else if (e.key === 'Escape') {
       e.preventDefault()
       onClose()
+    } else if (e.key === 'Backspace' && query === activePrefix) {
+      e.preventDefault()
+      onQueryChange('')
     }
+  }
+
+  const clearPrefix = () => {
+    onQueryChange('')
+  }
+
+  // Render grouped or flat list
+  const renderCommands = () => {
+    if (showGrouped) {
+      let globalIndex = 0
+      return groupedCommands.map(group => (
+        <div key={group.category} className="command-group">
+          <div className="command-group-header">{CATEGORY_LABELS[group.category]}</div>
+          {group.items.map(cmd => {
+            const idx = globalIndex++
+            return (
+              <div
+                key={cmd.id}
+                className={`command-item ${idx === selectedIndex ? 'selected' : ''}`}
+                onClick={() => onSelect(cmd)}
+                onMouseEnter={() => onNavigate(idx - selectedIndex)}
+              >
+                <span className="command-item-icon">{cmd.icon}</span>
+                <span className="command-item-label">{cmd.label}</span>
+                {cmd.shortcut && <span className="command-item-shortcut">{cmd.shortcut}</span>}
+              </div>
+            )
+          })}
+        </div>
+      ))
+    }
+    return flatFiltered.map((cmd, i) => (
+      <div
+        key={cmd.id}
+        className={`command-item ${i === selectedIndex ? 'selected' : ''}`}
+        onClick={() => onSelect(cmd)}
+        onMouseEnter={() => onNavigate(i - selectedIndex)}
+      >
+        <span className="command-item-icon">{cmd.icon}</span>
+        <span className="command-item-label">{cmd.label}</span>
+        {cmd.shortcut && <span className="command-item-shortcut">{cmd.shortcut}</span>}
+      </div>
+    ))
   }
 
   return (
     <div className="command-palette-overlay" onClick={onClose}>
       <div className="command-palette" onClick={e => e.stopPropagation()}>
         <div className="command-input-wrapper">
-          <span className="command-icon">⌘</span>
+          {activePrefix ? (
+            <span className="command-filter-badge" onClick={clearPrefix}>
+              {CATEGORY_LABELS[activeCategory!]} {activePrefix}
+              <span className="badge-clear">×</span>
+            </span>
+          ) : (
+            <span className="command-icon">/</span>
+          )}
           <input
             ref={inputRef}
             type="text"
             className="command-input"
-            placeholder="What do you want to do?"
+            placeholder={activePrefix ? `Search ${CATEGORY_LABELS[activeCategory!].toLowerCase()}...` : '> examples  : settings  @ actions  * config'}
             value={query}
             onChange={e => onQueryChange(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -660,19 +761,8 @@ function CommandPalette({
           />
         </div>
         <div className="command-list">
-          {filtered.map((cmd, i) => (
-            <div
-              key={cmd.id}
-              className={`command-item ${i === selectedIndex ? 'selected' : ''}`}
-              onClick={() => onSelect(cmd)}
-              onMouseEnter={() => onNavigate(i - selectedIndex)}
-            >
-              <span className="command-item-icon">{cmd.icon}</span>
-              <span className="command-item-label">{cmd.label}</span>
-              {cmd.shortcut && <span className="command-item-shortcut">{cmd.shortcut}</span>}
-            </div>
-          ))}
-          {filtered.length === 0 && (
+          {renderCommands()}
+          {flatFiltered.length === 0 && (
             <div className="command-empty">No matching commands</div>
           )}
         </div>
@@ -816,7 +906,6 @@ function InteractiveCacheGrid({
     const assoc = config.assoc
     const lineSize = config.lineSize
 
-    // Initialize empty cache
     const cache: CacheLine[][] = Array.from({ length: numSets }, () =>
       Array.from({ length: assoc }, () => ({
         valid: false,
@@ -827,15 +916,13 @@ function InteractiveCacheGrid({
       }))
     )
 
-    // LRU tracking per set
     const lruOrder: number[][] = Array.from({ length: numSets }, () =>
       Array.from({ length: assoc }, (_, i) => i)
     )
 
-    // Process events up to currentIndex
     for (let i = 0; i < Math.min(currentIndex, timeline.length); i++) {
       const event = timeline[i]
-      if (!event.a || event.t === 'I') continue  // Skip instruction fetches for L1D
+      if (!event.a || event.t === 'I') continue
 
       const addr = event.a
       const setIndex = Math.floor(addr / lineSize) % numSets
@@ -845,7 +932,6 @@ function InteractiveCacheGrid({
       const set = cache[setIndex]
       const lru = lruOrder[setIndex]
 
-      // Check for hit
       let hitWay = -1
       for (let way = 0; way < assoc; way++) {
         if (set[way].valid && set[way].tag === tag) {
@@ -1628,7 +1714,6 @@ function App() {
   // Monaco language mapping
   const monacoLanguage = language === 'cpp' ? 'cpp' : language === 'rust' ? 'rust' : 'c'
 
-  // Close options dropdown when clicking outside
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (optionsRef.current && !optionsRef.current.contains(e.target as Node)) {
@@ -1644,13 +1729,10 @@ function App() {
     monacoRef.current = monaco
   }
 
-  // Vim mode initialization
   useEffect(() => {
     if (vimMode && editorRef.current && vimStatusRef.current) {
-      // Initialize vim mode
       vimModeRef.current = initVimMode(editorRef.current, vimStatusRef.current)
     } else if (vimModeRef.current) {
-      // Cleanup vim mode
       vimModeRef.current.dispose()
       vimModeRef.current = null
     }
@@ -1817,7 +1899,7 @@ function App() {
       severity: err.severity === 'error'
         ? monaco.MarkerSeverity.Error
         : monaco.MarkerSeverity.Warning,
-      message: err.message + (err.suggestion ? `\n\n💡 ${err.suggestion}` : ''),
+      message: err.message + (err.suggestion ? `\n\nHint: ${err.suggestion}` : ''),
       startLineNumber: err.line,
       startColumn: err.column,
       endLineNumber: err.line,
@@ -2026,45 +2108,48 @@ function App() {
     custom: 'Custom'
   }
 
-  // Command palette commands
   const commands: CommandItem[] = useMemo(() => [
-    { id: 'run', icon: '▶', label: 'Run analysis', shortcut: '⌘↵', action: () => { if (!isLoading) runAnalysis() }, category: 'action' },
-    { id: 'example-matrix', icon: '📋', label: 'Load: Matrix Traversal', action: () => {
-      const ex = EXAMPLES.matrix
-      setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, code: ex.code, language: ex.language, name: 'main' + getFileExtension(ex.language) } : f))
-    }, category: 'examples' },
-    { id: 'example-sequential', icon: '📋', label: 'Load: Sequential Access', action: () => {
+    // Actions (@)
+    { id: 'run', icon: '@', label: 'Run analysis', shortcut: '⌘R', action: () => { if (!isLoading) runAnalysis() }, category: 'actions' },
+    { id: 'share', icon: '@', label: 'Share / Copy link', shortcut: '⌘S', action: () => { handleShare(); setCopied(true); setTimeout(() => setCopied(false), 2000) }, category: 'actions' },
+    { id: 'ce', icon: '@', label: 'Open in Compiler Explorer', action: openInCompilerExplorer, category: 'actions' },
+    { id: 'diff-baseline', icon: '@', label: 'Set as diff baseline', action: () => setBaselineCode(code), category: 'actions' },
+    { id: 'diff-toggle', icon: '@', label: diffMode ? 'Exit diff mode' : 'Enter diff mode', action: () => { if (baselineCode) setDiffMode(!diffMode) }, category: 'actions' },
+    // Examples (>)
+    { id: 'example-sequential', icon: '>', label: 'Sequential Access', action: () => {
       const ex = EXAMPLES.sequential
       setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, code: ex.code, language: ex.language, name: 'main' + getFileExtension(ex.language) } : f))
     }, category: 'examples' },
-    { id: 'example-strided', icon: '📋', label: 'Load: Strided Access', action: () => {
+    { id: 'example-matrix', icon: '>', label: 'Matrix Traversal', action: () => {
+      const ex = EXAMPLES.matrix
+      setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, code: ex.code, language: ex.language, name: 'main' + getFileExtension(ex.language) } : f))
+    }, category: 'examples' },
+    { id: 'example-strided', icon: '>', label: 'Strided Access', action: () => {
       const ex = EXAMPLES.strided
       setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, code: ex.code, language: ex.language, name: 'main' + getFileExtension(ex.language) } : f))
     }, category: 'examples' },
-    { id: 'example-blocking', icon: '📋', label: 'Load: Cache Blocking', action: () => {
+    { id: 'example-blocking', icon: '>', label: 'Cache Blocking', action: () => {
       const ex = EXAMPLES.blocking
       setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, code: ex.code, language: ex.language, name: 'main' + getFileExtension(ex.language) } : f))
     }, category: 'examples' },
-    { id: 'example-linkedlist', icon: '📋', label: 'Load: Linked List', action: () => {
+    { id: 'example-linkedlist', icon: '>', label: 'Linked List', action: () => {
       const ex = EXAMPLES.linkedlist
       setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, code: ex.code, language: ex.language, name: 'main' + getFileExtension(ex.language) } : f))
     }, category: 'examples' },
-    { id: 'config', icon: '⚙️', label: 'Change hardware config...', action: () => setShowQuickConfig(true), category: 'settings' },
-    { id: 'share', icon: '📤', label: 'Share / Copy link', shortcut: '⌘S', action: () => { handleShare(); setCopied(true); setTimeout(() => setCopied(false), 2000) }, category: 'action' },
-    { id: 'ce', icon: '🔗', label: 'View in Compiler Explorer', action: openInCompilerExplorer, category: 'action' },
-    { id: 'vim', icon: '⌨️', label: vimMode ? 'Disable Vim mode' : 'Enable Vim mode', action: () => setVimMode(!vimMode), category: 'settings' },
-    { id: 'lang-c', icon: '🔤', label: 'Set language: C', action: () => updateActiveLanguage('c'), category: 'language' },
-    { id: 'lang-cpp', icon: '🔤', label: 'Set language: C++', action: () => updateActiveLanguage('cpp'), category: 'language' },
-    { id: 'lang-rust', icon: '🔤', label: 'Set language: Rust', action: () => updateActiveLanguage('rust'), category: 'language' },
-    { id: 'sampling-none', icon: '📊', label: 'Sampling: All events', action: () => setSampleRate(1), category: 'performance' },
-    { id: 'sampling-10', icon: '📊', label: 'Sampling: 1:10 (10%)', action: () => setSampleRate(10), category: 'performance' },
-    { id: 'sampling-100', icon: '📊', label: 'Sampling: 1:100 (1%)', action: () => setSampleRate(100), category: 'performance' },
-    { id: 'limit-1m', icon: '🔢', label: 'Event limit: 1M', action: () => setEventLimit(1000000), category: 'performance' },
-    { id: 'limit-5m', icon: '🔢', label: 'Event limit: 5M (default)', action: () => setEventLimit(5000000), category: 'performance' },
-    { id: 'limit-none', icon: '🔢', label: 'Event limit: None', action: () => setEventLimit(0), category: 'performance' },
-    { id: 'diff-baseline', icon: '📝', label: 'Set current as diff baseline', action: () => setBaselineCode(code), category: 'diff' },
-    { id: 'diff-toggle', icon: '🔀', label: diffMode ? 'Exit diff mode' : 'Show diff mode', action: () => { if (baselineCode) setDiffMode(!diffMode) }, category: 'diff' },
-    { id: 'options', icon: '⚙️', label: 'Advanced options...', action: () => setShowOptions(true), category: 'settings' },
+    // Settings (:)
+    { id: 'vim', icon: ':', label: vimMode ? 'Disable Vim mode' : 'Enable Vim mode', action: () => setVimMode(!vimMode), category: 'settings' },
+    { id: 'lang-c', icon: ':', label: 'Language: C', action: () => updateActiveLanguage('c'), category: 'settings' },
+    { id: 'lang-cpp', icon: ':', label: 'Language: C++', action: () => updateActiveLanguage('cpp'), category: 'settings' },
+    { id: 'lang-rust', icon: ':', label: 'Language: Rust', action: () => updateActiveLanguage('rust'), category: 'settings' },
+    // Config (*)
+    { id: 'config', icon: '*', label: 'Hardware config...', action: () => setShowQuickConfig(true), category: 'config' },
+    { id: 'options', icon: '*', label: 'Advanced options...', action: () => setShowOptions(true), category: 'config' },
+    { id: 'sampling-none', icon: '*', label: 'Sampling: All events', action: () => setSampleRate(1), category: 'config' },
+    { id: 'sampling-10', icon: '*', label: 'Sampling: 1:10', action: () => setSampleRate(10), category: 'config' },
+    { id: 'sampling-100', icon: '*', label: 'Sampling: 1:100', action: () => setSampleRate(100), category: 'config' },
+    { id: 'limit-1m', icon: '*', label: 'Event limit: 1M', action: () => setEventLimit(1000000), category: 'config' },
+    { id: 'limit-5m', icon: '*', label: 'Event limit: 5M', action: () => setEventLimit(5000000), category: 'config' },
+    { id: 'limit-none', icon: '*', label: 'Event limit: None', action: () => setEventLimit(0), category: 'config' },
   ], [isLoading, activeFileId, vimMode, diffMode, baselineCode, code, handleShare, openInCompilerExplorer, updateActiveLanguage])
 
   // Command palette handlers
@@ -2110,24 +2195,9 @@ function App() {
         onClose={() => setShowQuickConfig(false)}
       />
 
-      {/* Minimal Top Bar */}
       <div className="topbar">
         <div className="topbar-left">
-          <button
-            className="topbar-logo"
-            onClick={() => {
-              setShowCommandPalette(true)
-              setCommandQuery('')
-              setSelectedCommandIndex(0)
-            }}
-            title="Open command palette (⌘K)"
-          >
-            ⌘
-          </button>
           <span className="topbar-title">Cache Explorer</span>
-        </div>
-
-        <div className="topbar-center">
           <span className="topbar-filename">{activeFile?.name || 'main.c'}</span>
         </div>
 
@@ -2377,7 +2447,7 @@ function App() {
               {result.coherence && result.coherence.falseSharingEvents > 0 && (
                 <div className="panel warning">
                   <div className="panel-header">
-                    <span className="panel-title">⚠ False Sharing Detected</span>
+                    <span className="panel-title">False Sharing Detected</span>
                     <span className="panel-badge">{result.coherence.falseSharingEvents}</span>
                   </div>
                 </div>
@@ -2464,14 +2534,14 @@ function App() {
 
           {!result && !error && !isLoading && (
             <div className="placeholder">
-              <div className="placeholder-icon">📊</div>
+              <div className="placeholder-icon">&gt;_</div>
               <div className="placeholder-title">Cache Explorer</div>
               <div className="placeholder-text">
                 Write or paste code, then press <kbd>⌘</kbd>+<kbd>↵</kbd> to analyze cache behavior
               </div>
               <div className="placeholder-tips">
-                <div className="tip">💡 Try the Examples dropdown for common patterns</div>
-                <div className="tip">⚙️ Change hardware preset to simulate different CPUs</div>
+                <div className="tip">Try pressing ⌘K for examples and settings</div>
+                <div className="tip">Change hardware preset to simulate different CPUs</div>
               </div>
             </div>
           )}
