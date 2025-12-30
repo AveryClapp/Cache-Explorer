@@ -1,0 +1,35 @@
+# Exclude build directories (contain host-specific CMake cache)
+**/build/
+**/node_modules/
+
+# Exclude git
+.git/
+.gitignore
+
+# Exclude development files
+*.pyc
+__pycache__/
+.DS_Store
+*.swp
+*.swo
+
+# Exclude IDE files
+.vscode/
+.idea/
+
+# Exclude documentation (not needed in container)
+docs/
+*.md
+
+# Exclude frontend (built separately, not needed in sandbox container)
+frontend/
+
+# Exclude test files
+tests/
+*.test.*
+
+# Exclude local development scripts
+scripts/
+
+# Keep docker directory
+!docker/

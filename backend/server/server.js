@@ -248,6 +248,9 @@ app.post('/compile', async (req, res) => {
         language,
         config,
         optLevel,
+        prefetch: req.body.prefetch || 'none',
+        sampleRate,
+        eventLimit,
         customConfig: req.body.customConfig,
         defines: req.body.defines || []
       });
@@ -491,6 +494,9 @@ wss.on('connection', (ws) => {
           language,
           config,
           optLevel,
+          prefetch: prefetch || 'none',
+          sampleRate,
+          eventLimit,
           customConfig,
           defines: defines || [],
           onProgress: (progress) => {

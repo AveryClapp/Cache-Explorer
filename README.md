@@ -8,14 +8,31 @@ Paste your C/C++/Rust code, instantly see cache hits and misses with source-leve
 
 ## Features
 
-- **Real-time visualization** - Watch cache state update as code executes
+### Visualization
+- **Interactive cache grid** - Watch L1 cache state update in real-time
+- **Step-through execution** - Play/pause/step with timeline scrubber
+- **Source line highlighting** - Current access highlighted in editor
+- **Heat map coloring** - Hot/warm/cool/cold cache line visualization
+
+### Analysis
 - **Source attribution** - See exactly which lines cause cache misses
+- **Optimization suggestions** - Actionable fix recommendations with severity
+- **False sharing detection** - Identifies multi-threaded cache line conflicts
+- **Hot lines table** - Sortable by hits, misses, miss rate
+
+### Configuration
 - **13 hardware presets** - Intel, AMD, Apple Silicon, ARM, embedded
-- **False sharing detection** - Identifies multi-threaded performance bugs
 - **Multiple eviction policies** - LRU, PLRU, Random, SRRIP, BRRIP
 - **Prefetch simulation** - Next-line, stream, stride, adaptive
+- **Sampling modes** - 1x, 10x, 100x for large programs
+
+### Developer Experience
 - **Fast** - 2-5x overhead (vs 50x cachegrind)
 - **CLI + Web UI** - Terminal workflow or interactive browser
+- **Command palette** - Cmd+K with fuzzy search and prefix filters
+- **Vim mode** - Full vim keybindings in editor
+- **22 educational examples** - From sequential access to false sharing
+- **Compiler Explorer integration** - Open code in godbolt.org
 
 ## Quick Start
 
@@ -158,12 +175,25 @@ cache-explorer/
 
 **Teaching**: Interactive demos for computer architecture courses
 
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Cmd+K` | Open command palette |
+| `Cmd+R` | Run analysis |
+| `Cmd+S` | Share / copy link |
+| `>` | Filter to examples |
+| `:` | Filter to settings |
+| `@` | Filter to actions |
+| `*` | Filter to config |
+
 ## Documentation
 
-- [Quick Start Guide](docs/QUICK_START.md)
-- [How to Read Results](docs/HOW_TO_READ_RESULTS.md)
-- [Cache Optimization Patterns](docs/OPTIMIZATION_PATTERNS.md)
-- [Roadmap](ROADMAP.md)
+- [User Guide](docs/USER_GUIDE.md) - Complete guide to using Cache Explorer
+- [Quick Start](docs/QUICK_START.md) - Get running in 5 minutes
+- [How to Read Results](docs/HOW_TO_READ_RESULTS.md) - Understanding the output
+- [Optimization Patterns](docs/OPTIMIZATION_PATTERNS.md) - Common fixes
+- [Roadmap](ROADMAP.md) - Future plans
 
 ## Contributing
 

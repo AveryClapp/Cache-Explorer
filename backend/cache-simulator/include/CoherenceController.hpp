@@ -2,6 +2,7 @@
 
 #include "CacheLevel.hpp"
 #include "CoherenceState.hpp"
+#include <algorithm>
 #include <unordered_map>
 #include <vector>
 

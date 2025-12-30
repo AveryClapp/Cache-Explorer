@@ -1,0 +1,112 @@
+name: Validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'validation/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'validation/**'
+  schedule:
+    # Weekly full validation (Sundays at 2am UTC)
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+    inputs:
+      update_baseline:
+        description: 'Update baseline file'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  # Quick validation - runs on every PR
+  # Compares simulator against saved baseline (no perf required)
+  baseline-validation:
+    name: Baseline Validation
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm-dev cmake ninja-build bc
+
+      - name: Build Cache Explorer
+        run: ./scripts/build.sh
+
+      - name: Run baseline validation
+        run: |
+          chmod +x validation/validate-against-baseline.sh
+          ./validation/validate-against-baseline.sh
+        continue-on-error: false
+
+  # Full hardware validation - runs weekly or on-demand
+  # Requires self-hosted runner with perf access
+  hardware-validation:
+    name: Hardware Validation
+    runs-on: [self-hosted, linux, perf]
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.update_baseline == 'true')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Cache Explorer
+        run: ./scripts/build.sh
+
+      - name: Run hardware validation
+        run: |
+          chmod +x validation/validate-hardware.sh
+          ./validation/validate-hardware.sh --update-baseline
+
+      - name: Check for baseline changes
+        id: check_changes
+        run: |
+          git diff --quiet validation/baselines/ || echo "changed=true" >> $GITHUB_OUTPUT
+
+      - name: Commit updated baseline
+        if: steps.check_changes.outputs.changed == 'true'
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add validation/baselines/
+          git commit -m "Update validation baseline
+
+          Hardware validation run on $(date -I)
+
+          🤖 Generated with [Claude Code](https://claude.com/claude-code)"
+          git push
+
+  # Validation report - generates accuracy summary
+  validation-report:
+    name: Generate Report
+    runs-on: ubuntu-latest
+    needs: [baseline-validation]
+    if: always() && github.event_name == 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate validation summary
+        run: |
+          echo "## Cache Explorer Validation Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Benchmark | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+
+          for bench in sequential strided_16 strided_64 random matrix_row matrix_col linked_list working_set; do
+            if [[ -f "validation/benchmarks/$bench.c" ]]; then
+              echo "| $bench | ✅ |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| $bench | ⚠️ Missing |" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "See validation logs for detailed results." >> $GITHUB_STEP_SUMMARY

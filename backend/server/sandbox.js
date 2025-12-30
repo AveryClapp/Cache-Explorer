@@ -9,7 +9,7 @@
  */
 
 import { spawn } from 'child_process';
-import { writeFile, unlink, mkdir } from 'fs/promises';
+import { writeFile, mkdir, rm } from 'fs/promises';
 import { randomUUID } from 'crypto';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -24,9 +24,9 @@ const SANDBOX_CONFIG = {
   image: 'cache-explorer-sandbox:latest',
   // Resource limits
   memoryLimit: '256m',           // Max memory
-  cpuQuota: 50000,               // 50% of one CPU (50000/100000)
+  cpuQuota: 100000,              // 1 full CPU (100000/100000)
   pidLimit: 50,                  // Max processes
-  timeout: 15000,                // Max execution time (ms)
+  timeout: 45000,                // Max execution time (ms) - compilation + execution + simulation
   // Security
   networkDisabled: true,
   readOnlyRoot: true,
@@ -61,6 +61,9 @@ export async function checkSandboxAvailable() {
  * @param {string} options.language - 'c' | 'cpp'
  * @param {string} options.config - Cache configuration name
  * @param {string} options.optLevel - Optimization level (-O0, -O2, etc)
+ * @param {string} options.prefetch - Prefetch policy (none, stream, stride, etc)
+ * @param {number} options.sampleRate - Sampling rate (1 = all events)
+ * @param {number} options.eventLimit - Max events to process
  * @param {Object} options.customConfig - Custom cache parameters
  * @param {Array} options.defines - Preprocessor defines [{name, value}]
  * @param {Function} options.onProgress - Progress callback
@@ -72,6 +75,9 @@ export async function runInSandbox(options) {
     language = 'c',
     config = 'intel',
     optLevel = '-O0',
+    prefetch = 'none',
+    sampleRate = 1,
+    eventLimit = 5000000,
     customConfig,
     defines = [],
     onProgress
@@ -102,7 +108,7 @@ export async function runInSandbox(options) {
       `--cpu-quota=${SANDBOX_CONFIG.cpuQuota}`,         // CPU limit
       `--pids-limit=${SANDBOX_CONFIG.pidLimit}`,        // Process limit
       '--read-only',                                    // Read-only root filesystem
-      '--tmpfs', '/tmp:rw,size=64m,mode=1777',          // Writable /tmp
+      '--tmpfs', '/tmp:rw,exec,size=64m,mode=1777',     // Writable /tmp with execute permission
       '--tmpfs', '/workspace:rw,size=64m,mode=1777',    // Writable workspace
       '--security-opt', 'no-new-privileges',            // No privilege escalation
       '--cap-drop', 'ALL',                              // Drop all capabilities
@@ -119,19 +125,15 @@ export async function runInSandbox(options) {
     // Add image name
     dockerArgs.push(SANDBOX_CONFIG.image);
 
-    // Add sandbox-run.sh arguments
-    dockerArgs.push(`/workspace/input.${ext}`);
-    dockerArgs.push('--config', config);
-    dockerArgs.push(optLevel);
-    dockerArgs.push('--json');
-
-    // Add preprocessor defines
-    for (const def of defines) {
-      if (def.name && def.name.trim()) {
-        const defineStr = def.value ? `${def.name}=${def.value}` : def.name;
-        dockerArgs.push('-D', defineStr);
-      }
-    }
+    // Add run.sh positional arguments:
+    // CODE_FILE, LANGUAGE, CONFIG, OPT_LEVEL, PREFETCH, SAMPLE_RATE, EVENT_LIMIT
+    dockerArgs.push(`/workspace/input.${ext}`);  // CODE_FILE
+    dockerArgs.push(language);                    // LANGUAGE
+    dockerArgs.push(config);                      // CONFIG
+    dockerArgs.push(optLevel);                    // OPT_LEVEL
+    dockerArgs.push(prefetch);                    // PREFETCH
+    dockerArgs.push(String(sampleRate));          // SAMPLE_RATE
+    dockerArgs.push(String(eventLimit));          // EVENT_LIMIT
 
     if (onProgress) onProgress({ stage: 'compiling' });
 
@@ -194,8 +196,7 @@ export async function runInSandbox(options) {
 
   } finally {
     // Cleanup temp directory
-    await unlink(inputFile).catch(() => {});
-    await unlink(tempDir).catch(() => {});
+    await rm(tempDir, { recursive: true, force: true }).catch(() => {});
   }
 }
 
