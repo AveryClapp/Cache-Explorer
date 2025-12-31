@@ -233,26 +233,28 @@ inline CacheHierarchyConfig make_intel_xeon_config() {
 }
 
 // Intel Xeon Platinum 8488C (Sapphire Rapids) - AWS c7i instance
-// Exact specs from /sys/devices/system/cpu/cpu0/cache/
+// Based on /sys/devices/system/cpu/cpu0/cache/
+// Note: L3 adjusted for power-of-2 sets (simulator requirement)
+// Real: 105MB/15-way (114688 sets) → Sim: 96MB/12-way (131072 sets)
 inline CacheHierarchyConfig make_xeon_8488c_config() {
   return {
-      .l1_data = {.kb_size = 48,       // 48KB L1D per core
+      .l1_data = {.kb_size = 48,       // 48KB L1D per core (64 sets)
                   .associativity = 12,
                   .line_size = 64,
                   .policy = EvictionPolicy::PLRU,
                   .write_policy = WritePolicy::Back},
-      .l1_inst = {.kb_size = 32,       // 32KB L1I per core
+      .l1_inst = {.kb_size = 32,       // 32KB L1I per core (64 sets)
                   .associativity = 8,
                   .line_size = 64,
                   .policy = EvictionPolicy::PLRU,
                   .write_policy = WritePolicy::ReadOnly},
-      .l2 = {.kb_size = 2048,          // 2MB L2 per core
+      .l2 = {.kb_size = 2048,          // 2MB L2 per core (2048 sets)
              .associativity = 16,
              .line_size = 64,
              .policy = EvictionPolicy::PLRU,
              .write_policy = WritePolicy::Back},
-      .l3 = {.kb_size = 107520,        // 105MB shared L3
-             .associativity = 15,
+      .l3 = {.kb_size = 98304,         // 96MB shared L3 (131072 sets)
+             .associativity = 12,      // Adjusted from 15 for power-of-2 sets
              .line_size = 64,
              .policy = EvictionPolicy::PLRU,
              .write_policy = WritePolicy::Back},
