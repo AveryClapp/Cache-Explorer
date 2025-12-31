@@ -38,7 +38,7 @@ struct PrefetchConfig {
       .l2_adjacent_prefetch = true,    // Intel pairs cache lines to 128B
       .l2_prefetch_degree = 4,
       .l2_max_streams = 32,            // Intel tracks up to 32 streams
-      .l2_max_distance = 8,            // Balanced: real Intel is 20 but we lack smart backoff
+      .l2_max_distance = 4,            // Conservative: our prefetcher lacks Intel's smart backoff
       .l3_prefetch = true,
       .pointer_prefetch = false,
       .dynamic_degree = true           // Intel adjusts based on outstanding requests
@@ -54,7 +54,7 @@ struct PrefetchConfig {
       .l2_adjacent_prefetch = false,   // AMD doesn't pair lines
       .l2_prefetch_degree = 4,
       .l2_max_streams = 16,
-      .l2_max_distance = 12,
+      .l2_max_distance = 4,            // Conservative without smart backoff
       .l3_prefetch = false,            // AMD L3 is victim cache - no prefetch
       .pointer_prefetch = false,
       .dynamic_degree = false
@@ -65,12 +65,12 @@ struct PrefetchConfig {
     return {
       .l1_stream_prefetch = true,
       .l1_stride_prefetch = true,
-      .l1_prefetch_degree = 4,
+      .l1_prefetch_degree = 2,
       .l2_stream_prefetch = true,
       .l2_adjacent_prefetch = false,
-      .l2_prefetch_degree = 8,
+      .l2_prefetch_degree = 4,
       .l2_max_streams = 16,
-      .l2_max_distance = 16,
+      .l2_max_distance = 4,            // Conservative without smart backoff
       .l3_prefetch = true,
       .pointer_prefetch = true,        // Apple DMP - data-dependent prefetch
       .dynamic_degree = false
