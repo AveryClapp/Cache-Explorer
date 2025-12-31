@@ -96,9 +96,11 @@ int main(int argc, char *argv[]) {
   bool json_output = false;
   bool stream_mode = false;
 
-  // Prefetching options
+  // Prefetching options - will be set from preset config unless overridden
   PrefetchPolicy prefetch_policy = PrefetchPolicy::NONE;
   int prefetch_degree = 2;
+  bool prefetch_policy_set = false;  // Track if user explicitly set prefetch
+  bool prefetch_degree_set = false;
 
   // Custom config defaults
   size_t l1_size = 32768, l2_size = 262144, l3_size = 8388608;
@@ -133,8 +135,10 @@ int main(int argc, char *argv[]) {
       l3_assoc = std::stoi(argv[++i]);
     } else if (arg == "--prefetch" && i + 1 < argc) {
       prefetch_policy = parse_prefetch_policy(argv[++i]);
+      prefetch_policy_set = true;
     } else if (arg == "--prefetch-degree" && i + 1 < argc) {
       prefetch_degree = std::stoi(argv[++i]);
+      prefetch_degree_set = true;
     } else if (arg == "--help") {
       print_usage(argv[0]);
       return 0;
@@ -149,6 +153,19 @@ int main(int argc, char *argv[]) {
     cfg.l3 = {l3_size, l3_assoc, line_size, EvictionPolicy::LRU};
   } else {
     cfg = get_config(config_name);
+  }
+
+  // Apply preset's prefetch config unless user explicitly overrode
+  if (!prefetch_policy_set) {
+    // Use the preset's prefetch settings
+    const PrefetchConfig& pf = cfg.prefetch;
+    if (pf.l2_stream_prefetch || pf.l1_stream_prefetch) {
+      prefetch_policy = PrefetchPolicy::ADAPTIVE;  // Use adaptive for stream+stride
+    }
+    if (!prefetch_degree_set) {
+      // Use L2's max distance as the degree (it's the most aggressive)
+      prefetch_degree = pf.l2_max_distance;
+    }
   }
 
   // Streaming mode: process events as they arrive and output JSON for each

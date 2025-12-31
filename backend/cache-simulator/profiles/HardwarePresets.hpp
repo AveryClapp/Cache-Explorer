@@ -23,7 +23,8 @@ inline CacheHierarchyConfig make_intel_12th_gen_config() {
              .line_size = 64,
              .policy = EvictionPolicy::PLRU,
              .write_policy = WritePolicy::Back},
-      .inclusion_policy = InclusionPolicy::NINE};
+      .inclusion_policy = InclusionPolicy::NINE,
+      .prefetch = PrefetchConfig::intel_default()};
 }
 
 inline CacheHierarchyConfig make_amd_zen4_config() {
@@ -48,7 +49,8 @@ inline CacheHierarchyConfig make_amd_zen4_config() {
              .line_size = 64,
              .policy = EvictionPolicy::PLRU,
              .write_policy = WritePolicy::Back},
-      .inclusion_policy = InclusionPolicy::Exclusive};
+      .inclusion_policy = InclusionPolicy::Exclusive,
+      .prefetch = PrefetchConfig::amd_default()};
 }
 
 inline CacheHierarchyConfig make_apple_m_series_config() {
@@ -73,7 +75,8 @@ inline CacheHierarchyConfig make_apple_m_series_config() {
              .line_size = 64,
              .policy = EvictionPolicy::PLRU,
              .write_policy = WritePolicy::Back},
-      .inclusion_policy = InclusionPolicy::NINE};
+      .inclusion_policy = InclusionPolicy::NINE,
+      .prefetch = PrefetchConfig::apple_default()};
 }
 
 // Intel 14th Gen (Raptor Lake Refresh) - P-cores
@@ -99,7 +102,8 @@ inline CacheHierarchyConfig make_intel_14th_gen_config() {
              .line_size = 64,
              .policy = EvictionPolicy::PLRU,
              .write_policy = WritePolicy::Back},
-      .inclusion_policy = InclusionPolicy::NINE};
+      .inclusion_policy = InclusionPolicy::NINE,
+      .prefetch = PrefetchConfig::intel_default()};
 }
 
 // AMD Zen 3 (Ryzen 5000 series)
@@ -125,7 +129,8 @@ inline CacheHierarchyConfig make_amd_zen3_config() {
              .line_size = 64,
              .policy = EvictionPolicy::LRU,
              .write_policy = WritePolicy::Back},
-      .inclusion_policy = InclusionPolicy::Exclusive};  // Zen uses victim cache
+      .inclusion_policy = InclusionPolicy::Exclusive,
+      .prefetch = PrefetchConfig::amd_default()};  // Zen uses victim cache
 }
 
 // AWS Graviton 3 (ARM Neoverse V1)
@@ -151,7 +156,8 @@ inline CacheHierarchyConfig make_aws_graviton3_config() {
              .line_size = 64,
              .policy = EvictionPolicy::LRU,
              .write_policy = WritePolicy::Back},
-      .inclusion_policy = InclusionPolicy::NINE};
+      .inclusion_policy = InclusionPolicy::NINE,
+      .prefetch = PrefetchConfig::amd_default()};  // ARM uses similar prefetch to AMD
 }
 
 // Apple M2 Pro/Max
@@ -177,7 +183,8 @@ inline CacheHierarchyConfig make_apple_m2_config() {
              .line_size = 64,
              .policy = EvictionPolicy::PLRU,
              .write_policy = WritePolicy::Back},
-      .inclusion_policy = InclusionPolicy::NINE};
+      .inclusion_policy = InclusionPolicy::NINE,
+      .prefetch = PrefetchConfig::apple_default()};
 }
 
 // Embedded/IoT (typical Cortex-A53)
@@ -203,7 +210,8 @@ inline CacheHierarchyConfig make_embedded_config() {
              .line_size = 64,
              .policy = EvictionPolicy::LRU,
              .write_policy = WritePolicy::Back},
-      .inclusion_policy = InclusionPolicy::Inclusive};
+      .inclusion_policy = InclusionPolicy::Inclusive,
+      .prefetch = PrefetchConfig::none()};  // Simple embedded, minimal prefetch
 }
 
 // Intel Xeon Scalable (Ice Lake Server)
@@ -229,7 +237,8 @@ inline CacheHierarchyConfig make_intel_xeon_config() {
              .line_size = 64,
              .policy = EvictionPolicy::PLRU,
              .write_policy = WritePolicy::Back},
-      .inclusion_policy = InclusionPolicy::NINE};
+      .inclusion_policy = InclusionPolicy::NINE,
+      .prefetch = PrefetchConfig::intel_default()};
 }
 
 // Intel Xeon Platinum 8488C (Sapphire Rapids) - AWS c7i instance
@@ -258,7 +267,8 @@ inline CacheHierarchyConfig make_xeon_8488c_config() {
              .line_size = 64,
              .policy = EvictionPolicy::PLRU,
              .write_policy = WritePolicy::Back},
-      .inclusion_policy = InclusionPolicy::NINE};
+      .inclusion_policy = InclusionPolicy::NINE,
+      .prefetch = PrefetchConfig::intel_default()};
 }
 
 // AMD EPYC (Milan/Genoa)
@@ -284,7 +294,8 @@ inline CacheHierarchyConfig make_amd_epyc_config() {
              .line_size = 64,
              .policy = EvictionPolicy::LRU,
              .write_policy = WritePolicy::Back},
-      .inclusion_policy = InclusionPolicy::Exclusive};
+      .inclusion_policy = InclusionPolicy::Exclusive,
+      .prefetch = PrefetchConfig::amd_default()};
 }
 
 // Raspberry Pi 4 (Cortex-A72)
@@ -310,7 +321,8 @@ inline CacheHierarchyConfig make_raspberry_pi4_config() {
              .line_size = 64,
              .policy = EvictionPolicy::LRU,
              .write_policy = WritePolicy::Back},
-      .inclusion_policy = InclusionPolicy::Inclusive};
+      .inclusion_policy = InclusionPolicy::Inclusive,
+      .prefetch = PrefetchConfig::amd_default()};  // ARM Cortex similar to AMD
 }
 
 // Apple M3 Pro/Max (latest)
@@ -336,7 +348,8 @@ inline CacheHierarchyConfig make_apple_m3_config() {
              .line_size = 64,
              .policy = EvictionPolicy::PLRU,
              .write_policy = WritePolicy::Back},
-      .inclusion_policy = InclusionPolicy::NINE};
+      .inclusion_policy = InclusionPolicy::NINE,
+      .prefetch = PrefetchConfig::apple_default()};
 }
 
 inline CacheHierarchyConfig make_educational_config() {
@@ -361,5 +374,6 @@ inline CacheHierarchyConfig make_educational_config() {
              .line_size = 64,
              .policy = EvictionPolicy::LRU,
              .write_policy = WritePolicy::Back},
-      .inclusion_policy = InclusionPolicy::Inclusive};
+      .inclusion_policy = InclusionPolicy::Inclusive,
+      .prefetch = PrefetchConfig::none()};  // Educational: no prefetch for clarity
 }
