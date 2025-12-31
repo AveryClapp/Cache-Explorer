@@ -55,6 +55,7 @@ CacheHierarchyConfig get_config(const std::string &name) {
   if (name == "intel" || name == "intel12") return make_intel_12th_gen_config();
   if (name == "intel14") return make_intel_14th_gen_config();
   if (name == "xeon") return make_intel_xeon_config();
+  if (name == "xeon8488c" || name == "sapphire") return make_xeon_8488c_config();
 
   // AMD presets
   if (name == "amd" || name == "zen4") return make_amd_zen4_config();

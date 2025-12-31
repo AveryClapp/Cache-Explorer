@@ -208,24 +208,8 @@ std::vector<uint64_t> Prefetcher::adaptive_prefetch(uint64_t addr, uint64_t pc) 
 }
 
 std::vector<uint64_t> Prefetcher::intel_prefetch(uint64_t addr, uint64_t pc) {
-  std::vector<uint64_t> result;
-  uint64_t line_addr = get_line_addr(addr);
-
-  // 1. Adjacent Line Prefetcher (L2 Spatial Prefetcher)
-  // Intel CPUs fetch cache lines in pairs (128-byte sectors)
-  // If we access line N, also fetch line N^1 (the pair)
-  uint64_t pair_line = line_addr ^ line_size;  // XOR to get adjacent line in pair
-  result.push_back(pair_line);
-
-  // 2. Adaptive prefetching (stride or stream)
-  auto adaptive_result = adaptive_prefetch(addr, pc);
-
-  // Combine results, avoiding duplicates
-  for (uint64_t pf_addr : adaptive_result) {
-    if (pf_addr != pair_line) {
-      result.push_back(pf_addr);
-    }
-  }
-
-  return result;
+  // Intel-like prefetching: adaptive (stride + stream)
+  // Note: Adjacent line prefetcher is disabled as it reduced accuracy
+  // Real Intel CPUs have complex prefetcher interactions we can't fully model
+  return adaptive_prefetch(addr, pc);
 }

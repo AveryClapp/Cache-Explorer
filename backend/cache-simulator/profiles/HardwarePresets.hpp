@@ -232,6 +232,33 @@ inline CacheHierarchyConfig make_intel_xeon_config() {
       .inclusion_policy = InclusionPolicy::NINE};
 }
 
+// Intel Xeon Platinum 8488C (Sapphire Rapids) - AWS c7i instance
+// Exact specs from /sys/devices/system/cpu/cpu0/cache/
+inline CacheHierarchyConfig make_xeon_8488c_config() {
+  return {
+      .l1_data = {.kb_size = 48,       // 48KB L1D per core
+                  .associativity = 12,
+                  .line_size = 64,
+                  .policy = EvictionPolicy::PLRU,
+                  .write_policy = WritePolicy::Back},
+      .l1_inst = {.kb_size = 32,       // 32KB L1I per core
+                  .associativity = 8,
+                  .line_size = 64,
+                  .policy = EvictionPolicy::PLRU,
+                  .write_policy = WritePolicy::ReadOnly},
+      .l2 = {.kb_size = 2048,          // 2MB L2 per core
+             .associativity = 16,
+             .line_size = 64,
+             .policy = EvictionPolicy::PLRU,
+             .write_policy = WritePolicy::Back},
+      .l3 = {.kb_size = 107520,        // 105MB shared L3
+             .associativity = 15,
+             .line_size = 64,
+             .policy = EvictionPolicy::PLRU,
+             .write_policy = WritePolicy::Back},
+      .inclusion_policy = InclusionPolicy::NINE};
+}
+
 // AMD EPYC (Milan/Genoa)
 inline CacheHierarchyConfig make_amd_epyc_config() {
   return {

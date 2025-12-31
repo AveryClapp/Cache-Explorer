@@ -74,9 +74,13 @@ trap "rm -rf $TEMP_DIR" EXIT
 # Benchmarks to run
 BENCHMARKS=(sequential strided_16 strided_64 random matrix_row matrix_col linked_list working_set)
 
-# Results storage
+# Results storage - L1
 declare -A SIM_L1_HITS SIM_L1_MISSES SIM_L1_RATE
 declare -A PERF_L1_LOADS PERF_L1_MISSES PERF_L1_RATE
+
+# Results storage - L2
+declare -A SIM_L2_HITS SIM_L2_MISSES SIM_L2_RATE
+declare -A PERF_L2_HITS PERF_L2_MISSES PERF_L2_RATE
 
 echo -e "${YELLOW}Running benchmarks...${NC}"
 echo ""
@@ -92,57 +96,81 @@ for bench in "${BENCHMARKS[@]}"; do
     echo -e "${BLUE}[$bench]${NC}"
 
     # 1. Run with Cache Explorer simulator
-    # Use Intel-like prefetching (adjacent line + adaptive) to match real hardware
     echo "  Running simulator..."
-    SIM_OUTPUT=$("$CACHE_EXPLORE" "$BENCH_FILE" --config intel -O2 --prefetch intel --json 2>/dev/null || echo "{}")
+    SIM_OUTPUT=$("$CACHE_EXPLORE" "$BENCH_FILE" --config xeon8488c -O2 --prefetch adaptive --json 2>/dev/null || echo "{}")
 
-    # Parse L1 data cache results from "levels": {"l1d": {"hits": N, "misses": M, ...}}
-    # Note: "l1d" appears twice (cacheConfig and levels), we need the one with "hits"
+    # Parse L1 data cache results
     L1D_BLOCK=$(echo "$SIM_OUTPUT" | grep -o '"l1d":[^}]*}' | grep '"hits"' | head -1)
     SIM_L1_HITS[$bench]=$(echo "$L1D_BLOCK" | grep -oE '"hits":[[:space:]]*[0-9]+' | grep -o '[0-9]*' || echo "0")
     SIM_L1_MISSES[$bench]=$(echo "$L1D_BLOCK" | grep -oE '"misses":[[:space:]]*[0-9]+' | grep -o '[0-9]*' || echo "0")
 
-    SIM_TOTAL=$((${SIM_L1_HITS[$bench]:-0} + ${SIM_L1_MISSES[$bench]:-0}))
-    if [[ $SIM_TOTAL -gt 0 ]]; then
-        SIM_L1_RATE[$bench]=$(echo "scale=1; ${SIM_L1_HITS[$bench]:-0} * 100 / $SIM_TOTAL" | bc)
+    SIM_L1_TOTAL=$((${SIM_L1_HITS[$bench]:-0} + ${SIM_L1_MISSES[$bench]:-0}))
+    if [[ $SIM_L1_TOTAL -gt 0 ]]; then
+        SIM_L1_RATE[$bench]=$(echo "scale=1; ${SIM_L1_HITS[$bench]:-0} * 100 / $SIM_L1_TOTAL" | bc)
     else
         SIM_L1_RATE[$bench]="0.0"
     fi
 
-    # 2. Compile and run with perf
+    # Parse L2 cache results
+    L2_BLOCK=$(echo "$SIM_OUTPUT" | grep -o '"l2":[^}]*}' | grep '"hits"' | head -1)
+    SIM_L2_HITS[$bench]=$(echo "$L2_BLOCK" | grep -oE '"hits":[[:space:]]*[0-9]+' | grep -o '[0-9]*' || echo "0")
+    SIM_L2_MISSES[$bench]=$(echo "$L2_BLOCK" | grep -oE '"misses":[[:space:]]*[0-9]+' | grep -o '[0-9]*' || echo "0")
+
+    SIM_L2_TOTAL=$((${SIM_L2_HITS[$bench]:-0} + ${SIM_L2_MISSES[$bench]:-0}))
+    if [[ $SIM_L2_TOTAL -gt 0 ]]; then
+        SIM_L2_RATE[$bench]=$(echo "scale=1; ${SIM_L2_HITS[$bench]:-0} * 100 / $SIM_L2_TOTAL" | bc)
+    else
+        SIM_L2_RATE[$bench]="0.0"
+    fi
+
+    # 2. Compile and run with perf (L1 + L2 counters)
     echo "  Running hardware (perf)..."
     gcc -O2 "$BENCH_FILE" -o "$TEMP_DIR/$bench" 2>/dev/null
 
-    PERF_OUTPUT=$(perf stat -e L1-dcache-loads,L1-dcache-load-misses "$TEMP_DIR/$bench" 2>&1)
+    PERF_OUTPUT=$(perf stat -e L1-dcache-loads,L1-dcache-load-misses,l2_rqsts.demand_data_rd_hit,l2_rqsts.demand_data_rd_miss "$TEMP_DIR/$bench" 2>&1)
 
-    # Parse perf results
+    # Parse L1 perf results
     PERF_L1_LOADS[$bench]=$(echo "$PERF_OUTPUT" | grep -i 'L1-dcache-loads' | awk '{gsub(/,/,"",$1); print $1}')
     PERF_L1_MISSES[$bench]=$(echo "$PERF_OUTPUT" | grep -i 'L1-dcache-load-misses' | awk '{gsub(/,/,"",$1); print $1}')
 
-    PERF_LOADS=${PERF_L1_LOADS[$bench]:-0}
-    PERF_MISS=${PERF_L1_MISSES[$bench]:-0}
+    PERF_L1_LOAD=${PERF_L1_LOADS[$bench]:-0}
+    PERF_L1_MISS=${PERF_L1_MISSES[$bench]:-0}
 
-    if [[ $PERF_LOADS -gt 0 ]]; then
-        PERF_L1_RATE[$bench]=$(echo "scale=1; ($PERF_LOADS - $PERF_MISS) * 100 / $PERF_LOADS" | bc 2>/dev/null || echo "0.0")
+    if [[ $PERF_L1_LOAD -gt 0 ]]; then
+        PERF_L1_RATE[$bench]=$(echo "scale=1; ($PERF_L1_LOAD - $PERF_L1_MISS) * 100 / $PERF_L1_LOAD" | bc 2>/dev/null || echo "0.0")
     else
         PERF_L1_RATE[$bench]="0.0"
     fi
 
-    echo "    Simulator: ${SIM_L1_RATE[$bench]}% hit rate"
-    echo "    Hardware:  ${PERF_L1_RATE[$bench]}% hit rate"
+    # Parse L2 perf results
+    PERF_L2_HITS[$bench]=$(echo "$PERF_OUTPUT" | grep -i 'l2_rqsts.demand_data_rd_hit' | awk '{gsub(/,/,"",$1); print $1}')
+    PERF_L2_MISSES[$bench]=$(echo "$PERF_OUTPUT" | grep -i 'l2_rqsts.demand_data_rd_miss' | awk '{gsub(/,/,"",$1); print $1}')
+
+    PERF_L2_HIT=${PERF_L2_HITS[$bench]:-0}
+    PERF_L2_MISS=${PERF_L2_MISSES[$bench]:-0}
+    PERF_L2_TOTAL=$((PERF_L2_HIT + PERF_L2_MISS))
+
+    if [[ $PERF_L2_TOTAL -gt 0 ]]; then
+        PERF_L2_RATE[$bench]=$(echo "scale=1; $PERF_L2_HIT * 100 / $PERF_L2_TOTAL" | bc 2>/dev/null || echo "0.0")
+    else
+        PERF_L2_RATE[$bench]="0.0"
+    fi
+
+    echo "    L1: Sim ${SIM_L1_RATE[$bench]}% | HW ${PERF_L1_RATE[$bench]}%"
+    echo "    L2: Sim ${SIM_L2_RATE[$bench]}% | HW ${PERF_L2_RATE[$bench]}%"
     echo ""
 done
 
-# Print summary table
-echo -e "${BLUE}=== Validation Summary ===${NC}"
+# Print L1 summary table
+echo -e "${BLUE}=== L1 Cache Validation ===${NC}"
 echo ""
 printf "| %-12s | %10s | %10s | %8s |\n" "Benchmark" "Simulator" "Hardware" "Delta"
 printf "|--------------|------------|------------|----------|\n"
 
-TOTAL_DELTA=0
-COUNT=0
-MAX_DELTA=0
-ALL_PASS=true
+L1_TOTAL_DELTA=0
+L1_COUNT=0
+L1_MAX_DELTA=0
+L1_ALL_PASS=true
 
 for bench in "${BENCHMARKS[@]}"; do
     SIM="${SIM_L1_RATE[$bench]:-N/A}"
@@ -152,18 +180,15 @@ for bench in "${BENCHMARKS[@]}"; do
         DELTA=$(echo "scale=1; $SIM - $PERF" | bc 2>/dev/null)
         DELTA_ABS=$(echo "$DELTA" | sed 's/^-//')
 
-        # Track for average
-        TOTAL_DELTA=$(echo "$TOTAL_DELTA + $DELTA_ABS" | bc)
-        COUNT=$((COUNT + 1))
+        L1_TOTAL_DELTA=$(echo "$L1_TOTAL_DELTA + $DELTA_ABS" | bc)
+        L1_COUNT=$((L1_COUNT + 1))
 
-        # Track max
-        if (( $(echo "$DELTA_ABS > $MAX_DELTA" | bc -l) )); then
-            MAX_DELTA=$DELTA_ABS
+        if (( $(echo "$DELTA_ABS > $L1_MAX_DELTA" | bc -l) )); then
+            L1_MAX_DELTA=$DELTA_ABS
         fi
 
-        # Check threshold
         if (( $(echo "$DELTA_ABS > 5" | bc -l) )); then
-            ALL_PASS=false
+            L1_ALL_PASS=false
             printf "| %-12s | %9s%% | %9s%% | ${RED}%+7s%%${NC} |\n" "$bench" "$SIM" "$PERF" "$DELTA"
         else
             printf "| %-12s | %9s%% | %9s%% | ${GREEN}%+7s%%${NC} |\n" "$bench" "$SIM" "$PERF" "$DELTA"
@@ -174,20 +199,64 @@ for bench in "${BENCHMARKS[@]}"; do
 done
 
 echo ""
+if [[ $L1_COUNT -gt 0 ]]; then
+    L1_AVG_DELTA=$(echo "scale=1; $L1_TOTAL_DELTA / $L1_COUNT" | bc)
+    echo "L1 Average delta: ±${L1_AVG_DELTA}%"
+    echo "L1 Max delta: ${L1_MAX_DELTA}%"
+fi
 
-# Calculate average delta
-if [[ $COUNT -gt 0 ]]; then
-    AVG_DELTA=$(echo "scale=1; $TOTAL_DELTA / $COUNT" | bc)
-    echo "Average delta: ±${AVG_DELTA}%"
-    echo "Max delta: ${MAX_DELTA}%"
+# Print L2 summary table
+echo ""
+echo -e "${BLUE}=== L2 Cache Validation ===${NC}"
+echo ""
+printf "| %-12s | %10s | %10s | %8s |\n" "Benchmark" "Simulator" "Hardware" "Delta"
+printf "|--------------|------------|------------|----------|\n"
+
+L2_TOTAL_DELTA=0
+L2_COUNT=0
+L2_MAX_DELTA=0
+L2_ALL_PASS=true
+
+for bench in "${BENCHMARKS[@]}"; do
+    SIM="${SIM_L2_RATE[$bench]:-N/A}"
+    PERF="${PERF_L2_RATE[$bench]:-N/A}"
+
+    if [[ "$SIM" != "N/A" ]] && [[ "$PERF" != "N/A" ]] && [[ "$PERF" != "0.0" ]]; then
+        DELTA=$(echo "scale=1; $SIM - $PERF" | bc 2>/dev/null)
+        DELTA_ABS=$(echo "$DELTA" | sed 's/^-//')
+
+        L2_TOTAL_DELTA=$(echo "$L2_TOTAL_DELTA + $DELTA_ABS" | bc)
+        L2_COUNT=$((L2_COUNT + 1))
+
+        if (( $(echo "$DELTA_ABS > $L2_MAX_DELTA" | bc -l) )); then
+            L2_MAX_DELTA=$DELTA_ABS
+        fi
+
+        if (( $(echo "$DELTA_ABS > 10" | bc -l) )); then
+            L2_ALL_PASS=false
+            printf "| %-12s | %9s%% | %9s%% | ${RED}%+7s%%${NC} |\n" "$bench" "$SIM" "$PERF" "$DELTA"
+        else
+            printf "| %-12s | %9s%% | %9s%% | ${GREEN}%+7s%%${NC} |\n" "$bench" "$SIM" "$PERF" "$DELTA"
+        fi
+    else
+        printf "| %-12s | %9s%% | %9s%% | %8s |\n" "$bench" "$SIM" "$PERF" "N/A"
+    fi
+done
+
+echo ""
+if [[ $L2_COUNT -gt 0 ]]; then
+    L2_AVG_DELTA=$(echo "scale=1; $L2_TOTAL_DELTA / $L2_COUNT" | bc)
+    echo "L2 Average delta: ±${L2_AVG_DELTA}%"
+    echo "L2 Max delta: ${L2_MAX_DELTA}%"
 fi
 
 echo ""
 
-if $ALL_PASS; then
-    echo -e "${GREEN}Status: PASS (all benchmarks within 5% threshold)${NC}"
+# Overall status
+if $L1_ALL_PASS && $L2_ALL_PASS; then
+    echo -e "${GREEN}Status: PASS (L1 within 5%, L2 within 10%)${NC}"
 else
-    echo -e "${RED}Status: FAIL (some benchmarks exceed 5% threshold)${NC}"
+    echo -e "${RED}Status: FAIL (some benchmarks exceed threshold)${NC}"
 fi
 
 # Update baseline if requested
@@ -195,13 +264,11 @@ if $UPDATE_BASELINE; then
     echo ""
     echo -e "${YELLOW}Updating baseline...${NC}"
 
-    # Create machine-specific baseline filename
     MACHINE_ID=$(echo "$CPU_MODEL" | tr ' ' '-' | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]//g' | head -c 40)
     BASELINE_FILE="$BASELINES_DIR/$MACHINE_ID.json"
 
     mkdir -p "$BASELINES_DIR"
 
-    # Generate JSON
     cat > "$BASELINE_FILE" << EOF
 {
   "hardware": "$CPU_MODEL",
@@ -219,12 +286,22 @@ EOF
 
         cat >> "$BASELINE_FILE" << EOF
     "$bench": {
-      "simulator_hit_rate": ${SIM_L1_RATE[$bench]:-0},
-      "hardware_hit_rate": ${PERF_L1_RATE[$bench]:-0},
-      "simulator_hits": ${SIM_L1_HITS[$bench]:-0},
-      "simulator_misses": ${SIM_L1_MISSES[$bench]:-0},
-      "hardware_loads": ${PERF_L1_LOADS[$bench]:-0},
-      "hardware_misses": ${PERF_L1_MISSES[$bench]:-0}
+      "l1": {
+        "simulator_hit_rate": ${SIM_L1_RATE[$bench]:-0},
+        "hardware_hit_rate": ${PERF_L1_RATE[$bench]:-0},
+        "simulator_hits": ${SIM_L1_HITS[$bench]:-0},
+        "simulator_misses": ${SIM_L1_MISSES[$bench]:-0},
+        "hardware_loads": ${PERF_L1_LOADS[$bench]:-0},
+        "hardware_misses": ${PERF_L1_MISSES[$bench]:-0}
+      },
+      "l2": {
+        "simulator_hit_rate": ${SIM_L2_RATE[$bench]:-0},
+        "hardware_hit_rate": ${PERF_L2_RATE[$bench]:-0},
+        "simulator_hits": ${SIM_L2_HITS[$bench]:-0},
+        "simulator_misses": ${SIM_L2_MISSES[$bench]:-0},
+        "hardware_hits": ${PERF_L2_HITS[$bench]:-0},
+        "hardware_misses": ${PERF_L2_MISSES[$bench]:-0}
+      }
     }
 EOF
     done
