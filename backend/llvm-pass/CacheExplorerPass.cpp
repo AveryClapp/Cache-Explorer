@@ -342,7 +342,8 @@ llvmGetPassPluginInfo() {
             // Use OptimizerLastEPCallback for all optimization levels
             // This is the most reliable way to run after IR is generated
             PB.registerOptimizerLastEPCallback([](ModulePassManager &MPM,
-                                                  OptimizationLevel OL) {
+                                                  OptimizationLevel OL,
+                                                  ThinOrFullLTOPhase) {
               if (DebugFiltering)
                 errs() << "[CacheExplorer] OptimizerLast callback, OL="
                        << (int)OL.getSpeedupLevel() << "\n";
