@@ -10,6 +10,7 @@ enum class PrefetchPolicy {
   STREAM,     // Detect sequential streams, prefetch ahead
   STRIDE,     // Detect strided access patterns
   ADAPTIVE,   // Combine stream and stride detection
+  INTEL,      // Intel-like: adjacent line + adaptive (most realistic)
 };
 
 struct PrefetchStats {
@@ -81,6 +82,7 @@ private:
   std::vector<uint64_t> stream_prefetch(uint64_t addr, uint64_t pc);
   std::vector<uint64_t> stride_prefetch(uint64_t addr, uint64_t pc);
   std::vector<uint64_t> adaptive_prefetch(uint64_t addr, uint64_t pc);
+  std::vector<uint64_t> intel_prefetch(uint64_t addr, uint64_t pc);
 
   void update_stream_table(uint64_t addr);
   void update_stride_table(uint64_t addr, uint64_t pc);

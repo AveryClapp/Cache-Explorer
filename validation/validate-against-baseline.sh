@@ -101,8 +101,8 @@ for bench in "${BENCHMARKS[@]}"; do
         BASELINE_RATE[$bench]="N/A"
     fi
 
-    # Run simulator with adaptive prefetching to match real hardware
-    SIM_OUTPUT=$("$CACHE_EXPLORE" "$BENCH_FILE" --config intel -O2 --prefetch adaptive --json 2>/dev/null || echo "{}")
+    # Run simulator with Intel-like prefetching to match real hardware
+    SIM_OUTPUT=$("$CACHE_EXPLORE" "$BENCH_FILE" --config intel -O2 --prefetch intel --json 2>/dev/null || echo "{}")
 
     # Parse L1 data cache results from "levels": {"l1d": {"hits": N, "misses": M, ...}}
     # Note: "l1d" appears twice (cacheConfig and levels), we need the one with "hits"

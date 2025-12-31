@@ -12,7 +12,7 @@ void print_usage(const char *prog) {
             << "Options:\n"
             << "  --config <name>   intel|amd|apple|educational|custom (default: intel)\n"
             << "  --cores <n>       Number of cores to simulate (default: auto)\n"
-            << "  --prefetch <p>    Prefetch policy: none|next|stream|stride|adaptive\n"
+            << "  --prefetch <p>    Prefetch policy: none|next|stream|stride|adaptive|intel\n"
             << "  --prefetch-degree <n>  Number of lines to prefetch (default: 2)\n"
             << "  --verbose         Print each cache event\n"
             << "  --json            Output JSON format\n"
@@ -34,6 +34,7 @@ PrefetchPolicy parse_prefetch_policy(const std::string &name) {
   if (name == "stream") return PrefetchPolicy::STREAM;
   if (name == "stride") return PrefetchPolicy::STRIDE;
   if (name == "adaptive") return PrefetchPolicy::ADAPTIVE;
+  if (name == "intel") return PrefetchPolicy::INTEL;
   return PrefetchPolicy::NONE;
 }
 
@@ -44,6 +45,7 @@ std::string prefetch_policy_name(PrefetchPolicy p) {
     case PrefetchPolicy::STREAM: return "stream";
     case PrefetchPolicy::STRIDE: return "stride";
     case PrefetchPolicy::ADAPTIVE: return "adaptive";
+    case PrefetchPolicy::INTEL: return "intel";
   }
   return "unknown";
 }
