@@ -97,7 +97,7 @@ for bench in "${BENCHMARKS[@]}"; do
 
     # 1. Run with Cache Explorer simulator
     echo "  Running simulator..."
-    SIM_OUTPUT=$("$CACHE_EXPLORE" "$BENCH_FILE" --config xeon8488c -O2 --prefetch adaptive --json 2>/dev/null || echo "{}")
+    SIM_OUTPUT=$("$CACHE_EXPLORE" "$BENCH_FILE" --config xeon8488c -O2 --prefetch intel --prefetch-degree 8 --json 2>/dev/null || echo "{}")
 
     # Parse L1 data cache results
     L1D_BLOCK=$(echo "$SIM_OUTPUT" | grep -o '"l1d":[^}]*}' | grep '"hits"' | head -1)
