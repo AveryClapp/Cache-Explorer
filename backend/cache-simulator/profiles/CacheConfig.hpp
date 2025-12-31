@@ -38,7 +38,7 @@ struct PrefetchConfig {
       .l2_adjacent_prefetch = true,    // Intel pairs cache lines to 128B
       .l2_prefetch_degree = 4,
       .l2_max_streams = 32,            // Intel tracks up to 32 streams
-      .l2_max_distance = 20,           // Intel prefetches up to 20 lines ahead
+      .l2_max_distance = 8,            // Balanced: real Intel is 20 but we lack smart backoff
       .l3_prefetch = true,
       .pointer_prefetch = false,
       .dynamic_degree = true           // Intel adjusts based on outstanding requests
