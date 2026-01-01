@@ -27,3 +27,6 @@ target_link_libraries(MESICoherenceTest CacheSimulator)
 
 add_executable(MultiCorePrefetchTest tests/MultiCorePrefetchTest.cpp)
 target_link_libraries(MultiCorePrefetchTest CacheSimulator)
+
+add_executable(AdvancedInstrumentationTest tests/AdvancedInstrumentationTest.cpp)
+target_link_libraries(AdvancedInstrumentationTest CacheSimulator)

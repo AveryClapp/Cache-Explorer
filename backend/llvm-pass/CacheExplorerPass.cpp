@@ -218,6 +218,112 @@ PreservedAnalyses CacheExplorerPass::run(Function &F,
                                 "__tag_mem_store", M);
   }
 
+  // Software prefetch instrumentation
+  Function *TagPrefetch = M->getFunction("__tag_prefetch");
+  if (!TagPrefetch) {
+    FunctionType *PrefetchFnTy =
+        FunctionType::get(Type::getVoidTy(Ctx),
+                          {PointerType::getUnqual(Ctx), Type::getInt32Ty(Ctx),
+                           Type::getInt8Ty(Ctx), PointerType::getUnqual(Ctx),
+                           Type::getInt32Ty(Ctx)},
+                          false);
+    TagPrefetch = Function::Create(PrefetchFnTy, Function::ExternalLinkage,
+                                   "__tag_prefetch", M);
+  }
+
+  // Vector/SIMD instrumentation
+  Function *TagVectorLoad = M->getFunction("__tag_vector_load");
+  if (!TagVectorLoad) {
+    FunctionType *VecLoadFnTy =
+        FunctionType::get(Type::getVoidTy(Ctx),
+                          {PointerType::getUnqual(Ctx), Type::getInt32Ty(Ctx),
+                           PointerType::getUnqual(Ctx), Type::getInt32Ty(Ctx)},
+                          false);
+    TagVectorLoad = Function::Create(VecLoadFnTy, Function::ExternalLinkage,
+                                     "__tag_vector_load", M);
+  }
+
+  Function *TagVectorStore = M->getFunction("__tag_vector_store");
+  if (!TagVectorStore) {
+    FunctionType *VecStoreFnTy =
+        FunctionType::get(Type::getVoidTy(Ctx),
+                          {PointerType::getUnqual(Ctx), Type::getInt32Ty(Ctx),
+                           PointerType::getUnqual(Ctx), Type::getInt32Ty(Ctx)},
+                          false);
+    TagVectorStore = Function::Create(VecStoreFnTy, Function::ExternalLinkage,
+                                      "__tag_vector_store", M);
+  }
+
+  // Atomic operation instrumentation
+  Function *TagAtomicLoad = M->getFunction("__tag_atomic_load");
+  if (!TagAtomicLoad) {
+    FunctionType *AtomicLoadFnTy =
+        FunctionType::get(Type::getVoidTy(Ctx),
+                          {PointerType::getUnqual(Ctx), Type::getInt32Ty(Ctx),
+                           PointerType::getUnqual(Ctx), Type::getInt32Ty(Ctx)},
+                          false);
+    TagAtomicLoad = Function::Create(AtomicLoadFnTy, Function::ExternalLinkage,
+                                     "__tag_atomic_load", M);
+  }
+
+  Function *TagAtomicRMW = M->getFunction("__tag_atomic_rmw");
+  if (!TagAtomicRMW) {
+    FunctionType *AtomicRMWFnTy =
+        FunctionType::get(Type::getVoidTy(Ctx),
+                          {PointerType::getUnqual(Ctx), Type::getInt32Ty(Ctx),
+                           PointerType::getUnqual(Ctx), Type::getInt32Ty(Ctx)},
+                          false);
+    TagAtomicRMW = Function::Create(AtomicRMWFnTy, Function::ExternalLinkage,
+                                    "__tag_atomic_rmw", M);
+  }
+
+  Function *TagAtomicCmpxchg = M->getFunction("__tag_atomic_cmpxchg");
+  if (!TagAtomicCmpxchg) {
+    FunctionType *AtomicCmpxchgFnTy =
+        FunctionType::get(Type::getVoidTy(Ctx),
+                          {PointerType::getUnqual(Ctx), Type::getInt32Ty(Ctx),
+                           PointerType::getUnqual(Ctx), Type::getInt32Ty(Ctx)},
+                          false);
+    TagAtomicCmpxchg = Function::Create(AtomicCmpxchgFnTy, Function::ExternalLinkage,
+                                        "__tag_atomic_cmpxchg", M);
+  }
+
+  // Memory intrinsic instrumentation
+  Function *TagMemcpy = M->getFunction("__tag_memcpy");
+  if (!TagMemcpy) {
+    FunctionType *MemcpyFnTy =
+        FunctionType::get(Type::getVoidTy(Ctx),
+                          {PointerType::getUnqual(Ctx), PointerType::getUnqual(Ctx),
+                           Type::getInt32Ty(Ctx), PointerType::getUnqual(Ctx),
+                           Type::getInt32Ty(Ctx)},
+                          false);
+    TagMemcpy = Function::Create(MemcpyFnTy, Function::ExternalLinkage,
+                                 "__tag_memcpy", M);
+  }
+
+  Function *TagMemset = M->getFunction("__tag_memset");
+  if (!TagMemset) {
+    FunctionType *MemsetFnTy =
+        FunctionType::get(Type::getVoidTy(Ctx),
+                          {PointerType::getUnqual(Ctx), Type::getInt32Ty(Ctx),
+                           PointerType::getUnqual(Ctx), Type::getInt32Ty(Ctx)},
+                          false);
+    TagMemset = Function::Create(MemsetFnTy, Function::ExternalLinkage,
+                                 "__tag_memset", M);
+  }
+
+  Function *TagMemmove = M->getFunction("__tag_memmove");
+  if (!TagMemmove) {
+    FunctionType *MemmoveFnTy =
+        FunctionType::get(Type::getVoidTy(Ctx),
+                          {PointerType::getUnqual(Ctx), PointerType::getUnqual(Ctx),
+                           Type::getInt32Ty(Ctx), PointerType::getUnqual(Ctx),
+                           Type::getInt32Ty(Ctx)},
+                          false);
+    TagMemmove = Function::Create(MemmoveFnTy, Function::ExternalLinkage,
+                                  "__tag_memmove", M);
+  }
+
   // I-cache tracking: uses a unique ID instead of BlockAddress (ARM64 compatible)
   Function *TagBBEntry = M->getFunction("__tag_bb_entry");
   if (!TagBBEntry) {
@@ -267,7 +373,7 @@ PreservedAnalyses CacheExplorerPass::run(Function &F,
       Builder.CreateCall(TagBBEntry, {BBID, InstrCount, File, Line});
     }
 
-    // Data cache tracking: instrument loads and stores
+    // Data cache tracking: instrument loads, stores, atomics, vectors, intrinsics
     for (auto &I : BB) {
       // Skip compiler-generated code without source location
       if (!I.getDebugLoc())
@@ -281,18 +387,134 @@ PreservedAnalyses CacheExplorerPass::run(Function &F,
           continue;
       }
 
+      // Check for AtomicRMW instruction
+      if (auto *RMWI = dyn_cast<AtomicRMWInst>(&I)) {
+        auto data = prepareInstrumentation(M, Ctx, I, RMWI->getPointerOperand(),
+                                           RMWI->getValOperand()->getType());
+        IRBuilder<> Builder(&I);
+        Builder.CreateCall(TagAtomicRMW,
+                           {data.Addr, data.SizeVal, data.File, data.Line});
+        continue;
+      }
+
+      // Check for AtomicCmpXchg instruction
+      if (auto *CASI = dyn_cast<AtomicCmpXchgInst>(&I)) {
+        auto data = prepareInstrumentation(M, Ctx, I, CASI->getPointerOperand(),
+                                           CASI->getCompareOperand()->getType());
+        IRBuilder<> Builder(&I);
+        Builder.CreateCall(TagAtomicCmpxchg,
+                           {data.Addr, data.SizeVal, data.File, data.Line});
+        continue;
+      }
+
+      // Check for calls to intrinsics (prefetch, memcpy, memset, memmove)
+      if (auto *CI = dyn_cast<CallInst>(&I)) {
+        if (Function *Callee = CI->getCalledFunction()) {
+          StringRef Name = Callee->getName();
+
+          // llvm.prefetch intrinsic
+          if (Name.starts_with("llvm.prefetch")) {
+            Value *Addr = CI->getArgOperand(0);
+            // Prefetch hint is in arg 3 (0=T0, 1=T1, 2=T2, 3=NTA)
+            Value *Hint = CI->getNumOperands() >= 4 ? CI->getArgOperand(3)
+                          : ConstantInt::get(Type::getInt8Ty(Ctx), 0);
+            IRBuilder<> Builder(&I);
+            Value *SizeVal = ConstantInt::get(Type::getInt32Ty(Ctx), 64);  // Cache line
+            Value *File = Builder.CreateGlobalString(I.getDebugLoc()->getFilename());
+            Value *Line = ConstantInt::get(Type::getInt32Ty(Ctx), I.getDebugLoc()->getLine());
+            // Truncate hint to i8 if needed
+            if (Hint->getType() != Type::getInt8Ty(Ctx))
+              Hint = Builder.CreateTrunc(Hint, Type::getInt8Ty(Ctx));
+            Builder.CreateCall(TagPrefetch, {Addr, SizeVal, Hint, File, Line});
+            continue;
+          }
+
+          // llvm.memcpy intrinsic
+          if (Name.starts_with("llvm.memcpy")) {
+            Value *Dest = CI->getArgOperand(0);
+            Value *Src = CI->getArgOperand(1);
+            Value *Len = CI->getArgOperand(2);
+            IRBuilder<> Builder(&I);
+            Value *SizeVal = Builder.CreateTrunc(Len, Type::getInt32Ty(Ctx));
+            Value *File = Builder.CreateGlobalString(I.getDebugLoc()->getFilename());
+            Value *Line = ConstantInt::get(Type::getInt32Ty(Ctx), I.getDebugLoc()->getLine());
+            Builder.CreateCall(TagMemcpy, {Dest, Src, SizeVal, File, Line});
+            continue;
+          }
+
+          // llvm.memset intrinsic
+          if (Name.starts_with("llvm.memset")) {
+            Value *Dest = CI->getArgOperand(0);
+            Value *Len = CI->getArgOperand(2);
+            IRBuilder<> Builder(&I);
+            Value *SizeVal = Builder.CreateTrunc(Len, Type::getInt32Ty(Ctx));
+            Value *File = Builder.CreateGlobalString(I.getDebugLoc()->getFilename());
+            Value *Line = ConstantInt::get(Type::getInt32Ty(Ctx), I.getDebugLoc()->getLine());
+            Builder.CreateCall(TagMemset, {Dest, SizeVal, File, Line});
+            continue;
+          }
+
+          // llvm.memmove intrinsic
+          if (Name.starts_with("llvm.memmove")) {
+            Value *Dest = CI->getArgOperand(0);
+            Value *Src = CI->getArgOperand(1);
+            Value *Len = CI->getArgOperand(2);
+            IRBuilder<> Builder(&I);
+            Value *SizeVal = Builder.CreateTrunc(Len, Type::getInt32Ty(Ctx));
+            Value *File = Builder.CreateGlobalString(I.getDebugLoc()->getFilename());
+            Value *Line = ConstantInt::get(Type::getInt32Ty(Ctx), I.getDebugLoc()->getLine());
+            Builder.CreateCall(TagMemmove, {Dest, Src, SizeVal, File, Line});
+            continue;
+          }
+        }
+      }
+
+      // Load instruction
       if (auto *LI = dyn_cast<LoadInst>(&I)) {
         auto data = prepareInstrumentation(M, Ctx, I, LI->getPointerOperand(),
                                            LI->getType());
         IRBuilder<> Builder(&I);
-        Builder.CreateCall(TagLoad,
-                           {data.Addr, data.SizeVal, data.File, data.Line});
-      } else if (auto *SI = dyn_cast<StoreInst>(&I)) {
+
+        // Check if it's an atomic load
+        if (LI->isAtomic()) {
+          Builder.CreateCall(TagAtomicLoad,
+                             {data.Addr, data.SizeVal, data.File, data.Line});
+        }
+        // Check if it's a vector load
+        else if (LI->getType()->isVectorTy()) {
+          Builder.CreateCall(TagVectorLoad,
+                             {data.Addr, data.SizeVal, data.File, data.Line});
+        }
+        // Regular load
+        else {
+          Builder.CreateCall(TagLoad,
+                             {data.Addr, data.SizeVal, data.File, data.Line});
+        }
+        continue;
+      }
+
+      // Store instruction
+      if (auto *SI = dyn_cast<StoreInst>(&I)) {
         auto data = prepareInstrumentation(M, Ctx, I, SI->getPointerOperand(),
                                            SI->getValueOperand()->getType());
         IRBuilder<> Builder(&I);
-        Builder.CreateCall(TagStore,
-                           {data.Addr, data.SizeVal, data.File, data.Line});
+
+        // Check if it's an atomic store
+        if (SI->isAtomic()) {
+          Builder.CreateCall(TagAtomicRMW,  // Atomic stores treated as RMW
+                             {data.Addr, data.SizeVal, data.File, data.Line});
+        }
+        // Check if it's a vector store
+        else if (SI->getValueOperand()->getType()->isVectorTy()) {
+          Builder.CreateCall(TagVectorStore,
+                             {data.Addr, data.SizeVal, data.File, data.Line});
+        }
+        // Regular store
+        else {
+          Builder.CreateCall(TagStore,
+                             {data.Addr, data.SizeVal, data.File, data.Line});
+        }
+        continue;
       }
     }
   }

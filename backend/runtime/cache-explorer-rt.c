@@ -58,8 +58,8 @@ static uint32_t intern_filename(const char *file) {
   return 0;
 }
 
-static inline void emit_event(uint64_t addr_with_flag, uint32_t size,
-                               const char *file, uint32_t line) {
+static inline void emit_event_with_src(uint64_t addr_with_flag, uint64_t src_addr,
+                                        uint32_t size, const char *file, uint32_t line) {
   // Sampling: skip events based on sample rate
   if (sample_rate > 1) {
     sample_counter++;
@@ -89,12 +89,18 @@ static inline void emit_event(uint64_t addr_with_flag, uint32_t size,
 
   ring_buffer.events[head] = (CacheEvent){
       .address = addr_with_flag,
+      .src_address = src_addr,
       .size = size,
       .line = (intern_filename(file) << 20) | (line & 0xFFFFF),
       .thread_id = get_thread_id(),
   };
 
   atomic_store_explicit(&ring_buffer.head, next, memory_order_release);
+}
+
+static inline void emit_event(uint64_t addr_with_flag, uint32_t size,
+                               const char *file, uint32_t line) {
+  emit_event_with_src(addr_with_flag, 0, size, file, line);
 }
 
 void __tag_mem_load(void *addr, uint32_t size, const char *file, uint32_t line) {
@@ -110,6 +116,52 @@ void __tag_bb_entry(uint64_t bb_id, uint32_t instr_count, const char *file, uint
   // bb_id is a unique identifier for this basic block
   uint32_t fetch_size = instr_count * 4;
   emit_event(bb_id | EVENT_ICACHE_FLAG, fetch_size, file, line);
+}
+
+// Software prefetch hints (__builtin_prefetch)
+void __tag_prefetch(void *addr, uint32_t size, uint8_t hint, const char *file, uint32_t line) {
+  // Encode hint level in upper bits (P0, P1, P2, P3)
+  uint64_t flags = EVENT_PREFETCH_FLAG | ((uint64_t)(hint & 0x3) << 54);
+  emit_event((uint64_t)addr | flags, size, file, line);
+}
+
+// Vector/SIMD operations
+void __tag_vector_load(void *addr, uint32_t size, const char *file, uint32_t line) {
+  emit_event((uint64_t)addr | EVENT_VECTOR_FLAG, size, file, line);
+}
+
+void __tag_vector_store(void *addr, uint32_t size, const char *file, uint32_t line) {
+  emit_event((uint64_t)addr | EVENT_VECTOR_FLAG | EVENT_STORE_FLAG, size, file, line);
+}
+
+// Atomic operations
+void __tag_atomic_load(void *addr, uint32_t size, const char *file, uint32_t line) {
+  emit_event((uint64_t)addr | EVENT_ATOMIC_FLAG, size, file, line);
+}
+
+void __tag_atomic_store(void *addr, uint32_t size, const char *file, uint32_t line) {
+  emit_event((uint64_t)addr | EVENT_ATOMIC_FLAG | EVENT_STORE_FLAG, size, file, line);
+}
+
+void __tag_atomic_rmw(void *addr, uint32_t size, const char *file, uint32_t line) {
+  emit_event((uint64_t)addr | EVENT_ATOMIC_FLAG | EVENT_ATOMIC_RMW | EVENT_STORE_FLAG, size, file, line);
+}
+
+void __tag_atomic_cmpxchg(void *addr, uint32_t size, const char *file, uint32_t line) {
+  emit_event((uint64_t)addr | EVENT_ATOMIC_FLAG | EVENT_ATOMIC_CMPXCHG, size, file, line);
+}
+
+// Memory intrinsics
+void __tag_memcpy(void *dest, void *src, uint32_t size, const char *file, uint32_t line) {
+  emit_event_with_src((uint64_t)dest | EVENT_MEMINTR_FLAG, (uint64_t)src, size, file, line);
+}
+
+void __tag_memset(void *dest, uint32_t size, const char *file, uint32_t line) {
+  emit_event((uint64_t)dest | EVENT_MEMINTR_FLAG | EVENT_MEMSET_TYPE, size, file, line);
+}
+
+void __tag_memmove(void *dest, void *src, uint32_t size, const char *file, uint32_t line) {
+  emit_event_with_src((uint64_t)dest | EVENT_MEMINTR_FLAG | EVENT_MEMMOVE_TYPE, (uint64_t)src, size, file, line);
 }
 
 void __cache_explorer_init(void) {
@@ -164,15 +216,75 @@ void __cache_explorer_flush(void) {
     while (tail != head) {
       CacheEvent *e = &ring_buffer.events[tail];
       uint64_t addr = e->address & EVENT_ADDR_MASK;
-      int is_store = (e->address & EVENT_STORE_FLAG) != 0;
-      int is_icache = (e->address & EVENT_ICACHE_FLAG) != 0;
       uint32_t file_id = e->line >> 20;
       uint32_t line = e->line & 0xFFFFF;
-
       const char *file = (file_id < file_table.count) ? file_table.names[file_id] : "?";
-      char event_type = is_icache ? 'I' : (is_store ? 'S' : 'L');
-      dprintf(output_fd, "%c 0x%llx %u %s:%u T%u\n", event_type,
-              (unsigned long long)addr, e->size, file, line, e->thread_id);
+
+      // Check event type flags from high bits
+      int is_store = (e->address & EVENT_STORE_FLAG) != 0;
+      int is_icache = (e->address & EVENT_ICACHE_FLAG) != 0;
+      int is_prefetch = (e->address & EVENT_PREFETCH_FLAG) != 0;
+      int is_vector = (e->address & EVENT_VECTOR_FLAG) != 0;
+      int is_atomic = (e->address & EVENT_ATOMIC_FLAG) != 0;
+      int is_memintr = (e->address & EVENT_MEMINTR_FLAG) != 0;
+
+      if (is_memintr) {
+        // Memory intrinsics: M (memcpy), Z (memset), O (memmove)
+        uint64_t intrinsic_type = (e->address >> 54) & 0x3;
+        if (intrinsic_type == 1) {
+          // memset: Z <addr> <size> <file:line> T<n>
+          dprintf(output_fd, "Z 0x%llx %u %s:%u T%u\n",
+                  (unsigned long long)addr, e->size, file, line, e->thread_id);
+        } else if (intrinsic_type == 2) {
+          // memmove: O <dest> <src> <size> <file:line> T<n>
+          dprintf(output_fd, "O 0x%llx 0x%llx %u %s:%u T%u\n",
+                  (unsigned long long)addr, (unsigned long long)e->src_address,
+                  e->size, file, line, e->thread_id);
+        } else {
+          // memcpy: M <dest> <src> <size> <file:line> T<n>
+          dprintf(output_fd, "M 0x%llx 0x%llx %u %s:%u T%u\n",
+                  (unsigned long long)addr, (unsigned long long)e->src_address,
+                  e->size, file, line, e->thread_id);
+        }
+      } else if (is_atomic) {
+        // Atomic operations: A (load), X (RMW), C (cmpxchg)
+        uint64_t atomic_type = (e->address >> 57) & 0x3;
+        char event_type;
+        if (atomic_type == 3) {
+          event_type = 'C';  // cmpxchg
+        } else if (atomic_type == 2) {
+          event_type = 'X';  // RMW
+        } else if (is_store) {
+          event_type = 'X';  // atomic store treated as RMW for simplicity
+        } else {
+          event_type = 'A';  // atomic load
+        }
+        dprintf(output_fd, "%c 0x%llx %u %s:%u T%u\n", event_type,
+                (unsigned long long)addr, e->size, file, line, e->thread_id);
+      } else if (is_vector) {
+        // Vector/SIMD: V (load), U (store)
+        char event_type = is_store ? 'U' : 'V';
+        dprintf(output_fd, "%c 0x%llx %u %s:%u T%u\n", event_type,
+                (unsigned long long)addr, e->size, file, line, e->thread_id);
+      } else if (is_prefetch) {
+        // Prefetch: P or P0/P1/P2/P3
+        uint8_t hint = (e->address >> 54) & 0x3;
+        if (hint == 0) {
+          dprintf(output_fd, "P 0x%llx %u %s:%u T%u\n",
+                  (unsigned long long)addr, e->size, file, line, e->thread_id);
+        } else {
+          dprintf(output_fd, "P%u 0x%llx %u %s:%u T%u\n", hint,
+                  (unsigned long long)addr, e->size, file, line, e->thread_id);
+        }
+      } else if (is_icache) {
+        dprintf(output_fd, "I 0x%llx %u %s:%u T%u\n",
+                (unsigned long long)addr, e->size, file, line, e->thread_id);
+      } else {
+        // Regular load/store
+        char event_type = is_store ? 'S' : 'L';
+        dprintf(output_fd, "%c 0x%llx %u %s:%u T%u\n", event_type,
+                (unsigned long long)addr, e->size, file, line, e->thread_id);
+      }
 
       tail = (tail + 1) & BUFFER_MASK;
     }
