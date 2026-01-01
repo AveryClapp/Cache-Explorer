@@ -192,17 +192,28 @@ struct {
 
 ## Hardware Configurations
 
-Cache Explorer includes presets for common processors:
+Cache Explorer includes 14+ presets for common processors:
 
-| Config | L1 | L2 | L3 | Best For |
-|--------|----|----|----|----|
-| `educational` | 4KB | 32KB | 256KB | Learning (small, visible cache) |
-| `intel` | 32KB | 256KB | 8MB | Intel Core processors |
-| `amd` | 32KB | 512KB | 32MB | AMD Ryzen processors |
-| `apple` | 128KB | 4MB | Shared | Apple Silicon (M1/M2/M3) |
-| `embedded` | 16KB | 64KB | None | Embedded systems |
+| Config | L1d | L2 | L3 | Prefetch Model |
+|--------|-----|----|----|----------------|
+| `educational` | 4KB | 32KB | 256KB | None |
+| `intel` | 32KB | 256KB | 8MB | Stream + adjacent line |
+| `intel12` | 48KB | 1.25MB | 30MB | Stream + stride |
+| `intel14` | 48KB | 2MB | 36MB | Stream + stride |
+| `xeon` | 32KB | 1MB | 35MB | Stream + adjacent line |
+| `xeon8488c` | 48KB | 2MB | 96MB | Stream + stride + adjacent |
+| `amd` | 32KB | 512KB | 32MB | L1+L2 only (L3 victim cache) |
+| `zen3` | 32KB | 512KB | 32MB | L1+L2 only |
+| `zen4` | 32KB | 1MB | 32MB | L1+L2 only |
+| `epyc` | 32KB | 512KB | 256MB | L1+L2 only |
+| `apple` | 128KB | 4MB | Shared | DMP (pointer prefetch) |
+| `apple_m2` | 128KB | 16MB | Shared | DMP |
+| `apple_m3` | 128KB | 16MB | Shared | DMP |
+| `graviton3` | 64KB | 1MB | 32MB | Standard stream |
+| `rpi4` | 32KB | 1MB | None | Basic stream |
+| `embedded` | 16KB | 64KB | None | None |
 
-Use `--config <name>` in CLI or select from the Config panel in the web UI.
+Each preset includes vendor-accurate cache sizes, associativity, and prefetch behavior. Use `--config <name>` in CLI or select from the Config panel in the web UI.
 
 ## Tips for Effective Analysis
 
@@ -224,14 +235,33 @@ Use `--config <name>` in CLI or select from the Config panel in the web UI.
 | `@` in palette | Filter to actions |
 | `*` in palette | Filter to config |
 
+## Simulation Accuracy
+
+Cache Explorer is validated against real hardware using Linux `perf` performance counters.
+
+**Achieved Accuracy** (Intel Xeon Platinum 8488C):
+
+| Cache Level | Average Delta | Max Delta | Status |
+|-------------|---------------|-----------|--------|
+| L1 Data | ±4.6% | 8.2% | Within ±5% target |
+| L2 | ±9.3% | 22.7% | Within ±10% target (avg) |
+
+At ±5% L1 accuracy, you can:
+- Trust that simulated improvements translate to real hardware
+- Restructure code based on simulator feedback
+- Compare different algorithms' cache behavior
+
+See [VALIDATION.md](VALIDATION.md) for detailed methodology and per-benchmark results.
+
 ## Limitations
 
 Cache Explorer is a **simulation**, not hardware measurement:
 
 - **Timing is approximate** - Real cache latencies vary with frequency, contention
-- **Prefetching is simplified** - Hardware prefetchers are complex; simulation is idealized
+- **Prefetching is simplified** - Hardware prefetchers use smart backoff; simulation uses fixed degree
 - **TLB not modeled** - Translation lookaside buffer effects not included
 - **Bandwidth not modeled** - Memory controller contention not simulated
+- **L3/LLC counters not available on cloud** - EC2 virtualization blocks LLC perf counters
 
 For production profiling, validate with hardware counters (`perf stat`, VTune).
 

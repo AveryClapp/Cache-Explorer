@@ -4,6 +4,7 @@
 #include "CacheLevel.hpp"
 #include "CacheStats.hpp"
 #include "CoherenceController.hpp"
+#include "Prefetcher.hpp"
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
@@ -30,6 +31,7 @@ struct MultiCoreStats {
   CacheStats l3;
   uint64_t coherence_invalidations = 0;
   uint64_t false_sharing_events = 0;
+  std::vector<PrefetchStats> prefetch_per_core;  // Per-core prefetch statistics
 };
 
 struct MultiCoreAccessResult {
@@ -43,9 +45,13 @@ class MultiCoreCacheSystem {
 private:
   int num_cores;
   std::vector<std::unique_ptr<CacheLevel>> l1_caches;
+  std::vector<std::unique_ptr<Prefetcher>> prefetchers;  // Per-core prefetchers
   CacheLevel l2;
   CacheLevel l3;
   CoherenceController coherence;
+
+  PrefetchPolicy prefetch_policy = PrefetchPolicy::NONE;
+  int prefetch_degree = 2;
 
   std::unordered_map<uint32_t, int> thread_to_core;
   int next_core = 0;
@@ -79,6 +85,40 @@ private:
     return addr & ~(static_cast<uint64_t>(line_size) - 1);
   }
 
+  // Issue prefetches from a core's prefetcher
+  void issue_prefetches(int core, uint64_t miss_addr, uint64_t pc = 0) {
+    if (prefetch_policy == PrefetchPolicy::NONE) return;
+
+    auto prefetch_addrs = prefetchers[core]->on_miss(miss_addr, pc);
+    for (uint64_t pf_addr : prefetch_addrs) {
+      uint64_t line_addr = get_line_address(pf_addr);
+
+      // Don't prefetch if already in L1
+      if (l1_caches[core]->is_present(line_addr)) continue;
+
+      // Prefetch into L1 with appropriate coherence state
+      // Check other caches for coherence
+      bool others_have_it = false;
+      for (int other = 0; other < num_cores; other++) {
+        if (other != core && l1_caches[other]->is_present(line_addr)) {
+          others_have_it = true;
+          break;
+        }
+      }
+
+      // Install prefetched line as Shared (if others have it) or Exclusive
+      CoherenceState pf_state = others_have_it ? CoherenceState::Shared
+                                                : CoherenceState::Exclusive;
+
+      // Fetch into L2/L3 if needed, then L1
+      if (!l2.is_present(line_addr)) {
+        l3.access(line_addr, false);
+        l2.install(line_addr, false);
+      }
+      l1_caches[core]->install_with_state(line_addr, pf_state);
+    }
+  }
+
   void track_access_for_false_sharing(uint64_t addr, uint32_t thread_id,
                                        bool is_write, const std::string &file,
                                        uint32_t line) {
@@ -108,12 +148,18 @@ private:
 public:
   MultiCoreCacheSystem(int cores, const CacheConfig &l1_cfg,
                        const CacheConfig &l2_cfg,
-                       const CacheConfig &l3_cfg)
+                       const CacheConfig &l3_cfg,
+                       PrefetchPolicy pf_policy = PrefetchPolicy::NONE,
+                       int pf_degree = 2)
       : num_cores(cores), l2(l2_cfg), l3(l3_cfg), coherence(cores),
+        prefetch_policy(pf_policy), prefetch_degree(pf_degree),
         line_size(l1_cfg.line_size) {
     for (int i = 0; i < cores; i++) {
       l1_caches.push_back(std::make_unique<CacheLevel>(l1_cfg));
       coherence.register_cache(i, l1_caches[i].get());
+      // Each core gets its own prefetcher with independent state
+      prefetchers.push_back(std::make_unique<Prefetcher>(
+          pf_policy, pf_degree, l1_cfg.line_size));
     }
   }
 
@@ -129,20 +175,30 @@ public:
       return {true, false, false, false};
     }
 
+    // L1 miss - trigger prefetcher for this core
+    issue_prefetches(core, line_addr);
+
+    // Snoop other caches - may get data from Modified line
     auto snoop = coherence.request_read(core, line_addr);
     if (snoop.was_modified) {
       coherence_invalidations++;
+      // Downgrade the owner's line from M to S
+      l1_caches[snoop.data_source_core]->downgrade_to_shared(line_addr);
     }
+
+    // Determine coherence state for new line:
+    // Shared if others have it, Exclusive if we're the only one
+    CoherenceState new_state = snoop.found ? CoherenceState::Shared : CoherenceState::Exclusive;
 
     auto l2_info = l2.access(line_addr, false);
     if (l2_info.result == AccessResult::Hit) {
-      l1_caches[core]->install(line_addr, false);
+      l1_caches[core]->install_with_state(line_addr, new_state);
       return {false, true, false, false};
     }
 
     auto l3_info = l3.access(line_addr, false);
     l2.install(line_addr, false);
-    l1_caches[core]->install(line_addr, false);
+    l1_caches[core]->install_with_state(line_addr, new_state);
 
     bool l3_hit = (l3_info.result == AccessResult::Hit);
     return {false, false, l3_hit, !l3_hit};
@@ -155,25 +211,33 @@ public:
 
     uint64_t line_addr = get_line_address(address);
 
+    // Request exclusive access - invalidates all other copies
     auto snoop = coherence.request_exclusive(core, line_addr);
     if (snoop.found) {
       coherence_invalidations++;
     }
 
+    // Check if we have the line in L1
     auto l1_info = l1_caches[core]->access(line_addr, true);
     if (l1_info.result == AccessResult::Hit) {
+      // Upgrade to Modified state (handles S→M, E→M transitions)
+      l1_caches[core]->set_coherence_state(line_addr, CoherenceState::Modified);
       return {true, false, false, false};
     }
 
+    // L1 miss - trigger prefetcher for this core
+    issue_prefetches(core, line_addr);
+
+    // Miss in L1 - need to fetch and install as Modified
     auto l2_info = l2.access(line_addr, false);
     if (l2_info.result == AccessResult::Hit) {
-      l1_caches[core]->install(line_addr, true);
+      l1_caches[core]->install_with_state(line_addr, CoherenceState::Modified);
       return {false, true, false, false};
     }
 
     auto l3_info = l3.access(line_addr, false);
     l2.install(line_addr, false);
-    l1_caches[core]->install(line_addr, true);
+    l1_caches[core]->install_with_state(line_addr, CoherenceState::Modified);
 
     bool l3_hit = (l3_info.result == AccessResult::Hit);
     return {false, false, l3_hit, !l3_hit};
@@ -183,6 +247,9 @@ public:
     MultiCoreStats stats;
     for (const auto &l1 : l1_caches) {
       stats.l1_per_core.push_back(l1->getStats());
+    }
+    for (const auto &pf : prefetchers) {
+      stats.prefetch_per_core.push_back(pf->getStats());
     }
     stats.l2 = l2.getStats();
     stats.l3 = l3.getStats();
@@ -211,4 +278,32 @@ public:
 
   int get_num_cores() const { return num_cores; }
   uint32_t get_line_size() const { return line_size; }
+
+  // MESI state query for testing/debugging
+  CoherenceState get_l1_coherence_state(int core, uint64_t address) const {
+    if (core < 0 || core >= num_cores) return CoherenceState::Invalid;
+    uint64_t line_addr = get_line_address(address);
+    return l1_caches[core]->get_coherence_state(line_addr);
+  }
+
+  bool is_line_in_l1(int core, uint64_t address) const {
+    if (core < 0 || core >= num_cores) return false;
+    uint64_t line_addr = get_line_address(address);
+    return l1_caches[core]->is_present(line_addr);
+  }
+
+  // Prefetcher configuration accessors
+  PrefetchPolicy get_prefetch_policy() const { return prefetch_policy; }
+  int get_prefetch_degree() const { return prefetch_degree; }
+
+  PrefetchStats get_prefetch_stats(int core) const {
+    if (core < 0 || core >= num_cores) return PrefetchStats{};
+    return prefetchers[core]->getStats();
+  }
+
+  void reset_prefetch_stats() {
+    for (auto &pf : prefetchers) {
+      pf->resetStats();
+    }
+  }
 };

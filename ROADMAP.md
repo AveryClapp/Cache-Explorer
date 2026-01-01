@@ -30,9 +30,9 @@ Goal: Become the "Compiler Explorer for cache behavior" - the industry standard 
 - Event limits (--limit N)
 - 5M event default (~30s max runtime)
 
-**Hardware Support (13 Presets):**
+**Hardware Support (14+ Presets):**
 
-- Intel: 12th Gen, 14th Gen, Xeon
+- Intel: 12th Gen, 14th Gen, Xeon, **Xeon 8488C (validated)**
 - AMD: Zen 3, Zen 4, EPYC
 - Apple: M1, M2, M3
 - ARM: AWS Graviton 3, Raspberry Pi 4, Embedded (Cortex-A53)
@@ -47,9 +47,20 @@ Goal: Become the "Compiler Explorer for cache behavior" - the industry standard 
 - SRRIP (Static Re-Reference Interval Prediction)
 - BRRIP (Bimodal RRIP)
 
-**Prefetching:**
+**Prefetching (Vendor-Specific):**
 
-- None, Next-line, Stream, Stride, Adaptive
+- Intel: Stream + stride + adjacent line prefetch
+- AMD: L1+L2 only (L3 is victim cache)
+- Apple: DMP (data memory-dependent prefetch)
+- Presets auto-apply vendor-accurate prefetch behavior
+
+**Hardware Validation (Complete):**
+
+- ±4.6% L1 accuracy (target: ±5%)
+- ±9.3% L2 accuracy (target: ±10%)
+- 8 validation benchmarks (sequential, strided, random, matrix, linked list, working set)
+- Validated on Intel Xeon Platinum 8488C using Linux `perf`
+- CI-compatible baseline comparison script
 
 ---
 
@@ -66,6 +77,8 @@ Goal: Become the "Compiler Explorer for cache behavior" - the industry standard 
 
 - [x] Cache simulator unit tests (25 tests)
 - [x] Correctness verification tests
+- [x] Hardware validation benchmarks (8 patterns)
+- [x] Validation against real hardware (perf counters)
 - [ ] E2E test automation
 - [ ] CI pipeline (GitHub Actions)
 

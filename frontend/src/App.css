@@ -2,7 +2,7 @@
 
 /* ===== CSS Custom Properties ===== */
 :root {
-  /* Base Colors (Dark Theme) */
+  /* Base Colors (Dark Theme - Default) */
   --bg-base: #1e1e1e;
   --bg-panel: #252526;
   --bg-elevated: #2d2d2d;
@@ -34,6 +34,9 @@
   --rate-excellent: #4ec9b0;
   --rate-good: #dcdcaa;
   --rate-poor: #f48771;
+
+  /* Theme toggle icon */
+  --theme-icon: "◐";
 
   /* Spacing (4px base) */
   --space-xs: 4px;
@@ -67,6 +70,45 @@
   --header-height: 48px;
   --sidebar-width: 260px;
   --results-width: 380px;
+}
+
+/* ===== Light Theme ===== */
+[data-theme="light"] {
+  /* Base Colors */
+  --bg-base: #ffffff;
+  --bg-panel: #f5f5f5;
+  --bg-elevated: #fafafa;
+  --bg-hover: #e8e8e8;
+  --border: #d0d0d0;
+  --border-light: #e0e0e0;
+
+  /* Text Colors */
+  --text-primary: #1e1e1e;
+  --text-secondary: #555555;
+  --text-muted: #888888;
+
+  /* Semantic Colors (slightly adjusted for light bg) */
+  --success: #0d7d6c;
+  --warning: #8a6d00;
+  --error: #c43e2a;
+  --info: #0066b8;
+  --accent: #0066b8;
+  --accent-hover: #0078d4;
+
+  /* Cache Heat Map */
+  --heat-hot: #e06060;
+  --heat-warm: #e0a060;
+  --heat-cool: #6090e0;
+  --heat-cold: #a0c0e0;
+  --heat-empty: #e8e8e8;
+
+  /* Hit Rate Colors */
+  --rate-excellent: #0d7d6c;
+  --rate-good: #8a6d00;
+  --rate-poor: #c43e2a;
+
+  /* Theme toggle icon */
+  --theme-icon: "◑";
 }
 
 /* ===== Reset & Base ===== */
@@ -1931,6 +1973,32 @@ input:focus:not(:focus-visible) {
   display: flex;
   align-items: center;
   gap: var(--space-md);
+}
+
+/* Theme Toggle */
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.theme-toggle:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-light);
+  color: var(--text-primary);
+}
+
+.theme-toggle::before {
+  content: var(--theme-icon);
 }
 
 /* Config Badge */

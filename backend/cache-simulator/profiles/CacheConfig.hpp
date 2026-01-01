@@ -77,6 +77,24 @@ struct PrefetchConfig {
     };
   }
 
+  static PrefetchConfig arm_default() {
+    // ARM Neoverse V1 (Graviton 3) / Cortex-A series
+    // Has L1 Data Prefetcher (DPF) and L2 prefetcher
+    return {
+      .l1_stream_prefetch = true,
+      .l1_stride_prefetch = true,      // ARM has stride detection
+      .l1_prefetch_degree = 2,
+      .l2_stream_prefetch = true,
+      .l2_adjacent_prefetch = false,   // No adjacent line pairing
+      .l2_prefetch_degree = 4,
+      .l2_max_streams = 8,             // ARM typically fewer streams than Intel
+      .l2_max_distance = 4,            // Conservative without smart backoff
+      .l3_prefetch = true,             // Neoverse V1 has L3 prefetch
+      .pointer_prefetch = false,
+      .dynamic_degree = false
+    };
+  }
+
   static PrefetchConfig none() {
     return {
       .l1_stream_prefetch = false,

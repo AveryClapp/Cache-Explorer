@@ -323,11 +323,20 @@ int main(int argc, char *argv[]) {
               << ",\"cores\":" << processor.get_num_cores()
               << ",\"levels\":{";
     std::cout << "\"l1d\":{\"hits\":" << l1_total.hits << ",\"misses\":" << l1_total.misses
-              << ",\"hitRate\":" << std::fixed << std::setprecision(3) << l1_total.hit_rate() << "},";
+              << ",\"hitRate\":" << std::fixed << std::setprecision(3) << l1_total.hit_rate()
+              << ",\"compulsory\":" << l1_total.compulsory_misses
+              << ",\"capacity\":" << l1_total.capacity_misses
+              << ",\"conflict\":" << l1_total.conflict_misses << "},";
     std::cout << "\"l2\":{\"hits\":" << stats.l2.hits << ",\"misses\":" << stats.l2.misses
-              << ",\"hitRate\":" << std::fixed << std::setprecision(3) << stats.l2.hit_rate() << "},";
+              << ",\"hitRate\":" << std::fixed << std::setprecision(3) << stats.l2.hit_rate()
+              << ",\"compulsory\":" << stats.l2.compulsory_misses
+              << ",\"capacity\":" << stats.l2.capacity_misses
+              << ",\"conflict\":" << stats.l2.conflict_misses << "},";
     std::cout << "\"l3\":{\"hits\":" << stats.l3.hits << ",\"misses\":" << stats.l3.misses
-              << ",\"hitRate\":" << std::fixed << std::setprecision(3) << stats.l3.hit_rate() << "}";
+              << ",\"hitRate\":" << std::fixed << std::setprecision(3) << stats.l3.hit_rate()
+              << ",\"compulsory\":" << stats.l3.compulsory_misses
+              << ",\"capacity\":" << stats.l3.capacity_misses
+              << ",\"conflict\":" << stats.l3.conflict_misses << "}";
     std::cout << "}";
 
     // Coherence stats
@@ -428,9 +437,7 @@ int main(int argc, char *argv[]) {
       // Aggregate L1 stats
       CacheStats l1_total;
       for (const auto &l1 : stats.l1_per_core) {
-        l1_total.hits += l1.hits;
-        l1_total.misses += l1.misses;
-        l1_total.writebacks += l1.writebacks;
+        l1_total += l1;
       }
 
       std::cout << "  \"levels\": {\n";
@@ -439,7 +446,10 @@ int main(int argc, char *argv[]) {
                   << "\"hits\": " << s.hits << ", "
                   << "\"misses\": " << s.misses << ", "
                   << "\"hitRate\": " << std::fixed << std::setprecision(3) << s.hit_rate() << ", "
-                  << "\"writebacks\": " << s.writebacks << "}"
+                  << "\"writebacks\": " << s.writebacks << ", "
+                  << "\"compulsory\": " << s.compulsory_misses << ", "
+                  << "\"capacity\": " << s.capacity_misses << ", "
+                  << "\"conflict\": " << s.conflict_misses << "}"
                   << (last ? "\n" : ",\n");
       };
       json_level("l1", l1_total, false);
@@ -645,7 +655,10 @@ int main(int argc, char *argv[]) {
                   << "\"hits\": " << s.hits << ", "
                   << "\"misses\": " << s.misses << ", "
                   << "\"hitRate\": " << std::fixed << std::setprecision(3) << s.hit_rate() << ", "
-                  << "\"writebacks\": " << s.writebacks << "}"
+                  << "\"writebacks\": " << s.writebacks << ", "
+                  << "\"compulsory\": " << s.compulsory_misses << ", "
+                  << "\"capacity\": " << s.capacity_misses << ", "
+                  << "\"conflict\": " << s.conflict_misses << "}"
                   << (last ? "\n" : ",\n");
       };
 

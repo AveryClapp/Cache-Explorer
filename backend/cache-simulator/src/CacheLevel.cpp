@@ -148,6 +148,7 @@ AccessInfo CacheLevel::access(uint64_t address, bool is_write) {
   uint64_t tag = config.get_tag(address);
   uint64_t index = config.get_index(address);
   std::vector<CacheLine> &set = sets[index];
+  uint64_t line_addr = address & ~(static_cast<uint64_t>(config.line_size) - 1);
 
   access_time++;
 
@@ -166,7 +167,27 @@ AccessInfo CacheLevel::access(uint64_t address, bool is_write) {
     }
   }
 
+  // Miss - classify as compulsory, capacity, or conflict
   stats.misses++;
+
+  // Check if this is a compulsory (cold) miss
+  bool is_compulsory = (ever_accessed.find(line_addr) == ever_accessed.end());
+  if (is_compulsory) {
+    ever_accessed.insert(line_addr);
+    unique_lines_accessed++;
+    stats.compulsory_misses++;
+  } else {
+    // Non-compulsory miss: capacity or conflict
+    // Heuristic: if working set (unique lines) > cache capacity, it's capacity
+    // Otherwise it's conflict (same set contention)
+    uint64_t cache_lines = static_cast<uint64_t>(config.num_sets()) * config.associativity;
+    if (unique_lines_accessed > cache_lines) {
+      stats.capacity_misses++;
+    } else {
+      stats.conflict_misses++;
+    }
+  }
+
   int victim = find_victim(index);
   bool was_dirty = set[victim].valid && set[victim].dirty;
   uint64_t evicted_addr =
@@ -303,4 +324,119 @@ std::vector<uint64_t> CacheLevel::get_all_addresses() const {
     }
   }
   return addresses;
+}
+
+// MESI Coherence State Management
+
+CoherenceState CacheLevel::get_coherence_state(uint64_t address) const {
+  uint64_t tag = config.get_tag(address);
+  uint64_t index = config.get_index(address);
+  const std::vector<CacheLine> &set = sets[index];
+
+  for (int way = 0; way < config.associativity; way++) {
+    if (set[way].valid && set[way].tag == tag) {
+      return set[way].coherence_state;
+    }
+  }
+  return CoherenceState::Invalid;
+}
+
+void CacheLevel::set_coherence_state(uint64_t address, CoherenceState state) {
+  uint64_t tag = config.get_tag(address);
+  uint64_t index = config.get_index(address);
+  std::vector<CacheLine> &set = sets[index];
+
+  for (int way = 0; way < config.associativity; way++) {
+    if (set[way].valid && set[way].tag == tag) {
+      set[way].coherence_state = state;
+      // Sync dirty flag with coherence state
+      if (state == CoherenceState::Modified) {
+        set[way].dirty = true;
+      } else if (state == CoherenceState::Shared || state == CoherenceState::Invalid) {
+        set[way].dirty = false;
+      }
+      return;
+    }
+  }
+}
+
+bool CacheLevel::upgrade_to_modified(uint64_t address) {
+  uint64_t tag = config.get_tag(address);
+  uint64_t index = config.get_index(address);
+  std::vector<CacheLine> &set = sets[index];
+
+  for (int way = 0; way < config.associativity; way++) {
+    if (set[way].valid && set[way].tag == tag) {
+      CoherenceState old_state = set[way].coherence_state;
+      if (old_state == CoherenceState::Modified) {
+        return false;  // Already Modified, no upgrade needed
+      }
+      set[way].coherence_state = CoherenceState::Modified;
+      set[way].dirty = true;
+      return true;  // Upgrade was performed
+    }
+  }
+  return false;  // Line not present
+}
+
+void CacheLevel::downgrade_to_shared(uint64_t address) {
+  uint64_t tag = config.get_tag(address);
+  uint64_t index = config.get_index(address);
+  std::vector<CacheLine> &set = sets[index];
+
+  for (int way = 0; way < config.associativity; way++) {
+    if (set[way].valid && set[way].tag == tag) {
+      set[way].coherence_state = CoherenceState::Shared;
+      set[way].dirty = false;  // Write back happened, no longer dirty
+      return;
+    }
+  }
+}
+
+AccessInfo CacheLevel::install_with_state(uint64_t address, CoherenceState state) {
+  uint64_t tag = config.get_tag(address);
+  uint64_t index = config.get_index(address);
+  std::vector<CacheLine> &set = sets[index];
+
+  access_time++;
+
+  // Check if already present
+  for (int way = 0; way < config.associativity; way++) {
+    if (set[way].valid && set[way].tag == tag) {
+      set[way].lru_time = access_time;
+      set[way].coherence_state = state;
+      set[way].dirty = (state == CoherenceState::Modified);
+      if (config.policy == EvictionPolicy::SRRIP || config.policy == EvictionPolicy::BRRIP) {
+        set[way].rrip_value = 0;
+      }
+      update_replacement_state(index, way);
+      return {AccessResult::Hit, false, 0};
+    }
+  }
+
+  // Need to install new line
+  int victim = find_victim(index);
+  bool was_dirty = set[victim].valid && set[victim].dirty;
+  uint64_t evicted_addr =
+      was_dirty ? rebuild_address(set[victim].tag, index) : 0;
+
+  if (was_dirty)
+    stats.writebacks++;
+
+  set[victim].tag = tag;
+  set[victim].valid = true;
+  set[victim].dirty = (state == CoherenceState::Modified);
+  set[victim].coherence_state = state;
+  set[victim].lru_time = access_time;
+
+  if (config.policy == EvictionPolicy::SRRIP) {
+    set[victim].rrip_value = 2;
+  } else if (config.policy == EvictionPolicy::BRRIP) {
+    set[victim].rrip_value = (std::rand() % 32 == 0) ? 2 : 3;
+  }
+  update_replacement_state(index, victim);
+
+  AccessResult result =
+      was_dirty ? AccessResult::MissWithEviction : AccessResult::Miss;
+  return {result, was_dirty, evicted_addr};
 }

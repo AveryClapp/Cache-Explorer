@@ -21,3 +21,9 @@ target_link_libraries(CacheLevelTest CacheSimulator)
 
 add_executable(CacheSystemTest tests/CacheSystemTest.cpp)
 target_link_libraries(CacheSystemTest CacheSimulator)
+
+add_executable(MESICoherenceTest tests/MESICoherenceTest.cpp)
+target_link_libraries(MESICoherenceTest CacheSimulator)
+
+add_executable(MultiCorePrefetchTest tests/MultiCorePrefetchTest.cpp)
+target_link_libraries(MultiCorePrefetchTest CacheSimulator)

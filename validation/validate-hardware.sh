@@ -2,7 +2,12 @@
 # Hardware Validation Script
 # Compares Cache Explorer simulator against real hardware (perf)
 #
-# Usage: ./validate-hardware.sh [--update-baseline]
+# Usage: ./validate-hardware.sh [--update-baseline] [--config <config>]
+#
+# Supported architectures:
+#   - Intel (auto-detected): Uses xeon8488c config
+#   - AMD (auto-detected): Uses zen4 config
+#   - ARM/Graviton (auto-detected): Uses graviton3 config
 #
 # Requirements:
 #   - Linux with perf installed
@@ -25,9 +30,25 @@ BLUE='\033[0;36m'
 NC='\033[0m'
 
 UPDATE_BASELINE=false
-if [[ "$1" == "--update-baseline" ]]; then
-    UPDATE_BASELINE=true
-fi
+FORCE_CONFIG=""
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --update-baseline)
+            UPDATE_BASELINE=true
+            shift
+            ;;
+        --config)
+            FORCE_CONFIG="$2"
+            shift 2
+            ;;
+        *)
+            echo "Unknown option: $1"
+            exit 1
+            ;;
+    esac
+done
 
 # Check platform
 if [[ "$(uname)" != "Linux" ]]; then
@@ -61,10 +82,101 @@ fi
 CPU_MODEL=$(lscpu | grep "Model name" | cut -d: -f2 | xargs)
 KERNEL_VERSION=$(uname -r)
 TIMESTAMP=$(date -Iseconds)
+ARCH=$(uname -m)
+
+# Auto-detect CPU vendor and set config + perf counters
+detect_cpu_vendor() {
+    local vendor=$(lscpu | grep "Vendor ID" | cut -d: -f2 | xargs)
+
+    case "$vendor" in
+        GenuineIntel)
+            echo "intel"
+            ;;
+        AuthenticAMD)
+            echo "amd"
+            ;;
+        *)
+            # Check architecture for ARM
+            if [[ "$ARCH" == "aarch64" ]] || [[ "$ARCH" == "arm64" ]]; then
+                echo "arm"
+            else
+                echo "unknown"
+            fi
+            ;;
+    esac
+}
+
+CPU_VENDOR=$(detect_cpu_vendor)
+
+# Set config and perf counters based on vendor
+if [[ -n "$FORCE_CONFIG" ]]; then
+    SIM_CONFIG="$FORCE_CONFIG"
+    echo -e "${YELLOW}Using forced config: $SIM_CONFIG${NC}"
+else
+    case "$CPU_VENDOR" in
+        intel)
+            SIM_CONFIG="xeon8488c"
+            ;;
+        amd)
+            SIM_CONFIG="zen4"
+            ;;
+        arm)
+            SIM_CONFIG="graviton3"
+            ;;
+        *)
+            SIM_CONFIG="intel"
+            echo -e "${YELLOW}Warning: Unknown CPU vendor, using intel config${NC}"
+            ;;
+    esac
+fi
+
+# Set perf counters based on vendor
+# L1 counters are usually the same across vendors
+L1_LOAD_COUNTER="L1-dcache-loads"
+L1_MISS_COUNTER="L1-dcache-load-misses"
+
+case "$CPU_VENDOR" in
+    intel)
+        # Intel-specific L2 counters
+        L2_HIT_COUNTER="l2_rqsts.demand_data_rd_hit"
+        L2_MISS_COUNTER="l2_rqsts.demand_data_rd_miss"
+        L2_MODE="hit_miss"  # Separate hit and miss counters
+        ;;
+    amd)
+        # AMD uses different L2 counter names
+        # Try AMD-specific counters first, fall back to generic
+        if perf list 2>/dev/null | grep -q "l2_cache_accesses_from_dc_misses"; then
+            L2_HIT_COUNTER="l2_cache_hits_from_dc_misses"
+            L2_MISS_COUNTER="l2_cache_misses_from_dc_misses"
+            L2_MODE="hit_miss"
+        else
+            # Fallback to generic cache counters
+            L2_HIT_COUNTER="cache-references"
+            L2_MISS_COUNTER="cache-misses"
+            L2_MODE="ref_miss"  # References and misses (not pure L2)
+        fi
+        ;;
+    arm)
+        # ARM PMU counters
+        L2_HIT_COUNTER="l2d_cache"
+        L2_MISS_COUNTER="l2d_cache_refill"
+        L2_MODE="access_refill"  # Total accesses and refills (misses)
+        ;;
+    *)
+        # Generic fallback
+        L2_HIT_COUNTER="cache-references"
+        L2_MISS_COUNTER="cache-misses"
+        L2_MODE="ref_miss"
+        ;;
+esac
 
 echo -e "${BLUE}=== Cache Explorer Hardware Validation ===${NC}"
 echo "CPU: $CPU_MODEL"
+echo "Vendor: $CPU_VENDOR"
+echo "Architecture: $ARCH"
 echo "Kernel: $KERNEL_VERSION"
+echo "Simulator config: $SIM_CONFIG"
+echo "L2 counter mode: $L2_MODE"
 echo ""
 
 # Temp directory for builds
@@ -97,8 +209,8 @@ for bench in "${BENCHMARKS[@]}"; do
 
     # 1. Run with Cache Explorer simulator
     echo "  Running simulator..."
-    # Preset config now auto-applies vendor-specific prefetch (Intel: 20-line lookahead)
-    SIM_OUTPUT=$("$CACHE_EXPLORE" "$BENCH_FILE" --config xeon8488c -O2 --json 2>/dev/null || echo "{}")
+    # Preset config auto-applies vendor-specific prefetch
+    SIM_OUTPUT=$("$CACHE_EXPLORE" "$BENCH_FILE" --config "$SIM_CONFIG" -O2 --json 2>/dev/null || echo "{}")
 
     # Parse L1 data cache results
     L1D_BLOCK=$(echo "$SIM_OUTPUT" | grep -o '"l1d":[^}]*}' | grep '"hits"' | head -1)
@@ -128,11 +240,11 @@ for bench in "${BENCHMARKS[@]}"; do
     echo "  Running hardware (perf)..."
     gcc -O2 "$BENCH_FILE" -o "$TEMP_DIR/$bench" 2>/dev/null
 
-    PERF_OUTPUT=$(perf stat -e L1-dcache-loads,L1-dcache-load-misses,l2_rqsts.demand_data_rd_hit,l2_rqsts.demand_data_rd_miss "$TEMP_DIR/$bench" 2>&1)
+    PERF_OUTPUT=$(perf stat -e "$L1_LOAD_COUNTER,$L1_MISS_COUNTER,$L2_HIT_COUNTER,$L2_MISS_COUNTER" "$TEMP_DIR/$bench" 2>&1)
 
-    # Parse L1 perf results
-    PERF_L1_LOADS[$bench]=$(echo "$PERF_OUTPUT" | grep -i 'L1-dcache-loads' | awk '{gsub(/,/,"",$1); print $1}')
-    PERF_L1_MISSES[$bench]=$(echo "$PERF_OUTPUT" | grep -i 'L1-dcache-load-misses' | awk '{gsub(/,/,"",$1); print $1}')
+    # Parse L1 perf results (same across all vendors)
+    PERF_L1_LOADS[$bench]=$(echo "$PERF_OUTPUT" | grep -i "$L1_LOAD_COUNTER" | awk '{gsub(/,/,"",$1); print $1}')
+    PERF_L1_MISSES[$bench]=$(echo "$PERF_OUTPUT" | grep -i "$L1_MISS_COUNTER" | awk '{gsub(/,/,"",$1); print $1}')
 
     PERF_L1_LOAD=${PERF_L1_LOADS[$bench]:-0}
     PERF_L1_MISS=${PERF_L1_MISSES[$bench]:-0}
@@ -143,19 +255,49 @@ for bench in "${BENCHMARKS[@]}"; do
         PERF_L1_RATE[$bench]="0.0"
     fi
 
-    # Parse L2 perf results
-    PERF_L2_HITS[$bench]=$(echo "$PERF_OUTPUT" | grep -i 'l2_rqsts.demand_data_rd_hit' | awk '{gsub(/,/,"",$1); print $1}')
-    PERF_L2_MISSES[$bench]=$(echo "$PERF_OUTPUT" | grep -i 'l2_rqsts.demand_data_rd_miss' | awk '{gsub(/,/,"",$1); print $1}')
+    # Parse L2 perf results (vendor-specific)
+    L2_VAL1=$(echo "$PERF_OUTPUT" | grep -i "$L2_HIT_COUNTER" | head -1 | awk '{gsub(/,/,"",$1); print $1}')
+    L2_VAL2=$(echo "$PERF_OUTPUT" | grep -i "$L2_MISS_COUNTER" | head -1 | awk '{gsub(/,/,"",$1); print $1}')
 
-    PERF_L2_HIT=${PERF_L2_HITS[$bench]:-0}
-    PERF_L2_MISS=${PERF_L2_MISSES[$bench]:-0}
-    PERF_L2_TOTAL=$((PERF_L2_HIT + PERF_L2_MISS))
-
-    if [[ $PERF_L2_TOTAL -gt 0 ]]; then
-        PERF_L2_RATE[$bench]=$(echo "scale=1; $PERF_L2_HIT * 100 / $PERF_L2_TOTAL" | bc 2>/dev/null || echo "0.0")
-    else
-        PERF_L2_RATE[$bench]="0.0"
-    fi
+    # Calculate L2 hit rate based on counter mode
+    case "$L2_MODE" in
+        hit_miss)
+            # Intel: separate hit and miss counters
+            PERF_L2_HITS[$bench]=${L2_VAL1:-0}
+            PERF_L2_MISSES[$bench]=${L2_VAL2:-0}
+            PERF_L2_TOTAL=$((${PERF_L2_HITS[$bench]} + ${PERF_L2_MISSES[$bench]}))
+            if [[ $PERF_L2_TOTAL -gt 0 ]]; then
+                PERF_L2_RATE[$bench]=$(echo "scale=1; ${PERF_L2_HITS[$bench]} * 100 / $PERF_L2_TOTAL" | bc 2>/dev/null || echo "0.0")
+            else
+                PERF_L2_RATE[$bench]="0.0"
+            fi
+            ;;
+        access_refill)
+            # ARM: total accesses and refills (misses)
+            L2_ACCESSES=${L2_VAL1:-0}
+            L2_REFILLS=${L2_VAL2:-0}
+            PERF_L2_HITS[$bench]=$((L2_ACCESSES - L2_REFILLS))
+            PERF_L2_MISSES[$bench]=$L2_REFILLS
+            if [[ $L2_ACCESSES -gt 0 ]]; then
+                PERF_L2_RATE[$bench]=$(echo "scale=1; (${PERF_L2_HITS[$bench]}) * 100 / $L2_ACCESSES" | bc 2>/dev/null || echo "0.0")
+            else
+                PERF_L2_RATE[$bench]="0.0"
+            fi
+            ;;
+        ref_miss)
+            # Generic: cache-references and cache-misses (includes all levels)
+            CACHE_REFS=${L2_VAL1:-0}
+            CACHE_MISSES=${L2_VAL2:-0}
+            PERF_L2_HITS[$bench]=$((CACHE_REFS - CACHE_MISSES))
+            PERF_L2_MISSES[$bench]=$CACHE_MISSES
+            if [[ $CACHE_REFS -gt 0 ]]; then
+                PERF_L2_RATE[$bench]=$(echo "scale=1; (${PERF_L2_HITS[$bench]}) * 100 / $CACHE_REFS" | bc 2>/dev/null || echo "0.0")
+            else
+                PERF_L2_RATE[$bench]="0.0"
+            fi
+            echo -e "    ${YELLOW}(Note: Using generic cache counters - L2 accuracy may vary)${NC}"
+            ;;
+    esac
 
     echo "    L1: Sim ${SIM_L1_RATE[$bench]}% | HW ${PERF_L1_RATE[$bench]}%"
     echo "    L2: Sim ${SIM_L2_RATE[$bench]}% | HW ${PERF_L2_RATE[$bench]}%"
@@ -273,7 +415,11 @@ if $UPDATE_BASELINE; then
     cat > "$BASELINE_FILE" << EOF
 {
   "hardware": "$CPU_MODEL",
+  "vendor": "$CPU_VENDOR",
+  "architecture": "$ARCH",
   "kernel": "$KERNEL_VERSION",
+  "simulator_config": "$SIM_CONFIG",
+  "l2_counter_mode": "$L2_MODE",
   "date": "$TIMESTAMP",
   "benchmarks": {
 EOF

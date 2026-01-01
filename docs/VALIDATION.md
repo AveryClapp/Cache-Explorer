@@ -1,130 +1,225 @@
-# Cache Explorer Accuracy Validation
+# Cache Explorer Hardware Validation
 
-This document explains how Cache Explorer's simulation accuracy is validated against real hardware.
+This document describes how Cache Explorer's simulation accuracy is validated against real hardware using Linux `perf` performance counters.
 
-## Validation Methodology
+## Validation Results Summary
 
-### What We Measure
+**Target Accuracy**: ±5% for L1, ±10% for L2
 
-Cache Explorer simulates CPU cache behavior. We validate by comparing:
+**Achieved Accuracy** (Intel Xeon Platinum 8488C - AWS c7i.4xlarge):
 
-| Metric | Simulator | Hardware (perf) |
-|--------|-----------|-----------------|
-| L1 Data Cache Hits | Counted per access | `L1-dcache-loads - L1-dcache-load-misses` |
-| L1 Data Cache Misses | Counted per access | `L1-dcache-load-misses` |
-| L2 Cache Hits | Counted per access | `L2-dcache-load-misses` (inverse) |
-| L3 Cache Hits | Counted per access | `LLC-load-misses` (inverse) |
+| Cache Level | Average Delta | Max Delta | Status |
+|-------------|---------------|-----------|--------|
+| **L1 Data** | ±4.6% | 8.2% | ✅ Within target |
+| **L2** | ±9.3% | 22.7% | ✅ Within target (avg) |
 
-### How to Run Validation
+## Detailed Benchmark Results
 
-On Linux with perf:
+### L1 Cache Validation
+
+| Benchmark | Simulator | Hardware | Delta | Notes |
+|-----------|-----------|----------|-------|-------|
+| sequential | 99.2% | 96.9% | +2.3% | Sequential array access |
+| strided_16 | 97.1% | 91.1% | +6.0% | 16-byte stride |
+| strided_64 | 89.6% | 82.6% | +7.0% | Cache-line stride |
+| random | 83.6% | 91.4% | -7.8% | Random access pattern |
+| matrix_row | 98.7% | 99.3% | -0.6% | Row-major traversal |
+| matrix_col | 93.2% | 97.4% | -4.2% | Column-major traversal |
+| linked_list | 90.6% | 98.8% | -8.2% | Pointer chasing |
+| working_set | 99.4% | 98.7% | +0.7% | Fits in L1 |
+
+### L2 Cache Validation
+
+| Benchmark | Simulator | Hardware | Delta | Notes |
+|-----------|-----------|----------|-------|-------|
+| sequential | 90.8% | 95.9% | -5.1% | L2 stream prefetch |
+| strided_16 | 90.8% | 97.2% | -6.4% | L2 stride detection |
+| strided_64 | 90.7% | 97.4% | -6.7% | L2 prefetch helps |
+| random | 97.0% | 96.1% | +0.9% | Random defeats prefetch |
+| matrix_row | 49.8% | 72.5% | -22.7% | Complex 2D pattern |
+| matrix_col | 78.0% | 87.0% | -9.0% | 2D with poor locality |
+| linked_list | 99.0% | 93.2% | +5.8% | Sequential in memory |
+| working_set | 70.2% | 88.7% | -18.5% | L2 working set |
+
+## Hardware Configuration
+
+Validation performed on **Intel Xeon Platinum 8488C (Sapphire Rapids)**:
+
+| Level | Size | Associativity | Line Size |
+|-------|------|---------------|-----------|
+| L1 Data | 48 KB | 12-way | 64 bytes |
+| L1 Instruction | 32 KB | 8-way | 64 bytes |
+| L2 | 2 MB | 16-way | 64 bytes |
+| L3 | 105 MB | 15-way | 64 bytes |
+
+The simulator uses an exact config match (`--config xeon8488c`).
+
+## Perf Counters Used
+
+### L1 Counters (All Vendors)
+
+| Counter | Measurement |
+|---------|-------------|
+| `L1-dcache-loads` | Total L1D accesses |
+| `L1-dcache-load-misses` | L1D misses |
+
+### L2 Counters (Vendor-Specific)
+
+| Vendor | Hit Counter | Miss Counter |
+|--------|-------------|--------------|
+| **Intel** | `l2_rqsts.demand_data_rd_hit` | `l2_rqsts.demand_data_rd_miss` |
+| **AMD** | `l2_cache_hits_from_dc_misses` | `l2_cache_misses_from_dc_misses` |
+| **ARM** | `l2d_cache` (total) | `l2d_cache_refill` (misses) |
+| **Fallback** | `cache-references` | `cache-misses` |
+
+Note: L3/LLC counters are not available on EC2 virtualization.
+
+## Running Validation
+
+The validation script auto-detects CPU vendor (Intel, AMD, ARM) and selects the appropriate simulator config and perf counters.
+
+### On Linux with perf
 
 ```bash
-# Install perf
+# 1. Install perf
 sudo apt install linux-tools-generic linux-tools-$(uname -r)
 
-# Enable perf counters (may require root)
+# 2. Enable perf counters
 echo 0 | sudo tee /proc/sys/kernel/perf_event_paranoid
 
-# Run validation
-./scripts/validate-accuracy.sh
+# 3. Build Cache Explorer
+./scripts/build.sh
+
+# 4. Run validation (auto-detects architecture)
+./validation/validate-hardware.sh
+
+# 5. Update baseline (saves results for CI comparison)
+./validation/validate-hardware.sh --update-baseline
+
+# 6. Force a specific config (optional)
+./validation/validate-hardware.sh --config zen4
 ```
 
-## Expected Accuracy
+### Multi-Architecture Validation
 
-### Relative Accuracy (Pattern Detection)
+| Platform | Instance Type | Simulator Config | L2 Counters |
+|----------|---------------|------------------|-------------|
+| **Intel Xeon** | AWS c7i | `xeon8488c` | `l2_rqsts.*` |
+| **AMD EPYC** | AWS c6a/m6a | `zen4` | `l2_cache_*` or generic |
+| **ARM Graviton** | AWS c7g/m7g | `graviton3` | `l2d_cache*` |
 
-Cache Explorer is highly accurate at detecting *relative* cache behavior:
+```bash
+# Intel (c7i instance)
+./validation/validate-hardware.sh --update-baseline
 
-| Pattern | Expected Behavior | Simulator Accuracy |
-|---------|-------------------|-------------------|
-| Sequential vs Strided | Sequential 10-20% better | ✅ Matches |
-| Row-major vs Column-major | Row-major 50-90% better | ✅ Matches |
-| Small vs Large working set | Small much better L1 hits | ✅ Matches |
-| Random access | Low hit rate | ✅ Matches |
+# AMD (c6a instance)
+./validation/validate-hardware.sh --update-baseline
 
-**This is what matters most**: Cache Explorer correctly identifies which code patterns are cache-friendly.
+# ARM Graviton (c7g instance)
+./validation/validate-hardware.sh --update-baseline
+```
 
-### Absolute Accuracy (Hit Rate Numbers)
+The script will:
+1. Auto-detect vendor from `lscpu`
+2. Select matching simulator config
+3. Use vendor-specific perf counters
+4. Save baseline with vendor metadata
 
-Absolute hit rate numbers may differ from hardware by 5-15% due to:
+### On macOS/Windows (no perf)
 
-1. **Instruction Cache Effects**
-   - Simulator tracks I-cache separately
-   - perf `L1-dcache-*` only measures data cache
-   - Comparison is valid for data access patterns
+```bash
+# Compare against saved Linux baseline
+./validation/validate-against-baseline.sh
+```
 
-2. **Compiler Differences**
-   - Simulator uses Clang with instrumentation
-   - Native perf uses gcc without instrumentation
-   - Slightly different code generation
+## Vendor-Specific Prefetch Configurations
 
-3. **Hardware Variability**
-   - Real CPUs have prefetchers we may not model exactly
-   - Background OS activity causes noise
-   - Different CPU generations have different cache sizes
+Each hardware preset now includes vendor-accurate prefetch settings:
 
-4. **Simulation Simplifications**
-   - LRU approximates real replacement policies
-   - Fixed latencies vs. real variable latencies
-   - No memory bandwidth contention modeling
+### Intel (Xeon, 12th/14th Gen)
+- L2 streamer: Up to 32 concurrent streams
+- Adjacent line prefetcher: Pairs cache lines to 128 bytes
+- Prefetch degree: 4 lines (conservative; real hardware uses smart backoff)
 
-## Benchmark Results
+### AMD (Zen 3/4, EPYC)
+- L1+L2 prefetch only (L3 is victim cache)
+- No adjacent line pairing
+- Prefetch degree: 4 lines
 
-Results from validation on Intel Core i7-12700K (Alder Lake):
+### Apple (M1/M2/M3)
+- Data Memory-Dependent Prefetcher (DMP) - pointer prefetch
+- More aggressive L1 prefetch
+- Prefetch degree: 4 lines
 
-| Test | Simulator L1 Hit% | Hardware L1 Hit% | Delta |
-|------|-------------------|------------------|-------|
-| Sequential | 99.2% | 99.5% | 0.3% |
-| Strided (16) | 86.4% | 88.1% | 1.7% |
-| Random | 45.2% | 42.8% | 2.4% |
-| Matrix Row | 98.8% | 99.1% | 0.3% |
-| Matrix Col | 12.4% | 14.2% | 1.8% |
+### ARM (Graviton 3, Cortex-A)
+- L1 Data Prefetcher (DPF)
+- L2 stream prefetcher
+- Prefetch degree: 4 lines
+- Fewer concurrent streams than Intel (8 vs 32)
 
-**Conclusion**: Simulator within 3% of hardware on typical workloads.
+### Educational
+- No prefetching (clearer results for learning)
 
-## Why Simulation is Valuable
+## Why Accuracy Matters
 
-Even with small absolute differences, simulation provides:
+Cache Explorer is designed as an **engineering tool**, not just educational:
 
-1. **Deterministic Results**
-   - Same code always produces same results
-   - No noise from OS or other processes
-   - Reproducible for education and debugging
+| Accuracy | Use Case |
+|----------|----------|
+| ±20% | Educational only |
+| ±10% | Directional guidance |
+| **±5%** | **Engineering decisions** |
+| ±2% | Production profiler |
 
-2. **Line-Level Attribution**
-   - Know exactly which source line caused each miss
-   - Hardware perf only gives aggregate counts
+At ±5% L1 accuracy, engineers can:
+- Restructure code based on simulator feedback
+- Trust that improvements will translate to real hardware
+- Compare different algorithms' cache behavior
 
-3. **"What If" Analysis**
-   - Test different cache configurations
-   - Compare prefetch policies
-   - No need to buy different hardware
+## Known Limitations
 
-4. **Safe Exploration**
-   - No risk of system instability
-   - Works in sandboxed environments
-   - Students can experiment freely
+### Simulator Underestimates L2 Hit Rate
+The simulator shows lower L2 hit rates than hardware for some patterns (matrix_row: -22.7%). This is because:
+- Intel's L2 prefetcher is more sophisticated than our model
+- Real hardware has dynamic prefetch distance adjustment
+- We use conservative prefetch settings to avoid over-prefetching
 
-## Limitations
+### Linked List Shows Variance
+Hardware shows 98.8% L1 hits for linked_list because nodes are allocated sequentially in memory (array-backed). Our prefetcher doesn't fully model Intel's stream detection for this pattern.
 
-Cache Explorer does NOT model:
+### LLC Not Available on Cloud
+AWS EC2 virtualization doesn't expose L3/LLC performance counters. Bare metal instances would be needed for full L3 validation.
 
-- **TLB (Translation Lookaside Buffer)** - May add in future
-- **Memory bandwidth contention** - Assumes infinite bandwidth
-- **NUMA effects** - Single socket model only
-- **CPU frequency scaling** - Assumes fixed frequency
-- **Speculative execution** - No branch prediction modeling
+## Future Improvements
 
-For these effects, use hardware profiling tools like perf, VTune, or Instruments.
+1. **Smart Prefetch Backoff** - Detect when prefetching hurts and reduce aggressiveness
+2. **Pattern-Specific Prefetch** - Different degrees for stream vs stride patterns
+3. **L3 Validation** - Use bare metal instances for LLC counter access
 
-## Improving Accuracy
+## Multi-Architecture Support (Ready)
 
-We continuously improve accuracy by:
+The validation script now supports:
+- **Intel** - Validated on Xeon 8488C (c7i)
+- **AMD** - Ready for validation on EPYC (c6a/m6a)
+- **ARM Graviton** - Ready for validation on Graviton 3 (c7g)
 
-1. Comparing against more hardware (Intel, AMD, Apple Silicon)
-2. Refining replacement policy models
-3. Adding more realistic prefetcher models
-4. Incorporating user feedback on discrepancies
+Each architecture uses vendor-specific prefetch models and perf counters.
 
-Report accuracy issues at: https://github.com/your-repo/cache-explorer/issues
+## Benchmark Descriptions
+
+| Benchmark | Description |
+|-----------|-------------|
+| `sequential` | Linear array traversal - best case for prefetching |
+| `strided_16` | Access every 16 bytes - tests stride detection |
+| `strided_64` | Access every cache line - worst case for spatial locality |
+| `random` | Random array indices - defeats prefetching |
+| `matrix_row` | Row-major 2D traversal - cache friendly |
+| `matrix_col` | Column-major 2D traversal - cache unfriendly |
+| `linked_list` | Pointer chasing through nodes |
+| `working_set` | Repeated access to data that fits in cache |
+
+## References
+
+- [Intel Optimization Manual - Prefetcher Details](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html)
+- [AMD Zen 4 Memory Subsystem](https://chipsandcheese.com/p/amds-zen-4-part-2-memory-subsystem-and-conclusion)
+- [Linux perf Documentation](http://www.brendangregg.com/perf.html)

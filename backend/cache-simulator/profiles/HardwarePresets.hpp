@@ -157,7 +157,7 @@ inline CacheHierarchyConfig make_aws_graviton3_config() {
              .policy = EvictionPolicy::LRU,
              .write_policy = WritePolicy::Back},
       .inclusion_policy = InclusionPolicy::NINE,
-      .prefetch = PrefetchConfig::amd_default()};  // ARM uses similar prefetch to AMD
+      .prefetch = PrefetchConfig::arm_default()};
 }
 
 // Apple M2 Pro/Max
@@ -322,7 +322,7 @@ inline CacheHierarchyConfig make_raspberry_pi4_config() {
              .policy = EvictionPolicy::LRU,
              .write_policy = WritePolicy::Back},
       .inclusion_policy = InclusionPolicy::Inclusive,
-      .prefetch = PrefetchConfig::amd_default()};  // ARM Cortex similar to AMD
+      .prefetch = PrefetchConfig::arm_default()};
 }
 
 // Apple M3 Pro/Max (latest)

@@ -1,7 +1,7 @@
 # Cache Explorer: Industry-Standard Requirements Specification
 
-**Version:** 1.0  
-**Last Updated:** December 2024  
+**Version:** 1.1
+**Last Updated:** December 31, 2024
 **Goal:** Define every requirement for Cache Explorer to become the industry-standard cache profiling tool — as essential as Compiler Explorer for assembly, as trusted as perf/VTune but with dramatically better UX.
 
 ---
@@ -10,20 +10,20 @@
 
 | Component                   | Status           | Completion |
 | --------------------------- | ---------------- | ---------- |
-| **LLVM Pass**               | ✅ Complete      | 90%        |
-| **Runtime Library**         | ✅ Working       | 70%        |
-| **Cache Simulator**         | ✅ Working       | 90%        |
-| **Multi-Core Support**      | ✅ Working       | 75%        |
-| **False Sharing Detection** | ✅ Working       | 80%        |
-| **CLI Tool**                | ✅ Working       | 70%        |
-| **Web Frontend**            | 🔧 In Progress   | 40%        |
-| **Web Backend**             | ✅ Working       | 75%        |
-| **Documentation**           | 🔧 In Progress   | 40%        |
-| **Hardware Presets**        | ✅ Started       | 40%        |
-| **Testing**                 | ✅ Good coverage | 60%        |
-| **Security (Sandbox)**      | ✅ Complete      | 90%        |
+| **LLVM Pass**               | ✅ Complete      | 95%        |
+| **Runtime Library**         | ✅ Working       | 80%        |
+| **Cache Simulator**         | ✅ Complete      | 95%        |
+| **Multi-Core Support**      | ✅ Complete      | 90%        |
+| **False Sharing Detection** | ✅ Complete      | 90%        |
+| **CLI Tool**                | ✅ Working       | 75%        |
+| **Web Frontend**            | ✅ Working       | 75%        |
+| **Web Backend**             | ✅ Working       | 85%        |
+| **Documentation**           | 🔧 In Progress   | 50%        |
+| **Hardware Presets**        | ✅ Working       | 50%        |
+| **Testing**                 | ✅ Good coverage | 75%        |
+| **Security (Sandbox)**      | ✅ Complete      | 95%        |
 
-**Overall: ~65% complete for 1.0 release**
+**Overall: ~80% complete for 1.0 release**
 
 ### What's Working Now
 
@@ -37,10 +37,10 @@
 
 1. ~~**WebSocket streaming**~~ ✅ Done (real-time streaming mode)
 2. ~~**Docker sandbox**~~ ✅ Done (full container isolation)
-3. **Cache visualization** (the killer feature)
+3. ~~**Cache visualization**~~ ✅ Done (timeline view, cache stats, source annotations)
 4. ~~**Quick Start documentation**~~ ✅ Done (docs/QUICK_START.md)
 5. **Hardware validation** (compare against `perf`)
-6. **Better error messages** (compilation errors)
+6. ~~**Better error messages**~~ ✅ Done (structured error parsing with line/column)
 
 ---
 
@@ -48,36 +48,36 @@
 
 ### 🔴 P0: Must Have for Public Beta (2-3 weeks)
 
-| Task                              | Effort | Impact   | Notes                                               |
-| --------------------------------- | ------ | -------- | --------------------------------------------------- |
-| WebSocket real-time streaming     | 3 days | High     | Currently batch-only, users want live updates       |
-| Docker sandbox for code execution | 3 days | Critical | **Security blocker** — can't go public without this |
-| Better compilation error messages | 1 day  | Medium   | Currently cryptic errors                            |
-| Quick Start documentation         | 1 day  | High     | Users need to get started fast                      |
-| Hardware validation vs perf       | 2 days | High     | Need to prove accuracy claims                       |
+| Task                              | Effort | Impact   | Status | Notes                                               |
+| --------------------------------- | ------ | -------- | ------ | --------------------------------------------------- |
+| WebSocket real-time streaming     | 3 days | High     | ✅ Done | Real-time timeline streaming implemented            |
+| Docker sandbox for code execution | 3 days | Critical | ✅ Done | Full container isolation with seccomp               |
+| Better compilation error messages | 1 day  | Medium   | ✅ Done | Structured parsing with line/column/suggestions     |
+| Quick Start documentation         | 1 day  | High     | ✅ Done | docs/QUICK_START.md                                 |
+| Hardware validation vs perf       | 2 days | High     | Pending | Need to prove accuracy claims                       |
 
 ### 🟡 P1: Should Have for 1.0 (4-6 weeks)
 
-| Task                                  | Effort | Impact        | Notes                                |
-| ------------------------------------- | ------ | ------------- | ------------------------------------ |
-| Cache state visualization (grid view) | 1 week | **Very High** | The killer differentiator            |
-| Access timeline visualization         | 1 week | High          | See patterns over time               |
-| Source line annotations in editor     | 3 days | High          | Monaco decorations for hits/misses   |
-| 6 more hardware presets               | 2 days | Medium        | Intel 14th gen, AMD Zen 3, ARM, etc. |
-| Optimization suggestions              | 1 week | High          | "Consider loop tiling"               |
-| RRIP replacement policy               | 2 days | Medium        | More realistic L3 simulation         |
-| User guide documentation              | 3 days | High          | Complete usage documentation         |
+| Task                                  | Effort | Impact        | Status | Notes                                |
+| ------------------------------------- | ------ | ------------- | ------ | ------------------------------------ |
+| Cache state visualization (grid view) | 1 week | **Very High** | Partial | Timeline + stats done, grid pending  |
+| Access timeline visualization         | 1 week | High          | ✅ Done | Scrubber with event timeline         |
+| Source line annotations in editor     | 3 days | High          | ✅ Done | Monaco decorations with hover info   |
+| 6 more hardware presets               | 2 days | Medium        | Pending | Intel 14th gen, AMD Zen 3, ARM, etc. |
+| Optimization suggestions              | 1 week | High          | ✅ Done | Pattern detection + fix suggestions  |
+| RRIP replacement policy               | 2 days | Medium        | ✅ Done | SRRIP and BRRIP implemented          |
+| User guide documentation              | 3 days | High          | Pending | Complete usage documentation         |
 
 ### 🟢 P2: Nice to Have for 1.0 (if time permits)
 
-| Task                        | Effort  | Impact | Notes                     |
-| --------------------------- | ------- | ------ | ------------------------- |
-| Step-through execution      | 3 days  | Medium | Educational feature       |
-| Memory layout visualization | 1 week  | Medium | Stack/heap/struct layout  |
-| Flamegraph output           | 2 days  | Medium | Alternative visualization |
-| CI/CD integration examples  | 1 day   | Medium | GitHub Actions, GitLab    |
-| Prefetcher simulation       | 1 week  | Low    | Accuracy improvement      |
-| Dark mode                   | 2 hours | Low    | User request              |
+| Task                        | Effort  | Impact | Status | Notes                     |
+| --------------------------- | ------- | ------ | ------ | ------------------------- |
+| Step-through execution      | 3 days  | Medium | Partial | Basic timeline scrubber done |
+| Memory layout visualization | 1 week  | Medium | Pending | Stack/heap/struct layout  |
+| Flamegraph output           | 2 days  | Medium | Pending | Alternative visualization |
+| CI/CD integration examples  | 1 day   | Medium | Pending | GitHub Actions, GitLab    |
+| Prefetcher simulation       | 1 week  | Low    | ✅ Done | 6 policies: none/next-line/stream/stride/adaptive/intel |
+| Dark mode                   | 2 hours | Low    | ✅ Done | Light/dark toggle with persistence |
 
 ### 🔵 P3: Post-1.0 Features
 
@@ -177,9 +177,9 @@ Cache Explorer makes CPU cache behavior visible and understandable, transforming
 
 #### 2.2.2 Required for Industry Standard
 
-- [ ] RRIP (Re-Reference Interval Prediction) — Intel L3
+- [x] SRRIP (Static RRIP) — implemented in CacheLevel.cpp
+- [x] BRRIP (Bimodal RRIP) — scan-resistant variant
 - [ ] DRRIP (Dynamic RRIP) — adaptive version
-- [ ] SRRIP (Static RRIP)
 - [ ] NRU (Not Recently Used)
 - [ ] FIFO (First In First Out)
 - [ ] LFU (Least Frequently Used)
@@ -214,14 +214,17 @@ Cache Explorer makes CPU cache behavior visible and understandable, transforming
 
 ### 2.5 Cache Coherence (Multi-Threading)
 
-#### 2.5.1 MESI Protocol
+#### 2.5.1 MESI Protocol — ✅ Fully Implemented
 
-- [x] Modified state (dirty, exclusive) — tracked via dirty bit
-- [x] Exclusive state (clean, exclusive)
-- [x] Shared state (clean, possibly shared)
-- [x] Invalid state
-- [x] State transition diagram implementation — `CoherenceController.hpp`
+- [x] Modified state (dirty, exclusive) — `CoherenceState::Modified`
+- [x] Exclusive state (clean, exclusive) — `CoherenceState::Exclusive`
+- [x] Shared state (clean, possibly shared) — `CoherenceState::Shared`
+- [x] Invalid state — `CoherenceState::Invalid`
+- [x] State transition diagram implementation — `CacheLevel.cpp`
 - [x] Bus snooping simulation — `request_read()`, `request_exclusive()`
+- [x] Full state machine enforcement — 19 unit tests in MESICoherenceTest.cpp
+- [x] Data forwarding between cores — cache-to-cache transfers
+- [x] Silent writes in Modified state — no bus transaction needed
 - [ ] Snoop filter / directory (for scalability) — basic directory exists
 
 #### 2.5.2 Extended Protocols
@@ -249,20 +252,22 @@ Cache Explorer makes CPU cache behavior visible and understandable, transforming
 
 ### 2.6 Prefetching
 
-#### 2.6.1 Hardware Prefetchers
+#### 2.6.1 Hardware Prefetchers — ✅ Implemented
 
-- [ ] Next-line prefetcher (simplest)
-- [ ] Stride prefetcher (detect strided access patterns)
-- [ ] Stream prefetcher (multiple concurrent streams)
-- [ ] Spatial prefetcher (adjacent cache lines)
-- [ ] Configurable prefetch distance
-- [ ] Prefetch into L1 vs L2 vs L3
+- [x] Next-line prefetcher — `PrefetchPolicy::NEXT_LINE`
+- [x] Stride prefetcher — `PrefetchPolicy::STRIDE` with pattern detection
+- [x] Stream prefetcher — `PrefetchPolicy::STREAM` with 4 concurrent streams
+- [x] Adaptive prefetcher — `PrefetchPolicy::ADAPTIVE` combines stream + stride
+- [x] Intel-style prefetcher — `PrefetchPolicy::INTEL` DCU + IP-stride
+- [x] Configurable prefetch degree (1-4 lines)
+- [x] Per-core prefetch state tracking — `MultiCoreCacheSystem`
+- [x] Prefetch effectiveness metrics (issued, useful, accuracy)
 
 #### 2.6.2 Software Prefetch
 
 - [ ] Recognize `__builtin_prefetch` / `_mm_prefetch`
 - [ ] Prefetch hint types (T0, T1, T2, NTA)
-- [ ] Prefetch effectiveness metrics
+- [x] Prefetch effectiveness metrics — accuracy tracked in PrefetchStats
 
 ### 2.7 TLB Simulation (Optional but Valuable)
 
@@ -421,10 +426,10 @@ typedef struct {
 - [x] Monaco editor integration
 - [x] Syntax highlighting (C, C++, Rust) — via Monaco
 - [x] Line numbers
-- [ ] Click-to-annotate (show hit/miss on line)
-- [ ] Error/warning squiggles from compiler
+- [x] Click-to-annotate (show hit/miss on line) — Monaco decorations
+- [x] Error/warning squiggles from compiler — CompileError markers
 - [ ] Auto-completion (basic)
-- [ ] Multiple file tabs
+- [x] Multiple file tabs — FileTab support with add/remove
 - [x] Code templates/snippets — Examples dropdown
 - [x] Keyboard shortcuts (run button)
 
@@ -450,7 +455,7 @@ typedef struct {
 ##### 4.1.2.3 Statistics Dashboard
 
 - [x] Hit rates per level (L1/L2/L3) — displayed in results
-- [ ] Miss breakdown (compulsory/capacity/conflict)
+- [x] Miss breakdown (compulsory/capacity/conflict) — 3C model in CacheStats
 - [ ] Bandwidth utilization
 - [ ] Working set size over time
 - [x] Top cache-missing lines (source attribution) — hottest lines
@@ -489,7 +494,7 @@ typedef struct {
 #### 4.1.5 User Experience
 
 - [x] Responsive layout
-- [ ] Dark mode
+- [x] Dark mode — theme toggle with localStorage persistence
 - [ ] Keyboard navigation
 - [x] Shareable URLs (encode code + config) — share button
 - [ ] Local storage for recent code
@@ -874,16 +879,19 @@ For each preset, document:
 
 ## 9. Production Features
 
-### 9.1 Optimization Suggestions
+### 9.1 Optimization Suggestions — ✅ Implemented
 
 #### 9.1.1 Pattern Detection
 
+- [x] High miss rate detection with location
+- [x] "False sharing detected between threads" — with padding suggestion
+- [x] "Poor locality" detection — L1 miss rate analysis
+- [x] "High coherence traffic" — invalidation counting
+- [x] Multi-thread contention detection
 - [ ] "Strided access detected — consider loop tiling"
 - [ ] "Column-major access on row-major array — transpose or swap loops"
-- [ ] "False sharing detected between threads"
 - [ ] "Working set exceeds L2 — consider blocking"
 - [ ] "High conflict misses — padding may help"
-- [ ] "Random access pattern — consider cache-oblivious algorithm"
 
 #### 9.1.2 Suggestion Format
 
@@ -1244,7 +1252,7 @@ Example:
 
 **Quality:**
 
-- [x] 80%+ test coverage (34 tests passing)
+- [x] 85+ tests passing (CacheLevel: 22, CacheSystem: 25, MESI: 19, Prefetch: 19)
 - [ ] <5% divergence from perf counters (not validated yet)
 - [ ] Performance within targets (not measured)
 - [x] Security review complete (Docker sandbox implemented)
@@ -1284,8 +1292,7 @@ Example:
 
 - [ ] Complete user documentation
 - [ ] Technical documentation
-- [ ] Video tutorials
-- [ ] Example gallery (started)
+- [x] Example gallery — 10+ built-in examples with descriptions
 
 **Operations:**
 
@@ -1305,15 +1312,15 @@ Example:
 
 ### 16.4 Post-1.0 Roadmap
 
-**1.1 - Multi-Threading:**
+**1.1 - Multi-Threading:** ✅ COMPLETE
 
-- [ ] Full MESI coherence
-- [ ] False sharing detection
-- [ ] Per-thread statistics
+- [x] Full MESI coherence — 19 tests passing
+- [x] False sharing detection — implemented with reports
+- [x] Per-thread statistics — via MultiCoreStats
 
-**1.2 - Advanced Analysis:**
+**1.2 - Advanced Analysis:** Partial
 
-- [ ] Prefetcher simulation
+- [x] Prefetcher simulation — 6 policies with per-core tracking
 - [ ] Timing model
 - [ ] Bandwidth analysis
 

@@ -76,19 +76,26 @@ matrix.c:8 - 7 misses
 
 ### Hardware Presets
 
+Each preset includes vendor-accurate cache specs and prefetch behavior:
+
 ```bash
 # Intel 12th Gen (default)
 ./backend/scripts/cache-explore code.c --config intel
 
-# AMD Zen 4
-./backend/scripts/cache-explore code.c --config amd
+# Intel Xeon (validated against real hardware)
+./backend/scripts/cache-explore code.c --config xeon8488c
 
-# Apple M-Series
+# AMD Zen 4
+./backend/scripts/cache-explore code.c --config zen4
+
+# Apple M-Series (with DMP - data-dependent prefetch)
 ./backend/scripts/cache-explore code.c --config apple
 
 # Educational (smaller caches, easier to understand)
 ./backend/scripts/cache-explore code.c --config educational
 ```
+
+14+ presets available: `intel`, `intel12`, `intel14`, `xeon`, `xeon8488c`, `amd`, `zen3`, `zen4`, `epyc`, `apple`, `apple_m2`, `apple_m3`, `graviton3`, `rpi4`, `embedded`, `educational`
 
 ### Preprocessor Defines
 
@@ -269,11 +276,16 @@ By default, STL is filtered for faster compilation. To include STL analysis:
 CACHE_EXPLORER_INCLUDE_STL=1 ./backend/scripts/cache-explore code.cpp
 ```
 
+## Simulation Accuracy
+
+Cache Explorer is validated against real Intel Xeon hardware with ±4.6% L1 and ±9.3% L2 accuracy.
+See [VALIDATION.md](VALIDATION.md) for methodology and detailed results.
+
 ## Next Steps
 
 - Check out `examples/` for more sample code
-- Read the [Architecture Guide](architecture/) for internals
-- See [PROJECT_REQUIREMENTS.md](../PROJECT_REQUIREMENTS.md) for the full roadmap
+- Read the [User Guide](USER_GUIDE.md) for detailed usage
+- See [VALIDATION.md](VALIDATION.md) for hardware validation results
 
 ## Getting Help
 

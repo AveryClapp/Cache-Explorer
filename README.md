@@ -95,13 +95,15 @@ Your Code → Clang + CacheProfiler.so → Instrumented Binary (2-5x overhead)
 
 ## Hardware Presets
 
-| Vendor | Presets |
-|--------|---------|
-| Intel | 12th Gen, 14th Gen, Xeon |
-| AMD | Zen 3, Zen 4, EPYC |
-| Apple | M1, M2, M3 |
-| ARM | AWS Graviton 3, Raspberry Pi 4, Embedded |
-| Other | Educational (tiny caches), Custom |
+| Vendor | Presets | Prefetch Model |
+|--------|---------|----------------|
+| Intel | 12th Gen, 14th Gen, Xeon, **Xeon 8488C** | Stream + stride, adjacent line |
+| AMD | Zen 3, Zen 4, EPYC | L1+L2 only (L3 victim cache) |
+| Apple | M1, M2, M3 | DMP (pointer prefetch) |
+| ARM | AWS Graviton 3, Raspberry Pi 4, Embedded | Standard stream/stride |
+| Other | Educational (no prefetch), Custom | Configurable |
+
+Each preset includes vendor-specific cache sizes, associativity, and prefetch behavior.
 
 ## Example: Row vs Column Major
 

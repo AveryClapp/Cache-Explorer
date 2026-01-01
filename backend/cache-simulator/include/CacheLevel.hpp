@@ -6,6 +6,7 @@
 #include "EvictionPolicy.hpp"
 #include <cstdlib>
 #include <stdexcept>
+#include <unordered_set>
 #include <vector>
 
 enum class AccessResult { Hit, Miss, MissWithEviction };
@@ -23,6 +24,10 @@ private:
   std::vector<uint64_t> plru_bits;
   uint64_t access_time = 0;
   CacheStats stats;
+
+  // For 3C miss classification
+  std::unordered_set<uint64_t> ever_accessed;  // Track compulsory misses
+  uint64_t unique_lines_accessed = 0;          // For capacity estimation
 
   int find_victim_lru(const std::vector<CacheLine> &set) const;
   int find_victim_plru(uint64_t set_index);
@@ -48,7 +53,11 @@ public:
 
   const CacheConfig &getConfig() const { return config; }
   const CacheStats &getStats() const { return stats; }
-  void resetStats() { stats.reset(); }
+  void resetStats() {
+    stats.reset();
+    ever_accessed.clear();
+    unique_lines_accessed = 0;
+  }
 
   int getNumSets() const { return config.num_sets(); }
   int getAssociativity() const { return config.associativity; }
@@ -58,10 +67,17 @@ public:
 
   AccessInfo access(uint64_t address, bool is_write);
   AccessInfo install(uint64_t address, bool is_dirty = false);
+  AccessInfo install_with_state(uint64_t address, CoherenceState state);
   bool is_present(uint64_t address) const;
   void invalidate(uint64_t address);
   bool is_dirty(uint64_t address) const;
   bool get_line_for_writeback(uint64_t address, bool &was_dirty);
   std::vector<uint64_t> get_all_addresses() const;
   bool probe(uint64_t address) const { return is_present(address); }
+
+  // MESI coherence state management
+  CoherenceState get_coherence_state(uint64_t address) const;
+  void set_coherence_state(uint64_t address, CoherenceState state);
+  bool upgrade_to_modified(uint64_t address);  // Returns true if upgrade was needed
+  void downgrade_to_shared(uint64_t address);
 };

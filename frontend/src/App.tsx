@@ -1693,6 +1693,13 @@ function App() {
   const [config, setConfig] = useState('educational')
   const [optLevel, setOptLevel] = useState('-O0')
   const [prefetchPolicy, setPrefetchPolicy] = useState<PrefetchPolicy>('none')
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('cache-explorer-theme')
+      if (saved === 'light' || saved === 'dark') return saved
+    }
+    return 'dark'
+  })
   const [result, setResult] = useState<CacheResult | null>(null)
   const [stage, setStage] = useState<Stage>('idle')
   const [error, setError] = useState<ErrorResult | null>(null)
@@ -1735,6 +1742,16 @@ function App() {
     }
     document.addEventListener('click', handleClick)
     return () => document.removeEventListener('click', handleClick)
+  }, [])
+
+  // Theme sync
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem('cache-explorer-theme', theme)
+  }, [theme])
+
+  const toggleTheme = useCallback(() => {
+    setTheme(prev => prev === 'dark' ? 'light' : 'dark')
   }, [])
 
   const handleEditorMount = (editor: editor.IStandaloneCodeEditor, monaco: Monaco) => {
@@ -2250,6 +2267,11 @@ function App() {
 
         <div className="topbar-right">
           <button
+            className="theme-toggle"
+            onClick={toggleTheme}
+            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+          />
+          <button
             className="config-badge"
             onClick={() => setShowQuickConfig(true)}
             title="Change configuration"
@@ -2368,7 +2390,7 @@ function App() {
             <DiffEditor
               height="calc(100% - 32px)"
               language={monacoLanguage}
-              theme="vs-dark"
+              theme={theme === 'dark' ? 'vs-dark' : 'light'}
               original={baselineCode}
               modified={code}
               onMount={(editor) => {
@@ -2381,7 +2403,7 @@ function App() {
             <Editor
               height={vimMode ? "calc(100% - 56px)" : "calc(100% - 32px)"}
               language={monacoLanguage}
-              theme="vs-dark"
+              theme={theme === 'dark' ? 'vs-dark' : 'light'}
               value={code}
               onChange={(value) => updateActiveCode(value || '')}
               onMount={handleEditorMount}
