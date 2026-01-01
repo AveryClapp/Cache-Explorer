@@ -944,9 +944,15 @@ select:focus {
 
 .cache-grid-header {
   display: flex;
-  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-md);
   align-items: center;
   margin-bottom: var(--space-md);
+}
+
+.cache-grid-header .cache-grid-title {
+  flex: 1;
+  min-width: 200px;
 }
 
 .cache-grid-title {
@@ -1003,6 +1009,53 @@ select:focus {
 .speed-select:focus {
   outline: none;
   border-color: var(--accent);
+}
+
+.step-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
+.skip-miss {
+  background: var(--bg-hover);
+  border-color: var(--rate-poor);
+  color: var(--rate-poor);
+}
+
+.skip-miss:hover:not(:disabled) {
+  background: var(--rate-poor);
+  border-color: var(--rate-poor);
+  color: #fff;
+}
+
+/* Running stats display */
+.running-stats {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+}
+
+.running-stats .stat-hit {
+  color: var(--rate-excellent);
+  padding: 2px 8px;
+  background: rgba(39, 174, 96, 0.1);
+  border-radius: var(--radius-sm);
+}
+
+.running-stats .stat-miss {
+  color: var(--rate-poor);
+  padding: 2px 8px;
+  background: rgba(231, 76, 60, 0.1);
+  border-radius: var(--radius-sm);
+}
+
+.running-stats .stat-ratio {
+  color: var(--text-secondary);
+  font-weight: 500;
 }
 
 .timeline-scrubber {
@@ -2505,4 +2558,133 @@ input:focus:not(:focus-visible) {
 /* Adjust main content to account for bottom strip */
 .app:has(.bottom-strip) .main {
   padding-bottom: 48px;
+}
+
+/* ===== Cache Grid Visualization ===== */
+.cache-grid-container {
+  padding: var(--space-md);
+}
+
+.cache-grid-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-md);
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.core-selector {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.core-selector label {
+  font-size: var(--text-small);
+  color: var(--text-secondary);
+}
+
+.core-selector select {
+  padding: 4px 8px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--text-small);
+}
+
+.cache-grid-legend {
+  display: flex;
+  gap: var(--space-md);
+  font-size: var(--text-small);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-secondary);
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.cache-grid-info {
+  font-size: var(--text-small);
+  color: var(--text-muted);
+  margin-bottom: var(--space-sm);
+}
+
+.cache-grid {
+  display: grid;
+  gap: 2px;
+  background: var(--bg-panel);
+  padding: var(--space-sm);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+}
+
+.grid-header-cell {
+  font-size: 9px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 2px;
+}
+
+.grid-set-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  text-align: right;
+  padding-right: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.grid-cell {
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.grid-cell:hover {
+  transform: scale(1.3);
+  z-index: 1;
+}
+
+/* MESI State Colors */
+.state-modified {
+  background: var(--error);
+}
+
+.state-exclusive {
+  background: var(--success);
+}
+
+.state-shared {
+  background: var(--accent);
+}
+
+.state-invalid {
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+}
+
+.cache-grid-note {
+  font-size: var(--text-tiny);
+  color: var(--text-muted);
+  margin-top: var(--space-sm);
+  font-style: italic;
+}
+
+.cache-grid-empty {
+  padding: var(--space-lg);
+  text-align: center;
+  color: var(--text-muted);
 }

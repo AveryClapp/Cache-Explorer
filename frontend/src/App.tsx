@@ -109,6 +109,25 @@ interface PrefetchStats {
   accuracy: number
 }
 
+interface CacheLineState {
+  s: number      // set
+  w: number      // way
+  v: number      // valid (0 or 1)
+  t?: string     // tag (hex string)
+  st?: string    // state: M, E, S, I
+}
+
+interface CoreCacheState {
+  core: number
+  sets: number
+  ways: number
+  lines: CacheLineState[]
+}
+
+interface CacheState {
+  l1d: CoreCacheState[]
+}
+
 interface CacheResult {
   config: string
   events: number
@@ -129,6 +148,7 @@ interface CacheResult {
   suggestions?: OptimizationSuggestion[]
   timeline?: TimelineEvent[]  // collected timeline events
   prefetch?: PrefetchStats
+  cacheState?: CacheState
 }
 
 type Language = 'c' | 'cpp' | 'rust'
@@ -875,6 +895,114 @@ function LevelDetail({ name, stats }: { name: string; stats: CacheStats }) {
   )
 }
 
+// L1 Cache Grid Visualization - shows final cache state with MESI colors
+function CacheGrid({ cacheState, coreCount }: { cacheState: CacheState; coreCount: number }) {
+  const [selectedCore, setSelectedCore] = useState(0)
+
+  if (!cacheState.l1d || cacheState.l1d.length === 0) {
+    return <div className="cache-grid-empty">No cache state available</div>
+  }
+
+  const coreData = cacheState.l1d[selectedCore]
+  if (!coreData) return null
+
+  const { sets, ways, lines } = coreData
+
+  // Create a 2D grid from flat lines array
+  const grid: (CacheLineState | null)[][] = Array.from({ length: sets }, () =>
+    Array(ways).fill(null)
+  )
+
+  for (const line of lines) {
+    if (line.s < sets && line.w < ways) {
+      grid[line.s][line.w] = line
+    }
+  }
+
+  const getStateColor = (state?: string) => {
+    switch (state) {
+      case 'M': return 'state-modified'
+      case 'E': return 'state-exclusive'
+      case 'S': return 'state-shared'
+      default: return 'state-invalid'
+    }
+  }
+
+  const getStateLabel = (state?: string) => {
+    switch (state) {
+      case 'M': return 'Modified'
+      case 'E': return 'Exclusive'
+      case 'S': return 'Shared'
+      default: return 'Invalid'
+    }
+  }
+
+  return (
+    <div className="cache-grid-container">
+      <div className="cache-grid-header">
+        {coreCount > 1 && (
+          <div className="core-selector">
+            <label>Core:</label>
+            <select
+              value={selectedCore}
+              onChange={(e) => setSelectedCore(Number(e.target.value))}
+            >
+              {Array.from({ length: coreCount }, (_, i) => (
+                <option key={i} value={i}>Core {i}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        <div className="cache-grid-legend">
+          <span className="legend-item"><span className="legend-color state-modified"></span>Modified</span>
+          <span className="legend-item"><span className="legend-color state-exclusive"></span>Exclusive</span>
+          <span className="legend-item"><span className="legend-color state-shared"></span>Shared</span>
+          <span className="legend-item"><span className="legend-color state-invalid"></span>Invalid</span>
+        </div>
+      </div>
+
+      <div className="cache-grid-info">
+        L1D: {sets} sets × {ways} ways = {sets * ways} lines
+      </div>
+
+      <div className="cache-grid" style={{
+        gridTemplateColumns: `auto repeat(${ways}, 1fr)`,
+        maxWidth: Math.min(ways * 24 + 40, 600)
+      }}>
+        {/* Header row */}
+        <div className="grid-header-cell"></div>
+        {Array.from({ length: ways }, (_, w) => (
+          <div key={`h${w}`} className="grid-header-cell">W{w}</div>
+        ))}
+
+        {/* Data rows - show all sets or paginate if too many */}
+        {grid.slice(0, Math.min(sets, 64)).map((row, setIdx) => {
+          const cells = [
+            <div key={`label-${setIdx}`} className="grid-set-label">S{setIdx}</div>,
+            ...row.map((line, wayIdx) => (
+              <div
+                key={`${setIdx}-${wayIdx}`}
+                className={`grid-cell ${line?.v ? getStateColor(line.st) : 'state-invalid'}`}
+                title={line?.v
+                  ? `Set ${setIdx}, Way ${wayIdx}\nTag: ${line.t}\nState: ${getStateLabel(line.st)}`
+                  : `Set ${setIdx}, Way ${wayIdx}\nEmpty`
+                }
+              />
+            ))
+          ]
+          return cells
+        })}
+      </div>
+
+      {sets > 64 && (
+        <div className="cache-grid-note">
+          Showing first 64 of {sets} sets
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Cache line state for visualization
 interface CacheLine {
   valid: boolean
@@ -899,6 +1027,39 @@ function InteractiveCacheGrid({
   const [isPlaying, setIsPlaying] = useState(false)
   const [playSpeed, setPlaySpeed] = useState(10)  // events per second
   const playRef = useRef<number | null>(null)
+
+  // Calculate running stats up to current index
+  const runningStats = useMemo(() => {
+    let hits = 0, misses = 0, reads = 0, writes = 0
+    for (let i = 0; i < currentIndex; i++) {
+      const e = timeline[i]
+      if (e.l === 1) hits++
+      else misses++
+      if (e.t === 'R') reads++
+      else if (e.t === 'W') writes++
+    }
+    return { hits, misses, reads, writes }
+  }, [timeline, currentIndex])
+
+  // Find next miss event
+  const findNextMiss = () => {
+    for (let i = currentIndex; i < timeline.length; i++) {
+      if (timeline[i].l !== 1) {  // Not an L1 hit
+        return i + 1  // Return 1-indexed position
+      }
+    }
+    return timeline.length  // No more misses, go to end
+  }
+
+  // Find previous miss event
+  const findPrevMiss = () => {
+    for (let i = currentIndex - 2; i >= 0; i--) {
+      if (timeline[i].l !== 1) {  // Not an L1 hit
+        return i + 1  // Return 1-indexed position
+      }
+    }
+    return 0  // No previous miss, go to start
+  }
 
   // Compute cache state up to currentIndex
   const cacheState = useMemo(() => {
@@ -1017,6 +1178,7 @@ function InteractiveCacheGrid({
             className="play-btn"
             onClick={() => setIsPlaying(!isPlaying)}
             disabled={currentIndex >= timeline.length}
+            title={isPlaying ? 'Pause' : 'Play'}
           >
             {isPlaying ? '⏸' : '▶'}
           </button>
@@ -1024,6 +1186,7 @@ function InteractiveCacheGrid({
             className="step-btn"
             onClick={() => onIndexChange(Math.max(0, currentIndex - 1))}
             disabled={currentIndex <= 0}
+            title="Previous event"
           >
             ◀
           </button>
@@ -1031,13 +1194,32 @@ function InteractiveCacheGrid({
             className="step-btn"
             onClick={() => onIndexChange(Math.min(timeline.length, currentIndex + 1))}
             disabled={currentIndex >= timeline.length}
+            title="Next event"
           >
             ▶
+          </button>
+          <div className="step-divider" />
+          <button
+            className="step-btn skip-miss"
+            onClick={() => onIndexChange(findPrevMiss())}
+            disabled={currentIndex <= 0}
+            title="Previous miss"
+          >
+            ⏮
+          </button>
+          <button
+            className="step-btn skip-miss"
+            onClick={() => onIndexChange(findNextMiss())}
+            disabled={currentIndex >= timeline.length}
+            title="Next miss"
+          >
+            ⏭
           </button>
           <select
             className="speed-select"
             value={playSpeed}
             onChange={(e) => setPlaySpeed(Number(e.target.value))}
+            title="Playback speed"
           >
             <option value={1}>1x</option>
             <option value={5}>5x</option>
@@ -1045,6 +1227,13 @@ function InteractiveCacheGrid({
             <option value={50}>50x</option>
             <option value={100}>100x</option>
           </select>
+        </div>
+        <div className="running-stats">
+          <span className="stat-hit" title="L1 Hits">{runningStats.hits} hits</span>
+          <span className="stat-miss" title="L1 Misses">{runningStats.misses} miss</span>
+          <span className="stat-ratio" title="Hit Rate">
+            {currentIndex > 0 ? ((runningStats.hits / currentIndex) * 100).toFixed(1) : 0}%
+          </span>
         </div>
       </div>
 
@@ -2588,6 +2777,19 @@ function App() {
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {result.cacheState && (
+                <div className="panel">
+                  <div className="panel-header">
+                    <span className="panel-title">L1 Cache Grid</span>
+                    <span className="panel-badge">Final State</span>
+                  </div>
+                  <CacheGrid
+                    cacheState={result.cacheState}
+                    coreCount={result.cores || 1}
+                  />
                 </div>
               )}
             </>

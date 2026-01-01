@@ -75,11 +75,24 @@ Shows which source lines cause the most cache activity:
 
 ### Cache Grid Visualization
 
-The interactive grid shows L1 cache state:
-- Each **row** is a cache set
-- Each **column** is a way (slot in the set)
-- **Color intensity** shows recency (brighter = more recent)
-- Use the **timeline scrubber** to step through execution
+The cache grid shows the final state of the L1 data cache after execution:
+
+**Grid Layout:**
+- Each **row** is a cache set (typically 64 sets for a 32KB L1)
+- Each **column** is a way (slot within the set)
+- **Hover** over a cell to see the tag and state details
+
+**MESI State Colors:**
+
+| Color | State | Meaning |
+|-------|-------|---------|
+| Orange/Red | Modified (M) | Data is dirty, only this cache has it |
+| Green | Exclusive (E) | Data is clean, only this cache has it |
+| Blue | Shared (S) | Data is clean, may be in other caches |
+| Gray | Invalid (I) | Cache line is empty or invalidated |
+
+**Multi-Core Support:**
+For simulations with multiple cores, use the **Core** dropdown above the grid to view each core's L1 cache. This is useful for visualizing cache coherence behavior and seeing how different threads use their private caches
 
 ### Optimization Suggestions
 

@@ -97,4 +97,7 @@ public:
 
   size_t get_thread_count() const { return seen_threads.size(); }
   int get_num_cores() const { return cache.get_num_cores(); }
+
+  // Access to cache system for visualization
+  const MultiCoreCacheSystem& get_cache_system() const { return cache; }
 };

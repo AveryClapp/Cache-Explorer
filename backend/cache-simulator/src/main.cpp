@@ -17,6 +17,7 @@ void print_usage(const char *prog) {
             << "  --verbose         Print each cache event\n"
             << "  --json            Output JSON format\n"
             << "  --stream          Stream individual events as JSON (for real-time)\n"
+            << "  --flamegraph      Output SVG flamegraph of cache misses\n"
             << "  --help            Show this help\n"
             << "\nCustom cache config (use with --config custom):\n"
             << "  --l1-size <bytes>   L1 cache size (default: 32768)\n"
@@ -89,12 +90,153 @@ std::string escape_json(const std::string &s) {
   return out;
 }
 
+const char* coherence_state_char(CoherenceState s) {
+  switch (s) {
+    case CoherenceState::Modified: return "M";
+    case CoherenceState::Exclusive: return "E";
+    case CoherenceState::Shared: return "S";
+    case CoherenceState::Invalid: return "I";
+  }
+  return "I";
+}
+
+// Output L1 cache state for visualization
+// multicore=true uses actual coherence state, multicore=false derives from dirty bit
+void output_cache_state_json(const CacheLevel& l1, int core, bool first, bool multicore = true) {
+  const auto& sets = l1.get_sets();
+  int num_sets = l1.getNumSets();
+  int assoc = l1.getAssociativity();
+
+  if (!first) std::cout << ",";
+  std::cout << "{\"core\":" << core
+            << ",\"sets\":" << num_sets
+            << ",\"ways\":" << assoc
+            << ",\"lines\":[";
+
+  bool first_line = true;
+  for (int set = 0; set < num_sets; set++) {
+    for (int way = 0; way < assoc; way++) {
+      const auto& line = sets[set][way];
+      if (!first_line) std::cout << ",";
+      first_line = false;
+
+      if (line.valid) {
+        const char* state;
+        if (multicore) {
+          state = coherence_state_char(line.coherence_state);
+        } else {
+          // Single-core: derive state from dirty bit (M=dirty, E=clean)
+          state = line.dirty ? "M" : "E";
+        }
+        std::cout << "{\"s\":" << set
+                  << ",\"w\":" << way
+                  << ",\"v\":1"
+                  << ",\"t\":\"0x" << std::hex << line.tag << std::dec << "\""
+                  << ",\"st\":\"" << state << "\"}";
+      } else {
+        std::cout << "{\"s\":" << set << ",\"w\":" << way << ",\"v\":0}";
+      }
+    }
+  }
+  std::cout << "]}";
+}
+
+// Generate SVG flamegraph showing cache miss distribution
+template<typename HotLineType>
+void output_flamegraph_svg(const std::vector<HotLineType>& hot_lines, const std::string& title) {
+  if (hot_lines.empty()) {
+    std::cout << "<!-- No cache misses to display -->\n";
+    return;
+  }
+
+  // SVG dimensions
+  const int width = 800;
+  const int bar_height = 20;
+  const int margin = 40;
+  const int title_height = 30;
+  const int legend_height = 40;
+
+  // Calculate max misses for scaling
+  uint64_t max_misses = 0;
+  uint64_t total_misses = 0;
+  for (const auto& h : hot_lines) {
+    if (h.misses > max_misses) max_misses = h.misses;
+    total_misses += h.misses;
+  }
+
+  int height = title_height + (hot_lines.size() * (bar_height + 4)) + legend_height + margin;
+
+  // SVG header
+  std::cout << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
+  std::cout << "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 " << width << " " << height << "\">\n";
+  std::cout << "<style>\n";
+  std::cout << "  .title { font: bold 16px sans-serif; fill: #333; }\n";
+  std::cout << "  .label { font: 11px monospace; fill: #fff; }\n";
+  std::cout << "  .count { font: 10px sans-serif; fill: #666; }\n";
+  std::cout << "  .legend { font: 12px sans-serif; fill: #666; }\n";
+  std::cout << "  .bar { cursor: pointer; }\n";
+  std::cout << "  .bar:hover { opacity: 0.8; }\n";
+  std::cout << "</style>\n";
+
+  // Background
+  std::cout << "<rect width=\"100%\" height=\"100%\" fill=\"#fafafa\"/>\n";
+
+  // Title
+  std::cout << "<text x=\"" << margin << "\" y=\"24\" class=\"title\">"
+            << title << " - Cache Miss Distribution</text>\n";
+
+  // Bars
+  int y = title_height + 10;
+  for (const auto& h : hot_lines) {
+    double bar_width = (double)(h.misses) / max_misses * (width - 2 * margin - 100);
+    if (bar_width < 1) bar_width = 1;
+
+    // Color based on miss rate
+    std::string color;
+    double miss_rate = h.miss_rate();
+    if (miss_rate > 0.5) color = "#e74c3c";       // Red - high miss rate
+    else if (miss_rate > 0.2) color = "#f39c12";  // Orange - medium
+    else color = "#27ae60";                        // Green - low
+
+    // Bar
+    std::cout << "<g class=\"bar\">\n";
+    std::cout << "  <rect x=\"" << margin << "\" y=\"" << y
+              << "\" width=\"" << bar_width << "\" height=\"" << bar_height
+              << "\" fill=\"" << color << "\" rx=\"2\"/>\n";
+
+    // Label (file:line)
+    std::string label = h.file + ":" + std::to_string(h.line);
+    if (label.length() > 30) {
+      label = "..." + label.substr(label.length() - 27);
+    }
+    std::cout << "  <text x=\"" << (margin + 4) << "\" y=\"" << (y + 14)
+              << "\" class=\"label\">" << label << "</text>\n";
+
+    // Count on right
+    std::cout << "  <text x=\"" << (width - margin + 5) << "\" y=\"" << (y + 14)
+              << "\" class=\"count\">" << h.misses << " ("
+              << std::fixed << std::setprecision(1) << (miss_rate * 100) << "%)</text>\n";
+    std::cout << "</g>\n";
+
+    y += bar_height + 4;
+  }
+
+  // Legend
+  y += 10;
+  std::cout << "<text x=\"" << margin << "\" y=\"" << y
+            << "\" class=\"legend\">Total: " << total_misses << " misses across "
+            << hot_lines.size() << " locations</text>\n";
+
+  std::cout << "</svg>\n";
+}
+
 int main(int argc, char *argv[]) {
   std::string config_name = "intel";
   int num_cores = 0; // 0 = auto-detect
   bool verbose = false;
   bool json_output = false;
   bool stream_mode = false;
+  bool flamegraph_output = false;
 
   // Prefetching options - will be set from preset config unless overridden
   PrefetchPolicy prefetch_policy = PrefetchPolicy::NONE;
@@ -119,6 +261,8 @@ int main(int argc, char *argv[]) {
     } else if (arg == "--stream") {
       stream_mode = true;
       json_output = true;  // Streaming implies JSON
+    } else if (arg == "--flamegraph") {
+      flamegraph_output = true;
     } else if (arg == "--l1-size" && i + 1 < argc) {
       l1_size = std::stoull(argv[++i]);
     } else if (arg == "--l1-assoc" && i + 1 < argc) {
@@ -423,8 +567,13 @@ int main(int argc, char *argv[]) {
     }
 
     auto stats = processor.get_stats();
-    auto hot = processor.get_hot_lines(10);
+    auto hot = processor.get_hot_lines(flamegraph_output ? 20 : 10);  // More lines for flamegraph
     auto false_sharing = processor.get_false_sharing_reports();
+
+    if (flamegraph_output) {
+      output_flamegraph_svg(hot, config_name + " (multi-core)");
+      return 0;
+    }
 
     if (json_output) {
       std::cout << "{\n";
@@ -521,7 +670,19 @@ int main(int argc, char *argv[]) {
                   << "\"fix\": \"" << escape_json(s.fix) << "\"}"
                   << (i + 1 < suggestions.size() ? ",\n" : "\n");
       }
-      std::cout << "  ]\n";
+      std::cout << "  ],\n";
+
+      // Output L1 cache state for visualization
+      std::cout << "  \"cacheState\": {\"l1d\": [";
+      const auto& cache_sys = processor.get_cache_system();
+      for (int core = 0; core < num_cores; core++) {
+        const CacheLevel* l1 = cache_sys.get_l1_cache(core);
+        if (l1) {
+          output_cache_state_json(*l1, core, core == 0);
+        }
+      }
+      std::cout << "]}\n";
+
       std::cout << "}\n";
     } else {
       std::cout << "\n=== Multi-Core Cache Simulation ===\n";
@@ -621,7 +782,12 @@ int main(int argc, char *argv[]) {
     }
 
     auto stats = processor.get_stats();
-    auto hot = processor.get_hot_lines(10);
+    auto hot = processor.get_hot_lines(20);  // Get more for flamegraph
+
+    if (flamegraph_output) {
+      output_flamegraph_svg(hot, config_name);
+      return 0;
+    }
 
     if (json_output) {
       std::cout << "{\n";
@@ -708,6 +874,13 @@ int main(int argc, char *argv[]) {
                   << "    \"accuracy\": " << std::fixed << std::setprecision(3) << pf_stats.accuracy() << "\n"
                   << "  }";
       }
+
+      // Output L1 cache state for visualization (single core = core 0)
+      std::cout << ",\n  \"cacheState\": {\"l1d\": [";
+      const auto& cache_sys = processor.get_cache_system();
+      output_cache_state_json(cache_sys.get_l1d(), 0, true, false);  // false = single-core mode
+      std::cout << "]}";
+
       std::cout << "\n}\n";
     } else {
       std::cout << "\n=== Cache Simulation Results ===\n";

@@ -292,6 +292,12 @@ public:
     return l1_caches[core]->is_present(line_addr);
   }
 
+  // Cache state access for visualization
+  const CacheLevel* get_l1_cache(int core) const {
+    if (core < 0 || core >= num_cores) return nullptr;
+    return l1_caches[core].get();
+  }
+
   // Prefetcher configuration accessors
   PrefetchPolicy get_prefetch_policy() const { return prefetch_policy; }
   int get_prefetch_degree() const { return prefetch_degree; }

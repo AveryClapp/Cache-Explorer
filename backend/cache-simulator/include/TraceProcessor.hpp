@@ -109,4 +109,7 @@ public:
     cache.reset_stats();
     source_stats.clear();
   }
+
+  // Access to cache system for visualization
+  const CacheSystem& get_cache_system() const { return cache; }
 };

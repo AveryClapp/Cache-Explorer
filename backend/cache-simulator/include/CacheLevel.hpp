@@ -75,6 +75,9 @@ public:
   std::vector<uint64_t> get_all_addresses() const;
   bool probe(uint64_t address) const { return is_present(address); }
 
+  // Get full cache state for visualization
+  const std::vector<std::vector<CacheLine>>& get_sets() const { return sets; }
+
   // MESI coherence state management
   CoherenceState get_coherence_state(uint64_t address) const;
   void set_coherence_state(uint64_t address, CoherenceState state);
