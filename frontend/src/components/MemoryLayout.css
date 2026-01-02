@@ -1,0 +1,216 @@
+.memory-layout-container {
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 12px;
+  background: #1e1e1e;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.view-mode-toggle {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.view-mode-toggle button {
+  flex: 1;
+  padding: 6px 12px;
+  background: #2d2d2d;
+  border: 1px solid #444;
+  color: #888;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  transition: all 0.2s;
+}
+
+.view-mode-toggle button:hover {
+  background: #3d3d3d;
+}
+
+.view-mode-toggle button.active {
+  background: #4a90d9;
+  border-color: #2e6eb0;
+  color: #fff;
+}
+
+.memory-regions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.address-label {
+  text-align: center;
+  color: #666;
+  font-size: 10px;
+  padding: 4px;
+}
+
+.address-label.high {
+  border-bottom: 1px dashed #444;
+}
+
+.address-label.low {
+  border-top: 1px dashed #444;
+}
+
+.memory-region {
+  padding: 12px;
+  border: 2px solid;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.memory-region:hover {
+  transform: translateX(4px);
+  box-shadow: -4px 0 12px rgba(0, 0, 0, 0.3);
+}
+
+.memory-region.highlighted {
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(255, 255, 255, 0); }
+}
+
+.region-name {
+  font-weight: bold;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.region-range {
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+.region-size {
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.region-stats {
+  font-size: 10px;
+  margin-top: 4px;
+  opacity: 0.9;
+}
+
+.memory-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #333;
+}
+
+.legend-item {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 3px;
+}
+
+/* Access list view */
+.access-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.no-accesses {
+  color: #666;
+  text-align: center;
+  padding: 20px;
+}
+
+.access-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.access-item:hover {
+  background: #2d2d2d;
+}
+
+.access-item.highlighted {
+  background: #3a3a00;
+}
+
+.access-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.access-address {
+  font-family: monospace;
+  color: #4a90d9;
+  flex: 1;
+}
+
+.access-type {
+  color: #888;
+  font-size: 10px;
+  width: 30px;
+}
+
+.access-region {
+  color: #50c878;
+  font-size: 10px;
+  width: 60px;
+}
+
+.access-count {
+  color: #666;
+  font-size: 10px;
+  width: 30px;
+  text-align: right;
+}
+
+.hit-legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #333;
+}
+
+.legend-title {
+  color: #888;
+  font-size: 11px;
+}
+
+.hit-item {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  color: #fff;
+}
+
+.memory-tooltip {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  background: #2d2d2d;
+  border: 1px solid #555;
+  border-radius: 6px;
+  padding: 10px;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  font-size: 11px;
+  color: #ddd;
+}
+
+.memory-tooltip strong {
+  color: #fff;
+}

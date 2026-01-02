@@ -9,6 +9,125 @@ import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { checkSandboxAvailable, runInSandbox, parseSandboxError } from './sandbox.js';
 
+// ============================================================================
+// Configuration
+// ============================================================================
+
+const CONFIG = {
+  // Timeout settings (in milliseconds)
+  timeouts: {
+    default: 60000,           // 60 seconds default
+    max: 300000,              // 5 minutes maximum
+    min: 5000,                // 5 seconds minimum
+    compilation: 30000,       // 30 seconds for compilation phase
+    heartbeat: 5000,          // 5 seconds heartbeat interval
+  },
+
+  // Memory limits
+  memory: {
+    maxOutputBuffer: 50 * 1024 * 1024,  // 50MB max output
+    maxEventBatch: 1000,                 // Events per batch when streaming
+  },
+
+  // Rate limiting
+  rateLimit: {
+    maxRequestsPerMinute: 30,   // Per connection
+    maxConcurrentProcesses: 5,  // Per connection
+    windowMs: 60000,            // 1 minute window
+  },
+
+  // Event streaming
+  streaming: {
+    batchSize: 100,             // Events per batch
+    batchIntervalMs: 100,       // Batch every 100ms
+    progressIntervalMs: 1000,   // Progress update interval
+  },
+
+  // Cleanup
+  cleanup: {
+    tempDirMaxAgeMs: 300000,    // 5 minutes
+    orphanCheckIntervalMs: 60000, // Check every minute
+  }
+};
+
+// ============================================================================
+// Resource Management
+// ============================================================================
+
+// Track active processes per connection
+const connectionResources = new Map();
+
+class ConnectionResourceTracker {
+  constructor(connectionId) {
+    this.connectionId = connectionId;
+    this.processes = new Set();
+    this.tempDirs = new Set();
+    this.requestTimes = [];
+    this.heartbeatInterval = null;
+  }
+
+  // Rate limiting
+  checkRateLimit() {
+    const now = Date.now();
+    // Remove old requests outside the window
+    this.requestTimes = this.requestTimes.filter(
+      t => now - t < CONFIG.rateLimit.windowMs
+    );
+
+    if (this.requestTimes.length >= CONFIG.rateLimit.maxRequestsPerMinute) {
+      return false;
+    }
+
+    this.requestTimes.push(now);
+    return true;
+  }
+
+  canStartProcess() {
+    return this.processes.size < CONFIG.rateLimit.maxConcurrentProcesses;
+  }
+
+  addProcess(proc, tempDir) {
+    this.processes.add(proc);
+    if (tempDir) {
+      this.tempDirs.add(tempDir);
+    }
+    return () => this.removeProcess(proc, tempDir);
+  }
+
+  removeProcess(proc, tempDir) {
+    this.processes.delete(proc);
+    // Temp dir cleanup is handled separately
+  }
+
+  async cleanup() {
+    // Kill all active processes
+    for (const proc of this.processes) {
+      try {
+        proc.kill('SIGKILL');
+      } catch {
+        // Ignore kill errors
+      }
+    }
+    this.processes.clear();
+
+    // Clear heartbeat
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+
+    // Cleanup temp directories
+    for (const tempDir of this.tempDirs) {
+      await cleanupTempProject(tempDir);
+    }
+    this.tempDirs.clear();
+  }
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
 // Helper to create temp directory with files
 async function createTempProject(files, language = 'c') {
   const extensions = { c: '.c', cpp: '.cpp', rust: '.rs' };
@@ -43,6 +162,36 @@ async function cleanupTempProject(tempDir) {
   }
 }
 
+// Cleanup orphaned temp directories periodically
+async function cleanupOrphanedTempDirs() {
+  try {
+    const tmpDir = '/tmp';
+    const entries = await readdir(tmpDir);
+    const now = Date.now();
+
+    for (const entry of entries) {
+      if (entry.startsWith('cache-explorer-')) {
+        const fullPath = join(tmpDir, entry);
+        try {
+          const { mtime } = await import('fs').then(fs =>
+            fs.promises.stat(fullPath)
+          );
+          if (now - mtime.getTime() > CONFIG.cleanup.tempDirMaxAgeMs) {
+            await rm(fullPath, { recursive: true, force: true });
+          }
+        } catch {
+          // Ignore stat/cleanup errors
+        }
+      }
+    }
+  } catch {
+    // Ignore cleanup errors
+  }
+}
+
+// Start periodic cleanup
+setInterval(cleanupOrphanedTempDirs, CONFIG.cleanup.orphanCheckIntervalMs);
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const BACKEND_DIR = dirname(__dirname);
 const CACHE_EXPLORE = join(BACKEND_DIR, 'scripts', 'cache-explore');
@@ -58,12 +207,9 @@ checkSandboxAvailable().then(available => {
   }
 });
 
-const app = express();
-app.use(cors());
-app.use(express.json({ limit: '1mb' }));
-
-const server = createServer(app);
-const wss = new WebSocketServer({ server, path: '/ws' });
+// ============================================================================
+// Error Handling
+// ============================================================================
 
 // Common error patterns and their helpful suggestions
 const errorSuggestions = {
@@ -98,6 +244,34 @@ const errorSuggestions = {
   'member reference': 'Using . or -> incorrectly - check if pointer or value',
   'called object': 'Trying to call something that is not a function',
 };
+
+// Runtime error patterns
+const runtimeErrorPatterns = [
+  { pattern: /Segmentation fault|SIGSEGV/, type: 'segfault',
+    message: 'Program crashed (segmentation fault)',
+    suggestion: 'Check for null pointer access, array out of bounds, or stack overflow' },
+  { pattern: /Abort|SIGABRT/, type: 'abort',
+    message: 'Program aborted',
+    suggestion: 'Check for failed assertions or memory corruption' },
+  { pattern: /Bus error|SIGBUS/, type: 'bus_error',
+    message: 'Bus error (bad memory access)',
+    suggestion: 'Check for misaligned memory access or mmap issues' },
+  { pattern: /Floating point exception|SIGFPE/, type: 'fpe',
+    message: 'Floating point exception',
+    suggestion: 'Check for division by zero or invalid floating point operation' },
+  { pattern: /Illegal instruction|SIGILL/, type: 'illegal_instruction',
+    message: 'Illegal instruction',
+    suggestion: 'Program tried to execute invalid CPU instruction' },
+  { pattern: /stack smashing|stack-protector/, type: 'stack_overflow',
+    message: 'Stack buffer overflow detected',
+    suggestion: 'Array is being written past its bounds - check array sizes' },
+  { pattern: /killed|SIGKILL/, type: 'killed',
+    message: 'Program was killed (memory limit exceeded?)',
+    suggestion: 'Reduce memory usage or array sizes' },
+  { pattern: /out of memory|cannot allocate/, type: 'oom',
+    message: 'Out of memory',
+    suggestion: 'Reduce memory allocations or use smaller data structures' },
+];
 
 // Parse clang error output into structured format
 function parseCompileErrors(stderr, tempFile) {
@@ -192,29 +366,24 @@ function parseCompileErrors(stderr, tempFile) {
     };
   }
 
-  // Check for runtime errors
-  if (stderr.includes('Segmentation fault') || stderr.includes('SIGSEGV')) {
-    return {
-      type: 'runtime_error',
-      message: 'Program crashed (segmentation fault)',
-      suggestion: 'Check for null pointer access, array out of bounds, or stack overflow',
-      raw: stderr
-    };
+  // Check for runtime errors using patterns
+  for (const { pattern, type, message, suggestion } of runtimeErrorPatterns) {
+    if (pattern.test(stderr)) {
+      return {
+        type: 'runtime_error',
+        errorType: type,
+        message,
+        suggestion,
+        raw: stderr
+      };
+    }
   }
 
-  if (stderr.includes('Abort') || stderr.includes('SIGABRT')) {
-    return {
-      type: 'runtime_error',
-      message: 'Program aborted',
-      suggestion: 'Check for failed assertions or memory corruption',
-      raw: stderr
-    };
-  }
-
+  // Check for timeout
   if (stderr.includes('timeout') || stderr.includes('timed out')) {
     return {
       type: 'timeout',
-      message: 'Execution timed out (10s limit)',
+      message: 'Execution timed out',
       suggestion: 'Check for infinite loops or reduce input size'
     };
   }
@@ -226,8 +395,103 @@ function parseCompileErrors(stderr, tempFile) {
   };
 }
 
+// Create a detailed error response
+function createErrorResponse(error, mainFile, options = {}) {
+  const { includePartialResults = false, partialResults = null } = options;
+
+  // First, check if stdout contains JSON error from cache-explore script
+  if (error.stdout) {
+    try {
+      const jsonError = JSON.parse(error.stdout.trim());
+      if (jsonError.error) {
+        const errorFile = error.mainFile || mainFile;
+        const parsed = jsonError.details
+          ? parseCompileErrors(jsonError.details, errorFile)
+          : { type: 'compile_error', message: jsonError.error };
+
+        parsed.raw = jsonError.details || error.stdout;
+        if (error.exitCode !== undefined) {
+          parsed.exitCode = error.exitCode;
+        }
+        if (includePartialResults && partialResults) {
+          parsed.partialResults = partialResults;
+        }
+        return parsed;
+      }
+    } catch {
+      // Not JSON, continue to other error handling
+    }
+  }
+
+  // Check for timeout with partial results
+  if (error.timeout) {
+    const result = {
+      type: 'timeout',
+      message: `Execution timed out after ${Math.round(error.timeoutMs / 1000)}s`,
+      suggestion: 'Check for infinite loops, reduce input size, or increase timeout'
+    };
+    if (includePartialResults && partialResults) {
+      result.partialResults = partialResults;
+      result.message += ' - partial results available';
+    }
+    return result;
+  }
+
+  // Parse stderr for compile errors
+  if (error.stderr) {
+    const errorFile = error.mainFile || mainFile;
+    const parsed = parseCompileErrors(error.stderr, errorFile);
+    parsed.raw = error.stderr;
+    if (error.exitCode !== undefined) {
+      parsed.exitCode = error.exitCode;
+    }
+    if (includePartialResults && partialResults) {
+      parsed.partialResults = partialResults;
+    }
+    return parsed;
+  }
+
+  if (error.message) {
+    return {
+      type: 'server_error',
+      message: error.message,
+      raw: error.stack || error.message
+    };
+  }
+
+  return {
+    type: 'server_error',
+    message: 'Unknown error occurred',
+    raw: JSON.stringify(error, null, 2)
+  };
+}
+
+// ============================================================================
+// Express App Setup
+// ============================================================================
+
+const app = express();
+app.use(cors());
+app.use(express.json({ limit: '1mb' }));
+
+const server = createServer(app);
+const wss = new WebSocketServer({ server, path: '/ws' });
+
+// ============================================================================
+// HTTP Endpoints
+// ============================================================================
+
 app.post('/compile', async (req, res) => {
-  const { code, files, config = 'educational', optLevel = '-O0', language = 'c', sample, limit } = req.body;
+  const {
+    code,
+    files,
+    config = 'educational',
+    optLevel = '-O0',
+    language = 'c',
+    sample,
+    limit,
+    timeout: requestedTimeout
+  } = req.body;
 
   // Support both single code string and files array
   const inputFiles = files || (code ? code : null);
@@ -238,6 +502,12 @@ app.post('/compile', async (req, res) => {
   // Apply sensible defaults for web UI to prevent timeouts
   const eventLimit = limit !== undefined ? limit : 5000000;  // 5M events max (~30s runtime)
   const sampleRate = sample !== undefined ? sample : 1;       // No sampling by default
+
+  // Configurable timeout with bounds
+  const timeout = Math.min(
+    Math.max(requestedTimeout || CONFIG.timeouts.default, CONFIG.timeouts.min),
+    CONFIG.timeouts.max
+  );
 
   // Use Docker sandbox if available (production), otherwise direct execution (development)
   if (sandboxAvailable) {
@@ -252,7 +522,8 @@ app.post('/compile', async (req, res) => {
         sampleRate,
         eventLimit,
         customConfig: req.body.customConfig,
-        defines: req.body.defines || []
+        defines: req.body.defines || [],
+        timeout
       });
 
       const output = result.stdout.trim();
@@ -325,19 +596,40 @@ app.post('/compile', async (req, res) => {
 
       let stdout = '';
       let stderr = '';
+      let killed = false;
 
-      proc.stdout.on('data', (data) => { stdout += data; });
+      // Set up timeout
+      const timeoutId = setTimeout(() => {
+        killed = true;
+        proc.kill('SIGTERM');
+        setTimeout(() => proc.kill('SIGKILL'), 1000);
+      }, timeout);
+
+      proc.stdout.on('data', (data) => {
+        stdout += data;
+        // Prevent excessive memory usage
+        if (stdout.length > CONFIG.memory.maxOutputBuffer) {
+          killed = true;
+          proc.kill('SIGKILL');
+        }
+      });
       proc.stderr.on('data', (data) => { stderr += data; });
 
       proc.on('close', (exitCode) => {
-        if (exitCode !== 0) {
+        clearTimeout(timeoutId);
+        if (killed && exitCode !== 0) {
+          reject({ stdout, stderr, exitCode, mainFile, timeout: true, timeoutMs: timeout });
+        } else if (exitCode !== 0) {
           reject({ stdout, stderr, exitCode, mainFile });
         } else {
           resolve({ stdout, stderr });
         }
       });
 
-      proc.on('error', reject);
+      proc.on('error', (err) => {
+        clearTimeout(timeoutId);
+        reject(err);
+      });
     });
 
     const output = result.stdout.trim();
@@ -350,52 +642,8 @@ app.post('/compile', async (req, res) => {
     }
   } catch (err) {
     console.error('HTTP compile error:', err);
-
-    // First, check if stdout contains JSON error from cache-explore script
-    if (err.stdout) {
-      try {
-        const jsonError = JSON.parse(err.stdout.trim());
-        if (jsonError.error) {
-          // Parse the error details if present
-          const errorFile = err.mainFile || mainFile;
-          const parsed = jsonError.details
-            ? parseCompileErrors(jsonError.details, errorFile)
-            : { type: 'compile_error', message: jsonError.error };
-
-          parsed.raw = jsonError.details || err.stdout;
-          if (err.exitCode !== undefined) {
-            parsed.exitCode = err.exitCode;
-          }
-          res.status(400).json(parsed);
-          return;
-        }
-      } catch {
-        // Not JSON, continue to other error handling
-      }
-    }
-
-    // Fallback: parse stderr for compile errors
-    if (err.stderr) {
-      const errorFile = err.mainFile || mainFile;
-      const parsed = parseCompileErrors(err.stderr, errorFile);
-      parsed.raw = err.stderr;
-      if (err.exitCode !== undefined) {
-        parsed.exitCode = err.exitCode;
-      }
-      res.status(400).json(parsed);
-    } else if (err.message) {
-      res.status(500).json({
-        error: err.message,
-        type: 'server_error',
-        raw: err.stack || err.message
-      });
-    } else {
-      res.status(500).json({
-        error: 'Unknown error occurred',
-        type: 'server_error',
-        raw: JSON.stringify(err, null, 2)
-      });
-    }
+    const parsed = createErrorResponse(err, mainFile);
+    res.status(400).json(parsed);
   } finally {
     if (tempDir) {
       await cleanupTempProject(tempDir);
@@ -407,9 +655,17 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     sandbox: sandboxAvailable ? 'enabled' : 'disabled',
-    mode: sandboxAvailable ? 'production' : 'development'
+    mode: sandboxAvailable ? 'production' : 'development',
+    config: {
+      timeouts: CONFIG.timeouts,
+      rateLimit: CONFIG.rateLimit
+    }
   });
 });
+
+// ============================================================================
+// Link Shortener
+// ============================================================================
 
 // Link shortener - in-memory store (replace with DB for production)
 const shortLinks = new Map();
@@ -459,9 +715,45 @@ app.get('/s/:id', (req, res) => {
   res.json({ state: link.state });
 });
 
-// WebSocket handler for streaming results
+// ============================================================================
+// WebSocket Handler
+// ============================================================================
+
 wss.on('connection', (ws) => {
-  console.log('WebSocket client connected');
+  const connectionId = randomUUID();
+  const tracker = new ConnectionResourceTracker(connectionId);
+  connectionResources.set(connectionId, tracker);
+
+  console.log(`WebSocket client connected: ${connectionId}`);
+
+  // Set up heartbeat to detect dead connections
+  let isAlive = true;
+  ws.on('pong', () => { isAlive = true; });
+
+  tracker.heartbeatInterval = setInterval(() => {
+    if (!isAlive) {
+      console.log(`Client ${connectionId} appears dead, terminating`);
+      ws.terminate();
+      return;
+    }
+    isAlive = false;
+    try {
+      ws.ping();
+    } catch {
+      // Connection already dead
+    }
+  }, CONFIG.timeouts.heartbeat);
+
+  // Send connection info
+  ws.send(JSON.stringify({
+    type: 'connected',
+    connectionId,
+    config: {
+      maxTimeout: CONFIG.timeouts.max,
+      defaultTimeout: CONFIG.timeouts.default,
+      rateLimit: CONFIG.rateLimit.maxRequestsPerMinute
+    }
+  }));
 
   ws.on('message', async (message) => {
     let data;
@@ -472,7 +764,47 @@ wss.on('connection', (ws) => {
       return;
     }
 
-    const { code, files, config = 'educational', optLevel = '-O0', customConfig, defines, language = 'c', prefetch, sample, limit } = data;
+    // Handle cancel request
+    if (data.type === 'cancel') {
+      await tracker.cleanup();
+      ws.send(JSON.stringify({ type: 'cancelled' }));
+      return;
+    }
+
+    // Rate limiting check
+    if (!tracker.checkRateLimit()) {
+      ws.send(JSON.stringify({
+        type: 'error',
+        error: 'Rate limit exceeded',
+        suggestion: `Maximum ${CONFIG.rateLimit.maxRequestsPerMinute} requests per minute`,
+        retryAfter: Math.ceil(CONFIG.rateLimit.windowMs / 1000)
+      }));
+      return;
+    }
+
+    // Concurrent process limit check
+    if (!tracker.canStartProcess()) {
+      ws.send(JSON.stringify({
+        type: 'error',
+        error: 'Too many concurrent processes',
+        suggestion: 'Wait for current processes to complete'
+      }));
+      return;
+    }
+
+    const {
+      code,
+      files,
+      config = 'educational',
+      optLevel = '-O0',
+      customConfig,
+      defines,
+      language = 'c',
+      prefetch,
+      sample,
+      limit,
+      timeout: requestedTimeout
+    } = data;
 
     // Support both single code string and files array
     const inputFiles = files || (code ? code : null);
@@ -482,9 +814,14 @@ wss.on('connection', (ws) => {
     }
 
     // Apply sensible defaults for web UI to prevent timeouts
-    // Default: 1M event limit, no sampling (user can override)
     const eventLimit = limit !== undefined ? limit : 5000000;  // 5M events max (~30s runtime)
     const sampleRate = sample !== undefined ? sample : 1;       // No sampling by default
+
+    // Configurable timeout with bounds
+    const timeout = Math.min(
+      Math.max(requestedTimeout || CONFIG.timeouts.default, CONFIG.timeouts.min),
+      CONFIG.timeouts.max
+    );
 
     // Use Docker sandbox if available
     if (sandboxAvailable) {
@@ -499,29 +836,38 @@ wss.on('connection', (ws) => {
           eventLimit,
           customConfig,
           defines: defines || [],
+          timeout,
           onProgress: (progress) => {
-            ws.send(JSON.stringify({ type: 'status', ...progress }));
+            if (ws.readyState === ws.OPEN) {
+              ws.send(JSON.stringify({ type: 'status', ...progress }));
+            }
           }
         });
 
-        ws.send(JSON.stringify({ type: 'status', stage: 'done' }));
+        if (ws.readyState === ws.OPEN) {
+          ws.send(JSON.stringify({ type: 'status', stage: 'done' }));
 
-        const output = result.stdout.trim();
-        try {
-          const json = JSON.parse(output);
-          ws.send(JSON.stringify({ type: 'result', data: json }));
-        } catch {
-          ws.send(JSON.stringify({ type: 'result', data: { raw: output } }));
+          const output = result.stdout.trim();
+          try {
+            const json = JSON.parse(output);
+            ws.send(JSON.stringify({ type: 'result', data: json }));
+          } catch {
+            ws.send(JSON.stringify({ type: 'result', data: { raw: output } }));
+          }
         }
       } catch (err) {
-        const parsed = parseSandboxError(err);
-        ws.send(JSON.stringify({ type: 'error', ...parsed }));
+        if (ws.readyState === ws.OPEN) {
+          const parsed = parseSandboxError(err);
+          ws.send(JSON.stringify({ type: 'error', ...parsed }));
+        }
       }
       return;
     }
 
     // Fallback: Direct execution (development mode) with real-time streaming
     let tempDir, mainFile;
+    let proc = null;
+    let cleanupFn = null;
 
     try {
       // Status: writing file
@@ -529,6 +875,7 @@ wss.on('connection', (ws) => {
       const project = await createTempProject(inputFiles, language);
       tempDir = project.tempDir;
       mainFile = project.mainFile;
+      tracker.tempDirs.add(tempDir);
 
       // Status: compiling
       ws.send(JSON.stringify({ type: 'status', stage: 'compiling' }));
@@ -576,11 +923,55 @@ wss.on('connection', (ws) => {
           args.push('--limit', String(eventLimit));
         }
 
-        const proc = spawn(CACHE_EXPLORE, args);
+        proc = spawn(CACHE_EXPLORE, args);
+        cleanupFn = tracker.addProcess(proc, tempDir);
 
         let finalResult = null;
+        let partialProgress = null;
         let stderr = '';
         let lineBuffer = '';
+        let killed = false;
+        let eventBatch = [];
+        let lastBatchSent = Date.now();
+        let lastProgressSent = Date.now();
+
+        // Set up timeout with graceful termination
+        const timeoutId = setTimeout(() => {
+          killed = true;
+          // Send partial results before killing
+          if (partialProgress && ws.readyState === ws.OPEN) {
+            ws.send(JSON.stringify({
+              type: 'warning',
+              message: 'Execution timeout - sending partial results',
+              partialProgress
+            }));
+          }
+          // Graceful termination
+          proc.kill('SIGTERM');
+          setTimeout(() => {
+            if (!proc.killed) {
+              proc.kill('SIGKILL');
+            }
+          }, 2000);
+        }, timeout);
+
+        // Function to flush event batch
+        const flushEventBatch = () => {
+          if (eventBatch.length > 0 && ws.readyState === ws.OPEN) {
+            ws.send(JSON.stringify({
+              type: 'events',
+              events: eventBatch,
+              count: eventBatch.length
+            }));
+            eventBatch = [];
+            lastBatchSent = Date.now();
+          }
+        };
+
+        // Batch flush interval
+        const batchInterval = setInterval(() => {
+          flushEventBatch();
+        }, CONFIG.streaming.batchIntervalMs);
 
         proc.stdout.on('data', (chunk) => {
           lineBuffer += chunk.toString();
@@ -592,10 +983,30 @@ wss.on('connection', (ws) => {
             try {
               const event = JSON.parse(line);
               if (event.type === 'start') {
-                ws.send(JSON.stringify({ type: 'status', stage: 'running', config: event.config }));
+                if (ws.readyState === ws.OPEN) {
+                  ws.send(JSON.stringify({
+                    type: 'status',
+                    stage: 'running',
+                    config: event.config,
+                    timeout: timeout / 1000
+                  }));
+                }
               } else if (event.type === 'progress') {
-                // Stream intermediate progress to client
-                ws.send(JSON.stringify({ type: 'progress', ...event }));
+                partialProgress = event;
+                // Send progress updates at intervals, not every event
+                const now = Date.now();
+                if (now - lastProgressSent >= CONFIG.streaming.progressIntervalMs) {
+                  if (ws.readyState === ws.OPEN) {
+                    ws.send(JSON.stringify({ type: 'progress', ...event }));
+                  }
+                  lastProgressSent = now;
+                }
+              } else if (event.type === 'event') {
+                // Batch individual events
+                eventBatch.push(event);
+                if (eventBatch.length >= CONFIG.streaming.batchSize) {
+                  flushEventBatch();
+                }
               } else if (event.type === 'complete') {
                 // Store final result
                 finalResult = event;
@@ -611,15 +1022,25 @@ wss.on('connection', (ws) => {
           // Stream compilation progress
           const lines = chunk.toString().split('\n');
           for (const line of lines) {
-            if (line.includes('Compiling')) {
-              ws.send(JSON.stringify({ type: 'status', stage: 'compiling', message: line }));
-            } else if (line.includes('Running')) {
-              ws.send(JSON.stringify({ type: 'status', stage: 'running' }));
+            if (ws.readyState === ws.OPEN) {
+              if (line.includes('Compiling')) {
+                ws.send(JSON.stringify({ type: 'status', stage: 'compiling', message: line }));
+              } else if (line.includes('Running')) {
+                ws.send(JSON.stringify({ type: 'status', stage: 'running' }));
+              } else if (line.includes('Simulating')) {
+                ws.send(JSON.stringify({ type: 'status', stage: 'simulating', message: line }));
+              }
             }
           }
         });
 
         proc.on('close', (exitCode) => {
+          clearTimeout(timeoutId);
+          clearInterval(batchInterval);
+          flushEventBatch(); // Send any remaining events
+
+          if (cleanupFn) cleanupFn();
+
           // Process any remaining buffered output
           if (lineBuffer.trim()) {
             try {
@@ -630,88 +1051,114 @@ wss.on('connection', (ws) => {
             } catch {}
           }
 
-          if (exitCode !== 0) {
-            // Include lineBuffer as stdout for error parsing
-            reject({ stdout: lineBuffer, stderr, exitCode, mainFile });
+          if (killed) {
+            reject({
+              stdout: lineBuffer,
+              stderr,
+              exitCode,
+              mainFile,
+              timeout: true,
+              timeoutMs: timeout,
+              partialProgress
+            });
+          } else if (exitCode !== 0) {
+            reject({ stdout: lineBuffer, stderr, exitCode, mainFile, partialProgress });
           } else {
             resolve({ data: finalResult, stderr });
           }
         });
 
-        proc.on('error', reject);
+        proc.on('error', (err) => {
+          clearTimeout(timeoutId);
+          clearInterval(batchInterval);
+          if (cleanupFn) cleanupFn();
+          reject(err);
+        });
       });
 
       // Status: done
-      ws.send(JSON.stringify({ type: 'status', stage: 'done' }));
+      if (ws.readyState === ws.OPEN) {
+        ws.send(JSON.stringify({ type: 'status', stage: 'done' }));
 
-      if (result.data) {
-        ws.send(JSON.stringify({ type: 'result', data: result.data }));
-      } else {
-        ws.send(JSON.stringify({ type: 'error', error: 'No results received' }));
+        if (result.data) {
+          ws.send(JSON.stringify({ type: 'result', data: result.data }));
+        } else {
+          ws.send(JSON.stringify({ type: 'error', error: 'No results received' }));
+        }
       }
     } catch (err) {
       console.error('Cache-explore error:', err);
 
-      // First, check if stdout contains JSON error from cache-explore script
-      if (err.stdout) {
-        try {
-          const jsonError = JSON.parse(err.stdout.trim());
-          if (jsonError.error) {
-            // Parse the error details if present
-            const errorFile = err.mainFile || mainFile;
-            const parsed = jsonError.details
-              ? parseCompileErrors(jsonError.details, errorFile)
-              : { type: 'compile_error', message: jsonError.error };
-
-            parsed.raw = jsonError.details || err.stdout;
-            if (err.exitCode !== undefined) {
-              parsed.exitCode = err.exitCode;
-            }
-            ws.send(JSON.stringify({ type: 'error', ...parsed }));
-            return;
-          }
-        } catch {
-          // Not JSON, continue to other error handling
-        }
-      }
-
-      // Fallback: parse stderr for compile errors
-      if (err.stderr) {
-        const errorFile = err.mainFile || mainFile;
-        const parsed = parseCompileErrors(err.stderr, errorFile);
-        parsed.raw = err.stderr;
-        if (err.exitCode !== undefined) {
-          parsed.exitCode = err.exitCode;
-        }
+      if (ws.readyState === ws.OPEN) {
+        const parsed = createErrorResponse(err, mainFile, {
+          includePartialResults: true,
+          partialResults: err.partialProgress
+        });
         ws.send(JSON.stringify({ type: 'error', ...parsed }));
-      } else if (err.message) {
-        ws.send(JSON.stringify({
-          type: 'error',
-          message: err.message,
-          raw: err.stack || err.message
-        }));
-      } else {
-        // Fallback for unknown error format
-        ws.send(JSON.stringify({
-          type: 'error',
-          message: 'Unknown error occurred',
-          raw: JSON.stringify(err, null, 2)
-        }));
       }
     } finally {
       if (tempDir) {
+        tracker.tempDirs.delete(tempDir);
         await cleanupTempProject(tempDir);
       }
     }
   });
 
-  ws.on('close', () => {
-    console.log('WebSocket client disconnected');
+  ws.on('close', async () => {
+    console.log(`WebSocket client disconnected: ${connectionId}`);
+
+    // Cleanup all resources for this connection
+    await tracker.cleanup();
+    connectionResources.delete(connectionId);
+  });
+
+  ws.on('error', async (err) => {
+    console.error(`WebSocket error for ${connectionId}:`, err.message);
+    await tracker.cleanup();
+    connectionResources.delete(connectionId);
   });
 });
+
+// ============================================================================
+// Server Startup
+// ============================================================================
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`Cache Explorer server running on http://localhost:${PORT}`);
   console.log(`WebSocket available at ws://localhost:${PORT}/ws`);
+  console.log(`Configuration: timeout=${CONFIG.timeouts.default}ms (max ${CONFIG.timeouts.max}ms), rate=${CONFIG.rateLimit.maxRequestsPerMinute}/min`);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  console.log('Received SIGTERM, shutting down gracefully...');
+
+  // Cleanup all connections
+  for (const [id, tracker] of connectionResources) {
+    await tracker.cleanup();
+  }
+  connectionResources.clear();
+
+  // Close server
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+
+  // Force close after 10 seconds
+  setTimeout(() => {
+    console.log('Forcing shutdown');
+    process.exit(1);
+  }, 10000);
+});
+
+process.on('SIGINT', async () => {
+  console.log('Received SIGINT, shutting down...');
+
+  for (const [id, tracker] of connectionResources) {
+    await tracker.cleanup();
+  }
+
+  process.exit(0);
 });

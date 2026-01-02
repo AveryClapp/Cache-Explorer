@@ -2,6 +2,30 @@
 
 A complete guide to understanding and using Cache Explorer for cache performance analysis.
 
+## Table of Contents
+
+1. [What is Cache Explorer?](#what-is-cache-explorer)
+2. [Getting Started](#getting-started)
+   - [Web UI Quick Start](#web-ui-quick-start)
+   - [CLI Quick Start](#cli-quick-start)
+3. [Understanding the Visualization](#understanding-the-visualization)
+   - [Timeline View](#timeline-view)
+   - [Cache State Grid](#cache-state-grid)
+   - [Source Annotations](#source-annotations)
+4. [Interpreting Results](#interpreting-results)
+   - [Hit Rates](#hit-rates)
+   - [Miss Patterns](#miss-patterns)
+   - [3C Miss Classification](#3c-miss-classification)
+5. [Common Workflows](#common-workflows)
+   - [Profiling a New Codebase](#profiling-a-new-codebase)
+   - [Optimization Iteration](#optimization-iteration)
+   - [Comparing Configurations](#comparing-configurations)
+6. [Hardware Configurations](#hardware-configurations)
+7. [When to Use Cache Explorer](#when-to-use-cache-explorer)
+8. [Limitations](#limitations)
+
+---
+
 ## What is Cache Explorer?
 
 Cache Explorer is a visual cache profiler that shows how your code interacts with CPU cache hierarchies. Think of it as "Compiler Explorer for cache behavior" - you paste code, instantly see cache hits/misses with source-level attribution, and learn optimization techniques.
@@ -12,24 +36,402 @@ Cache Explorer is a visual cache profiler that shows how your code interacts wit
 - Compare different access patterns
 - Get actionable optimization suggestions
 - Test "what if" scenarios with different hardware configs
+- Detect false sharing in multi-threaded code
+- Simulate different CPU architectures (Intel, AMD, Apple Silicon, ARM)
 
-## When to Use Cache Explorer
+---
 
-### Learning (Primary Use Case)
-- Understanding why row-major vs column-major access matters
-- Seeing the impact of data structure layout (AoS vs SoA)
-- Learning about cache blocking and loop optimization
-- Visualizing false sharing in multi-threaded code
+## Getting Started
 
-### Debugging Performance Issues
-- Finding unexpected cache miss hotspots
-- Understanding why a "fast" algorithm is slow
-- Comparing before/after optimization
+### Web UI Quick Start
 
-### Architecture Exploration
-- Testing code against different cache configurations
-- Comparing Intel vs AMD vs Apple Silicon cache behavior
-- Understanding working set size effects
+The web UI is the fastest way to explore cache behavior interactively.
+
+**1. Start the servers:**
+
+```bash
+# Terminal 1: Backend server
+cd backend/server
+npm install
+npm start
+# Runs at http://localhost:3001
+
+# Terminal 2: Frontend
+cd frontend
+npm install
+npm run dev
+# Runs at http://localhost:5173
+```
+
+**2. Open your browser** to http://localhost:5173
+
+**3. Write or paste code** in the Monaco editor:
+
+```c
+#define N 128
+int main() {
+    int arr[N][N];
+    for (int i = 0; i < N; i++)
+        for (int j = 0; j < N; j++)
+            arr[i][j] = i + j;
+    return 0;
+}
+```
+
+**4. Configure your analysis:**
+- **Language**: C or C++
+- **Optimization**: -O0 through -O3
+- **Config**: Hardware preset (Intel, AMD, Apple, Educational)
+- **Prefetch**: Prefetching strategy (none, stream, stride, adaptive)
+
+**5. Click "Run"** and view results in real-time.
+
+**Web UI Features:**
+- **Dark/Light Mode**: Toggle in settings, persists across sessions
+- **Command Palette**: Press `Cmd+K` (Mac) or `Ctrl+K` (Windows/Linux)
+- **Examples Gallery**: Type `>` in command palette to browse examples
+- **Share URLs**: Get a compressed link to share your code
+- **Source Annotations**: Hover over highlighted lines for miss details
+
+### CLI Quick Start
+
+The CLI is ideal for scripting, CI integration, and profiling local files.
+
+**Basic usage:**
+
+```bash
+# Analyze a C file with default settings (Intel config)
+./backend/scripts/cache-explore mycode.c
+
+# Analyze C++ with optimization
+./backend/scripts/cache-explore mycode.cpp -O2
+
+# Get JSON output for programmatic use
+./backend/scripts/cache-explore mycode.c --json
+```
+
+**With hardware presets:**
+
+```bash
+# Educational (small caches, easier to understand)
+./backend/scripts/cache-explore code.c --config educational
+
+# Intel 12th Gen
+./backend/scripts/cache-explore code.c --config intel12
+
+# AMD Zen 4
+./backend/scripts/cache-explore code.c --config zen4
+
+# Apple M-Series with DMP
+./backend/scripts/cache-explore code.c --config apple
+```
+
+**With prefetching:**
+
+```bash
+# No prefetching (raw cache behavior)
+./backend/scripts/cache-explore code.c --prefetch none
+
+# Stream prefetcher (Intel-style)
+./backend/scripts/cache-explore code.c --prefetch stream
+
+# Stride detector
+./backend/scripts/cache-explore code.c --prefetch stride
+
+# Adaptive (stream + stride combined)
+./backend/scripts/cache-explore code.c --prefetch adaptive
+```
+
+**Performance options for large programs:**
+
+```bash
+# Sample 1 in 100 events (faster)
+./backend/scripts/cache-explore large.c --sample 100
+
+# Limit total events
+./backend/scripts/cache-explore large.c --limit 1000000
+
+# Define constants
+./backend/scripts/cache-explore matrix.c -D N=1000
+```
+
+**Example CLI output:**
+
+```
+=== Cache Simulation Results ===
+Config: intel
+Events: 16,384
+
+Level     Hits       Misses     Hit Rate   Writebacks
+-------   --------   --------   --------   ----------
+L1d       15,872     512        96.9%      128
+L1i       4,096      16         99.6%      0
+L2        384        128        75.0%      64
+L3        96         32         75.0%      0
+
+=== Hottest Lines ===
+matrix.c:15 - 256 misses (50.0%)
+matrix.c:12 - 128 misses (25.0%)
+matrix.c:8  - 64 misses  (12.5%)
+
+=== Suggestions ===
+[HIGH] poor_locality at matrix.c:15
+  Column-major access pattern detected
+  Fix: Swap loop order for row-major access
+```
+
+---
+
+## Understanding the Visualization
+
+### Timeline View
+
+The timeline shows memory access patterns over time:
+
+```
+Time →
+████████████░░░░░░████████████████░░████████
+ ^-- L1 hits --^  ^misses^  ^-- hits --^  ^miss^
+```
+
+**Color coding:**
+- **Green**: L1 cache hit (fastest, ~4 cycles)
+- **Yellow**: L2 cache hit (~12 cycles)
+- **Orange**: L3 cache hit (~40 cycles)
+- **Red**: Memory access (~200+ cycles)
+
+**What to look for:**
+- **Solid green**: Excellent locality - data stays in cache
+- **Periodic red spikes**: Working set exceeds cache size
+- **Red at start, then green**: Normal cold-start misses
+- **Random red throughout**: Poor spatial locality
+
+**Using the timeline scrubber:**
+1. Click and drag to select a time range
+2. Use arrow keys to step through events one at a time
+3. Observe the cache grid update in real-time
+4. Correlate events with source lines (highlighted in editor)
+
+### Cache State Grid
+
+The cache grid visualizes the L1 data cache state:
+
+```
+Set 0:  [M][E][S][I]  ← 4-way associative (4 slots per set)
+Set 1:  [S][S][I][I]
+Set 2:  [E][I][I][I]
+Set 3:  [M][M][S][I]
+...
+Set 63: [I][I][I][I]
+```
+
+**Grid layout:**
+- **Rows**: Cache sets (determined by address bits)
+- **Columns**: Ways (slots within each set)
+- **Cell color**: MESI coherence state
+
+**MESI state colors:**
+
+| Color | State | Meaning |
+|-------|-------|---------|
+| Red/Orange | Modified (M) | Data is dirty, only this cache has it |
+| Green | Exclusive (E) | Data is clean, only this cache has it |
+| Blue | Shared (S) | Data is clean, may be in other caches |
+| Gray | Invalid (I) | Cache line is empty or invalidated |
+
+**Hover information:**
+- Tag bits (which memory address)
+- Full address range
+- Last access time
+- Dirty/clean status
+
+**Multi-core view:**
+Use the **Core** dropdown to switch between cores and see how each core's private L1 cache differs. This helps visualize:
+- Cache coherence behavior
+- How threads share data
+- False sharing patterns
+
+### Source Annotations
+
+The code editor shows inline performance hints:
+
+```c
+for (int i = 0; i < N; i++)
+    for (int j = 0; j < N; j++)
+        matrix[i][j] = i + j;  // [256 misses | 12.5% miss rate]
+                               //  ↑ Click for details
+```
+
+**Annotation colors:**
+- **Green background**: Good locality (<5% miss rate)
+- **Yellow background**: Some misses (5-20% miss rate)
+- **Red background**: High miss rate (>20%)
+
+**Click on a highlighted line** to see:
+- Total hits and misses
+- Miss rate percentage
+- Which cache levels were hit
+- Optimization suggestions for this line
+
+---
+
+## Interpreting Results
+
+### Hit Rates
+
+The summary panel shows hit rates for each cache level:
+
+```
+L1 Data    L2 Unified    L3 Shared
+98.5%      85.2%         95.8%
+```
+
+**Interpreting L1 hit rates:**
+
+| Hit Rate | Interpretation | Action |
+|----------|----------------|--------|
+| >95% | Excellent | Code is well-optimized |
+| 90-95% | Good | Minor optimization possible |
+| 80-90% | Fair | Check hot lines for issues |
+| 60-80% | Poor | Significant optimization needed |
+| <60% | Very Poor | Major cache-unfriendly patterns |
+
+**Understanding the hierarchy:**
+
+L1 misses go to L2. L2 misses go to L3. L3 misses go to memory.
+
+```
+Total latency = L1_time + (L1_miss_rate * L2_time) +
+                (L1_miss_rate * L2_miss_rate * L3_time) + ...
+```
+
+So a 95% L1 hit rate with 50% L2 hit rate is often better than 90% L1 with 90% L2.
+
+### Miss Patterns
+
+**Hot Lines Table:**
+
+| Line | Hits | Misses | Miss Rate | Type |
+|------|------|--------|-----------|------|
+| 42 | 10,000 | 500 | 4.8% | Capacity |
+| 15 | 1,000 | 400 | 28.6% | Conflict |
+| 8 | 100 | 100 | 50.0% | Compulsory |
+
+**Focus on:** Lines with **high miss counts AND high miss rates**
+
+- High misses + low rate = Runs many times, mostly hits (good)
+- Low misses + high rate = Cold path (usually fine)
+- High misses + high rate = **Optimization target**
+
+### 3C Miss Classification
+
+Cache Explorer classifies misses into three categories:
+
+**Compulsory (Cold) Misses:**
+- First access to data that has never been in cache
+- Cannot be eliminated (except through prefetching)
+- Expected at program start and when touching new data
+
+**Capacity Misses:**
+- Data was in cache but evicted because cache was full
+- Working set exceeds cache size
+- Fix with: Loop tiling, smaller data structures, or algorithmic changes
+
+**Conflict Misses:**
+- Data was in cache but evicted due to set conflicts
+- Multiple addresses map to same cache set
+- Fix with: Data alignment, padding, or data structure reorganization
+
+**Viewing in JSON output:**
+
+```json
+{
+  "l1d": {
+    "misses": 500,
+    "compulsory": 50,
+    "capacity": 300,
+    "conflict": 150
+  }
+}
+```
+
+---
+
+## Common Workflows
+
+### Profiling a New Codebase
+
+**Step 1: Start with educational config**
+```bash
+./backend/scripts/cache-explore code.c --config educational
+```
+Smaller caches make problems more obvious.
+
+**Step 2: Identify hot lines**
+Look at the "Hottest Lines" section. Focus on lines with:
+- High miss counts (absolute impact)
+- High miss rates (optimization potential)
+
+**Step 3: Understand the pattern**
+For each hot line, ask:
+- Is this sequential or strided access?
+- Is the working set too large?
+- Are there unnecessary fields being loaded?
+
+**Step 4: Switch to realistic config**
+```bash
+./backend/scripts/cache-explore code.c --config intel
+```
+Verify the pattern still matters on real hardware.
+
+### Optimization Iteration
+
+**Step 1: Baseline measurement**
+```bash
+./backend/scripts/cache-explore original.c --json > baseline.json
+```
+
+**Step 2: Make ONE change**
+Common changes:
+- Swap loop order
+- Add cache blocking
+- Change AoS to SoA
+- Add padding for false sharing
+
+**Step 3: Measure again**
+```bash
+./backend/scripts/cache-explore optimized.c --json > optimized.json
+```
+
+**Step 4: Compare results**
+```bash
+diff baseline.json optimized.json
+```
+Or use the web UI's split view.
+
+**Step 5: Iterate**
+If improvement is insufficient, try additional changes one at a time.
+
+### Comparing Configurations
+
+Test how code behaves on different architectures:
+
+```bash
+# Test on multiple configs
+for config in educational intel zen4 apple; do
+    echo "=== $config ==="
+    ./backend/scripts/cache-explore code.c --config $config --json | jq '.levels.l1d.hitRate'
+done
+```
+
+This helps answer:
+- Will this optimization help on AMD?
+- How does Apple's larger L1 affect behavior?
+- What's the minimum cache size this code needs?
+
+---
+
+## Hardware Configurations
 
 ## Understanding the Results
 

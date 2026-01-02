@@ -377,3 +377,215 @@ inline CacheHierarchyConfig make_educational_config() {
       .inclusion_policy = InclusionPolicy::Inclusive,
       .prefetch = PrefetchConfig::none()};  // Educational: no prefetch for clarity
 }
+
+// =============================================================================
+// RISC-V Presets
+// =============================================================================
+
+// SiFive U74 (Application core in HiFive Unmatched, typical RISC-V application core)
+// Reference: SiFive U74 Core Complex Manual
+inline CacheHierarchyConfig make_sifive_u74_config() {
+  return {
+      .l1_data = {.kb_size = 32,        // 32KB L1D per core
+                  .associativity = 8,
+                  .line_size = 64,
+                  .policy = EvictionPolicy::LRU,
+                  .write_policy = WritePolicy::Back},
+      .l1_inst = {.kb_size = 32,        // 32KB L1I per core
+                  .associativity = 4,
+                  .line_size = 64,
+                  .policy = EvictionPolicy::LRU,
+                  .write_policy = WritePolicy::ReadOnly},
+      .l2 = {.kb_size = 2048,           // 2MB shared L2 (coherent)
+             .associativity = 16,
+             .line_size = 64,
+             .policy = EvictionPolicy::LRU,
+             .write_policy = WritePolicy::Back},
+      .l3 = {.kb_size = 0,              // No L3 on U74
+             .associativity = 1,
+             .line_size = 64,
+             .policy = EvictionPolicy::LRU,
+             .write_policy = WritePolicy::Back},
+      .inclusion_policy = InclusionPolicy::Inclusive,
+      .prefetch = PrefetchConfig::riscv_default()};
+}
+
+// SiFive P670 (High-performance RISC-V application processor)
+// Reference: SiFive Performance P670 Core Complex Manual
+inline CacheHierarchyConfig make_sifive_p670_config() {
+  return {
+      .l1_data = {.kb_size = 32,        // 32KB L1D per core
+                  .associativity = 8,
+                  .line_size = 64,
+                  .policy = EvictionPolicy::LRU,
+                  .write_policy = WritePolicy::Back},
+      .l1_inst = {.kb_size = 32,        // 32KB L1I per core
+                  .associativity = 4,
+                  .line_size = 64,
+                  .policy = EvictionPolicy::LRU,
+                  .write_policy = WritePolicy::ReadOnly},
+      .l2 = {.kb_size = 256,            // 256KB private L2 per core
+             .associativity = 8,
+             .line_size = 64,
+             .policy = EvictionPolicy::LRU,
+             .write_policy = WritePolicy::Back},
+      .l3 = {.kb_size = 8192,           // 8MB shared L3 (cluster cache)
+             .associativity = 16,
+             .line_size = 64,
+             .policy = EvictionPolicy::LRU,
+             .write_policy = WritePolicy::Back},
+      .inclusion_policy = InclusionPolicy::NINE,
+      .prefetch = PrefetchConfig::riscv_default()};
+}
+
+// =============================================================================
+// Additional Intel Generations
+// =============================================================================
+
+// Intel 10th Gen (Ice Lake client) - 10nm, first client Sunny Cove
+// Reference: Intel Optimization Manual, wikichip.org
+inline CacheHierarchyConfig make_intel_10th_gen_config() {
+  return {
+      .l1_data = {.kb_size = 48,        // 48KB L1D per core (12-way)
+                  .associativity = 12,
+                  .line_size = 64,
+                  .policy = EvictionPolicy::PLRU,
+                  .write_policy = WritePolicy::Back},
+      .l1_inst = {.kb_size = 32,        // 32KB L1I per core
+                  .associativity = 8,
+                  .line_size = 64,
+                  .policy = EvictionPolicy::PLRU,
+                  .write_policy = WritePolicy::ReadOnly},
+      .l2 = {.kb_size = 512,            // 512KB L2 per core
+             .associativity = 8,
+             .line_size = 64,
+             .policy = EvictionPolicy::PLRU,
+             .write_policy = WritePolicy::Back},
+      .l3 = {.kb_size = 8192,           // 8MB shared L3 (varies by SKU)
+             .associativity = 16,
+             .line_size = 64,
+             .policy = EvictionPolicy::PLRU,
+             .write_policy = WritePolicy::Back},
+      .inclusion_policy = InclusionPolicy::NINE,
+      .prefetch = PrefetchConfig::intel_default()};
+}
+
+// Intel 11th Gen (Tiger Lake) - 10nm SuperFin, Willow Cove
+// Reference: Intel Optimization Manual, wikichip.org
+inline CacheHierarchyConfig make_intel_11th_gen_config() {
+  return {
+      .l1_data = {.kb_size = 48,        // 48KB L1D per core
+                  .associativity = 12,
+                  .line_size = 64,
+                  .policy = EvictionPolicy::PLRU,
+                  .write_policy = WritePolicy::Back},
+      .l1_inst = {.kb_size = 32,        // 32KB L1I per core
+                  .associativity = 8,
+                  .line_size = 64,
+                  .policy = EvictionPolicy::PLRU,
+                  .write_policy = WritePolicy::ReadOnly},
+      .l2 = {.kb_size = 1280,           // 1.25MB L2 per core (major bump from Ice Lake)
+             .associativity = 20,
+             .line_size = 64,
+             .policy = EvictionPolicy::PLRU,
+             .write_policy = WritePolicy::Back},
+      .l3 = {.kb_size = 12288,          // 12MB shared L3 (varies by SKU)
+             .associativity = 12,
+             .line_size = 64,
+             .policy = EvictionPolicy::PLRU,
+             .write_policy = WritePolicy::Back},
+      .inclusion_policy = InclusionPolicy::NINE,
+      .prefetch = PrefetchConfig::intel_default()};
+}
+
+// Intel 13th Gen (Raptor Lake) - P-cores (Golden Cove based)
+// Reference: Intel Optimization Manual, wikichip.org
+inline CacheHierarchyConfig make_intel_13th_gen_config() {
+  return {
+      .l1_data = {.kb_size = 48,        // 48KB L1D per P-core
+                  .associativity = 12,
+                  .line_size = 64,
+                  .policy = EvictionPolicy::PLRU,
+                  .write_policy = WritePolicy::Back},
+      .l1_inst = {.kb_size = 32,        // 32KB L1I per P-core
+                  .associativity = 8,
+                  .line_size = 64,
+                  .policy = EvictionPolicy::PLRU,
+                  .write_policy = WritePolicy::ReadOnly},
+      .l2 = {.kb_size = 2048,           // 2MB L2 per P-core
+             .associativity = 16,
+             .line_size = 64,
+             .policy = EvictionPolicy::PLRU,
+             .write_policy = WritePolicy::Back},
+      .l3 = {.kb_size = 36864,          // 36MB shared L3 (i9-13900K)
+             .associativity = 18,
+             .line_size = 64,
+             .policy = EvictionPolicy::PLRU,
+             .write_policy = WritePolicy::Back},
+      .inclusion_policy = InclusionPolicy::NINE,
+      .prefetch = PrefetchConfig::intel_default()};
+}
+
+// =============================================================================
+// Additional AMD Presets
+// =============================================================================
+
+// AMD Zen 2 (Ryzen 3000 series, Matisse)
+// Reference: AMD Software Optimization Guide, wikichip.org
+inline CacheHierarchyConfig make_amd_zen2_config() {
+  return {
+      .l1_data = {.kb_size = 32,        // 32KB L1D per core (8-way)
+                  .associativity = 8,
+                  .line_size = 64,
+                  .policy = EvictionPolicy::LRU,
+                  .write_policy = WritePolicy::Back},
+      .l1_inst = {.kb_size = 32,        // 32KB L1I per core
+                  .associativity = 8,
+                  .line_size = 64,
+                  .policy = EvictionPolicy::LRU,
+                  .write_policy = WritePolicy::ReadOnly},
+      .l2 = {.kb_size = 512,            // 512KB L2 per core
+             .associativity = 8,
+             .line_size = 64,
+             .policy = EvictionPolicy::LRU,
+             .write_policy = WritePolicy::Back},
+      .l3 = {.kb_size = 16384,          // 16MB L3 per CCX (32MB per CCD)
+             .associativity = 16,
+             .line_size = 64,
+             .policy = EvictionPolicy::LRU,
+             .write_policy = WritePolicy::Back},
+      .inclusion_policy = InclusionPolicy::Exclusive,  // AMD victim cache design
+      .prefetch = PrefetchConfig::amd_default()};
+}
+
+// =============================================================================
+// Server Variants
+// =============================================================================
+
+// AMD EPYC Genoa (Zen 4 server, 4th Gen EPYC)
+// Reference: AMD EPYC 9004 Series Processor Architecture, wikichip.org
+inline CacheHierarchyConfig make_amd_epyc_genoa_config() {
+  return {
+      .l1_data = {.kb_size = 32,        // 32KB L1D per core
+                  .associativity = 8,
+                  .line_size = 64,
+                  .policy = EvictionPolicy::LRU,
+                  .write_policy = WritePolicy::Back},
+      .l1_inst = {.kb_size = 32,        // 32KB L1I per core
+                  .associativity = 8,
+                  .line_size = 64,
+                  .policy = EvictionPolicy::LRU,
+                  .write_policy = WritePolicy::ReadOnly},
+      .l2 = {.kb_size = 1024,           // 1MB L2 per core (doubled from Milan)
+             .associativity = 8,
+             .line_size = 64,
+             .policy = EvictionPolicy::LRU,
+             .write_policy = WritePolicy::Back},
+      .l3 = {.kb_size = 98304,          // 96MB L3 per CCD (768MB total on 96-core)
+             .associativity = 16,       // 12 CCDs x 8 cores x 12MB each = 96MB per CCD
+             .line_size = 64,
+             .policy = EvictionPolicy::LRU,
+             .write_policy = WritePolicy::Back},
+      .inclusion_policy = InclusionPolicy::Exclusive,  // AMD victim cache design
+      .prefetch = PrefetchConfig::amd_default()};
+}

@@ -1,0 +1,174 @@
+.file-manager {
+  background: #1e1e1e;
+  border-radius: 8px;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  min-height: 150px;
+  max-height: 300px;
+}
+
+.file-manager-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid #333;
+}
+
+.header-title {
+  font-weight: bold;
+  color: #888;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.add-file-btn {
+  width: 20px;
+  height: 20px;
+  background: #2d2d2d;
+  border: 1px solid #444;
+  border-radius: 4px;
+  color: #888;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.add-file-btn:hover {
+  background: #4a90d9;
+  border-color: #2e6eb0;
+  color: #fff;
+}
+
+.file-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.file-item:hover {
+  background: #2d2d2d;
+}
+
+.file-item.active {
+  background: #37373d;
+  border-left: 2px solid #4a90d9;
+}
+
+.file-item.main-file {
+  font-weight: 500;
+}
+
+.file-item.creating {
+  background: #2d2d2d;
+}
+
+.file-icon {
+  width: 20px;
+  height: 16px;
+  background: #4a90d9;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: bold;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.file-name {
+  flex: 1;
+  color: #ddd;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.main-badge {
+  color: #ffd700;
+  font-size: 10px;
+}
+
+.rename-input,
+.new-file-input {
+  flex: 1;
+  background: #1e1e1e;
+  border: 1px solid #4a90d9;
+  color: #fff;
+  padding: 2px 6px;
+  font-size: 12px;
+  border-radius: 3px;
+  outline: none;
+}
+
+.empty-state {
+  color: #666;
+  text-align: center;
+  padding: 20px;
+  font-size: 11px;
+}
+
+.context-menu {
+  position: fixed;
+  background: #2d2d2d;
+  border: 1px solid #444;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  min-width: 120px;
+  padding: 4px 0;
+}
+
+.context-menu button {
+  display: block;
+  width: 100%;
+  padding: 6px 12px;
+  background: none;
+  border: none;
+  color: #ddd;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.context-menu button:hover {
+  background: #3d3d3d;
+}
+
+.context-menu button.delete-btn {
+  color: #ff6b6b;
+}
+
+.context-menu button.delete-btn:disabled {
+  color: #666;
+  cursor: not-allowed;
+}
+
+.context-menu hr {
+  border: none;
+  border-top: 1px solid #444;
+  margin: 4px 0;
+}
+
+.file-manager-footer {
+  padding: 6px 12px;
+  border-top: 1px solid #333;
+  color: #666;
+  font-size: 10px;
+}

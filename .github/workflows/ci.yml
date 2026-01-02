@@ -64,10 +64,15 @@ jobs:
             -DCMAKE_CXX_COMPILER=clang++-18
           ninja
 
-      - name: Run unit tests
+      - name: Run all unit tests
         working-directory: backend/cache-simulator/build
         run: |
-          ./CacheLevelTest
+          for test in ./*Test; do
+            if [ -x "$test" ]; then
+              echo "Running $test..."
+              $test || exit 1
+            fi
+          done
 
       - name: Verify CLI tools exist
         run: |
@@ -127,3 +132,24 @@ jobs:
       - name: Lint (if available)
         working-directory: backend/server
         run: npm run lint || true
+
+  vscode-extension:
+    name: VS Code Extension Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: vscode-extension
+        run: npm install
+
+      - name: Compile extension
+        working-directory: vscode-extension
+        run: npm run compile
