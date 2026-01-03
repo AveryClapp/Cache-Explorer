@@ -103,6 +103,7 @@ SAMPLE_RATE=""
 EVENT_LIMIT=""
 PREFETCH=""
 PREFETCH_DEGREE=""
+COMPILER_PATH=""  # Path to LLVM bin directory (e.g., /opt/homebrew/opt/llvm@20/bin)
 
 usage() {
   echo "Usage: cache-explore [options] <source.c|.cpp|.rs>"
@@ -121,6 +122,7 @@ usage() {
   echo "  --limit <N>       Stop after N events (e.g., 1000000 = 1M events max)"
   echo "  --prefetch <type> Enable prefetching: none|next|stream|stride|adaptive|intel"
   echo "  --prefetch-degree <N>  How many lines to prefetch ahead (default: 4)"
+  echo "  --compiler <path> Path to LLVM bin directory (e.g., /opt/homebrew/opt/llvm@20/bin)"
   echo "  -O<level>         Optimization level (default: -O0)"
   echo "  -D <name>=<val>   Preprocessor define (can be used multiple times)"
   echo "  --help            Show this help"
@@ -145,6 +147,7 @@ while [[ $# -gt 0 ]]; do
     --limit) EVENT_LIMIT="$2"; shift 2 ;;
     --prefetch) PREFETCH="$2"; shift 2 ;;
     --prefetch-degree) PREFETCH_DEGREE="$2"; shift 2 ;;
+    --compiler) COMPILER_PATH="$2"; shift 2 ;;
     -O*) OPT_LEVEL="$1"; shift ;;
     -D) DEFINES+=("-D$2"); shift 2 ;;
     -D*) DEFINES+=("$1"); shift ;;
@@ -183,8 +186,13 @@ if [[ ! -f "$CACHE_SIM" ]]; then
   exit 1
 fi
 
-# Find clang - prefer versioned (CI) or unversioned (local)
+# Find clang - prefer --compiler flag, then env, then versioned (CI), then unversioned (local)
 find_clang() {
+  # Check --compiler flag (path to LLVM bin directory)
+  if [[ -n "$COMPILER_PATH" && -x "$COMPILER_PATH/clang" ]]; then
+    echo "$COMPILER_PATH/clang"
+    return
+  fi
   # Check environment override
   if [[ -n "${CACHE_EXPLORER_CC:-}" ]]; then
     echo "$CACHE_EXPLORER_CC"
@@ -196,7 +204,7 @@ find_clang() {
     return
   fi
   # Check for versioned clang (Ubuntu CI)
-  for ver in 18 17 16 15; do
+  for ver in 21 20 19 18 17 16 15; do
     if command -v "clang-$ver" &>/dev/null; then
       echo "clang-$ver"
       return
@@ -206,6 +214,11 @@ find_clang() {
 }
 
 find_clangxx() {
+  # Check --compiler flag (path to LLVM bin directory)
+  if [[ -n "$COMPILER_PATH" && -x "$COMPILER_PATH/clang++" ]]; then
+    echo "$COMPILER_PATH/clang++"
+    return
+  fi
   if [[ -n "${CACHE_EXPLORER_CXX:-}" ]]; then
     echo "$CACHE_EXPLORER_CXX"
     return
@@ -214,7 +227,7 @@ find_clangxx() {
     echo "clang++"
     return
   fi
-  for ver in 18 17 16 15; do
+  for ver in 21 20 19 18 17 16 15; do
     if command -v "clang++-$ver" &>/dev/null; then
       echo "clang++-$ver"
       return

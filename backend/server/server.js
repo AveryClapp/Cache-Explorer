@@ -1,16 +1,18 @@
 import express from 'express';
 import cors from 'cors';
 import { spawn } from 'child_process';
-import { writeFile, unlink, mkdir, rm, readdir } from 'fs/promises';
+import { writeFile, unlink, mkdir, rm, readdir, readFile } from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
+import yaml from 'js-yaml';
 import { checkSandboxAvailable, runInSandbox, parseSandboxError } from './sandbox.js';
 import { initDb, createShortUrl, getShortUrl, isHealthy as isDbHealthy, getDbStats } from './db.js';
 import { getCachedResult, cacheResult, startCachePruning } from './cache.js';
 import { incCounter, setGauge, recordDuration, getPrometheusMetrics, getHealthStatus } from './metrics.js';
+import { discoverCompilers, getCompiler, getDefaultCompiler } from './compilers.js';
 
 // ============================================================================
 // Configuration
@@ -626,6 +628,14 @@ app.post('/compile', async (req, res) => {
         args.push('--prefetch', req.body.prefetch);
       }
 
+      // Add compiler selection if specified
+      if (req.body.compiler) {
+        const compiler = getCompiler(req.body.compiler);
+        if (compiler && compiler.path) {
+          args.push('--compiler', compiler.path);
+        }
+      }
+
       // Add sampling and limit for performance
       if (sampleRate > 1) {
         args.push('--sample', String(sampleRate));
@@ -720,6 +730,20 @@ app.get('/metrics', (req, res) => {
   res.send(getPrometheusMetrics());
 });
 
+// Compiler discovery endpoint
+app.get('/api/compilers', (req, res) => {
+  try {
+    const compilers = discoverCompilers();
+    res.json({
+      compilers,
+      default: getDefaultCompiler()?.id || 'clang-21'
+    });
+  } catch (err) {
+    console.error('Failed to discover compilers:', err);
+    res.status(500).json({ error: 'Failed to discover compilers' });
+  }
+});
+
 // ============================================================================
 // Link Shortener (SQLite-backed)
 // ============================================================================
@@ -788,6 +812,46 @@ app.get('/api/s/:code', (req, res) => {
   } catch (err) {
     console.error('Failed to retrieve short URL:', err);
     res.status(500).json({ error: 'Failed to retrieve' });
+  }
+});
+
+// ============================================================================
+// OpenAPI Documentation Endpoints
+// ============================================================================
+
+// Cache the OpenAPI spec to avoid reading from disk on every request
+let openApiSpecCache = null;
+let openApiJsonCache = null;
+
+async function loadOpenApiSpec() {
+  if (!openApiSpecCache) {
+    const specPath = join(__dirname, 'openapi.yaml');
+    openApiSpecCache = await readFile(specPath, 'utf-8');
+    openApiJsonCache = yaml.load(openApiSpecCache);
+  }
+  return { yaml: openApiSpecCache, json: openApiJsonCache };
+}
+
+// Serve OpenAPI spec as YAML
+app.get('/api/docs', async (req, res) => {
+  try {
+    const { yaml: specYaml } = await loadOpenApiSpec();
+    res.set('Content-Type', 'text/yaml');
+    res.send(specYaml);
+  } catch (err) {
+    console.error('Failed to load OpenAPI spec:', err);
+    res.status(500).json({ error: 'Failed to load API documentation' });
+  }
+});
+
+// Serve OpenAPI spec as JSON
+app.get('/api/docs.json', async (req, res) => {
+  try {
+    const { json: specJson } = await loadOpenApiSpec();
+    res.json(specJson);
+  } catch (err) {
+    console.error('Failed to load OpenAPI spec:', err);
+    res.status(500).json({ error: 'Failed to load API documentation' });
   }
 });
 
@@ -989,6 +1053,14 @@ wss.on('connection', (ws) => {
         // Add prefetch policy if specified
         if (prefetch && prefetch !== 'none') {
           args.push('--prefetch', prefetch);
+        }
+
+        // Add compiler selection if specified
+        if (data.compiler) {
+          const selectedCompiler = getCompiler(data.compiler);
+          if (selectedCompiler && selectedCompiler.path) {
+            args.push('--compiler', selectedCompiler.path);
+          }
         }
 
         // Add sampling and limit for performance

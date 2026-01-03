@@ -2688,3 +2688,544 @@ input:focus:not(:focus-visible) {
   text-align: center;
   color: var(--text-muted);
 }
+
+/* ===== Mobile Tab Switcher ===== */
+.mobile-tab-switcher {
+  display: none;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  padding: var(--space-xs);
+  gap: var(--space-xs);
+}
+
+.mobile-tab-switcher button {
+  flex: 1;
+  height: 40px;
+  padding: 0 var(--space-md);
+  font-size: var(--text-body);
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+.mobile-tab-switcher button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.mobile-tab-switcher button:hover:not(.active) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* ===== Responsive: Tablet (max-width: 1024px) ===== */
+@media (max-width: 1024px) {
+  :root {
+    --header-height: 44px;
+    --results-width: 100%;
+  }
+
+  /* Stack panes vertically */
+  .main {
+    flex-direction: column;
+  }
+
+  .editor-pane {
+    flex: 1;
+    min-height: 50vh;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .results-pane {
+    flex: 1;
+    min-height: 50vh;
+    width: 100%;
+    max-width: none;
+  }
+
+  /* Compact header */
+  .topbar {
+    height: var(--header-height);
+    padding: 0 var(--space-sm);
+  }
+
+  .topbar-title {
+    font-size: var(--text-body);
+  }
+
+  .topbar-filename {
+    font-size: var(--text-small);
+    padding: 2px 8px;
+  }
+
+  /* Slightly smaller fonts */
+  .panel-title {
+    font-size: var(--text-tiny);
+  }
+
+  .cache-box-rate {
+    font-size: var(--text-subsection);
+  }
+
+  .cache-box-label {
+    font-size: 9px;
+  }
+
+  /* Compact cache hierarchy */
+  .cache-hierarchy {
+    padding: var(--space-sm);
+    gap: var(--space-xs);
+  }
+
+  .cache-box {
+    padding: var(--space-xs) var(--space-sm);
+    min-width: 70px;
+  }
+
+  .cache-connector {
+    height: 12px;
+  }
+
+  /* Compact config badge */
+  .config-badge {
+    padding: 4px 10px;
+    font-size: var(--text-tiny);
+  }
+
+  /* Compact run button */
+  .btn-run-cinema {
+    padding: 6px 16px;
+    font-size: var(--text-small);
+  }
+
+  /* Compact quick config */
+  .quick-config {
+    width: 290px;
+    right: 10px;
+  }
+
+  /* Compact panels */
+  .panel-body {
+    padding: var(--space-sm);
+  }
+
+  /* Compact bottom strip */
+  .bottom-strip {
+    height: 44px;
+    padding: 0 var(--space-sm);
+  }
+
+  .app:has(.bottom-strip) .main {
+    padding-bottom: 44px;
+  }
+
+  /* Compact options modal */
+  .options-modal {
+    width: 420px;
+  }
+
+  /* Compact cache grid cells */
+  .grid-cell {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+/* ===== Responsive: Mobile (max-width: 768px) ===== */
+@media (max-width: 768px) {
+  :root {
+    --header-height: 48px;
+  }
+
+  /* Show mobile tab switcher */
+  .mobile-tab-switcher {
+    display: flex;
+  }
+
+  /* Single column layout - hide inactive pane */
+  .main {
+    flex-direction: column;
+  }
+
+  .editor-pane,
+  .results-pane {
+    width: 100%;
+    min-height: 0;
+    flex: none;
+    border: none;
+  }
+
+  .editor-pane {
+    height: 100%;
+  }
+
+  .results-pane {
+    height: 100%;
+  }
+
+  /* Hide panes based on mobile state (controlled by JS) */
+  .editor-pane.mobile-hidden,
+  .results-pane.mobile-hidden {
+    display: none;
+  }
+
+  /* Larger touch targets (min 44px) */
+  button {
+    min-height: 44px;
+  }
+
+  .tab {
+    min-height: 44px;
+    padding: 0 var(--space-lg);
+  }
+
+  .tab-close {
+    width: 24px;
+    height: 24px;
+  }
+
+  select {
+    min-height: 44px;
+  }
+
+  /* Full-width panels */
+  .panel {
+    border-radius: 0;
+    margin-bottom: 0;
+    border-left: none;
+    border-right: none;
+  }
+
+  /* Compact header for mobile */
+  .topbar {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: var(--header-height);
+    padding: var(--space-xs) var(--space-sm);
+    gap: var(--space-xs);
+  }
+
+  .topbar-left {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .topbar-title {
+    font-size: var(--text-body);
+  }
+
+  .topbar-filename {
+    display: none;
+  }
+
+  .topbar-right {
+    display: flex;
+    gap: var(--space-xs);
+  }
+
+  /* Hide keyboard shortcut hints on mobile */
+  .shortcut-hint,
+  .command-item-shortcut {
+    display: none;
+  }
+
+  /* Command palette full-screen on mobile */
+  .command-palette-overlay {
+    padding-top: 0;
+  }
+
+  .command-palette {
+    width: 100%;
+    max-height: 100vh;
+    border-radius: 0;
+    max-width: none;
+  }
+
+  .command-input {
+    font-size: 16px; /* Prevent zoom on iOS */
+  }
+
+  .command-item {
+    padding: 16px 20px;
+    min-height: 44px;
+  }
+
+  /* Quick config full-width */
+  .quick-config {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+
+  .quick-config-row {
+    padding: var(--space-sm) 0;
+  }
+
+  .quick-config-row select {
+    min-height: 44px;
+  }
+
+  /* Hide advanced options by default */
+  .options-wrapper {
+    display: none;
+  }
+
+  /* Full-width options modal */
+  .options-modal {
+    width: 100%;
+    max-width: none;
+    border-radius: 0;
+    max-height: 100vh;
+  }
+
+  /* Compact file manager */
+  .file-manager {
+    padding: var(--space-xs);
+  }
+
+  .file-manager-item {
+    padding: var(--space-sm);
+    min-height: 44px;
+  }
+
+  /* Compact cache stats grid */
+  .cache-stats {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .cache-stat {
+    padding: var(--space-xs);
+  }
+
+  .cache-stat-value {
+    font-size: var(--text-body);
+  }
+
+  /* Compact bottom strip */
+  .bottom-strip {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 48px;
+    padding: var(--space-sm);
+  }
+
+  .bottom-strip-center {
+    order: -1;
+    width: 100%;
+    max-width: none;
+    padding: 0 0 var(--space-sm) 0;
+  }
+
+  .bottom-strip-left,
+  .bottom-strip-right {
+    flex: 1;
+  }
+
+  .strip-stat {
+    font-size: var(--text-tiny);
+  }
+
+  .app:has(.bottom-strip) .main {
+    padding-bottom: 80px;
+  }
+
+  /* Hide long tips on mobile */
+  .placeholder-tips {
+    display: none;
+  }
+
+  .placeholder-text kbd {
+    font-size: var(--text-small);
+  }
+
+  /* Compact hotspots */
+  .hotspot {
+    padding: var(--space-sm);
+  }
+
+  .hotspot-location,
+  .hotspot-stats {
+    font-size: var(--text-tiny);
+  }
+
+  /* Suggestions compact */
+  .suggestion {
+    padding: var(--space-sm);
+  }
+
+  .suggestion-message {
+    font-size: var(--text-small);
+  }
+
+  /* Toast position */
+  .toast {
+    bottom: 100px;
+    left: var(--space-md);
+    right: var(--space-md);
+    transform: none;
+  }
+}
+
+/* ===== Responsive: Small Mobile (max-width: 480px) ===== */
+@media (max-width: 480px) {
+  :root {
+    --space-md: 8px;
+    --space-lg: 12px;
+  }
+
+  /* Even more compact header */
+  .topbar-title {
+    font-size: var(--text-small);
+  }
+
+  .config-badge {
+    padding: 4px 8px;
+    font-size: 10px;
+  }
+
+  .config-badge-divider {
+    display: none;
+  }
+
+  .config-badge span:last-child {
+    display: none;
+  }
+
+  .btn-run-cinema {
+    padding: 6px 12px;
+    font-size: var(--text-small);
+  }
+
+  .theme-toggle {
+    width: 36px;
+    height: 36px;
+  }
+
+  /* Smaller cache grid cells */
+  .grid-cell {
+    width: 12px;
+    height: 12px;
+  }
+
+  .grid-set-label,
+  .grid-header-cell {
+    font-size: 8px;
+  }
+
+  /* Truncate long text */
+  .topbar-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100px;
+  }
+
+  .status-meta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .suggestion-location {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 150px;
+  }
+
+  /* Stack all UI elements vertically */
+  .cache-level-row {
+    flex-direction: column;
+    gap: var(--space-xs);
+  }
+
+  .cache-box {
+    width: 100%;
+    max-width: 120px;
+  }
+
+  .cache-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .prefetch-stats {
+    grid-template-columns: 1fr;
+    gap: var(--space-xs);
+  }
+
+  /* Compact legend */
+  .cache-grid-legend {
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+    font-size: 10px;
+  }
+
+  .legend-color {
+    width: 10px;
+    height: 10px;
+  }
+
+  /* Compact suggestions */
+  .suggestion-header {
+    flex-wrap: wrap;
+  }
+
+  /* Smaller placeholder */
+  .placeholder-icon {
+    font-size: 32px;
+  }
+
+  .placeholder-title {
+    font-size: var(--text-subsection);
+  }
+
+  .placeholder-text {
+    font-size: var(--text-small);
+  }
+
+  /* Bottom strip even more compact */
+  .strip-btn {
+    padding: 4px 8px;
+    font-size: var(--text-tiny);
+  }
+
+  /* Hide some strip elements */
+  .strip-divider {
+    display: none;
+  }
+
+  .strip-stat:not(:first-child) {
+    display: none;
+  }
+
+  /* Compact mobile tabs */
+  .mobile-tab-switcher button {
+    font-size: var(--text-small);
+  }
+
+  /* Compact error display */
+  .error-box {
+    padding: var(--space-sm);
+  }
+
+  .error-pre {
+    font-size: 11px;
+  }
+
+  /* Timeline compact */
+  .timeline-position {
+    min-width: 60px;
+    font-size: 10px;
+  }
+}

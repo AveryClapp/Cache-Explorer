@@ -16,6 +16,16 @@ const WS_URL = import.meta.env.PROD
   ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`
   : 'ws://localhost:3001/ws'
 
+interface Compiler {
+  id: string
+  name: string
+  version: string
+  major: number
+  path: string
+  source: string
+  default?: boolean
+}
+
 interface CacheStats {
   hits: number
   misses: number
@@ -1307,18 +1317,24 @@ function QuickConfigPanel({
   config,
   optLevel,
   prefetchPolicy,
+  compilers,
+  selectedCompiler,
   onConfigChange,
   onOptLevelChange,
   onPrefetchChange,
+  onCompilerChange,
   onClose
 }: {
   isOpen: boolean
   config: string
   optLevel: string
   prefetchPolicy: string
+  compilers: Compiler[]
+  selectedCompiler: string
   onConfigChange: (c: string) => void
   onOptLevelChange: (o: string) => void
   onPrefetchChange: (p: string) => void
+  onCompilerChange: (c: string) => void
   onClose: () => void
 }) {
   if (!isOpen) return null
@@ -1377,6 +1393,16 @@ function QuickConfigPanel({
               <option value="adaptive">Adaptive</option>
             </select>
           </div>
+          {compilers.length > 1 && (
+            <div className="quick-config-row">
+              <label>Compiler</label>
+              <select value={selectedCompiler} onChange={e => onCompilerChange(e.target.value)}>
+                {compilers.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -2335,6 +2361,11 @@ const PREFETCH_DEFAULTS: Record<string, PrefetchPolicy> = {
 }
 
 function App() {
+  // Embed mode detection from URL params
+  const urlParams = new URLSearchParams(window.location.search)
+  const isEmbedMode = urlParams.get('embed') === 'true'
+  const isReadOnly = urlParams.get('readonly') === 'true'
+
   // Multi-file state - use files array instead of single code
   const [files, setFiles] = useState<FileTab[]>(() => [
     createFileTab('main.c', EXAMPLE_CODE, 'c')
@@ -2403,6 +2434,8 @@ function App() {
   const [config, setConfig] = useState('educational')
   const [optLevel, setOptLevel] = useState('-O0')
   const [prefetchPolicy, setPrefetchPolicy] = useState<PrefetchPolicy>('none')
+  const [compilers, setCompilers] = useState<Compiler[]>([])
+  const [selectedCompiler, setSelectedCompiler] = useState<string>('')
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('cache-explorer-theme')
@@ -2431,6 +2464,8 @@ function App() {
   const [commandQuery, setCommandQuery] = useState('')
   const [showQuickConfig, setShowQuickConfig] = useState(false)
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0)
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768)
+  const [mobilePane, setMobilePane] = useState<'editor' | 'results'>('editor')
   const commandInputRef = useRef<HTMLInputElement>(null)
   const timelineRef = useRef<TimelineEvent[]>([])  // Accumulator during streaming
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
@@ -2460,6 +2495,21 @@ function App() {
     localStorage.setItem('cache-explorer-theme', theme)
   }, [theme])
 
+  // Fetch available compilers on mount
+  useEffect(() => {
+    fetch(`${API_BASE}/api/compilers`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.compilers && data.compilers.length > 0) {
+          setCompilers(data.compilers)
+          setSelectedCompiler(data.default || data.compilers[0].id)
+        }
+      })
+      .catch(err => {
+        console.warn('Failed to fetch compilers:', err)
+      })
+  }, [])
+
   const toggleTheme = useCallback(() => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark')
   }, [])
@@ -2483,6 +2533,15 @@ function App() {
       }
     }
   }, [vimMode])
+
+  // Mobile detection - update on resize
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -2788,6 +2847,7 @@ function App() {
       if (prefetchPolicy !== 'none') payload.prefetch = prefetchPolicy
       if (sampleRate > 1) payload.sample = sampleRate
       if (eventLimit > 0) payload.limit = eventLimit
+      if (selectedCompiler) payload.compiler = selectedCompiler
       ws.send(JSON.stringify(payload))
     }
 
@@ -2929,81 +2989,91 @@ function App() {
   }, [commandQuery, commands])
 
   return (
-    <div className="app">
-      {/* Command Palette */}
-      <CommandPalette
-        isOpen={showCommandPalette}
-        query={commandQuery}
-        selectedIndex={selectedCommandIndex}
-        onQueryChange={setCommandQuery}
-        onSelect={handleCommandSelect}
-        onClose={() => setShowCommandPalette(false)}
-        onNavigate={handleCommandNavigate}
-        inputRef={commandInputRef}
-        commands={commands}
-      />
+    <div className={`app${isEmbedMode ? ' embed' : ''}`}>
+      {/* Command Palette - hidden in embed mode */}
+      {!isEmbedMode && (
+        <CommandPalette
+          isOpen={showCommandPalette}
+          query={commandQuery}
+          selectedIndex={selectedCommandIndex}
+          onQueryChange={setCommandQuery}
+          onSelect={handleCommandSelect}
+          onClose={() => setShowCommandPalette(false)}
+          onNavigate={handleCommandNavigate}
+          inputRef={commandInputRef}
+          commands={commands}
+        />
+      )}
 
-      {/* Quick Config Panel */}
-      <QuickConfigPanel
-        isOpen={showQuickConfig}
-        config={config}
-        optLevel={optLevel}
-        prefetchPolicy={prefetchPolicy}
-        onConfigChange={(c) => {
-          setConfig(c)
-          setPrefetchPolicy(PREFETCH_DEFAULTS[c] || 'none')
-        }}
-        onOptLevelChange={setOptLevel}
-        onPrefetchChange={(p) => setPrefetchPolicy(p as PrefetchPolicy)}
-        onClose={() => setShowQuickConfig(false)}
-      />
+      {/* Quick Config Panel - hidden in embed mode */}
+      {!isEmbedMode && (
+        <QuickConfigPanel
+          isOpen={showQuickConfig}
+          config={config}
+          optLevel={optLevel}
+          prefetchPolicy={prefetchPolicy}
+          compilers={compilers}
+          selectedCompiler={selectedCompiler}
+          onConfigChange={(c) => {
+            setConfig(c)
+            setPrefetchPolicy(PREFETCH_DEFAULTS[c] || 'none')
+          }}
+          onOptLevelChange={setOptLevel}
+          onPrefetchChange={(p) => setPrefetchPolicy(p as PrefetchPolicy)}
+          onCompilerChange={setSelectedCompiler}
+          onClose={() => setShowQuickConfig(false)}
+        />
+      )}
 
-      <div className="topbar">
-        <div className="topbar-left">
-          <span className="topbar-title">Cache Explorer</span>
-          <span className="topbar-filename">{activeFile?.name || 'main.c'}</span>
+      {/* Topbar - hidden in embed mode */}
+      {!isEmbedMode && (
+        <div className="topbar">
+          <div className="topbar-left">
+            <span className="topbar-title">Cache Explorer</span>
+            <span className="topbar-filename">{activeFile?.name || 'main.c'}</span>
+          </div>
+
+          <div className="topbar-right">
+            <button
+              className="theme-toggle"
+              onClick={toggleTheme}
+              title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+            />
+            <button
+              className="config-badge"
+              onClick={() => setShowQuickConfig(true)}
+              title="Change configuration"
+            >
+              <span>{configNames[config] || config}</span>
+              <span className="config-badge-divider" />
+              <span>{optLevel}</span>
+            </button>
+
+            <button
+              onClick={runAnalysis}
+              disabled={isLoading}
+              className={`btn-run-cinema ${isLoading ? 'loading' : ''}`}
+            >
+              {isLoading ? (
+                <>
+                  <span className="run-spinner" />
+                  {stageText[stage]}
+                </>
+              ) : (
+                <>Run</>
+              )}
+            </button>
+          </div>
         </div>
-
-        <div className="topbar-right">
-          <button
-            className="theme-toggle"
-            onClick={toggleTheme}
-            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-          />
-          <button
-            className="config-badge"
-            onClick={() => setShowQuickConfig(true)}
-            title="Change configuration"
-          >
-            <span>{configNames[config] || config}</span>
-            <span className="config-badge-divider" />
-            <span>{optLevel}</span>
-          </button>
-
-          <button
-            onClick={runAnalysis}
-            disabled={isLoading}
-            className={`btn-run-cinema ${isLoading ? 'loading' : ''}`}
-          >
-            {isLoading ? (
-              <>
-                <span className="run-spinner" />
-                {stageText[stage]}
-              </>
-            ) : (
-              <>▶ Run</>
-            )}
-          </button>
-        </div>
-      </div>
+      )}
 
       {/* Copied Toast */}
       {copied && (
         <div className="toast">Link copied!</div>
       )}
 
-      {/* Advanced Options Modal */}
-      {showOptions && (
+      {/* Advanced Options Modal - hidden in embed mode */}
+      {showOptions && !isEmbedMode && (
         <div className="options-modal-overlay" onClick={() => setShowOptions(false)}>
           <div className="options-modal" onClick={e => e.stopPropagation()}>
             <div className="options-modal-header">
@@ -3075,20 +3145,41 @@ function App() {
         </div>
       )}
 
+      {/* Mobile Tab Switcher */}
+      {isMobile && !isEmbedMode && (
+        <div className="mobile-tab-switcher">
+          <button
+            className={mobilePane === 'editor' ? 'active' : ''}
+            onClick={() => setMobilePane('editor')}
+          >
+            Code
+          </button>
+          <button
+            className={mobilePane === 'results' ? 'active' : ''}
+            onClick={() => setMobilePane('results')}
+          >
+            Results
+          </button>
+        </div>
+      )}
+
       <div className="main">
-        <div className="editor-pane">
-          <FileManager
-            files={projectFiles}
-            activeFileId={activeFileId}
-            onFileSelect={setActiveFileId}
-            onFileCreate={createFile}
-            onFileDelete={closeFile}
-            onFileRename={renameFile}
-            onSetMainFile={setMainFileId}
-          />
+        <div className={`editor-pane${isMobile && mobilePane !== 'editor' ? ' mobile-hidden' : ''}`}>
+          {/* FileManager hidden in embed mode */}
+          {!isEmbedMode && (
+            <FileManager
+              files={projectFiles}
+              activeFileId={activeFileId}
+              onFileSelect={setActiveFileId}
+              onFileCreate={createFile}
+              onFileDelete={closeFile}
+              onFileRename={renameFile}
+              onSetMainFile={setMainFileId}
+            />
+          )}
           {diffMode && baselineCode ? (
             <DiffEditor
-              height="calc(100% - 180px)"
+              height={isEmbedMode ? "100%" : "calc(100% - 180px)"}
               language={monacoLanguage}
               theme={theme === 'dark' ? 'vs-dark' : 'light'}
               original={baselineCode}
@@ -3097,23 +3188,23 @@ function App() {
                 const modifiedEditor = editor.getModifiedEditor()
                 modifiedEditor.onDidChangeModelContent(() => updateActiveCode(modifiedEditor.getValue()))
               }}
-              options={{ minimap: { enabled: false }, fontSize: 13, renderSideBySide: true }}
+              options={{ minimap: { enabled: false }, fontSize: 13, renderSideBySide: true, readOnly: isReadOnly }}
             />
           ) : (
             <Editor
-              height={vimMode ? "calc(100% - 204px)" : "calc(100% - 180px)"}
+              height={isEmbedMode ? "100%" : (vimMode ? "calc(100% - 204px)" : "calc(100% - 180px)")}
               language={monacoLanguage}
               theme={theme === 'dark' ? 'vs-dark' : 'light'}
               value={code}
-              onChange={(value) => updateActiveCode(value || '')}
+              onChange={(value) => !isReadOnly && updateActiveCode(value || '')}
               onMount={handleEditorMount}
-              options={{ minimap: { enabled: false }, fontSize: 13, lineNumbers: 'on', scrollBeyondLastLine: false, glyphMargin: true }}
+              options={{ minimap: { enabled: false }, fontSize: 13, lineNumbers: 'on', scrollBeyondLastLine: false, glyphMargin: true, readOnly: isReadOnly }}
             />
           )}
-          {vimMode && <div ref={vimStatusRef} className="vim-status-bar" />}
+          {vimMode && !isEmbedMode && <div ref={vimStatusRef} className="vim-status-bar" />}
         </div>
 
-        <div className="results-pane">
+        <div className={`results-pane${isMobile && mobilePane !== 'results' ? ' mobile-hidden' : ''}`}>
           <div className="results-scroll">
             {error && <ErrorDisplay error={error} />}
 
@@ -3356,8 +3447,8 @@ function App() {
         </div>
       </div>
 
-      {/* Bottom Control Strip - appears after run */}
-      {result && timeline.length > 0 && (
+      {/* Bottom Control Strip - appears after run, hidden in embed mode */}
+      {result && timeline.length > 0 && !isEmbedMode && (
         <div className="bottom-strip">
           <div className="bottom-strip-left">
             <span className="strip-stat">{result.events.toLocaleString()} events</span>

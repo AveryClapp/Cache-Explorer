@@ -1,0 +1,812 @@
+openapi: 3.0.3
+info:
+  title: Cache Explorer API
+  version: 1.0.0
+  description: |
+    Cache Explorer is a visual cache profiler that shows how code interacts with CPU cache hierarchies.
+    This API provides endpoints for compiling and profiling C/C++/Rust code, sharing code snippets,
+    and monitoring server health.
+  contact:
+    name: Cache Explorer
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:3001
+    description: Local development server
+
+tags:
+  - name: profiling
+    description: Code compilation and cache profiling endpoints
+  - name: sharing
+    description: URL shortening and code sharing endpoints
+  - name: monitoring
+    description: Health checks and metrics endpoints
+
+paths:
+  /compile:
+    post:
+      tags:
+        - profiling
+      summary: Compile and profile code
+      description: |
+        Compiles the provided source code with cache instrumentation and runs the cache simulator.
+        Returns detailed cache profiling results including hit/miss statistics, memory access patterns,
+        and optimization suggestions.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompileRequest'
+            examples:
+              simple_c:
+                summary: Simple C program
+                value:
+                  code: |
+                    #include <stdio.h>
+                    int main() {
+                        int arr[100];
+                        for (int i = 0; i < 100; i++) {
+                            arr[i] = i;
+                        }
+                        return 0;
+                    }
+                  language: c
+                  config: educational
+                  optLevel: "-O0"
+              multi_file:
+                summary: Multi-file project
+                value:
+                  files:
+                    - name: main.c
+                      code: |
+                        #include "helper.h"
+                        int main() { return add(1, 2); }
+                    - name: helper.h
+                      code: |
+                        int add(int a, int b);
+                    - name: helper.c
+                      code: |
+                        int add(int a, int b) { return a + b; }
+                  language: c
+                  config: educational
+      responses:
+        '200':
+          description: Successful compilation and profiling
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompileResult'
+              example:
+                summary:
+                  totalAccesses: 1000
+                  hits: 850
+                  misses: 150
+                  hitRate: 0.85
+                cacheConfig:
+                  l1Size: 32768
+                  l1Assoc: 8
+                  lineSize: 64
+                events:
+                  - type: load
+                    address: "0x7fff5fbff8c0"
+                    line: 5
+                    file: main.c
+                    hit: true
+                    level: L1
+        '400':
+          description: Compilation or execution error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompileError'
+              examples:
+                compile_error:
+                  summary: Compilation error
+                  value:
+                    type: compile_error
+                    errors:
+                      - line: 5
+                        column: 10
+                        severity: error
+                        message: "use of undeclared identifier 'x'"
+                        suggestion: "Variable or function not declared - check spelling or add declaration"
+                    summary: "1 error"
+                timeout:
+                  summary: Execution timeout
+                  value:
+                    type: timeout
+                    message: "Execution timed out after 60s"
+                    suggestion: "Check for infinite loops, reduce input size, or increase timeout"
+
+  /health:
+    get:
+      tags:
+        - monitoring
+      summary: Health check endpoint
+      description: Returns the health status of the server including database connectivity, sandbox availability, and configuration.
+      responses:
+        '200':
+          description: Server health status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: healthy
+                uptime: 3600
+                database: connected
+                sandbox: enabled
+                mode: production
+                config:
+                  timeouts:
+                    default: 60000
+                    max: 300000
+                    min: 5000
+                  rateLimit:
+                    maxRequestsPerMinute: 30
+
+  /metrics:
+    get:
+      tags:
+        - monitoring
+      summary: Prometheus metrics endpoint
+      description: Returns server metrics in Prometheus text format for monitoring and alerting.
+      responses:
+        '200':
+          description: Prometheus metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: |
+                # HELP cache_explorer_requests_total Total number of requests
+                # TYPE cache_explorer_requests_total counter
+                cache_explorer_requests_total{type="compile"} 150
+                cache_explorer_requests_total{type="share"} 25
+                # HELP cache_explorer_errors_total Total number of errors
+                # TYPE cache_explorer_errors_total counter
+                cache_explorer_errors_total{type="compile"} 5
+
+  /shorten:
+    post:
+      tags:
+        - sharing
+      summary: Create a short URL for state
+      description: Creates a short URL that can be used to share the current editor state including code, configuration, and results.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShortenRequest'
+            example:
+              state:
+                code: "int main() { return 0; }"
+                config: educational
+                optLevel: "-O0"
+      responses:
+        '200':
+          description: Short URL created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShortenResponse'
+              example:
+                id: abc123
+                url: /s/abc123
+        '400':
+          description: No state provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: No state provided
+        '500':
+          description: Failed to create short URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: Failed to create short URL
+
+  /s/{id}:
+    get:
+      tags:
+        - sharing
+      summary: Get short URL data
+      description: Retrieves the state associated with a short URL ID.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The short URL identifier
+          schema:
+            type: string
+          example: abc123
+      responses:
+        '200':
+          description: State retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShortUrlDataResponse'
+              example:
+                state:
+                  code: "int main() { return 0; }"
+                  config: educational
+                  optLevel: "-O0"
+        '404':
+          description: Link not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: Link not found
+        '500':
+          description: Failed to retrieve link
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: Failed to retrieve link
+
+  /api/share:
+    post:
+      tags:
+        - sharing
+      summary: Create a share link (alternative endpoint)
+      description: Alternative endpoint for creating shareable links. Uses 'data' instead of 'state' for the payload.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShareRequest'
+            example:
+              data:
+                code: "int main() { return 0; }"
+                config: educational
+      responses:
+        '200':
+          description: Share link created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShareResponse'
+              example:
+                code: xyz789
+                url: /s/xyz789
+        '400':
+          description: No data provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: No data provided
+        '500':
+          description: Failed to create short URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: Failed to create short URL
+
+  /api/s/{code}:
+    get:
+      tags:
+        - sharing
+      summary: Get share data (alternative endpoint)
+      description: Alternative endpoint for retrieving shared data. Returns 'data' instead of 'state'.
+      parameters:
+        - name: code
+          in: path
+          required: true
+          description: The share code identifier
+          schema:
+            type: string
+          example: xyz789
+      responses:
+        '200':
+          description: Data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShareDataResponse'
+              example:
+                data:
+                  code: "int main() { return 0; }"
+                  config: educational
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: Not found
+        '500':
+          description: Failed to retrieve
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: Failed to retrieve
+
+  /api/docs:
+    get:
+      tags:
+        - monitoring
+      summary: Get OpenAPI specification (YAML)
+      description: Returns the OpenAPI specification for this API in YAML format.
+      responses:
+        '200':
+          description: OpenAPI specification in YAML format
+          content:
+            text/yaml:
+              schema:
+                type: string
+
+  /api/docs.json:
+    get:
+      tags:
+        - monitoring
+      summary: Get OpenAPI specification (JSON)
+      description: Returns the OpenAPI specification for this API in JSON format.
+      responses:
+        '200':
+          description: OpenAPI specification in JSON format
+          content:
+            application/json:
+              schema:
+                type: object
+
+components:
+  schemas:
+    CompileRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Source code to compile (for single-file projects)
+          example: |
+            #include <stdio.h>
+            int main() { printf("Hello\n"); return 0; }
+        files:
+          type: array
+          description: Array of source files (for multi-file projects)
+          items:
+            $ref: '#/components/schemas/SourceFile'
+        config:
+          type: string
+          description: Cache configuration preset
+          enum: [educational, desktop, server, mobile, custom]
+          default: educational
+          example: educational
+        optLevel:
+          type: string
+          description: Compiler optimization level
+          enum: ["-O0", "-O1", "-O2", "-O3", "-Os"]
+          default: "-O0"
+          example: "-O0"
+        language:
+          type: string
+          description: Programming language
+          enum: [c, cpp, rust]
+          default: c
+          example: c
+        sample:
+          type: integer
+          description: Sample rate (1 = every access, 10 = every 10th access)
+          minimum: 1
+          default: 1
+          example: 1
+        limit:
+          type: integer
+          description: Maximum number of events to capture
+          default: 5000000
+          example: 100000
+        timeout:
+          type: integer
+          description: Execution timeout in milliseconds
+          minimum: 5000
+          maximum: 300000
+          default: 60000
+          example: 60000
+        prefetch:
+          type: string
+          description: Prefetch policy to simulate
+          enum: [none, next-line, stride, stream]
+          default: none
+          example: none
+        customConfig:
+          $ref: '#/components/schemas/CustomCacheConfig'
+        defines:
+          type: array
+          description: Preprocessor definitions
+          items:
+            $ref: '#/components/schemas/PreprocessorDefine'
+
+    SourceFile:
+      type: object
+      required:
+        - name
+        - code
+      properties:
+        name:
+          type: string
+          description: File name including extension
+          example: main.c
+        code:
+          type: string
+          description: File contents
+          example: "int main() { return 0; }"
+
+    CustomCacheConfig:
+      type: object
+      description: Custom cache configuration parameters
+      properties:
+        l1Size:
+          type: integer
+          description: L1 cache size in bytes
+          example: 32768
+        l1Assoc:
+          type: integer
+          description: L1 cache associativity
+          example: 8
+        lineSize:
+          type: integer
+          description: Cache line size in bytes
+          example: 64
+        l2Size:
+          type: integer
+          description: L2 cache size in bytes
+          example: 262144
+        l2Assoc:
+          type: integer
+          description: L2 cache associativity
+          example: 4
+        l3Size:
+          type: integer
+          description: L3 cache size in bytes
+          example: 8388608
+        l3Assoc:
+          type: integer
+          description: L3 cache associativity
+          example: 16
+
+    PreprocessorDefine:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Define name
+          example: DEBUG
+        value:
+          type: string
+          description: Define value (optional)
+          example: "1"
+
+    CompileResult:
+      type: object
+      properties:
+        summary:
+          $ref: '#/components/schemas/CacheSummary'
+        cacheConfig:
+          $ref: '#/components/schemas/CacheConfigResult'
+        events:
+          type: array
+          description: Memory access events with cache results
+          items:
+            $ref: '#/components/schemas/CacheEvent'
+        hotLines:
+          type: array
+          description: Source lines with most cache activity
+          items:
+            $ref: '#/components/schemas/HotLine'
+        suggestions:
+          type: array
+          description: Optimization suggestions
+          items:
+            type: string
+
+    CacheSummary:
+      type: object
+      properties:
+        totalAccesses:
+          type: integer
+          description: Total number of memory accesses
+          example: 10000
+        hits:
+          type: integer
+          description: Number of cache hits
+          example: 8500
+        misses:
+          type: integer
+          description: Number of cache misses
+          example: 1500
+        hitRate:
+          type: number
+          format: float
+          description: Cache hit rate (0.0 to 1.0)
+          example: 0.85
+        l1Hits:
+          type: integer
+          description: L1 cache hits
+          example: 7000
+        l2Hits:
+          type: integer
+          description: L2 cache hits
+          example: 1200
+        l3Hits:
+          type: integer
+          description: L3 cache hits
+          example: 300
+
+    CacheConfigResult:
+      type: object
+      properties:
+        l1Size:
+          type: integer
+          example: 32768
+        l1Assoc:
+          type: integer
+          example: 8
+        lineSize:
+          type: integer
+          example: 64
+        l2Size:
+          type: integer
+          example: 262144
+        l3Size:
+          type: integer
+          example: 8388608
+
+    CacheEvent:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [load, store]
+          description: Type of memory access
+          example: load
+        address:
+          type: string
+          description: Memory address accessed
+          example: "0x7fff5fbff8c0"
+        size:
+          type: integer
+          description: Size of access in bytes
+          example: 4
+        line:
+          type: integer
+          description: Source code line number
+          example: 10
+        file:
+          type: string
+          description: Source file name
+          example: main.c
+        hit:
+          type: boolean
+          description: Whether this was a cache hit
+          example: true
+        level:
+          type: string
+          enum: [L1, L2, L3, MEMORY]
+          description: Cache level that served the request
+          example: L1
+
+    HotLine:
+      type: object
+      properties:
+        line:
+          type: integer
+          description: Source line number
+          example: 15
+        file:
+          type: string
+          description: Source file name
+          example: main.c
+        accesses:
+          type: integer
+          description: Number of accesses from this line
+          example: 500
+        hitRate:
+          type: number
+          format: float
+          description: Hit rate for this line
+          example: 0.92
+
+    CompileError:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [compile_error, linker_error, runtime_error, timeout, server_error, unknown_error, validation_error]
+          description: Type of error
+          example: compile_error
+        errors:
+          type: array
+          description: List of compilation errors (for compile_error type)
+          items:
+            $ref: '#/components/schemas/CompileErrorDetail'
+        message:
+          type: string
+          description: Error message
+          example: "Undefined symbol: foo"
+        suggestion:
+          type: string
+          description: Helpful suggestion for fixing the error
+          example: "Check that the function is defined, not just declared"
+        summary:
+          type: string
+          description: Summary of errors (e.g., "3 errors, 1 warning")
+          example: "1 error"
+        raw:
+          type: string
+          description: Raw error output from compiler
+        exitCode:
+          type: integer
+          description: Exit code from compiler/runtime
+
+    CompileErrorDetail:
+      type: object
+      properties:
+        line:
+          type: integer
+          description: Line number of the error
+          example: 5
+        column:
+          type: integer
+          description: Column number of the error
+          example: 10
+        severity:
+          type: string
+          enum: [error, warning]
+          description: Severity of the issue
+          example: error
+        message:
+          type: string
+          description: Error message from compiler
+          example: "use of undeclared identifier 'x'"
+        suggestion:
+          type: string
+          description: Suggestion for fixing the error
+          example: "Variable or function not declared - check spelling or add declaration"
+        sourceLine:
+          type: string
+          description: The source code line containing the error
+          example: "    int y = x + 1;"
+        caret:
+          type: string
+          description: Caret indicator showing error position
+          example: "            ^"
+        notes:
+          type: array
+          description: Additional notes from the compiler
+          items:
+            type: string
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+          description: Overall health status
+          example: healthy
+        uptime:
+          type: number
+          description: Server uptime in seconds
+          example: 3600.5
+        database:
+          type: string
+          description: Database connection status
+          example: connected
+        sandbox:
+          type: string
+          enum: [enabled, disabled]
+          description: Docker sandbox status
+          example: enabled
+        mode:
+          type: string
+          enum: [production, development]
+          description: Server running mode
+          example: production
+        config:
+          type: object
+          properties:
+            timeouts:
+              type: object
+              properties:
+                default:
+                  type: integer
+                  example: 60000
+                max:
+                  type: integer
+                  example: 300000
+                min:
+                  type: integer
+                  example: 5000
+            rateLimit:
+              type: object
+              properties:
+                maxRequestsPerMinute:
+                  type: integer
+                  example: 30
+
+    ShortenRequest:
+      type: object
+      required:
+        - state
+      properties:
+        state:
+          type: object
+          description: State object to store (typically includes code, config, results)
+          additionalProperties: true
+
+    ShortenResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: The short URL identifier
+          example: abc123
+        url:
+          type: string
+          description: The relative URL path
+          example: /s/abc123
+
+    ShortUrlDataResponse:
+      type: object
+      properties:
+        state:
+          type: object
+          description: The stored state object
+          additionalProperties: true
+
+    ShareRequest:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          type: object
+          description: Data object to store
+          additionalProperties: true
+
+    ShareResponse:
+      type: object
+      properties:
+        code:
+          type: string
+          description: The share code identifier
+          example: xyz789
+        url:
+          type: string
+          description: The relative URL path
+          example: /s/xyz789
+
+    ShareDataResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          description: The stored data object
+          additionalProperties: true
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+          example: An error occurred
