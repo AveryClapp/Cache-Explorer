@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Background -->
+  <rect width="32" height="32" rx="4" fill="#1e1e1e"/>
+
+  <!-- Cache grid - 3x3 representing cache lines -->
+  <!-- Row 1 -->
+  <rect x="4" y="4" width="7" height="7" rx="1" fill="#32cd32"/> <!-- L1 hit - green -->
+  <rect x="12.5" y="4" width="7" height="7" rx="1" fill="#32cd32"/>
+  <rect x="21" y="4" width="7" height="7" rx="1" fill="#4169e1"/> <!-- Shared - blue -->
+
+  <!-- Row 2 -->
+  <rect x="4" y="12.5" width="7" height="7" rx="1" fill="#ffd700"/> <!-- L2 hit - gold -->
+  <rect x="12.5" y="12.5" width="7" height="7" rx="1" fill="#32cd32"/>
+  <rect x="21" y="12.5" width="7" height="7" rx="1" fill="#32cd32"/>
+
+  <!-- Row 3 -->
+  <rect x="4" y="21" width="7" height="7" rx="1" fill="#ff6347"/> <!-- Miss - red -->
+  <rect x="12.5" y="21" width="7" height="7" rx="1" fill="#ffd700"/>
+  <rect x="21" y="21" width="7" height="7" rx="1" fill="#32cd32"/>
+</svg>

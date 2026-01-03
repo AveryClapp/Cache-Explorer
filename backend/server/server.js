@@ -8,6 +8,9 @@ import { randomUUID } from 'crypto';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { checkSandboxAvailable, runInSandbox, parseSandboxError } from './sandbox.js';
+import { initDb, createShortUrl, getShortUrl, isHealthy as isDbHealthy, getDbStats } from './db.js';
+import { getCachedResult, cacheResult, startCachePruning } from './cache.js';
+import { incCounter, setGauge, recordDuration, getPrometheusMetrics, getHealthStatus } from './metrics.js';
 
 // ============================================================================
 // Configuration
@@ -482,6 +485,9 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 // ============================================================================
 
 app.post('/compile', async (req, res) => {
+  const startTime = Date.now();
+  incCounter('requests', { type: 'compile' });
+
   const {
     code,
     files,
@@ -502,6 +508,34 @@ app.post('/compile', async (req, res) => {
   // Apply sensible defaults for web UI to prevent timeouts
   const eventLimit = limit !== undefined ? limit : 5000000;  // 5M events max (~30s runtime)
   const sampleRate = sample !== undefined ? sample : 1;       // No sampling by default
+
+  // Normalize files for cache key
+  const normalizedFiles = Array.isArray(inputFiles)
+    ? inputFiles
+    : [{ name: 'main', code: inputFiles, language }];
+
+  // Check cache first
+  const cacheInputs = {
+    files: normalizedFiles,
+    config,
+    optLevel,
+    prefetch: req.body.prefetch || 'none',
+    defines: req.body.defines || [],
+    sampleRate,
+    eventLimit,
+  };
+
+  try {
+    const cached = getCachedResult(cacheInputs);
+    if (cached) {
+      incCounter('cache_hits');
+      recordDuration('compilation_duration', (Date.now() - startTime) / 1000);
+      return res.json(cached);
+    }
+  } catch (err) {
+    // Cache miss or error, continue with compilation
+  }
+  incCounter('cache_misses');
 
   // Configurable timeout with bounds
   const timeout = Math.min(
@@ -529,11 +563,19 @@ app.post('/compile', async (req, res) => {
       const output = result.stdout.trim();
       try {
         const json = JSON.parse(output);
+        // Cache successful result
+        try {
+          cacheResult(cacheInputs, json);
+        } catch (cacheErr) {
+          console.warn('Failed to cache result:', cacheErr.message);
+        }
+        recordDuration('compilation_duration', (Date.now() - startTime) / 1000);
         res.json(json);
       } catch {
         res.json({ raw: output, stderr: result.stderr });
       }
     } catch (err) {
+      incCounter('errors', { type: 'compile' });
       const parsed = parseSandboxError(err);
       res.status(400).json(parsed);
     }
@@ -636,11 +678,19 @@ app.post('/compile', async (req, res) => {
 
     try {
       const json = JSON.parse(output);
+      // Cache successful result
+      try {
+        cacheResult(cacheInputs, json);
+      } catch (cacheErr) {
+        console.warn('Failed to cache result:', cacheErr.message);
+      }
+      recordDuration('compilation_duration', (Date.now() - startTime) / 1000);
       res.json(json);
     } catch {
       res.json({ raw: output, stderr: result.stderr });
     }
   } catch (err) {
+    incCounter('errors', { type: 'compile' });
     console.error('HTTP compile error:', err);
     const parsed = createErrorResponse(err, mainFile);
     res.status(400).json(parsed);
@@ -652,8 +702,9 @@ app.post('/compile', async (req, res) => {
 });
 
 app.get('/health', (req, res) => {
+  const health = getHealthStatus();
   res.json({
-    status: 'ok',
+    ...health,
     sandbox: sandboxAvailable ? 'enabled' : 'disabled',
     mode: sandboxAvailable ? 'production' : 'development',
     config: {
@@ -663,56 +714,81 @@ app.get('/health', (req, res) => {
   });
 });
 
-// ============================================================================
-// Link Shortener
-// ============================================================================
+// Prometheus metrics endpoint
+app.get('/metrics', (req, res) => {
+  res.set('Content-Type', 'text/plain; version=0.0.4');
+  res.send(getPrometheusMetrics());
+});
 
-// Link shortener - in-memory store (replace with DB for production)
-const shortLinks = new Map();
-
-function generateShortId() {
-  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let id = '';
-  for (let i = 0; i < 8; i++) {
-    id += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return id;
-}
+// ============================================================================
+// Link Shortener (SQLite-backed)
+// ============================================================================
 
 // Create short link
 app.post('/shorten', (req, res) => {
+  incCounter('requests', { type: 'share' });
   const { state } = req.body;
   if (!state) {
     return res.status(400).json({ error: 'No state provided' });
   }
 
-  const id = generateShortId();
-  shortLinks.set(id, {
-    state,
-    created: Date.now()
-  });
-
-  // Cleanup old links (keep last 1000)
-  if (shortLinks.size > 1000) {
-    const oldest = [...shortLinks.entries()]
-      .sort((a, b) => a[1].created - b[1].created)
-      .slice(0, shortLinks.size - 1000);
-    oldest.forEach(([key]) => shortLinks.delete(key));
+  try {
+    const code = createShortUrl(state);
+    res.json({ id: code, url: `/s/${code}` });
+  } catch (err) {
+    console.error('Failed to create short URL:', err);
+    incCounter('errors', { type: 'share' });
+    res.status(500).json({ error: 'Failed to create short URL' });
   }
-
-  res.json({ id });
 });
 
 // Retrieve short link
 app.get('/s/:id', (req, res) => {
   const { id } = req.params;
-  const link = shortLinks.get(id);
 
-  if (!link) {
-    return res.status(404).json({ error: 'Link not found' });
+  try {
+    const data = getShortUrl(id);
+    if (!data) {
+      return res.status(404).json({ error: 'Link not found' });
+    }
+    res.json({ state: data });
+  } catch (err) {
+    console.error('Failed to retrieve short URL:', err);
+    res.status(500).json({ error: 'Failed to retrieve link' });
+  }
+});
+
+// API endpoint for sharing (alternative route)
+app.post('/api/share', (req, res) => {
+  incCounter('requests', { type: 'share' });
+  const { data } = req.body;
+  if (!data) {
+    return res.status(400).json({ error: 'No data provided' });
   }
 
-  res.json({ state: link.state });
+  try {
+    const code = createShortUrl(data);
+    res.json({ code, url: `/s/${code}` });
+  } catch (err) {
+    console.error('Failed to create short URL:', err);
+    incCounter('errors', { type: 'share' });
+    res.status(500).json({ error: 'Failed to create short URL' });
+  }
+});
+
+app.get('/api/s/:code', (req, res) => {
+  const { code } = req.params;
+
+  try {
+    const data = getShortUrl(code);
+    if (!data) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    res.json({ data });
+  } catch (err) {
+    console.error('Failed to retrieve short URL:', err);
+    res.status(500).json({ error: 'Failed to retrieve' });
+  }
 });
 
 // ============================================================================
@@ -1124,6 +1200,16 @@ wss.on('connection', (ws) => {
 // ============================================================================
 
 const PORT = process.env.PORT || 3001;
+
+// Initialize database and caching
+try {
+  initDb();
+  startCachePruning();
+  console.log('Database and cache initialized');
+} catch (err) {
+  console.warn('Database initialization failed, running without persistence:', err.message);
+}
+
 server.listen(PORT, () => {
   console.log(`Cache Explorer server running on http://localhost:${PORT}`);
   console.log(`WebSocket available at ws://localhost:${PORT}/ws`);

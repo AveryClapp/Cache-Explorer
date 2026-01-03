@@ -82,8 +82,8 @@ export function CacheGrid({
   const handleMouseEnter = (
     e: React.MouseEvent,
     line: CacheLineState | null,
-    set: number,
-    way: number
+    _set: number,
+    _way: number
   ) => {
     if (line) {
       setHoveredLine(line)

@@ -6,6 +6,10 @@ import { initVimMode } from 'monaco-vim'
 import LZString from 'lz-string'
 import './App.css'
 
+// Import visualization components
+import { MemoryLayout, FileManager } from './components'
+import type { ProjectFile } from './components'
+
 // API base URL - in production (Docker), use relative paths; in dev, use localhost
 const API_BASE = import.meta.env.PROD ? '' : 'http://localhost:3001'
 const WS_URL = import.meta.env.PROD
@@ -168,37 +172,13 @@ interface Example {
 }
 
 const EXAMPLES: Record<string, Example> = {
-  matrix: {
-    name: 'Matrix Traversal',
-    description: 'Row-major vs column-major',
-    language: 'c',
-    code: `#include <stdio.h>
-#define N 100
-
-int main() {
-    int matrix[N][N];
-
-    // Row-major (cache-friendly)
-    for (int i = 0; i < N; i++)
-        for (int j = 0; j < N; j++)
-            matrix[i][j] = i + j;
-
-    // Column-major (cache-unfriendly)
-    int sum = 0;
-    for (int j = 0; j < N; j++)
-        for (int i = 0; i < N; i++)
-            sum += matrix[i][j];
-
-    printf("Sum: %d\\n", sum);
-    return 0;
-}
-`
-  },
+  // === Access Patterns ===
   sequential: {
     name: 'Sequential Access',
     description: 'Best case - spatial locality',
     language: 'c',
-    code: `#include <stdio.h>
+    code: `// Sequential array access - good cache behavior
+#include <stdio.h>
 #define N 1000
 
 int main() {
@@ -215,9 +195,10 @@ int main() {
   },
   strided: {
     name: 'Strided Access',
-    description: 'Worst case - skips cache lines',
+    description: 'Skips cache lines - poor locality',
     language: 'c',
-    code: `#include <stdio.h>
+    code: `// Strided access - poor cache behavior
+#include <stdio.h>
 #define N 1000
 #define STRIDE 16  // 64 bytes = 1 cache line
 
@@ -227,22 +208,216 @@ int main() {
 
     int sum = 0;
     for (int i = 0; i < N; i++)
-        sum += arr[i * STRIDE];  // Miss every time!
+        sum += arr[i * STRIDE];  // Miss every access
 
     printf("Sum: %d\\n", sum);
     return 0;
 }
 `
   },
+  matrix_row: {
+    name: 'Row-Major Matrix',
+    description: 'Sequential memory access - cache friendly',
+    language: 'c',
+    code: `// Row-major matrix traversal - good cache behavior
+#include <stdio.h>
+#define N 64
+
+int main() {
+    int matrix[N][N];
+    int sum = 0;
+
+    for (int i = 0; i < N; i++)
+        for (int j = 0; j < N; j++)
+            matrix[i][j] = i + j;
+
+    for (int i = 0; i < N; i++)
+        for (int j = 0; j < N; j++)
+            sum += matrix[i][j];
+
+    printf("Sum: %d\\n", sum);
+    return 0;
+}
+`
+  },
+  matrix_col: {
+    name: 'Column-Major Matrix',
+    description: 'Strided access - cache unfriendly',
+    language: 'c',
+    code: `// Column-major matrix traversal - poor cache behavior
+#include <stdio.h>
+#define N 64
+
+int main() {
+    int matrix[N][N];
+    int sum = 0;
+
+    for (int j = 0; j < N; j++)
+        for (int i = 0; i < N; i++)
+            matrix[i][j] = i + j;
+
+    for (int j = 0; j < N; j++)
+        for (int i = 0; i < N; i++)
+            sum += matrix[i][j];
+
+    printf("Sum: %d\\n", sum);
+    return 0;
+}
+`
+  },
+  linkedlist: {
+    name: 'Linked List',
+    description: 'Pointer chasing - poor locality',
+    language: 'c',
+    code: `// Linked List - scattered memory access
+#include <stdio.h>
+#include <stdlib.h>
+#define N 10000
+
+struct Node { int value; struct Node* next; };
+
+int main() {
+    struct Node* head = NULL;
+    for (int i = 0; i < N; i++) {
+        struct Node* node = malloc(sizeof(struct Node));
+        node->value = i;
+        node->next = head;
+        head = node;
+    }
+
+    int sum = 0;
+    for (int rep = 0; rep < 10; rep++) {
+        struct Node* curr = head;
+        while (curr) {
+            sum += curr->value;
+            curr = curr->next;
+        }
+    }
+
+    printf("Sum: %d\\n", sum);
+    return 0;
+}
+`
+  },
+  binary_search: {
+    name: 'Binary Search',
+    description: 'Unpredictable memory access pattern',
+    language: 'c',
+    code: `// Binary Search - random-like access pattern
+#include <stdio.h>
+#define N 1000000
+
+int arr[N];
+
+int binary_search(int target) {
+    int left = 0, right = N - 1;
+    while (left <= right) {
+        int mid = left + (right - left) / 2;
+        if (arr[mid] == target) return mid;
+        if (arr[mid] < target) left = mid + 1;
+        else right = mid - 1;
+    }
+    return -1;
+}
+
+int main() {
+    for (int i = 0; i < N; i++) arr[i] = i * 2;
+
+    int found = 0;
+    for (int i = 0; i < 10000; i++) {
+        int target = (i * 7) % (N * 2);
+        if (binary_search(target) >= 0) found++;
+    }
+
+    printf("Found: %d\\n", found);
+    return 0;
+}
+`
+  },
+
+  // === Data Layout ===
+  array_of_structs: {
+    name: 'Array of Structs',
+    description: 'AoS - wastes cache on partial field access',
+    language: 'c',
+    code: `// Array of Structs (AoS) - Mixed Locality
+#include <stdio.h>
+#define N 10000
+
+struct Particle {
+    float x, y, z;
+    float vx, vy, vz;
+    float mass;
+    int id;
+};  // 32 bytes
+
+struct Particle particles[N];
+
+int main() {
+    for (int i = 0; i < N; i++) {
+        particles[i].x = i * 0.1f;
+        particles[i].y = i * 0.2f;
+        particles[i].mass = 1.0f;
+    }
+
+    // Access ONLY x - wastes cache loading other fields
+    float sum_x = 0;
+    for (int rep = 0; rep < 100; rep++)
+        for (int i = 0; i < N; i++)
+            sum_x += particles[i].x;
+
+    printf("Sum: %f\\n", sum_x);
+    return 0;
+}
+`
+  },
+  struct_of_arrays: {
+    name: 'Struct of Arrays',
+    description: 'SoA - excellent locality for single field',
+    language: 'c',
+    code: `// Struct of Arrays (SoA) - Excellent Locality
+#include <stdio.h>
+#define N 10000
+
+struct Particles {
+    float x[N], y[N], z[N];
+    float vx[N], vy[N], vz[N];
+    float mass[N];
+    int id[N];
+};
+
+struct Particles p;
+
+int main() {
+    for (int i = 0; i < N; i++) {
+        p.x[i] = i * 0.1f;
+        p.y[i] = i * 0.2f;
+        p.mass[i] = 1.0f;
+    }
+
+    // Access ONLY x - perfect sequential access
+    float sum_x = 0;
+    for (int rep = 0; rep < 100; rep++)
+        for (int i = 0; i < N; i++)
+            sum_x += p.x[i];
+
+    printf("Sum: %f\\n", sum_x);
+    return 0;
+}
+`
+  },
+
+  // === Optimizations ===
   blocking: {
     name: 'Cache Blocking',
-    description: 'Matrix multiply optimization',
+    description: 'Tiled matrix multiply',
     language: 'c',
-    code: `#include <stdio.h>
-#define N 64
-#define BLOCK 8
+    code: `// Cache Blocking - Matrix Multiply Optimization
+#include <stdio.h>
+#define N 256
+#define BLOCK 32
 
-int A[N][N], B[N][N], C[N][N];
+float A[N][N], B[N][N], C[N][N];
 
 int main() {
     for (int i = 0; i < N; i++)
@@ -253,46 +428,462 @@ int main() {
         }
 
     // Blocked multiply - better cache reuse
-    for (int ii = 0; ii < N; ii += BLOCK)
-        for (int jj = 0; jj < N; jj += BLOCK)
-            for (int kk = 0; kk < N; kk += BLOCK)
-                for (int i = ii; i < ii + BLOCK && i < N; i++)
-                    for (int j = jj; j < jj + BLOCK && j < N; j++) {
-                        int sum = C[i][j];
-                        for (int k = kk; k < kk + BLOCK && k < N; k++)
-                            sum += A[i][k] * B[k][j];
-                        C[i][j] = sum;
+    for (int i = 0; i < N; i += BLOCK)
+        for (int j = 0; j < N; j += BLOCK)
+            for (int k = 0; k < N; k += BLOCK)
+                for (int ii = i; ii < i + BLOCK; ii++)
+                    for (int jj = j; jj < j + BLOCK; jj++) {
+                        float sum = C[ii][jj];
+                        for (int kk = k; kk < k + BLOCK; kk++)
+                            sum += A[ii][kk] * B[kk][jj];
+                        C[ii][jj] = sum;
                     }
 
-    printf("C[0][0] = %d\\n", C[0][0]);
+    float sum = 0;
+    for (int i = 0; i < N; i++)
+        for (int j = 0; j < N; j++)
+            sum += C[i][j];
+
+    printf("Checksum: %f\\n", sum);
     return 0;
 }
 `
   },
-  linkedlist: {
-    name: 'Linked List',
-    description: 'Pointer chasing - poor locality',
+  loop_interchange: {
+    name: 'Loop Interchange',
+    description: 'Fix column-major to row-major',
     language: 'c',
-    code: `#include <stdio.h>
-#include <stdlib.h>
-#define N 1000
+    code: `// Loop Interchange - Fixing Column-Major Access
+#include <stdio.h>
+#define N 512
 
-struct Node { int value; struct Node* next; };
+int matrix[N][N];
+
+// BAD: Column-major access
+void fill_column_major() {
+    for (int j = 0; j < N; j++)
+        for (int i = 0; i < N; i++)
+            matrix[i][j] = i + j;
+}
+
+// GOOD: Row-major access
+void fill_row_major() {
+    for (int i = 0; i < N; i++)
+        for (int j = 0; j < N; j++)
+            matrix[i][j] = i + j;
+}
 
 int main() {
-    struct Node* head = NULL;
+    fill_row_major();  // Try fill_column_major() to compare
+
+    int sum = 0;
+    for (int i = 0; i < N; i++)
+        for (int j = 0; j < N; j++)
+            sum += matrix[i][j];
+
+    printf("Sum: %d\\n", sum);
+    return 0;
+}
+`
+  },
+  loop_fusion: {
+    name: 'Loop Fusion',
+    description: 'Combine loops for better cache use',
+    language: 'c',
+    code: `// Loop Fusion - Combining Loops
+#include <stdio.h>
+#define N 100000
+
+float a[N], b[N], c[N], d[N];
+
+// GOOD: Fused loop - load a[i] once
+void fused_loop() {
     for (int i = 0; i < N; i++) {
-        struct Node* n = malloc(sizeof(struct Node));
-        n->value = i;
-        n->next = head;
-        head = n;
+        float val = a[i];
+        b[i] = val * 2;
+        c[i] = val + 1;
+        d[i] = val - 1;
+    }
+}
+
+int main() {
+    for (int i = 0; i < N; i++) a[i] = (float)i;
+
+    fused_loop();
+
+    float sum = 0;
+    for (int i = 0; i < N; i++)
+        sum += b[i] + c[i] + d[i];
+
+    printf("Sum: %f\\n", sum);
+    return 0;
+}
+`
+  },
+  prefetch_friendly: {
+    name: 'Prefetch Friendly',
+    description: 'Sequential access - prefetcher excels',
+    language: 'c',
+    code: `// Prefetch-Friendly Access Pattern
+#include <stdio.h>
+#define N 1000000
+
+int data[N];
+
+int main() {
+    for (int i = 0; i < N; i++) data[i] = i;
+
+    // Sequential scan - prefetcher predicts this
+    long long sum = 0;
+    for (int rep = 0; rep < 5; rep++)
+        for (int i = 0; i < N; i++)
+            sum += data[i];
+
+    printf("Sum: %lld\\n", sum);
+    return 0;
+}
+`
+  },
+
+  // === Anti-patterns ===
+  prefetch_unfriendly: {
+    name: 'Prefetch Unfriendly',
+    description: 'Random access defeats prefetcher',
+    language: 'c',
+    code: `// Prefetch-Unfriendly - Random Access
+#include <stdio.h>
+#define N 100000
+
+int data[N];
+int indices[N];
+
+int main() {
+    unsigned int seed = 42;
+    for (int i = 0; i < N; i++) {
+        indices[i] = i;
+        data[i] = i;
+    }
+
+    // Shuffle indices
+    for (int i = N - 1; i > 0; i--) {
+        seed = seed * 1103515245 + 12345;
+        int j = (seed >> 16) % (i + 1);
+        int tmp = indices[i];
+        indices[i] = indices[j];
+        indices[j] = tmp;
+    }
+
+    // Random access - unpredictable
+    long long sum = 0;
+    for (int rep = 0; rep < 5; rep++)
+        for (int i = 0; i < N; i++)
+            sum += data[indices[i]];
+
+    printf("Sum: %lld\\n", sum);
+    return 0;
+}
+`
+  },
+  false_sharing: {
+    name: 'False Sharing',
+    description: 'Multi-threaded cache contention',
+    language: 'c',
+    code: `// False Sharing - Cache Line Ping-Pong
+#include <stdio.h>
+#include <pthread.h>
+#define ITERATIONS 1000000
+
+// BAD: Both counters on same cache line
+struct {
+    int counter1;
+    int counter2;
+} shared_bad;
+
+void* increment1(void* arg) {
+    for (int i = 0; i < ITERATIONS; i++)
+        shared_bad.counter1++;
+    return NULL;
+}
+
+void* increment2(void* arg) {
+    for (int i = 0; i < ITERATIONS; i++)
+        shared_bad.counter2++;
+    return NULL;
+}
+
+int main() {
+    pthread_t t1, t2;
+    pthread_create(&t1, NULL, increment1, NULL);
+    pthread_create(&t2, NULL, increment2, NULL);
+    pthread_join(t1, NULL);
+    pthread_join(t2, NULL);
+
+    printf("C1: %d, C2: %d\\n", shared_bad.counter1, shared_bad.counter2);
+    return 0;
+}
+`
+  },
+
+  // === Working Set ===
+  working_set_small: {
+    name: 'Small Working Set',
+    description: 'Fits in L1 cache - high hit rate',
+    language: 'c',
+    code: `// Small Working Set - Fits in L1 Cache
+#include <stdio.h>
+#define SIZE (16 * 1024 / sizeof(int))  // 16KB
+
+int data[SIZE];
+
+int main() {
+    for (int i = 0; i < SIZE; i++) data[i] = i;
+
+    // Repeatedly access same data - stays in L1
+    long long sum = 0;
+    for (int rep = 0; rep < 1000; rep++)
+        for (int i = 0; i < SIZE; i++)
+            sum += data[i];
+
+    printf("Sum: %lld\\n", sum);
+    return 0;
+}
+`
+  },
+  working_set_large: {
+    name: 'Large Working Set',
+    description: 'Exceeds L3 cache - capacity misses',
+    language: 'c',
+    code: `// Large Working Set - Exceeds L3 Cache
+#include <stdio.h>
+#define SIZE (16 * 1024 * 1024 / sizeof(int))  // 16MB
+
+int data[SIZE];
+
+int main() {
+    for (int i = 0; i < SIZE; i++) data[i] = i;
+
+    // Access large dataset - constant capacity misses
+    long long sum = 0;
+    for (int rep = 0; rep < 3; rep++)
+        for (int i = 0; i < SIZE; i++)
+            sum += data[i];
+
+    printf("Sum: %lld\\n", sum);
+    return 0;
+}
+`
+  },
+  memory_pool: {
+    name: 'Memory Pool',
+    description: 'Cache-friendly allocation',
+    language: 'c',
+    code: `// Memory Pool - Contiguous Allocation
+#include <stdio.h>
+#define POOL_SIZE 10000
+
+struct Object {
+    int data[4];
+    struct Object* next;
+};
+
+struct Object pool[POOL_SIZE];
+int pool_index = 0;
+
+struct Object* pool_alloc() {
+    if (pool_index < POOL_SIZE)
+        return &pool[pool_index++];
+    return 0;
+}
+
+int main() {
+    struct Object* head = 0;
+    for (int i = 0; i < POOL_SIZE; i++) {
+        struct Object* obj = pool_alloc();
+        if (obj) {
+            obj->data[0] = i;
+            obj->next = head;
+            head = obj;
+        }
     }
 
     int sum = 0;
-    for (struct Node* c = head; c; c = c->next)
-        sum += c->value;
+    for (int rep = 0; rep < 100; rep++) {
+        struct Object* curr = head;
+        while (curr) {
+            sum += curr->data[0];
+            curr = curr->next;
+        }
+    }
 
     printf("Sum: %d\\n", sum);
+    return 0;
+}
+`
+  },
+
+  // === Algorithms ===
+  quicksort: {
+    name: 'Quicksort',
+    description: 'Divide and conquer - good cache behavior',
+    language: 'c',
+    code: `// Quicksort - Good Cache Behavior
+#include <stdio.h>
+#define N 10000
+
+int arr[N];
+
+void swap(int* a, int* b) { int t = *a; *a = *b; *b = t; }
+
+int partition(int low, int high) {
+    int pivot = arr[high], i = low - 1;
+    for (int j = low; j < high; j++)
+        if (arr[j] <= pivot) swap(&arr[++i], &arr[j]);
+    swap(&arr[i + 1], &arr[high]);
+    return i + 1;
+}
+
+void quicksort(int low, int high) {
+    if (low < high) {
+        int pi = partition(low, high);
+        quicksort(low, pi - 1);
+        quicksort(pi + 1, high);
+    }
+}
+
+int main() {
+    for (int i = 0; i < N; i++) arr[i] = N - i;
+    quicksort(0, N - 1);
+
+    int sorted = 1;
+    for (int i = 1; i < N; i++)
+        if (arr[i] < arr[i-1]) sorted = 0;
+
+    printf("Sorted: %s\\n", sorted ? "yes" : "no");
+    return 0;
+}
+`
+  },
+  hash_table: {
+    name: 'Hash Table',
+    description: 'Random access pattern',
+    language: 'c',
+    code: `// Hash Table - Random Access Pattern
+#include <stdio.h>
+#include <string.h>
+#define TABLE_SIZE 10007
+#define NUM_LOOKUPS 100000
+
+struct Entry { int key, value, occupied; };
+struct Entry table[TABLE_SIZE];
+
+int hash(int key) {
+    return ((key * 2654435761U) >> 16) % TABLE_SIZE;
+}
+
+void insert(int key, int value) {
+    int idx = hash(key);
+    while (table[idx].occupied && table[idx].key != key)
+        idx = (idx + 1) % TABLE_SIZE;
+    table[idx].key = key;
+    table[idx].value = value;
+    table[idx].occupied = 1;
+}
+
+int lookup(int key) {
+    int idx = hash(key);
+    while (table[idx].occupied) {
+        if (table[idx].key == key) return table[idx].value;
+        idx = (idx + 1) % TABLE_SIZE;
+    }
+    return -1;
+}
+
+int main() {
+    memset(table, 0, sizeof(table));
+    for (int i = 0; i < 5000; i++) insert(i * 7, i);
+
+    int sum = 0;
+    for (int i = 0; i < NUM_LOOKUPS; i++) {
+        int val = lookup((i * 13) % 5000 * 7);
+        if (val >= 0) sum += val;
+    }
+
+    printf("Sum: %d\\n", sum);
+    return 0;
+}
+`
+  },
+  image_blur: {
+    name: 'Image Blur',
+    description: '2D stencil access pattern',
+    language: 'c',
+    code: `// Image Blur - 2D Stencil Pattern
+#include <stdio.h>
+#define WIDTH 512
+#define HEIGHT 512
+
+unsigned char input[HEIGHT][WIDTH];
+unsigned char output[HEIGHT][WIDTH];
+
+void blur() {
+    for (int y = 1; y < HEIGHT - 1; y++) {
+        for (int x = 1; x < WIDTH - 1; x++) {
+            int sum = 0;
+            for (int dy = -1; dy <= 1; dy++)
+                for (int dx = -1; dx <= 1; dx++)
+                    sum += input[y + dy][x + dx];
+            output[y][x] = sum / 9;
+        }
+    }
+}
+
+int main() {
+    for (int y = 0; y < HEIGHT; y++)
+        for (int x = 0; x < WIDTH; x++)
+            input[y][x] = (x + y) % 256;
+
+    blur();
+
+    int sum = 0;
+    for (int y = 0; y < HEIGHT; y++)
+        for (int x = 0; x < WIDTH; x++)
+            sum += output[y][x];
+
+    printf("Checksum: %d\\n", sum);
+    return 0;
+}
+`
+  },
+  string_search: {
+    name: 'String Search',
+    description: 'Sequential scan - good locality',
+    language: 'c',
+    code: `// String Search - Sequential Pattern
+#include <stdio.h>
+#include <string.h>
+#define TEXT_SIZE 100000
+
+char text[TEXT_SIZE];
+const char* pattern = "needle";
+
+int count_occurrences() {
+    int count = 0, plen = 6;
+    for (int i = 0; i <= TEXT_SIZE - plen; i++) {
+        int match = 1;
+        for (int j = 0; j < plen && match; j++)
+            if (text[i + j] != pattern[j]) match = 0;
+        if (match) count++;
+    }
+    return count;
+}
+
+int main() {
+    for (int i = 0; i < TEXT_SIZE; i++) text[i] = 'a';
+    for (int i = 0; i < TEXT_SIZE - 10; i += 1000)
+        memcpy(&text[i], "needle", 6);
+
+    int found = count_occurrences();
+    printf("Found %d occurrences\\n", found);
     return 0;
 }
 `
@@ -408,7 +999,7 @@ int main() {
   },
 }
 
-const EXAMPLE_CODE = EXAMPLES.matrix.code
+const EXAMPLE_CODE = EXAMPLES.matrix_row.code
 
 // Helper to generate unique file IDs
 let fileIdCounter = 0
@@ -427,87 +1018,6 @@ function getFileExtension(lang: Language): string {
 
 function createFileTab(name: string, code: string, language: Language): FileTab {
   return { id: generateFileId(), name, code, language }
-}
-
-// Tab bar for multi-file editing
-function TabBar({
-  files,
-  activeId,
-  onSelect,
-  onClose,
-  onAdd,
-  onRename
-}: {
-  files: FileTab[]
-  activeId: string
-  onSelect: (id: string) => void
-  onClose: (id: string) => void
-  onAdd: () => void
-  onRename: (id: string, name: string) => void
-}) {
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editName, setEditName] = useState('')
-
-  const handleDoubleClick = (file: FileTab) => {
-    setEditingId(file.id)
-    setEditName(file.name)
-  }
-
-  const handleRenameSubmit = (id: string) => {
-    if (editName.trim()) {
-      onRename(id, editName.trim())
-    }
-    setEditingId(null)
-  }
-
-  return (
-    <div className="tab-bar">
-      {files.map((file) => (
-        <div
-          key={file.id}
-          className={`tab ${file.id === activeId ? 'active' : ''}`}
-          onClick={() => onSelect(file.id)}
-          onDoubleClick={() => handleDoubleClick(file)}
-        >
-          {editingId === file.id ? (
-            <input
-              type="text"
-              className="tab-rename-input"
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              onBlur={() => handleRenameSubmit(file.id)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleRenameSubmit(file.id)
-                if (e.key === 'Escape') setEditingId(null)
-              }}
-              autoFocus
-              onClick={(e) => e.stopPropagation()}
-            />
-          ) : (
-            <>
-              <span className="tab-name">{file.name}</span>
-              <span className="tab-lang">{file.language}</span>
-            </>
-          )}
-          {files.length > 1 && (
-            <button
-              className="tab-close"
-              onClick={(e) => {
-                e.stopPropagation()
-                onClose(file.id)
-              }}
-              title="Close file"
-            >
-              ×
-            </button>
-          )}
-        </div>
-      ))}
-      <button className="tab-add" onClick={onAdd} title="Add new file">
-        +
-      </button>
-    </div>
-  )
 }
 
 function formatPercent(rate: number): string {
@@ -1830,6 +2340,7 @@ function App() {
     createFileTab('main.c', EXAMPLE_CODE, 'c')
   ])
   const [activeFileId, setActiveFileId] = useState<string>(() => files[0]?.id || '')
+  const [mainFileId, setMainFileId] = useState<string>(() => files[0]?.id || '')
 
   // Derived state for current file
   const activeFile = files.find(f => f.id === activeFileId) || files[0]
@@ -1853,14 +2364,6 @@ function App() {
     }))
   }, [activeFileId])
 
-  const addFile = useCallback(() => {
-    const lang: Language = 'c'
-    const num = files.length + 1
-    const newFile = createFileTab(`file${num}.c`, '', lang)
-    setFiles(prev => [...prev, newFile])
-    setActiveFileId(newFile.id)
-  }, [files.length])
-
   const closeFile = useCallback((id: string) => {
     if (files.length <= 1) return // Don't close last file
     const idx = files.findIndex(f => f.id === id)
@@ -1878,6 +2381,24 @@ function App() {
       f.id === id ? { ...f, name } : f
     ))
   }, [])
+
+  // FileManager-compatible createFile callback
+  const createFile = useCallback((name: string, language: 'c' | 'cpp' | 'rust') => {
+    const newFile = createFileTab(name, '', language)
+    setFiles(prev => [...prev, newFile])
+    setActiveFileId(newFile.id)
+  }, [])
+
+  // Convert files to ProjectFile format for FileManager
+  const projectFiles: ProjectFile[] = useMemo(() =>
+    files.map(f => ({
+      id: f.id,
+      name: f.name,
+      code: f.code,
+      language: f.language,
+      isMain: f.id === mainFileId
+    }))
+  , [files, mainFileId])
 
   const [config, setConfig] = useState('educational')
   const [optLevel, setOptLevel] = useState('-O0')
@@ -2368,27 +2889,16 @@ function App() {
     { id: 'ce', icon: '@', label: 'Open in Compiler Explorer', action: openInCompilerExplorer, category: 'actions' },
     { id: 'diff-baseline', icon: '@', label: 'Set as diff baseline', action: () => setBaselineCode(code), category: 'actions' },
     { id: 'diff-toggle', icon: '@', label: diffMode ? 'Exit diff mode' : 'Enter diff mode', action: () => { if (baselineCode) setDiffMode(!diffMode) }, category: 'actions' },
-    // Examples (>)
-    { id: 'example-sequential', icon: '>', label: 'Sequential Access', action: () => {
-      const ex = EXAMPLES.sequential
-      setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, code: ex.code, language: ex.language, name: 'main' + getFileExtension(ex.language) } : f))
-    }, category: 'examples' },
-    { id: 'example-matrix', icon: '>', label: 'Matrix Traversal', action: () => {
-      const ex = EXAMPLES.matrix
-      setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, code: ex.code, language: ex.language, name: 'main' + getFileExtension(ex.language) } : f))
-    }, category: 'examples' },
-    { id: 'example-strided', icon: '>', label: 'Strided Access', action: () => {
-      const ex = EXAMPLES.strided
-      setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, code: ex.code, language: ex.language, name: 'main' + getFileExtension(ex.language) } : f))
-    }, category: 'examples' },
-    { id: 'example-blocking', icon: '>', label: 'Cache Blocking', action: () => {
-      const ex = EXAMPLES.blocking
-      setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, code: ex.code, language: ex.language, name: 'main' + getFileExtension(ex.language) } : f))
-    }, category: 'examples' },
-    { id: 'example-linkedlist', icon: '>', label: 'Linked List', action: () => {
-      const ex = EXAMPLES.linkedlist
-      setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, code: ex.code, language: ex.language, name: 'main' + getFileExtension(ex.language) } : f))
-    }, category: 'examples' },
+    // Examples (>) - dynamically generated from EXAMPLES
+    ...Object.entries(EXAMPLES).map(([key, ex]) => ({
+      id: `example-${key}`,
+      icon: '>',
+      label: ex.name,
+      action: () => {
+        setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, code: ex.code, language: ex.language, name: 'main' + getFileExtension(ex.language) } : f))
+      },
+      category: 'examples'
+    })),
     // Settings (:)
     { id: 'vim', icon: ':', label: vimMode ? 'Disable Vim mode' : 'Enable Vim mode', action: () => setVimMode(!vimMode), category: 'settings' },
     { id: 'lang-c', icon: ':', label: 'Language: C', action: () => updateActiveLanguage('c'), category: 'settings' },
@@ -2567,17 +3077,18 @@ function App() {
 
       <div className="main">
         <div className="editor-pane">
-          <TabBar
-            files={files}
-            activeId={activeFileId}
-            onSelect={setActiveFileId}
-            onClose={closeFile}
-            onAdd={addFile}
-            onRename={renameFile}
+          <FileManager
+            files={projectFiles}
+            activeFileId={activeFileId}
+            onFileSelect={setActiveFileId}
+            onFileCreate={createFile}
+            onFileDelete={closeFile}
+            onFileRename={renameFile}
+            onSetMainFile={setMainFileId}
           />
           {diffMode && baselineCode ? (
             <DiffEditor
-              height="calc(100% - 32px)"
+              height="calc(100% - 180px)"
               language={monacoLanguage}
               theme={theme === 'dark' ? 'vs-dark' : 'light'}
               original={baselineCode}
@@ -2590,7 +3101,7 @@ function App() {
             />
           ) : (
             <Editor
-              height={vimMode ? "calc(100% - 56px)" : "calc(100% - 32px)"}
+              height={vimMode ? "calc(100% - 204px)" : "calc(100% - 180px)"}
               language={monacoLanguage}
               theme={theme === 'dark' ? 'vs-dark' : 'light'}
               value={code}
@@ -2789,6 +3300,27 @@ function App() {
                   <CacheGrid
                     cacheState={result.cacheState}
                     coreCount={result.cores || 1}
+                  />
+                </div>
+              )}
+
+              {/* Memory Layout Visualization */}
+              {timeline.length > 0 && (
+                <div className="panel">
+                  <div className="panel-header">
+                    <span className="panel-title">Memory Access Pattern</span>
+                    <span className="panel-badge">{timeline.length} accesses</span>
+                  </div>
+                  <MemoryLayout
+                    recentAccesses={timeline.slice(-200).map(e => ({
+                      address: e.a || 0,
+                      size: 8,
+                      isWrite: e.t === 'W',
+                      file: e.f,
+                      line: e.n,
+                      hitLevel: e.l
+                    }))}
+                    maxAccesses={200}
                   />
                 </div>
               )}

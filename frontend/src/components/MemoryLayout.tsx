@@ -60,7 +60,7 @@ export function MemoryLayout({
   onAddressClick,
 }: MemoryLayoutProps) {
   const [hoveredRegion, setHoveredRegion] = useState<MemoryRegion | null>(null)
-  const [hoveredAccess, setHoveredAccess] = useState<MemoryAccess | null>(null)
+  const [, setHoveredAccess] = useState<MemoryAccess | null>(null)
   const [viewMode, setViewMode] = useState<'regions' | 'accesses'>('regions')
 
   // Sort regions by address (high to low for typical stack-heap layout)
