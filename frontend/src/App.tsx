@@ -13,7 +13,8 @@ import {
   shareUrl,
   useMobileResponsive,
   useEditorState,
-  useResultState
+  useResultState,
+  useAnalysisExecution
 } from './hooks'
 
 // Import visualization components
@@ -36,173 +37,9 @@ import type { ProjectFile, CommandItem } from './components'
 
 // Import constants and types
 import { PREFETCH_DEFAULTS } from './constants/config'
-import type { PrefetchPolicy } from './types'
-
-// API base URL - in production (Docker), use relative paths; in dev, use localhost
-const API_BASE = import.meta.env.PROD ? '' : 'http://localhost:3001'
-const WS_URL = import.meta.env.PROD
-  ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`
-  : 'ws://localhost:3001/ws'
-
-interface CacheStats {
-  hits: number
-  misses: number
-  hitRate: number
-  writebacks: number
-}
-
-interface TLBStats {
-  hits: number
-  misses: number
-  hitRate: number
-}
-
-interface TLBHierarchyStats {
-  dtlb: TLBStats
-  itlb: TLBStats
-}
-
-interface HotLine {
-  file: string
-  line: number
-  hits: number
-  misses: number
-  missRate: number
-  threads?: number
-}
-
-interface FalseSharingAccess {
-  threadId: number
-  offset: number
-  isWrite: boolean
-  file: string
-  line: number
-  count: number
-}
-
-interface FalseSharingEvent {
-  cacheLineAddr: string
-  accessCount: number
-  accesses: FalseSharingAccess[]
-}
-
-interface CoherenceStats {
-  invalidations: number
-  falseSharingEvents: number
-}
-
-interface CompileError {
-  line: number
-  column: number
-  severity: 'error' | 'warning'
-  message: string
-  suggestion?: string
-  notes?: string[]
-  sourceLine?: string
-  caret?: string
-}
-
-interface ErrorResult {
-  type: 'compile_error' | 'linker_error' | 'runtime_error' | 'timeout' | 'unknown_error' | 'validation_error' | 'server_error'
-  errors?: CompileError[]
-  summary?: string
-  message?: string
-  suggestion?: string
-  raw?: string
-  error?: string
-}
-
-interface OptimizationSuggestion {
-  type: string
-  severity: 'high' | 'medium' | 'low'
-  location: string
-  message: string
-  fix: string
-}
-
-interface CacheLevelConfig {
-  sizeKB: number
-  assoc: number
-  lineSize: number
-  sets: number
-}
-
-interface CacheConfig {
-  l1d: CacheLevelConfig
-  l1i: CacheLevelConfig
-  l2: CacheLevelConfig
-  l3: CacheLevelConfig
-}
-
-// Timeline event from streaming progress
-interface TimelineEvent {
-  i: number       // event index
-  t: 'R' | 'W' | 'I'  // type: Read, Write, Instruction fetch
-  l: 1 | 2 | 3 | 4    // hit level: 1=L1, 2=L2, 3=L3, 4=memory
-  a?: number      // memory address (for cache visualization)
-  f?: string      // file (optional)
-  n?: number      // line number (optional)
-}
-
-interface PrefetchStats {
-  policy: string
-  degree: number
-  issued: number
-  useful: number
-  accuracy: number
-}
-
-interface CacheLineState {
-  s: number      // set
-  w: number      // way
-  v: number      // valid (0 or 1)
-  t?: string     // tag (hex string)
-  st?: string    // state: M, E, S, I
-}
-
-interface CoreCacheState {
-  core: number
-  sets: number
-  ways: number
-  lines: CacheLineState[]
-}
-
-interface CacheState {
-  l1d: CoreCacheState[]
-}
-
-interface CacheResult {
-  config: string
-  events: number
-  multicore?: boolean
-  cores?: number
-  threads?: number
-  cacheConfig?: CacheConfig
-  levels: {
-    l1?: CacheStats
-    l1d?: CacheStats
-    l1i?: CacheStats
-    l2: CacheStats
-    l3: CacheStats
-  }
-  coherence?: CoherenceStats
-  hotLines: HotLine[]
-  falseSharing?: FalseSharingEvent[]
-  suggestions?: OptimizationSuggestion[]
-  timeline?: TimelineEvent[]  // collected timeline events
-  prefetch?: PrefetchStats
-  cacheState?: CacheState
-  tlb?: TLBHierarchyStats
-}
+import type { PrefetchPolicy, TimelineEvent, CacheState, CacheLineState } from './types'
 
 type Language = 'c' | 'cpp' | 'rust'
-
-interface FileTab {
-  id: string
-  name: string
-  code: string
-  language: Language
-}
 
 interface Example {
   name: string
@@ -1165,11 +1002,6 @@ function CacheGrid({ cacheState, coreCount }: { cacheState: CacheState; coreCoun
   )
 }
 
-
-type Stage = 'idle' | 'connecting' | 'preparing' | 'compiling' | 'running' | 'processing' | 'done'
-
-// Types are now imported from './types' via hooks and components
-
 function App() {
   // Embed mode detection from URL params
   const urlParams = new URLSearchParams(window.location.search)
@@ -1329,119 +1161,34 @@ function App() {
     window.open(ceUrl, '_blank', 'noopener,noreferrer')
   }, [code, language, optLevel])
 
+  // Use analysis execution hook
+  const { runAnalysis } = useAnalysisExecution({
+    files: analysisState.files,
+    mainFileId: analysisState.mainFileId,
+    config,
+    optLevel,
+    prefetchPolicy,
+    customConfig,
+    defines,
+    sampleRate,
+    eventLimit,
+    selectedCompiler,
+    longRunning,
+    onStageChange: resultState.setStage,
+    onResultChange: resultState.setResult,
+    onErrorChange: resultState.setError,
+    onTimelineAdd: (events) => {
+      timelineRef.current = [...timelineRef.current, ...events]
+      resultState.setTimeline([...timelineRef.current])
+    },
+    onTimelineReset: () => {
+      timelineRef.current = []
+      resultState.setTimeline([])
+    },
+    onLongRunningChange: setLongRunning,
+    onScrubberIndexChange: resultState.setScrubberIndex
+  })
 
-  const runAnalysis = () => {
-    // Input validation - check total size across all files
-    const totalSize = analysisState.files.reduce((sum: number, f: FileTab) => sum + f.code.length, 0)
-    if (totalSize > 100000) {
-      resultState.setError({ type: 'validation_error', message: 'Code too long (max 100KB total)', suggestion: 'Try smaller programs or use sampling' })
-      return
-    }
-    if (analysisState.files.every((f: FileTab) => f.code.trim().length === 0)) {
-      resultState.setError({ type: 'validation_error', message: 'No code to analyze', suggestion: 'Write or paste some code first' })
-      return
-    }
-
-    resultState.setStage('connecting')
-    resultState.setError(null)
-    resultState.setResult(null)
-    resultState.setTimeline([])
-    setLongRunning(false)
-    timelineRef.current = []
-
-    // Set long-running warning after 10 seconds
-    const longRunTimeout = setTimeout(() => setLongRunning(true), 10000)
-
-    const ws = new WebSocket(WS_URL)
-
-    ws.onopen = () => {
-      const payload: Record<string, unknown> = { config, optLevel }
-      // Send files array for multi-file support, single code for backward compatibility
-      if (analysisState.files.length === 1) {
-        payload.code = analysisState.files[0].code
-        payload.language = analysisState.files[0].language
-      } else {
-        payload.files = analysisState.files.map(f => ({ name: f.name, code: f.code, language: f.language }))
-        payload.language = analysisState.files[0].language // Primary language for compilation
-      }
-      if (config === 'custom') payload.customConfig = customConfig
-      if (defines.length > 0) payload.defines = defines.filter(d => d.name.trim())
-      if (prefetchPolicy !== 'none') payload.prefetch = prefetchPolicy
-      if (sampleRate > 1) payload.sample = sampleRate
-      if (eventLimit > 0) payload.limit = eventLimit
-      if (selectedCompiler) payload.compiler = selectedCompiler
-      ws.send(JSON.stringify(payload))
-    }
-
-    ws.onmessage = (event) => {
-      const msg = JSON.parse(event.data)
-      if (msg.type === 'status') resultState.setStage(msg.stage as Stage)
-      else if (msg.type === 'progress') {
-        // Collect timeline events from streaming progress
-        if (msg.timeline && Array.isArray(msg.timeline)) {
-          timelineRef.current = [...timelineRef.current, ...msg.timeline]
-          // Update timeline state periodically (every 200 events)
-          if (timelineRef.current.length % 200 < msg.timeline.length) {
-            resultState.setTimeline([...timelineRef.current])
-          }
-        }
-      } else if (msg.type === 'result') {
-        clearTimeout(longRunTimeout)
-        setLongRunning(false)
-        // Finalize timeline and set result
-        resultState.setTimeline([...timelineRef.current])
-        resultState.setResult({ ...(msg.data as CacheResult), timeline: timelineRef.current })
-        resultState.setScrubberIndex(timelineRef.current.length)  // Start at end of timeline
-        resultState.setStage('idle')
-        ws.close()
-      } else if (msg.type === 'error' || msg.type?.includes('error') || msg.errors) {
-        // Handle all error types: 'error', 'compile_error', 'linker_error', etc.
-        clearTimeout(longRunTimeout)
-        setLongRunning(false)
-        resultState.setError(msg as ErrorResult)
-        resultState.setStage('idle')
-        ws.close()
-      }
-    }
-
-    ws.onerror = () => fallbackToHttp()
-    ws.onclose = (e) => { if (!e.wasClean && resultState.stage !== 'idle') fallbackToHttp() }
-
-    const fallbackToHttp = async () => {
-      resultState.setStage('compiling')
-      try {
-        const payload: Record<string, unknown> = { config, optLevel }
-        // Send files array for multi-file support, single code for backward compatibility
-        if (analysisState.files.length === 1) {
-          payload.code = analysisState.files[0].code
-          payload.language = analysisState.files[0].language
-        } else {
-          payload.files = analysisState.files.map(f => ({ name: f.name, code: f.code, language: f.language }))
-          payload.language = analysisState.files[0].language
-        }
-        if (config === 'custom') payload.customConfig = customConfig
-        if (defines.length > 0) payload.defines = defines.filter(d => d.name.trim())
-        if (prefetchPolicy !== 'none') payload.prefetch = prefetchPolicy
-        if (sampleRate > 1) payload.sample = sampleRate
-        if (eventLimit > 0) payload.limit = eventLimit
-
-        const response = await fetch(`${API_BASE}/compile`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
-        const data = await response.json()
-
-        if (data.type || data.error) resultState.setError(data as ErrorResult)
-        else if (data.levels) resultState.setResult(data as CacheResult)
-        else resultState.setError({ type: 'unknown_error', message: 'Unexpected response' })
-      } catch (err) {
-        resultState.setError({ type: 'server_error', message: err instanceof Error ? err.message : 'Connection failed' })
-      } finally {
-        resultState.setStage('idle')
-      }
-    }
-  }
 
   const isLoading = resultState.stage !== 'idle'
   const stageText = { idle: '', connecting: 'Connecting...', preparing: 'Preparing...', compiling: 'Compiling...', running: 'Running...', processing: 'Processing...', done: '' }
