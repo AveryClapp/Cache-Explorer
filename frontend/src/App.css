@@ -583,6 +583,78 @@ select:focus {
   background: var(--border-light);
 }
 
+/* ===== Results Header ===== */
+.results-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-lg);
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--border);
+  gap: var(--space-md);
+}
+
+.results-header-left {
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.results-header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-shrink: 0;
+}
+
+.results-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.3px;
+}
+
+.btn-assembly-view {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.btn-assembly-view:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.btn-assembly-view:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(102, 126, 234, 0.3);
+}
+
+.btn-assembly-view:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Light theme adjustments for assembly button */
+[data-theme="light"] .btn-assembly-view {
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.25);
+}
+
+[data-theme="light"] .btn-assembly-view:hover:not(:disabled) {
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
+}
+
 /* ===== Status Banner ===== */
 .status-banner {
   padding: var(--space-md);

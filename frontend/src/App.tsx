@@ -1302,6 +1302,22 @@ function App() {
 
             {resultState.result && (
               <>
+                {/* Results Header with Assembly Button */}
+                <div className="results-header">
+                  <div className="results-header-left">
+                    <div className="results-title">Cache Analysis Results</div>
+                  </div>
+                  <div className="results-header-right">
+                    <button
+                      className="btn-assembly-view"
+                      onClick={openInCompilerExplorer}
+                      title="View the generated assembly code with your selected compiler and optimization level"
+                    >
+                      View Generated Assembly
+                    </button>
+                  </div>
+                </div>
+
                 {/* Status Banner */}
                 <div className="status-banner success">
                   <div className="status-title">Analysis Complete</div>
