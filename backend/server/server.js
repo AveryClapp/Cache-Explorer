@@ -596,8 +596,9 @@ app.post('/compile', async (req, res) => {
     const result = await new Promise((resolve, reject) => {
       const args = [mainFile, '--config', config, optLevel, '--json'];
 
-      // Add include path for multi-file projects
+      // Enable multi-file compilation for multi-file projects
       if (Array.isArray(inputFiles) && inputFiles.length > 1) {
+        args.push('--multi-file');
         args.push('-I', tempDir);
       }
 

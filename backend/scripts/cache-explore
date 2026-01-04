@@ -104,6 +104,7 @@ EVENT_LIMIT=""
 PREFETCH=""
 PREFETCH_DEGREE=""
 COMPILER_PATH=""  # Path to LLVM bin directory (e.g., /opt/homebrew/opt/llvm@20/bin)
+MULTI_FILE=""  # Flag to enable multi-file compilation
 
 usage() {
   echo "Usage: cache-explore [options] <source.c|.cpp|.rs>"
@@ -118,6 +119,7 @@ usage() {
   echo "  --keep            Keep the instrumented binary"
   echo "  --json            Output JSON format"
   echo "  --stream          Stream events in real-time (for WebSocket)"
+  echo "  --multi-file      Compile all .c/.cpp files in the same directory"
   echo "  --sample <N>      Sample 1 in N events (e.g., 100 = 1% sampling)"
   echo "  --limit <N>       Stop after N events (e.g., 1000000 = 1M events max)"
   echo "  --prefetch <type> Enable prefetching: none|next|stream|stride|adaptive|intel"
@@ -132,6 +134,7 @@ usage() {
   echo "  cache-explore vector.cpp -O2 --json"
   echo "  cache-explore matrix.c -D N=1000 -D DEBUG"
   echo "  cache-explore bigprogram.c --sample 100 --limit 1000000"
+  echo "  cache-explore main.c --multi-file --json   # Compile with all .c files in dir"
 }
 
 OPT_LEVEL="-O0"
@@ -143,6 +146,7 @@ while [[ $# -gt 0 ]]; do
     --keep) KEEP_BINARY="1"; shift ;;
     --json) JSON_OUTPUT="--json"; shift ;;
     --stream) STREAM_OUTPUT="--stream"; shift ;;
+    --multi-file) MULTI_FILE="1"; shift ;;
     --sample) SAMPLE_RATE="$2"; shift 2 ;;
     --limit) EVENT_LIMIT="$2"; shift 2 ;;
     --prefetch) PREFETCH="$2"; shift 2 ;;
@@ -277,6 +281,34 @@ if [[ "$OPT_LEVEL" == "-O0" ]]; then
   EXTRA_FLAGS="-Xclang -disable-O0-optnone"
 fi
 
+# Get the input directory
+INPUT_DIR="$(dirname "$INPUT_FILE")"
+
+# Collect source files
+SOURCE_FILES=()
+
+if [[ -n "$MULTI_FILE" ]]; then
+  # Explicit multi-file mode: collect all source files from the directory
+  for file in "$INPUT_DIR"/*.c "$INPUT_DIR"/*.cpp "$INPUT_DIR"/*.cc "$INPUT_DIR"/*.cxx; do
+    [[ -e "$file" ]] && SOURCE_FILES+=("$file")
+  done
+else
+  # Auto-detect multi-file mode: if the directory contains multiple .c files
+  # and looks like a temp directory (created by the server), enable it automatically
+  c_file_count=$(shopt -s nullglob; files=("$INPUT_DIR"/*.c); echo ${#files[@]})
+  if [[ $c_file_count -gt 1 ]] && [[ "$INPUT_DIR" =~ ^/tmp/cache-explorer- ]]; then
+    # Auto-enable multi-file mode for temp directories with multiple .c files
+    for file in "$INPUT_DIR"/*.c "$INPUT_DIR"/*.cpp "$INPUT_DIR"/*.cc "$INPUT_DIR"/*.cxx; do
+      [[ -e "$file" ]] && SOURCE_FILES+=("$file")
+    done
+  fi
+fi
+
+# Fallback: if no source files collected, just use the input file
+if [[ ${#SOURCE_FILES[@]} -eq 0 ]]; then
+  SOURCE_FILES=("$INPUT_FILE")
+fi
+
 # Compile based on language
 if [[ "$LANG" == "rust" ]]; then
   # Rust compilation with LLVM pass
@@ -302,7 +334,7 @@ elif ! $COMPILER $OPT_LEVEL $EXTRA_FLAGS -g -fpass-plugin="$PASS" \
   -I"$RUNTIME_INC" \
   "${INCLUDES[@]}" \
   "${DEFINES[@]}" \
-  "$INPUT_FILE" \
+  "${SOURCE_FILES[@]}" \
   "$RUNTIME" \
   -o "$BINARY" 2>/tmp/cache-explore-compile-err-$$; then
   if [[ -n "$JSON_OUTPUT" ]]; then
