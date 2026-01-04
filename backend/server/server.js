@@ -452,8 +452,13 @@ function createErrorResponse(error, mainFile, options = {}) {
   // Parse stderr for compile errors
   if (error.stderr) {
     const errorFile = error.mainFile || mainFile;
-    const parsed = parseCompileErrors(error.stderr, errorFile);
-    parsed.raw = error.stderr;
+    // Filter out bash warnings before parsing
+    const cleanedStderr = error.stderr
+      .split('\n')
+      .filter(line => !line.includes('initialize_job_control') && !line.includes('getpgrp failed'))
+      .join('\n');
+    const parsed = parseCompileErrors(cleanedStderr, errorFile);
+    parsed.raw = cleanedStderr;
     if (error.exitCode !== undefined) {
       parsed.exitCode = error.exitCode;
     }
@@ -581,7 +586,12 @@ app.post('/compile', async (req, res) => {
         recordDuration('compilation_duration', (Date.now() - startTime) / 1000);
         res.json(json);
       } catch {
-        res.json({ raw: output, stderr: result.stderr });
+        // Filter out bash warnings from stderr
+        const cleanedStderr = result.stderr
+          .split('\n')
+          .filter(line => !line.includes('initialize_job_control') && !line.includes('getpgrp failed'))
+          .join('\n');
+        res.json({ raw: output, stderr: cleanedStderr });
       }
     } catch (err) {
       incCounter('errors', { type: 'compile' });
@@ -705,7 +715,12 @@ app.post('/compile', async (req, res) => {
       recordDuration('compilation_duration', (Date.now() - startTime) / 1000);
       res.json(json);
     } catch {
-      res.json({ raw: output, stderr: result.stderr });
+      // Filter out bash warnings from stderr
+      const cleanedStderr = result.stderr
+        .split('\n')
+        .filter(line => !line.includes('initialize_job_control') && !line.includes('getpgrp failed'))
+        .join('\n');
+      res.json({ raw: output, stderr: cleanedStderr });
     }
   } catch (err) {
     incCounter('errors', { type: 'compile' });
