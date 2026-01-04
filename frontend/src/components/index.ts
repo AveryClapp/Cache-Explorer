@@ -1,3 +1,6 @@
+export { CommandPalette } from './CommandPalette'
+export type { CommandItem } from './CommandPalette'
+
 export { CacheGrid } from './CacheGrid'
 export type { CacheLineState, CoreCacheState } from './CacheGrid'
 
