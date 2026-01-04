@@ -1,7 +1,7 @@
 .memory-layout-container {
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 12px;
-  background: #1e1e1e;
+  background: var(--bg-panel);
   border-radius: 8px;
   padding: 12px;
 }
@@ -15,9 +15,9 @@
 .view-mode-toggle button {
   flex: 1;
   padding: 6px 12px;
-  background: #2d2d2d;
-  border: 1px solid #444;
-  color: #888;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-light);
+  color: var(--text-muted);
   border-radius: 4px;
   cursor: pointer;
   font-size: 11px;
@@ -25,13 +25,13 @@
 }
 
 .view-mode-toggle button:hover {
-  background: #3d3d3d;
+  background: var(--bg-hover);
 }
 
 .view-mode-toggle button.active {
-  background: #4a90d9;
-  border-color: #2e6eb0;
-  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
 }
 
 .memory-regions {
@@ -42,17 +42,17 @@
 
 .address-label {
   text-align: center;
-  color: #666;
+  color: var(--text-muted);
   font-size: 10px;
   padding: 4px;
 }
 
 .address-label.high {
-  border-bottom: 1px dashed #444;
+  border-bottom: 1px dashed var(--border);
 }
 
 .address-label.low {
-  border-top: 1px dashed #444;
+  border-top: 1px dashed var(--border);
 }
 
 .memory-region {
@@ -61,11 +61,12 @@
   border-radius: 6px;
   cursor: pointer;
   transition: transform 0.1s, box-shadow 0.1s;
+  color: var(--text-primary);
 }
 
 .memory-region:hover {
   transform: translateX(4px);
-  box-shadow: -4px 0 12px rgba(0, 0, 0, 0.3);
+  box-shadow: -4px 0 12px rgba(25, 103, 210, 0.2);
 }
 
 .memory-region.highlighted {
@@ -73,8 +74,8 @@
 }
 
 @keyframes pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.4); }
-  50% { box-shadow: 0 0 0 8px rgba(255, 255, 255, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(25, 103, 210, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(25, 103, 210, 0); }
 }
 
 .region-name {
@@ -105,7 +106,7 @@
   gap: 6px;
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid #333;
+  border-top: 1px solid var(--border);
 }
 
 .legend-item {
@@ -121,7 +122,7 @@
 }
 
 .no-accesses {
-  color: #666;
+  color: var(--text-muted);
   text-align: center;
   padding: 20px;
 }
@@ -134,14 +135,16 @@
   border-radius: 4px;
   cursor: pointer;
   transition: background 0.1s;
+  color: var(--text-primary);
 }
 
 .access-item:hover {
-  background: #2d2d2d;
+  background: var(--bg-hover);
 }
 
 .access-item.highlighted {
-  background: #3a3a00;
+  background: var(--heat-warm);
+  opacity: 0.3;
 }
 
 .access-indicator {
@@ -153,24 +156,24 @@
 
 .access-address {
   font-family: monospace;
-  color: #4a90d9;
+  color: var(--accent);
   flex: 1;
 }
 
 .access-type {
-  color: #888;
+  color: var(--text-muted);
   font-size: 10px;
   width: 30px;
 }
 
 .access-region {
-  color: #50c878;
+  color: var(--success);
   font-size: 10px;
   width: 60px;
 }
 
 .access-count {
-  color: #666;
+  color: var(--text-muted);
   font-size: 10px;
   width: 30px;
   text-align: right;
@@ -182,11 +185,11 @@
   gap: 8px;
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid #333;
+  border-top: 1px solid var(--border);
 }
 
 .legend-title {
-  color: #888;
+  color: var(--text-muted);
   font-size: 11px;
 }
 
@@ -194,23 +197,24 @@
   font-size: 10px;
   padding: 2px 8px;
   border-radius: 3px;
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .memory-tooltip {
   position: fixed;
   bottom: 20px;
   left: 20px;
-  background: #2d2d2d;
-  border: 1px solid #555;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 10px;
   z-index: 1000;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   font-size: 11px;
-  color: #ddd;
+  color: var(--text-primary);
 }
 
 .memory-tooltip strong {
-  color: #fff;
+  color: var(--text-primary);
+  font-weight: 600;
 }

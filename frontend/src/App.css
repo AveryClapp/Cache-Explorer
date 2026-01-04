@@ -74,38 +74,38 @@
 
 /* ===== Light Theme ===== */
 [data-theme="light"] {
-  /* Base Colors */
-  --bg-base: #ffffff;
-  --bg-panel: #f5f5f5;
-  --bg-elevated: #fafafa;
-  --bg-hover: #e8e8e8;
-  --border: #d0d0d0;
-  --border-light: #e0e0e0;
+  /* Base Colors - Modern light palette with better contrast */
+  --bg-base: #f8f9fa;
+  --bg-panel: #ffffff;
+  --bg-elevated: #f0f2f5;
+  --bg-hover: #e8eaed;
+  --border: #dadce0;
+  --border-light: #e8eaed;
 
-  /* Text Colors */
-  --text-primary: #1e1e1e;
-  --text-secondary: #555555;
-  --text-muted: #888888;
+  /* Text Colors - Strong contrast */
+  --text-primary: #202124;
+  --text-secondary: #5f6368;
+  --text-muted: #9aa0a6;
 
-  /* Semantic Colors (slightly adjusted for light bg) */
-  --success: #0d7d6c;
-  --warning: #8a6d00;
-  --error: #c43e2a;
-  --info: #0066b8;
-  --accent: #0066b8;
-  --accent-hover: #0078d4;
+  /* Semantic Colors - Vibrant and accessible */
+  --success: #1e8449;
+  --warning: #c08620;
+  --error: #d33b27;
+  --info: #1967d2;
+  --accent: #1967d2;
+  --accent-hover: #1452bd;
 
-  /* Cache Heat Map */
-  --heat-hot: #e06060;
-  --heat-warm: #e0a060;
-  --heat-cool: #6090e0;
-  --heat-cold: #a0c0e0;
-  --heat-empty: #e8e8e8;
+  /* Cache Heat Map - Softer pastels for light mode */
+  --heat-hot: #d93026;
+  --heat-warm: #e8a700;
+  --heat-cool: #4285f4;
+  --heat-cold: #7fc4f9;
+  --heat-empty: #f0f2f5;
 
   /* Hit Rate Colors */
-  --rate-excellent: #0d7d6c;
-  --rate-good: #8a6d00;
-  --rate-poor: #c43e2a;
+  --rate-excellent: #1e8449;
+  --rate-good: #c08620;
+  --rate-poor: #d33b27;
 
   /* Theme toggle icon */
   --theme-icon: "◑";
