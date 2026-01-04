@@ -1066,22 +1066,8 @@ function App() {
       optFlags.push('-march=native')
     }
 
-    // Build CE ClientState
-    const ceState = {
-      sessions: [{
-        id: 1,
-        language: lang === 'cpp' ? 'c++' : lang,
-        source: sourceCode,
-        compilers: [{
-          id: ceCmpilerId,
-          options: optFlags.join(' ')
-        }]
-      }]
-    }
-
     // Use Compiler Explorer's direct code loading with hash parameters
     // Format: #z=<base64-compressed-state>
-    // Build the proper CE state object
     const ceState = {
       version: 4,
       sessions: [{
