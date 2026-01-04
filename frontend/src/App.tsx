@@ -39,6 +39,9 @@ import type { ProjectFile, CommandItem } from './components'
 import { PREFETCH_DEFAULTS } from './constants/config'
 import type { PrefetchPolicy, TimelineEvent, CacheState, CacheLineState } from './types'
 
+// Import utilities
+import { formatPercent, fuzzyMatch } from './utils/formatting'
+
 type Language = 'c' | 'cpp' | 'rust'
 
 interface Example {
@@ -877,21 +880,6 @@ int main() {
 }
 
 // Helper functions are now in utils/file.ts and imported via hooks
-
-function formatPercent(rate: number): string {
-  return (rate * 100).toFixed(1) + '%'
-}
-
-// Fuzzy match helper - used by command palette and App
-function fuzzyMatch(query: string, text: string): boolean {
-  const q = query.toLowerCase()
-  const t = text.toLowerCase()
-  let qi = 0
-  for (let ti = 0; ti < t.length && qi < q.length; ti++) {
-    if (t[ti] === q[qi]) qi++
-  }
-  return qi === q.length
-}
 
 
 // L1 Cache Grid Visualization - shows final cache state with MESI colors

@@ -1,3 +1,5 @@
+import { fuzzyMatch } from '../utils/formatting'
+
 export interface CommandItem {
   id: string
   icon: string
@@ -35,17 +37,6 @@ const CATEGORY_LABELS: Record<string, string> = {
 }
 
 const CATEGORY_ORDER = ['actions', 'examples', 'settings', 'config']
-
-// Fuzzy match helper
-function fuzzyMatch(query: string, text: string): boolean {
-  const q = query.toLowerCase()
-  const t = text.toLowerCase()
-  let qi = 0
-  for (let ti = 0; ti < t.length && qi < q.length; ti++) {
-    if (t[ti] === q[qi]) qi++
-  }
-  return qi === q.length
-}
 
 export function CommandPalette({
   isOpen,
