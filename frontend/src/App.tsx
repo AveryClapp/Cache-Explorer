@@ -12,7 +12,8 @@ import {
   useUrlState,
   shareUrl,
   useMobileResponsive,
-  useEditorState
+  useEditorState,
+  useResultState
 } from './hooks'
 
 // Import visualization components
@@ -1197,9 +1198,7 @@ function App() {
   , [analysisState.files, analysisState.mainFileId])
 
   // Remaining state - analysis specific
-  const [result, setResult] = useState<CacheResult | null>(null)
-  const [stage, setStage] = useState<Stage>('idle')
-  const [error, setError] = useState<ErrorResult | null>(null)
+  const resultState = useResultState()
   const [copied, setCopied] = useState(false)
   const [showOptions, setShowOptions] = useState(false)
   const [showDetails, setShowDetails] = useState(false)
@@ -1207,8 +1206,6 @@ function App() {
   const [diffMode, setDiffMode] = useState(false)
   const [longRunning, setLongRunning] = useState(false)
   const [baselineCode, setBaselineCode] = useState<string | null>(null)
-  const [timeline, setTimeline] = useState<TimelineEvent[]>([])
-  const [scrubberIndex, setScrubberIndex] = useState<number>(0)  // For interactive cache grid
   const [vimMode, setVimMode] = useState(false)  // Vim keybindings toggle
   const [showCommandPalette, setShowCommandPalette] = useState(false)
   const [commandQuery, setCommandQuery] = useState('')
@@ -1224,10 +1221,10 @@ function App() {
   // Editor state management (refs, Vim mode, decorations)
   const editorState = useEditorState(
     vimMode,
-    error,
-    result,
-    timeline,
-    scrubberIndex
+    resultState.error,
+    resultState.result,
+    resultState.timeline,
+    resultState.scrubberIndex
   )
 
   useEffect(() => {
@@ -1253,7 +1250,7 @@ function App() {
       setShowCommandPalette(false)
       setShowQuickConfig(false)
     },
-    canRun: stage === 'idle'
+    canRun: resultState.stage === 'idle'
   })
 
   // Use URL state hook for loading and syncing state
@@ -1337,18 +1334,18 @@ function App() {
     // Input validation - check total size across all files
     const totalSize = analysisState.files.reduce((sum: number, f: FileTab) => sum + f.code.length, 0)
     if (totalSize > 100000) {
-      setError({ type: 'validation_error', message: 'Code too long (max 100KB total)', suggestion: 'Try smaller programs or use sampling' })
+      resultState.setError({ type: 'validation_error', message: 'Code too long (max 100KB total)', suggestion: 'Try smaller programs or use sampling' })
       return
     }
     if (analysisState.files.every((f: FileTab) => f.code.trim().length === 0)) {
-      setError({ type: 'validation_error', message: 'No code to analyze', suggestion: 'Write or paste some code first' })
+      resultState.setError({ type: 'validation_error', message: 'No code to analyze', suggestion: 'Write or paste some code first' })
       return
     }
 
-    setStage('connecting')
-    setError(null)
-    setResult(null)
-    setTimeline([])
+    resultState.setStage('connecting')
+    resultState.setError(null)
+    resultState.setResult(null)
+    resultState.setTimeline([])
     setLongRunning(false)
     timelineRef.current = []
 
@@ -1378,40 +1375,40 @@ function App() {
 
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data)
-      if (msg.type === 'status') setStage(msg.stage as Stage)
+      if (msg.type === 'status') resultState.setStage(msg.stage as Stage)
       else if (msg.type === 'progress') {
         // Collect timeline events from streaming progress
         if (msg.timeline && Array.isArray(msg.timeline)) {
           timelineRef.current = [...timelineRef.current, ...msg.timeline]
           // Update timeline state periodically (every 200 events)
           if (timelineRef.current.length % 200 < msg.timeline.length) {
-            setTimeline([...timelineRef.current])
+            resultState.setTimeline([...timelineRef.current])
           }
         }
       } else if (msg.type === 'result') {
         clearTimeout(longRunTimeout)
         setLongRunning(false)
         // Finalize timeline and set result
-        setTimeline([...timelineRef.current])
-        setResult({ ...(msg.data as CacheResult), timeline: timelineRef.current })
-        setScrubberIndex(timelineRef.current.length)  // Start at end of timeline
-        setStage('idle')
+        resultState.setTimeline([...timelineRef.current])
+        resultState.setResult({ ...(msg.data as CacheResult), timeline: timelineRef.current })
+        resultState.setScrubberIndex(timelineRef.current.length)  // Start at end of timeline
+        resultState.setStage('idle')
         ws.close()
       } else if (msg.type === 'error' || msg.type?.includes('error') || msg.errors) {
         // Handle all error types: 'error', 'compile_error', 'linker_error', etc.
         clearTimeout(longRunTimeout)
         setLongRunning(false)
-        setError(msg as ErrorResult)
-        setStage('idle')
+        resultState.setError(msg as ErrorResult)
+        resultState.setStage('idle')
         ws.close()
       }
     }
 
     ws.onerror = () => fallbackToHttp()
-    ws.onclose = (e) => { if (!e.wasClean && stage !== 'idle') fallbackToHttp() }
+    ws.onclose = (e) => { if (!e.wasClean && resultState.stage !== 'idle') fallbackToHttp() }
 
     const fallbackToHttp = async () => {
-      setStage('compiling')
+      resultState.setStage('compiling')
       try {
         const payload: Record<string, unknown> = { config, optLevel }
         // Send files array for multi-file support, single code for backward compatibility
@@ -1435,18 +1432,18 @@ function App() {
         })
         const data = await response.json()
 
-        if (data.type || data.error) setError(data as ErrorResult)
-        else if (data.levels) setResult(data as CacheResult)
-        else setError({ type: 'unknown_error', message: 'Unexpected response' })
+        if (data.type || data.error) resultState.setError(data as ErrorResult)
+        else if (data.levels) resultState.setResult(data as CacheResult)
+        else resultState.setError({ type: 'unknown_error', message: 'Unexpected response' })
       } catch (err) {
-        setError({ type: 'server_error', message: err instanceof Error ? err.message : 'Connection failed' })
+        resultState.setError({ type: 'server_error', message: err instanceof Error ? err.message : 'Connection failed' })
       } finally {
-        setStage('idle')
+        resultState.setStage('idle')
       }
     }
   }
 
-  const isLoading = stage !== 'idle'
+  const isLoading = resultState.stage !== 'idle'
   const stageText = { idle: '', connecting: 'Connecting...', preparing: 'Preparing...', compiling: 'Compiling...', running: 'Running...', processing: 'Processing...', done: '' }
 
   // Config display names
@@ -1583,7 +1580,7 @@ function App() {
               {isLoading ? (
                 <>
                   <span className="run-spinner" />
-                  {stageText[stage]}
+                  {stageText[resultState.stage]}
                 </>
               ) : (
                 <>Run</>
@@ -1672,15 +1669,15 @@ function App() {
 
         <div className={`results-pane${isMobile && mobilePane !== 'results' ? ' mobile-hidden' : ''}`}>
           <div className="results-scroll">
-            {error && <ErrorDisplay error={error} />}
+            {resultState.error && <ErrorDisplay error={resultState.error} />}
 
-            {result && (
+            {resultState.result && (
               <>
                 {/* Status Banner */}
                 <div className="status-banner success">
                   <div className="status-title">Analysis Complete</div>
                   <div className="status-meta">
-                    {result.events.toLocaleString()} events | {result.config} config
+                    {resultState.result.events.toLocaleString()} events | {resultState.result.config} config
                     {sampleRate > 1 && ` | ${sampleRate}x sampling`}
                   </div>
                 </div>
@@ -1690,7 +1687,7 @@ function App() {
                   <div className="panel-header">
                     <span className="panel-title">Cache Hierarchy</span>
                   </div>
-                  <CacheHierarchyDisplay result={result} />
+                  <CacheHierarchyDisplay result={resultState.result} />
                 </div>
 
                 {/* Cache Stats Grid */}
@@ -1699,29 +1696,29 @@ function App() {
                     <span className="panel-title">Statistics</span>
                   </div>
                   <div className="panel-body">
-                    <CacheStatsDisplay result={result} />
+                    <CacheStatsDisplay result={resultState.result} />
                   </div>
                 </div>
 
                 {/* Prefetch Stats */}
-                {result.prefetch && (
+                {resultState.result.prefetch && (
                   <div className="panel">
                     <div className="panel-header">
-                      <span className="panel-title">Prefetching: {result.prefetch.policy}</span>
+                      <span className="panel-title">Prefetching: {resultState.result.prefetch.policy}</span>
                     </div>
                     <div className="panel-body">
                       <div className="prefetch-stats">
                         <div className="prefetch-stat">
-                          <span className="prefetch-stat-value">{result.prefetch.issued.toLocaleString()}</span>
+                          <span className="prefetch-stat-value">{resultState.result.prefetch.issued.toLocaleString()}</span>
                           <span className="prefetch-stat-label">Issued</span>
                         </div>
                         <div className="prefetch-stat">
-                          <span className="prefetch-stat-value">{result.prefetch.useful.toLocaleString()}</span>
+                          <span className="prefetch-stat-value">{resultState.result.prefetch.useful.toLocaleString()}</span>
                           <span className="prefetch-stat-label">Useful</span>
                         </div>
                         <div className="prefetch-stat">
-                          <span className={`prefetch-stat-value ${result.prefetch.accuracy > 0.5 ? 'excellent' : result.prefetch.accuracy > 0.2 ? 'good' : 'poor'}`}>
-                            {(result.prefetch.accuracy * 100).toFixed(1)}%
+                          <span className={`prefetch-stat-value ${resultState.result.prefetch.accuracy > 0.5 ? 'excellent' : resultState.result.prefetch.accuracy > 0.2 ? 'good' : 'poor'}`}>
+                            {(resultState.result.prefetch.accuracy * 100).toFixed(1)}%
                           </span>
                           <span className="prefetch-stat-label">Accuracy</span>
                         </div>
@@ -1740,9 +1737,9 @@ function App() {
                   </button>
                 </div>
 
-              {showTimeline && timeline.length > 0 && (
+              {showTimeline && resultState.timeline.length > 0 && (
                 <AccessTimelineDisplay
-                  events={timeline}
+                  events={resultState.timeline}
                   onEventClick={(line) => {
                     if (editorState.editorRef.current) {
                       editorState.editorRef.current.revealLineInCenter(line)
@@ -1756,51 +1753,51 @@ function App() {
               {showDetails && (
                 <>
                   <div className="details-grid">
-                    <LevelDetail name="L1 Data" stats={result.levels.l1d || result.levels.l1!} />
-                    {result.levels.l1i && <LevelDetail name="L1 Instruction" stats={result.levels.l1i} />}
-                    <LevelDetail name="L2" stats={result.levels.l2} />
-                    <LevelDetail name="L3" stats={result.levels.l3} />
+                    <LevelDetail name="L1 Data" stats={resultState.result.levels.l1d || resultState.result.levels.l1!} />
+                    {resultState.result.levels.l1i && <LevelDetail name="L1 Instruction" stats={resultState.result.levels.l1i} />}
+                    <LevelDetail name="L2" stats={resultState.result.levels.l2} />
+                    <LevelDetail name="L3" stats={resultState.result.levels.l3} />
                   </div>
-                  {result.tlb && (
+                  {resultState.result.tlb && (
                     <div className="details-grid tlb-grid">
-                      <TLBDetail name="Data TLB" stats={result.tlb.dtlb} />
-                      <TLBDetail name="Instruction TLB" stats={result.tlb.itlb} />
+                      <TLBDetail name="Data TLB" stats={resultState.result.tlb.dtlb} />
+                      <TLBDetail name="Instruction TLB" stats={resultState.result.tlb.itlb} />
                     </div>
                   )}
                   <CacheHierarchyVisualization
-                    result={result}
-                    timeline={timeline}
-                    scrubberIndex={scrubberIndex}
-                    onScrubberChange={setScrubberIndex}
+                    result={resultState.result}
+                    timeline={resultState.timeline}
+                    scrubberIndex={resultState.scrubberIndex}
+                    onScrubberChange={resultState.setScrubberIndex}
                   />
                 </>
               )}
 
-              {result.coherence && result.coherence.falseSharingEvents > 0 && (
+              {resultState.result.coherence && resultState.result.coherence.falseSharingEvents > 0 && (
                 <div className="panel warning">
                   <div className="panel-header">
                     <span className="panel-title">False Sharing Detected</span>
-                    <span className="panel-badge">{result.coherence.falseSharingEvents}</span>
+                    <span className="panel-badge">{resultState.result.coherence.falseSharingEvents}</span>
                   </div>
                 </div>
               )}
 
-              {result.falseSharing && result.falseSharing.length > 0 && (
+              {resultState.result.falseSharing && resultState.result.falseSharing.length > 0 && (
                 <FalseSharingDisplay
-                  falseSharing={result.falseSharing}
-                  lineSize={result.cacheConfig?.l1d?.lineSize || 64}
+                  falseSharing={resultState.result.falseSharing}
+                  lineSize={resultState.result.cacheConfig?.l1d?.lineSize || 64}
                 />
               )}
 
-              {result.hotLines.length > 0 && (
+              {resultState.result && resultState.result.hotLines.length > 0 && (
                 <div className="panel">
                   <div className="panel-header">
                     <span className="panel-title">Hot Lines</span>
-                    <span className="panel-badge">{result.hotLines.length}</span>
+                    <span className="panel-badge">{resultState.result.hotLines.length}</span>
                   </div>
                   <div className="hotspots">
-                    {result.hotLines.slice(0, 10).map((hotLine, i) => {
-                      const maxMisses = Math.max(...result.hotLines.slice(0, 10).map(h => h.misses))
+                    {resultState.result.hotLines.slice(0, 10).map((hotLine, i) => {
+                      const maxMisses = Math.max(...resultState.result!.hotLines.slice(0, 10).map(h => h.misses))
                       const barWidth = maxMisses > 0 ? (hotLine.misses / maxMisses) * 100 : 0
                       return (
                         <div
@@ -1833,14 +1830,14 @@ function App() {
                 </div>
               )}
 
-              {result.suggestions && result.suggestions.length > 0 && (
+              {resultState.result.suggestions && resultState.result.suggestions.length > 0 && (
                 <div className="panel">
                   <div className="panel-header">
                     <span className="panel-title">Optimization Suggestions</span>
-                    <span className="panel-badge">{result.suggestions.length}</span>
+                    <span className="panel-badge">{resultState.result.suggestions.length}</span>
                   </div>
                   <div className="suggestions">
-                    {result.suggestions.map((s, i) => (
+                    {resultState.result.suggestions.map((s, i) => (
                       <div key={i} className={`suggestion ${s.severity}`}>
                         <div className="suggestion-header">
                           <span className={`suggestion-severity ${s.severity}`}>{s.severity}</span>
@@ -1854,28 +1851,28 @@ function App() {
                 </div>
               )}
 
-              {result.cacheState && (
+              {resultState.result.cacheState && (
                 <div className="panel">
                   <div className="panel-header">
                     <span className="panel-title">L1 Cache Grid</span>
                     <span className="panel-badge">Final State</span>
                   </div>
                   <CacheGrid
-                    cacheState={result.cacheState}
-                    coreCount={result.cores || 1}
+                    cacheState={resultState.result.cacheState}
+                    coreCount={resultState.result.cores || 1}
                   />
                 </div>
               )}
 
               {/* Memory Layout Visualization */}
-              {timeline.length > 0 && (
+              {resultState.timeline.length > 0 && (
                 <div className="panel">
                   <div className="panel-header">
                     <span className="panel-title">Memory Access Pattern</span>
-                    <span className="panel-badge">{timeline.length} accesses</span>
+                    <span className="panel-badge">{resultState.timeline.length} accesses</span>
                   </div>
                   <MemoryLayout
-                    recentAccesses={timeline.slice(-200).map(e => ({
+                    recentAccesses={resultState.timeline.slice(-200).map(e => ({
                       address: e.a || 0,
                       size: 8,
                       isWrite: e.t === 'W',
@@ -1893,7 +1890,7 @@ function App() {
           {isLoading && (
             <div className="loading">
               <div className="spinner" />
-              <span>{stageText[stage]}</span>
+              <span>{stageText[resultState.stage]}</span>
               {longRunning && (
                 <div className="long-running-warning">
                   Taking longer than expected. Try enabling sampling in Options.
@@ -1902,7 +1899,7 @@ function App() {
             </div>
           )}
 
-          {!result && !error && !isLoading && (
+          {!resultState.result && !resultState.error && !isLoading && (
             <div className="placeholder">
               <div className="placeholder-icon">&gt;_</div>
               <div className="placeholder-title">Cache Explorer</div>
@@ -1920,24 +1917,24 @@ function App() {
       </div>
 
       {/* Bottom Control Strip - appears after run, hidden in embed mode */}
-      {result && timeline.length > 0 && !isEmbedMode && (
+      {resultState.result && resultState.timeline.length > 0 && !isEmbedMode && (
         <div className="bottom-strip">
           <div className="bottom-strip-left">
-            <span className="strip-stat">{result.events.toLocaleString()} events</span>
+            <span className="strip-stat">{resultState.result.events.toLocaleString()} events</span>
             <span className="strip-divider" />
-            <span className="strip-stat">{((result.levels.l1d || result.levels.l1!).hitRate * 100).toFixed(1)}% L1</span>
+            <span className="strip-stat">{((resultState.result.levels.l1d || resultState.result.levels.l1!).hitRate * 100).toFixed(1)}% L1</span>
           </div>
           <div className="bottom-strip-center">
             <input
               type="range"
               className="timeline-slider"
               min={0}
-              max={timeline.length - 1}
-              value={scrubberIndex}
-              onChange={(e) => setScrubberIndex(Number(e.target.value))}
+              max={resultState.timeline.length - 1}
+              value={resultState.scrubberIndex}
+              onChange={(e) => resultState.setScrubberIndex(Number(e.target.value))}
               title="Scrub through cache events"
             />
-            <span className="timeline-position">{scrubberIndex + 1} / {timeline.length}</span>
+            <span className="timeline-position">{resultState.scrubberIndex + 1} / {resultState.timeline.length}</span>
           </div>
           <div className="bottom-strip-right">
             <button className="strip-btn" onClick={openInCompilerExplorer} title="View in Compiler Explorer">CE ↗</button>

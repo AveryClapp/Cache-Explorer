@@ -5,3 +5,4 @@ export { useKeyboardShortcuts, type KeyboardShortcutHandlers } from './useKeyboa
 export { useUrlState, shareUrl } from './useUrlState'
 export { useMobileResponsive, type MobilePane } from './useMobileResponsive'
 export { useEditorState, type EditorState } from './useEditorState'
+export { useResultState } from './useResultState'
