@@ -1,20 +1,24 @@
 # CLAUDE.md - Cache Explorer Project Guide
 
-## Current Status (December 31, 2024)
+## Current Status (January 4, 2026)
 
-**Overall Completion: ~80%**
+**Overall Completion: ~75%**
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| LLVM Pass | ✅ Complete | Instruments loads/stores with source attribution |
+| LLVM Pass | ✅ Complete | Instruments loads/stores with file attribution |
 | Runtime Library | ✅ Working | Thread-safe event capture to stdout |
 | Cache Simulator | ✅ Complete | Full hierarchy with 5 eviction policies |
 | Multi-Core Support | ✅ Complete | MESI coherence, 85 tests passing |
 | Prefetching | ✅ Complete | 6 policies (none/next-line/stream/stride/adaptive/intel) |
 | False Sharing Detection | ✅ Complete | Reports with padding suggestions |
 | CLI Tool | ✅ Working | JSON/text output, hardware presets |
-| Web Frontend | ✅ Working | Dark mode, timeline, annotations |
-| Web Backend | ✅ Working | Docker sandbox, WebSocket streaming |
+| Backend - Multi-file | ✅ Complete | Accepts multiple files, compiles together |
+| Frontend - Multi-file | ✅ Complete | Sends all files, displays results per-file |
+| File Attribution UI | ✅ Complete | Results grouped by file with filtering |
+| Assembly View Button | ⚠️ Attempted | Button positioned, CE URL encoding in progress |
+| Web Frontend | ✅ Working | Dark/light modes (light theme improved), multi-file support |
+| Web Backend | ✅ Working | Docker sandbox, WebSocket streaming, multi-file compilation |
 | Testing | ✅ 85 tests | CacheLevel(22) + CacheSystem(25) + MESI(19) + Prefetch(19) |
 
 **What's Working:**
@@ -349,5 +353,55 @@ cache-explorer/
 
 ---
 
-**Last Updated:** December 31, 2024
-**Project Phase:** Beta (targeting 1.0 release)
+---
+
+## Recent Work Summary (January 4, 2026)
+
+### Completed in This Session
+
+**Frontend Refactoring:**
+- Extracted 10+ custom hooks (`useTheme`, `useUrlState`, `useKeyboardShortcuts`, etc.)
+- Extracted 5+ component modules (CommandPalette, QuickConfigPanel, ResultDisplay components)
+- Reduced App.tsx from 3,523 to 1,642 lines (53% reduction)
+- 18 commits with incremental refactoring
+
+**Multi-File Support:**
+- ✅ Backend: Accept multiple files via `/api/analyze` endpoint
+- ✅ Backend: Compile all files together, track file attribution
+- ✅ Frontend: Send all files in analysis request
+- ✅ Frontend: Display results grouped by file with filtering
+- ✅ Hot lines show source file attribution
+
+**UI Improvements:**
+- ✅ Light theme colors modernized (better WCAG AA contrast)
+- ✅ Component CSS updated to use CSS variables for theming
+- ✅ Bash warning messages filtered from error display
+- ✅ Assembly view button positioned as primary action
+
+**Known Issues:**
+- ⚠️ Compiler Explorer integration: URL encoding/state format not working
+  - Multiple approaches attempted (ClientState path, query params, base64 state)
+  - Button exists and styled correctly, but opens with decode errors
+  - Root cause: Compiler Explorer state format requirements unclear
+
+### Not Completed
+
+**Compiler Explorer Assembly View:**
+- Button is positioned and styled
+- Compiler/optimization mapping is correct
+- URL generation attempted multiple times
+- CE still returns "Decode Error" when loading generated URLs
+
+### What Still Needs Work
+
+1. **Compiler Explorer Fix** - Need to determine correct state serialization format
+2. **E2E Testing** - Multi-file integration tests missing
+3. **Documentation** - Several plan docs are outdated
+4. **TLB Simulation** - Not implemented (listed as known limitation)
+5. **Timing Model** - Hit/miss counts only, no cycle timing
+
+---
+
+**Last Updated:** January 4, 2026
+**Project Phase:** Beta (multi-file support added, assembly view WIP)
+**Recent Focus:** Frontend refactoring + multi-file implementation
