@@ -6,9 +6,24 @@ import { initVimMode } from 'monaco-vim'
 import LZString from 'lz-string'
 import './App.css'
 
+// Import hooks
+import {
+  useAnalysisState,
+  useConfigState,
+  useTheme,
+  useKeyboardShortcuts,
+  useUrlState,
+  shareUrl,
+  useMobileResponsive
+} from './hooks'
+
 // Import visualization components
-import { MemoryLayout, FileManager } from './components'
+import { MemoryLayout, FileManager, AdvancedOptionsModal } from './components'
 import type { ProjectFile } from './components'
+
+// Import constants and types
+import { PREFETCH_DEFAULTS } from './constants/config'
+import type { PrefetchPolicy } from './types'
 
 // API base URL - in production (Docker), use relative paths; in dev, use localhost
 const API_BASE = import.meta.env.PROD ? '' : 'http://localhost:3001'
@@ -1021,26 +1036,7 @@ int main() {
   },
 }
 
-const EXAMPLE_CODE = EXAMPLES.matrix_row.code
-
-// Helper to generate unique file IDs
-let fileIdCounter = 0
-function generateFileId(): string {
-  return `file_${++fileIdCounter}_${Date.now()}`
-}
-
-// Helper to get file extension from language
-function getFileExtension(lang: Language): string {
-  switch (lang) {
-    case 'cpp': return '.cpp'
-    case 'rust': return '.rs'
-    default: return '.c'
-  }
-}
-
-function createFileTab(name: string, code: string, language: Language): FileTab {
-  return { id: generateFileId(), name, code, language }
-}
+// Helper functions are now in utils/file.ts and imported via hooks
 
 function formatPercent(rate: number): string {
   return (rate * 100).toFixed(1) + '%'
@@ -2321,81 +2317,7 @@ function ErrorDisplay({ error }: { error: ErrorResult }) {
 
 type Stage = 'idle' | 'connecting' | 'preparing' | 'compiling' | 'running' | 'processing' | 'done'
 
-interface DefineEntry {
-  name: string
-  value: string
-}
-
-interface CustomCacheConfig {
-  l1Size: number
-  l1Assoc: number
-  lineSize: number
-  l2Size: number
-  l2Assoc: number
-  l3Size: number
-  l3Assoc: number
-}
-
-const defaultCustomConfig: CustomCacheConfig = {
-  l1Size: 32768,
-  l1Assoc: 8,
-  lineSize: 64,
-  l2Size: 262144,
-  l2Assoc: 8,
-  l3Size: 8388608,
-  l3Assoc: 16
-}
-
-interface ShareableState {
-  code: string
-  config: string
-  optLevel: string
-  language?: Language
-  defines?: DefineEntry[]
-}
-
-function encodeState(state: ShareableState): string {
-  return LZString.compressToEncodedURIComponent(JSON.stringify(state))
-}
-
-function decodeState(encoded: string): ShareableState | null {
-  try {
-    const json = LZString.decompressFromEncodedURIComponent(encoded)
-    if (!json) return null
-    return JSON.parse(json)
-  } catch {
-    return null
-  }
-}
-
-type PrefetchPolicy = 'none' | 'next' | 'stream' | 'stride' | 'adaptive'
-
-// Default prefetch policies for hardware presets (based on real hardware behavior)
-const PREFETCH_DEFAULTS: Record<string, PrefetchPolicy> = {
-  // Intel uses aggressive stream prefetchers + adjacent line prefetcher
-  intel: 'stream',
-  intel14: 'stream',
-  xeon: 'stream',
-  // AMD Zen uses stride + stream detection
-  amd: 'adaptive',
-  zen3: 'adaptive',
-  zen4: 'adaptive',
-  epyc: 'adaptive',
-  // Apple Silicon has very aggressive stream prefetchers
-  apple: 'stream',
-  m1: 'stream',
-  m2: 'stream',
-  m3: 'stream',
-  // ARM uses stream prefetching
-  graviton: 'stream',
-  rpi4: 'next',
-  // Embedded often has simple or no prefetching
-  embedded: 'next',
-  // Educational - no prefetch to show raw behavior
-  educational: 'none',
-  // Custom - user decides
-  custom: 'none',
-}
+// Types are now imported from './types' via hooks and components
 
 function App() {
   // Embed mode detection from URL params
@@ -2403,95 +2325,36 @@ function App() {
   const isEmbedMode = urlParams.get('embed') === 'true'
   const isReadOnly = urlParams.get('readonly') === 'true'
 
-  // Multi-file state - use files array instead of single code
-  const [files, setFiles] = useState<FileTab[]>(() => [
-    createFileTab('main.c', EXAMPLE_CODE, 'c')
-  ])
-  const [activeFileId, setActiveFileId] = useState<string>(() => files[0]?.id || '')
-  const [mainFileId, setMainFileId] = useState<string>(() => files[0]?.id || '')
+  // Use extracted hooks for state management
+  const analysisState = useAnalysisState()
+  const configState = useConfigState()
+  const { theme, toggleTheme } = useTheme()
+  const { isMobile, mobilePane, setMobilePane } = useMobileResponsive()
 
-  // Derived state for current file
-  const activeFile = files.find(f => f.id === activeFileId) || files[0]
-  const code = activeFile?.code || ''
-  const language = activeFile?.language || 'c'
-
-  // File management functions
-  const updateActiveCode = useCallback((newCode: string) => {
-    setFiles(prev => prev.map(f =>
-      f.id === activeFileId ? { ...f, code: newCode } : f
-    ))
-  }, [activeFileId])
-
-  const updateActiveLanguage = useCallback((newLang: Language) => {
-    setFiles(prev => prev.map(f => {
-      if (f.id !== activeFileId) return f
-      // Update extension if name has one
-      const ext = getFileExtension(newLang)
-      const baseName = f.name.replace(/\.(c|cpp|rs)$/, '')
-      return { ...f, language: newLang, name: baseName + ext }
-    }))
-  }, [activeFileId])
-
-  const closeFile = useCallback((id: string) => {
-    if (files.length <= 1) return // Don't close last file
-    const idx = files.findIndex(f => f.id === id)
-    setFiles(prev => prev.filter(f => f.id !== id))
-    // If closing active file, switch to adjacent
-    if (id === activeFileId) {
-      const newIdx = Math.min(idx, files.length - 2)
-      const newActive = files.filter(f => f.id !== id)[newIdx]
-      if (newActive) setActiveFileId(newActive.id)
-    }
-  }, [files, activeFileId])
-
-  const renameFile = useCallback((id: string, name: string) => {
-    setFiles(prev => prev.map(f =>
-      f.id === id ? { ...f, name } : f
-    ))
-  }, [])
-
-  // FileManager-compatible createFile callback
-  const createFile = useCallback((name: string, language: 'c' | 'cpp' | 'rust') => {
-    const newFile = createFileTab(name, '', language)
-    setFiles(prev => [...prev, newFile])
-    setActiveFileId(newFile.id)
-  }, [])
+  // Derived properties from hooks
+  const { code, language } = analysisState
+  const { config, optLevel, prefetchPolicy, customConfig, defines, sampleRate, eventLimit, selectedCompiler, compilers } = configState
 
   // Convert files to ProjectFile format for FileManager
   const projectFiles: ProjectFile[] = useMemo(() =>
-    files.map(f => ({
+    analysisState.files.map(f => ({
       id: f.id,
       name: f.name,
       code: f.code,
       language: f.language,
-      isMain: f.id === mainFileId
+      isMain: f.id === analysisState.mainFileId
     }))
-  , [files, mainFileId])
+  , [analysisState.files, analysisState.mainFileId])
 
-  const [config, setConfig] = useState('educational')
-  const [optLevel, setOptLevel] = useState('-O0')
-  const [prefetchPolicy, setPrefetchPolicy] = useState<PrefetchPolicy>('none')
-  const [compilers, setCompilers] = useState<Compiler[]>([])
-  const [selectedCompiler, setSelectedCompiler] = useState<string>('')
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('cache-explorer-theme')
-      if (saved === 'light' || saved === 'dark') return saved
-    }
-    return 'dark'
-  })
+  // Remaining state - analysis specific
   const [result, setResult] = useState<CacheResult | null>(null)
   const [stage, setStage] = useState<Stage>('idle')
   const [error, setError] = useState<ErrorResult | null>(null)
-  const [customConfig, setCustomConfig] = useState<CustomCacheConfig>(defaultCustomConfig)
-  const [defines, setDefines] = useState<DefineEntry[]>([])
   const [copied, setCopied] = useState(false)
   const [showOptions, setShowOptions] = useState(false)
   const [showDetails, setShowDetails] = useState(false)
   const [showTimeline, setShowTimeline] = useState(false)
   const [diffMode, setDiffMode] = useState(false)
-  const [sampleRate, setSampleRate] = useState(1)  // 1 = no sampling
-  const [eventLimit, setEventLimit] = useState(5000000)  // 5M default (~30s max runtime)
   const [longRunning, setLongRunning] = useState(false)
   const [baselineCode, setBaselineCode] = useState<string | null>(null)
   const [timeline, setTimeline] = useState<TimelineEvent[]>([])
@@ -2501,8 +2364,6 @@ function App() {
   const [commandQuery, setCommandQuery] = useState('')
   const [showQuickConfig, setShowQuickConfig] = useState(false)
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0)
-  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768)
-  const [mobilePane, setMobilePane] = useState<'editor' | 'results'>('editor')
   const commandInputRef = useRef<HTMLInputElement>(null)
   const timelineRef = useRef<TimelineEvent[]>([])  // Accumulator during streaming
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
@@ -2526,31 +2387,6 @@ function App() {
     return () => document.removeEventListener('click', handleClick)
   }, [])
 
-  // Theme sync
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme)
-    localStorage.setItem('cache-explorer-theme', theme)
-  }, [theme])
-
-  // Fetch available compilers on mount
-  useEffect(() => {
-    fetch(`${API_BASE}/api/compilers`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.compilers && data.compilers.length > 0) {
-          setCompilers(data.compilers)
-          setSelectedCompiler(data.default || data.compilers[0].id)
-        }
-      })
-      .catch(err => {
-        console.warn('Failed to fetch compilers:', err)
-      })
-  }, [])
-
-  const toggleTheme = useCallback(() => {
-    setTheme(prev => prev === 'dark' ? 'light' : 'dark')
-  }, [])
-
   const handleEditorMount = (editor: editor.IStandaloneCodeEditor, monaco: Monaco) => {
     editorRef.current = editor
     monacoRef.current = monaco
@@ -2571,97 +2407,46 @@ function App() {
     }
   }, [vimMode])
 
-  // Mobile detection - update on resize
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 768)
-    }
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Cmd+K to open command palette
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-        e.preventDefault()
-        setShowCommandPalette(true)
-        setCommandQuery('')
-        setSelectedCommandIndex(0)
-      }
-      // Ctrl/Cmd + Enter to run
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        e.preventDefault()
-        if (stage === 'idle') runAnalysis()
-      }
-      // Escape to close modals
-      if (e.key === 'Escape') {
-        setShowOptions(false)
-        setShowCommandPalette(false)
-        setShowQuickConfig(false)
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+  // Use keyboard shortcuts hook (mobile detection is handled by useMobileResponsive hook)
+  useKeyboardShortcuts({
+    onCommandPalette: () => {
+      setShowCommandPalette(true)
+      setCommandQuery('')
+      setSelectedCommandIndex(0)
+    },
+    onRun: () => runAnalysis(),
+    onEscape: () => {
+      setShowOptions(false)
+      setShowCommandPalette(false)
+      setShowQuickConfig(false)
+    },
+    canRun: stage === 'idle'
   })
 
-  // Load state from URL on mount
-  useEffect(() => {
-    const loadState = async () => {
-      const params = new URLSearchParams(window.location.search)
-      const shortId = params.get('s')
-
-      // Helper to apply loaded state to the first file
-      const applyState = (state: { code: string; config: string; optLevel: string; language?: Language; defines?: DefineEntry[] }) => {
-        const lang = state.language || 'c'
-        setFiles([createFileTab(`main${getFileExtension(lang)}`, state.code, lang)])
-        setConfig(state.config)
-        setOptLevel(state.optLevel)
-        if (state.defines) setDefines(state.defines)
-      }
-
-      if (shortId) {
-        try {
-          const response = await fetch(`${API_BASE}/s/${shortId}`)
-          const data = await response.json()
-          if (data.state) {
-            applyState(data.state)
-            return
-          }
-        } catch { /* ignore */ }
-      }
-
-      const hash = window.location.hash.slice(1)
-      if (hash) {
-        const saved = decodeState(hash)
-        if (saved) {
-          applyState(saved)
-        }
-      }
-    }
-    loadState()
-  }, [])
-
-  // Update URL when state changes
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const encoded = encodeState({ code, config, optLevel, language, defines })
-      window.history.replaceState(null, '', `${window.location.pathname}#${encoded}`)
-    }, 500)
-    return () => clearTimeout(timer)
-  }, [code, config, optLevel, language, defines])
+  // Use URL state hook for loading and syncing state
+  useUrlState(
+    (state) => {
+      const lang = state.language || 'c'
+      // Load state from URL into hooks
+      analysisState.updateActiveCode(state.code)
+      analysisState.updateActiveLanguage(lang)
+      configState.setConfig(state.config)
+      configState.setOptLevel(state.optLevel)
+      if (state.defines) configState.setDefines(state.defines)
+    },
+    [code, config, optLevel, language, defines]
+  )
 
   const handleShare = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/shorten`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ state: { code, config, optLevel, language, defines } }),
+      const url = await shareUrl({
+        code,
+        config,
+        optLevel,
+        language,
+        defines
       })
-      const data = await response.json()
-      if (data.id) {
-        const url = `${window.location.origin}${window.location.pathname}?s=${data.id}`
+      if (url) {
         await navigator.clipboard.writeText(url)
         setCopied(true)
         setTimeout(() => setCopied(false), 2000)
@@ -2675,10 +2460,8 @@ function App() {
 
   // Open current code in Compiler Explorer
   const openInCompilerExplorer = useCallback(() => {
-    // Get active file's code
-    const activeFile = files.find(f => f.id === activeFileId)
-    const sourceCode = activeFile?.code || ''
-    const lang = activeFile?.language || 'c'
+    const sourceCode = code
+    const lang = language
 
     // Map our language to CE compiler IDs
     const compilerMap: Record<string, string> = {
@@ -2714,7 +2497,7 @@ function App() {
     const compressed = LZString.compressToEncodedURIComponent(JSON.stringify(ceState))
     const ceUrl = `https://godbolt.org/clientstate/${compressed}`
     window.open(ceUrl, '_blank', 'noopener,noreferrer')
-  }, [files, activeFileId, optLevel])
+  }, [code, language, optLevel])
 
   // Apply error markers (red squiggles) for compile errors
   useEffect(() => {
@@ -2847,12 +2630,12 @@ function App() {
 
   const runAnalysis = () => {
     // Input validation - check total size across all files
-    const totalSize = files.reduce((sum, f) => sum + f.code.length, 0)
+    const totalSize = analysisState.files.reduce((sum: number, f: FileTab) => sum + f.code.length, 0)
     if (totalSize > 100000) {
       setError({ type: 'validation_error', message: 'Code too long (max 100KB total)', suggestion: 'Try smaller programs or use sampling' })
       return
     }
-    if (files.every(f => f.code.trim().length === 0)) {
+    if (analysisState.files.every((f: FileTab) => f.code.trim().length === 0)) {
       setError({ type: 'validation_error', message: 'No code to analyze', suggestion: 'Write or paste some code first' })
       return
     }
@@ -2872,12 +2655,12 @@ function App() {
     ws.onopen = () => {
       const payload: Record<string, unknown> = { config, optLevel }
       // Send files array for multi-file support, single code for backward compatibility
-      if (files.length === 1) {
-        payload.code = files[0].code
-        payload.language = files[0].language
+      if (analysisState.files.length === 1) {
+        payload.code = analysisState.files[0].code
+        payload.language = analysisState.files[0].language
       } else {
-        payload.files = files.map(f => ({ name: f.name, code: f.code, language: f.language }))
-        payload.language = files[0].language // Primary language for compilation
+        payload.files = analysisState.files.map(f => ({ name: f.name, code: f.code, language: f.language }))
+        payload.language = analysisState.files[0].language // Primary language for compilation
       }
       if (config === 'custom') payload.customConfig = customConfig
       if (defines.length > 0) payload.defines = defines.filter(d => d.name.trim())
@@ -2927,12 +2710,12 @@ function App() {
       try {
         const payload: Record<string, unknown> = { config, optLevel }
         // Send files array for multi-file support, single code for backward compatibility
-        if (files.length === 1) {
-          payload.code = files[0].code
-          payload.language = files[0].language
+        if (analysisState.files.length === 1) {
+          payload.code = analysisState.files[0].code
+          payload.language = analysisState.files[0].language
         } else {
-          payload.files = files.map(f => ({ name: f.name, code: f.code, language: f.language }))
-          payload.language = files[0].language
+          payload.files = analysisState.files.map(f => ({ name: f.name, code: f.code, language: f.language }))
+          payload.language = analysisState.files[0].language
         }
         if (config === 'custom') payload.customConfig = customConfig
         if (defines.length > 0) payload.defines = defines.filter(d => d.name.trim())
@@ -2992,25 +2775,26 @@ function App() {
       icon: '>',
       label: ex.name,
       action: () => {
-        setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, code: ex.code, language: ex.language, name: 'main' + getFileExtension(ex.language) } : f))
+        analysisState.updateActiveCode(ex.code)
+        analysisState.updateActiveLanguage(ex.language)
       },
       category: 'examples'
     })),
     // Settings (:)
     { id: 'vim', icon: ':', label: vimMode ? 'Disable Vim mode' : 'Enable Vim mode', action: () => setVimMode(!vimMode), category: 'settings' },
-    { id: 'lang-c', icon: ':', label: 'Language: C', action: () => updateActiveLanguage('c'), category: 'settings' },
-    { id: 'lang-cpp', icon: ':', label: 'Language: C++', action: () => updateActiveLanguage('cpp'), category: 'settings' },
-    { id: 'lang-rust', icon: ':', label: 'Language: Rust', action: () => updateActiveLanguage('rust'), category: 'settings' },
+    { id: 'lang-c', icon: ':', label: 'Language: C', action: () => analysisState.updateActiveLanguage('c'), category: 'settings' },
+    { id: 'lang-cpp', icon: ':', label: 'Language: C++', action: () => analysisState.updateActiveLanguage('cpp'), category: 'settings' },
+    { id: 'lang-rust', icon: ':', label: 'Language: Rust', action: () => analysisState.updateActiveLanguage('rust'), category: 'settings' },
     // Config (*)
     { id: 'config', icon: '*', label: 'Hardware config...', action: () => setShowQuickConfig(true), category: 'config' },
     { id: 'options', icon: '*', label: 'Advanced options...', action: () => setShowOptions(true), category: 'config' },
-    { id: 'sampling-none', icon: '*', label: 'Sampling: All events', action: () => setSampleRate(1), category: 'config' },
-    { id: 'sampling-10', icon: '*', label: 'Sampling: 1:10', action: () => setSampleRate(10), category: 'config' },
-    { id: 'sampling-100', icon: '*', label: 'Sampling: 1:100', action: () => setSampleRate(100), category: 'config' },
-    { id: 'limit-1m', icon: '*', label: 'Event limit: 1M', action: () => setEventLimit(1000000), category: 'config' },
-    { id: 'limit-5m', icon: '*', label: 'Event limit: 5M', action: () => setEventLimit(5000000), category: 'config' },
-    { id: 'limit-none', icon: '*', label: 'Event limit: None', action: () => setEventLimit(0), category: 'config' },
-  ], [isLoading, activeFileId, vimMode, diffMode, baselineCode, code, handleShare, openInCompilerExplorer, updateActiveLanguage])
+    { id: 'sampling-none', icon: '*', label: 'Sampling: All events', action: () => configState.setSampleRate(1), category: 'config' },
+    { id: 'sampling-10', icon: '*', label: 'Sampling: 1:10', action: () => configState.setSampleRate(10), category: 'config' },
+    { id: 'sampling-100', icon: '*', label: 'Sampling: 1:100', action: () => configState.setSampleRate(100), category: 'config' },
+    { id: 'limit-1m', icon: '*', label: 'Event limit: 1M', action: () => configState.setEventLimit(1000000), category: 'config' },
+    { id: 'limit-5m', icon: '*', label: 'Event limit: 5M', action: () => configState.setEventLimit(5000000), category: 'config' },
+    { id: 'limit-none', icon: '*', label: 'Event limit: None', action: () => configState.setEventLimit(0), category: 'config' },
+  ], [isLoading, analysisState.activeFileId, vimMode, diffMode, baselineCode, code, handleShare, openInCompilerExplorer, analysisState.updateActiveLanguage])
 
   // Command palette handlers
   const handleCommandSelect = useCallback((cmd: CommandItem) => {
@@ -3052,12 +2836,12 @@ function App() {
           compilers={compilers}
           selectedCompiler={selectedCompiler}
           onConfigChange={(c) => {
-            setConfig(c)
-            setPrefetchPolicy(PREFETCH_DEFAULTS[c] || 'none')
+            configState.setConfig(c)
+            configState.setPrefetchPolicy(PREFETCH_DEFAULTS[c] || 'none')
           }}
-          onOptLevelChange={setOptLevel}
-          onPrefetchChange={(p) => setPrefetchPolicy(p as PrefetchPolicy)}
-          onCompilerChange={setSelectedCompiler}
+          onOptLevelChange={configState.setOptLevel}
+          onPrefetchChange={(p) => configState.setPrefetchPolicy(p as PrefetchPolicy)}
+          onCompilerChange={configState.setSelectedCompiler}
           onClose={() => setShowQuickConfig(false)}
         />
       )}
@@ -3067,7 +2851,7 @@ function App() {
         <div className="topbar">
           <div className="topbar-left">
             <span className="topbar-title">Cache Explorer</span>
-            <span className="topbar-filename">{activeFile?.name || 'main.c'}</span>
+            <span className="topbar-filename">{analysisState.activeFile?.name || 'main.c'}</span>
           </div>
 
           <div className="topbar-right">
@@ -3109,77 +2893,17 @@ function App() {
         <div className="toast">Link copied!</div>
       )}
 
-      {/* Advanced Options Modal - hidden in embed mode */}
-      {showOptions && !isEmbedMode && (
-        <div className="options-modal-overlay" onClick={() => setShowOptions(false)}>
-          <div className="options-modal" onClick={e => e.stopPropagation()}>
-            <div className="options-modal-header">
-              <span>Advanced Options</span>
-              <button className="quick-config-close" onClick={() => setShowOptions(false)}>×</button>
-            </div>
-            <div className="options-modal-body">
-              <div className="option-section">
-                <div className="option-label">Preprocessor Defines</div>
-                <div className="defines-list">
-                  {defines.map((def, i) => (
-                    <div key={i} className="define-row">
-                      <span className="define-d">-D</span>
-                      <input
-                        type="text"
-                        placeholder="NAME"
-                        value={def.name}
-                        onChange={(e) => {
-                          const newDefs = [...defines]
-                          newDefs[i].name = e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '')
-                          setDefines(newDefs)
-                        }}
-                        className="define-name"
-                      />
-                      <span className="define-eq">=</span>
-                      <input
-                        type="text"
-                        placeholder="value"
-                        value={def.value}
-                        onChange={(e) => {
-                          const newDefs = [...defines]
-                          newDefs[i].value = e.target.value
-                          setDefines(newDefs)
-                        }}
-                        className="define-value"
-                      />
-                      <button className="btn-remove" onClick={() => setDefines(defines.filter((_, j) => j !== i))}>×</button>
-                    </div>
-                  ))}
-                  <button className="btn-add" onClick={() => setDefines([...defines, { name: '', value: '' }])}>
-                    + Add Define
-                  </button>
-                </div>
-              </div>
-
-              {config === 'custom' && (
-                <div className="option-section">
-                  <div className="option-label">Custom Cache Config</div>
-                  <div className="config-grid">
-                    <label>Line Size</label>
-                    <input type="number" value={customConfig.lineSize} onChange={(e) => setCustomConfig({ ...customConfig, lineSize: parseInt(e.target.value) || 64 })} />
-                    <label>L1 Size</label>
-                    <input type="number" value={customConfig.l1Size} onChange={(e) => setCustomConfig({ ...customConfig, l1Size: parseInt(e.target.value) || 32768 })} />
-                    <label>L1 Assoc</label>
-                    <input type="number" value={customConfig.l1Assoc} onChange={(e) => setCustomConfig({ ...customConfig, l1Assoc: parseInt(e.target.value) || 8 })} />
-                    <label>L2 Size</label>
-                    <input type="number" value={customConfig.l2Size} onChange={(e) => setCustomConfig({ ...customConfig, l2Size: parseInt(e.target.value) || 262144 })} />
-                    <label>L2 Assoc</label>
-                    <input type="number" value={customConfig.l2Assoc} onChange={(e) => setCustomConfig({ ...customConfig, l2Assoc: parseInt(e.target.value) || 8 })} />
-                    <label>L3 Size</label>
-                    <input type="number" value={customConfig.l3Size} onChange={(e) => setCustomConfig({ ...customConfig, l3Size: parseInt(e.target.value) || 8388608 })} />
-                    <label>L3 Assoc</label>
-                    <input type="number" value={customConfig.l3Assoc} onChange={(e) => setCustomConfig({ ...customConfig, l3Assoc: parseInt(e.target.value) || 16 })} />
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+      {/* Advanced Options Modal - using extracted component, hidden in embed mode */}
+      {!isEmbedMode && (
+        <AdvancedOptionsModal
+          isOpen={showOptions}
+          defines={defines}
+          customConfig={customConfig}
+          currentConfig={config}
+          onDefinesChange={configState.setDefines}
+          onCustomConfigChange={configState.setCustomConfig}
+          onClose={() => setShowOptions(false)}
+        />
       )}
 
       {/* Mobile Tab Switcher */}
@@ -3206,12 +2930,12 @@ function App() {
           {!isEmbedMode && (
             <FileManager
               files={projectFiles}
-              activeFileId={activeFileId}
-              onFileSelect={setActiveFileId}
-              onFileCreate={createFile}
-              onFileDelete={closeFile}
-              onFileRename={renameFile}
-              onSetMainFile={setMainFileId}
+              activeFileId={analysisState.activeFileId}
+              onFileSelect={analysisState.setActiveFileId}
+              onFileCreate={analysisState.createFile}
+              onFileDelete={analysisState.closeFile}
+              onFileRename={analysisState.renameFile}
+              onSetMainFile={analysisState.setMainFileId}
             />
           )}
           {diffMode && baselineCode ? (
@@ -3223,7 +2947,7 @@ function App() {
               modified={code}
               onMount={(editor) => {
                 const modifiedEditor = editor.getModifiedEditor()
-                modifiedEditor.onDidChangeModelContent(() => updateActiveCode(modifiedEditor.getValue()))
+                modifiedEditor.onDidChangeModelContent(() => analysisState.updateActiveCode(modifiedEditor.getValue()))
               }}
               options={{ minimap: { enabled: false }, fontSize: 13, renderSideBySide: true, readOnly: isReadOnly }}
             />
@@ -3233,7 +2957,7 @@ function App() {
               language={monacoLanguage}
               theme={theme === 'dark' ? 'vs-dark' : 'light'}
               value={code}
-              onChange={(value) => !isReadOnly && updateActiveCode(value || '')}
+              onChange={(value) => !isReadOnly && analysisState.updateActiveCode(value || '')}
               onMount={handleEditorMount}
               options={{ minimap: { enabled: false }, fontSize: 13, lineNumbers: 'on', scrollBeyondLastLine: false, glyphMargin: true, readOnly: isReadOnly }}
             />
