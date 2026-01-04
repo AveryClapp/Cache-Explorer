@@ -1,0 +1,20 @@
+[package]
+name = "cache-explorer"
+version = "0.1.0"
+edition = "2021"
+description = "Cache Explorer integration for Rust projects"
+license = "MIT"
+repository = "https://github.com/cache-explorer/cache-explorer"
+keywords = ["cache", "profiling", "performance", "optimization"]
+categories = ["development-tools::profiling"]
+
+[lib]
+name = "cache_explorer"
+path = "lib.rs"
+
+[dependencies]
+
+[features]
+default = []
+# Enable automatic instrumentation
+auto = []

@@ -33,6 +33,17 @@ interface CacheStats {
   writebacks: number
 }
 
+interface TLBStats {
+  hits: number
+  misses: number
+  hitRate: number
+}
+
+interface TLBHierarchyStats {
+  dtlb: TLBStats
+  itlb: TLBStats
+}
+
 interface HotLine {
   file: string
   line: number
@@ -163,6 +174,7 @@ interface CacheResult {
   timeline?: TimelineEvent[]  // collected timeline events
   prefetch?: PrefetchStats
   cacheState?: CacheState
+  tlb?: TLBHierarchyStats
 }
 
 type Language = 'c' | 'cpp' | 'rust'
@@ -1424,6 +1436,31 @@ function LevelDetail({ name, stats }: { name: string; stats: CacheStats }) {
       <div className="level-row">
         <span>Hit Rate</span>
         <span className={`mono ${stats.hitRate > 0.9 ? 'good' : stats.hitRate > 0.7 ? 'ok' : 'bad'}`}>
+          {formatPercent(stats.hitRate)}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function TLBDetail({ name, stats }: { name: string; stats: TLBStats }) {
+  const totalAccesses = stats.hits + stats.misses
+  if (totalAccesses === 0) return null
+
+  return (
+    <div className="level-detail tlb-detail">
+      <div className="level-header">{name}</div>
+      <div className="level-row">
+        <span>Hits</span>
+        <span className="mono">{stats.hits.toLocaleString()}</span>
+      </div>
+      <div className="level-row">
+        <span>Misses</span>
+        <span className="mono">{stats.misses.toLocaleString()}</span>
+      </div>
+      <div className="level-row">
+        <span>Hit Rate</span>
+        <span className={`mono ${stats.hitRate > 0.95 ? 'good' : stats.hitRate > 0.85 ? 'ok' : 'bad'}`}>
           {formatPercent(stats.hitRate)}
         </span>
       </div>
@@ -3295,6 +3332,12 @@ function App() {
                     <LevelDetail name="L2" stats={result.levels.l2} />
                     <LevelDetail name="L3" stats={result.levels.l3} />
                   </div>
+                  {result.tlb && (
+                    <div className="details-grid tlb-grid">
+                      <TLBDetail name="Data TLB" stats={result.tlb.dtlb} />
+                      <TLBDetail name="Instruction TLB" stats={result.tlb.itlb} />
+                    </div>
+                  )}
                   <CacheHierarchyViz
                     result={result}
                     timeline={timeline}

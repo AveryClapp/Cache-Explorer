@@ -606,6 +606,9 @@ int main(int argc, char *argv[]) {
       json_level("l3", stats.l3, true);
       std::cout << "  },\n";
 
+      // Note: TLB stats not yet available in multi-core mode (per-core TLBs)
+      // TODO: Aggregate TLB stats from all cores when MultiCoreCacheSystem supports TLB
+
       std::cout << "  \"coherence\": {\n";
       std::cout << "    \"invalidations\": " << stats.coherence_invalidations << ",\n";
       std::cout << "    \"falseSharingEvents\": " << stats.false_sharing_events << "\n";
@@ -833,6 +836,17 @@ int main(int argc, char *argv[]) {
       json_level("l2", stats.l2, false);
       json_level("l3", stats.l3, true);
 
+      std::cout << "  },\n";
+
+      // TLB statistics
+      auto tlb_stats = processor.get_cache_system().get_tlb_stats();
+      std::cout << "  \"tlb\": {\n";
+      std::cout << "    \"dtlb\": {\"hits\": " << tlb_stats.dtlb.hits
+                << ", \"misses\": " << tlb_stats.dtlb.misses
+                << ", \"hitRate\": " << std::fixed << std::setprecision(3) << tlb_stats.dtlb.hit_rate() << "},\n";
+      std::cout << "    \"itlb\": {\"hits\": " << tlb_stats.itlb.hits
+                << ", \"misses\": " << tlb_stats.itlb.misses
+                << ", \"hitRate\": " << std::fixed << std::setprecision(3) << tlb_stats.itlb.hit_rate() << "}\n";
       std::cout << "  },\n";
       std::cout << "  \"hotLines\": [\n";
 

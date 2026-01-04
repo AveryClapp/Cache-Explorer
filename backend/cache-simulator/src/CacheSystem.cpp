@@ -58,8 +58,19 @@ void CacheSystem::disable_prefetching() {
 SystemAccessResult CacheSystem::access_hierarchy(uint64_t address,
                                                   bool is_write,
                                                   CacheLevel &l1,
+                                                  TLB &tlb,
                                                   uint64_t pc) {
-  SystemAccessResult result = {false, false, false, false, {}, 0};
+  SystemAccessResult result = {false, false, false, false, false, false, {}, 0};
+
+  // TLB lookup (happens before/in parallel with cache access)
+  if (tlb_enabled) {
+    bool tlb_hit = tlb.access(address);
+    if (&tlb == &dtlb) {
+      result.dtlb_hit = tlb_hit;
+    } else {
+      result.itlb_hit = tlb_hit;
+    }
+  }
 
   // Try L1
   AccessInfo l1_info = l1.access(address, is_write);
@@ -157,15 +168,15 @@ SystemAccessResult CacheSystem::access_hierarchy(uint64_t address,
 }
 
 SystemAccessResult CacheSystem::read(uint64_t address, uint64_t pc) {
-  return access_hierarchy(address, false, l1d, pc);
+  return access_hierarchy(address, false, l1d, dtlb, pc);
 }
 
 SystemAccessResult CacheSystem::write(uint64_t address, uint64_t pc) {
-  return access_hierarchy(address, true, l1d, pc);
+  return access_hierarchy(address, true, l1d, dtlb, pc);
 }
 
 SystemAccessResult CacheSystem::fetch(uint64_t address, uint64_t pc) {
-  return access_hierarchy(address, false, l1i, pc);
+  return access_hierarchy(address, false, l1i, itlb, pc);
 }
 
 HierarchyStats CacheSystem::get_stats() const {

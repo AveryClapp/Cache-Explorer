@@ -1,0 +1,180 @@
+#!/bin/bash
+#
+# cache-explore-pin - Profile any binary with Intel Pin
+#
+# This script uses Intel Pin for dynamic binary instrumentation,
+# allowing cache profiling of GCC-compiled binaries, proprietary
+# software, or any executable without recompilation.
+#
+# Prerequisites:
+#   - Intel Pin (download from intel.com)
+#   - Set PIN_ROOT environment variable
+#   - Build the Pin tool: cd backend/pin-tool && make
+#
+# Usage:
+#   cache-explore-pin ./my_binary [args...]
+#   cache-explore-pin --config amd ./my_binary
+#   cache-explore-pin --json ./my_binary > results.json
+#
+# Options:
+#   --config <name>   Cache config (intel, amd, apple, educational)
+#   --json            Output JSON format
+#   --max <n>         Maximum events to trace (default: 10000000)
+#   --sample <n>      Sample rate (1=all, 100=1%)
+#   --output <file>   Trace output file (default: temp file)
+#   --keep-trace      Keep the trace file after analysis
+#   --help            Show this help
+
+set -e
+
+# Find project root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+BACKEND_DIR="$PROJECT_ROOT/backend"
+
+# Find Pin tool
+if [[ -f "$PROJECT_ROOT/build/backend/pin-tool/obj-intel64/cache_profiler.so" ]]; then
+    PIN_TOOL="$PROJECT_ROOT/build/backend/pin-tool/obj-intel64/cache_profiler.so"
+elif [[ -f "$BACKEND_DIR/pin-tool/obj-intel64/cache_profiler.so" ]]; then
+    PIN_TOOL="$BACKEND_DIR/pin-tool/obj-intel64/cache_profiler.so"
+else
+    echo "Error: Pin tool not found. Build it first:" >&2
+    echo "  cd $BACKEND_DIR/pin-tool && make PIN_ROOT=\$PIN_ROOT" >&2
+    exit 1
+fi
+
+# Find cache-sim
+if [[ -f "$PROJECT_ROOT/build/backend/cache-simulator/cache-sim" ]]; then
+    CACHE_SIM="$PROJECT_ROOT/build/backend/cache-simulator/cache-sim"
+elif [[ -f "$BACKEND_DIR/cache-simulator/build/cache-sim" ]]; then
+    CACHE_SIM="$BACKEND_DIR/cache-simulator/build/cache-sim"
+else
+    echo "Error: cache-sim not found" >&2
+    exit 1
+fi
+
+# Check for Pin
+if [[ -z "$PIN_ROOT" ]]; then
+    # Try to find Pin in common locations
+    for dir in /opt/pin /usr/local/pin ~/pin "$HOME/intel/pin"; do
+        if [[ -x "$dir/pin" ]]; then
+            PIN_ROOT="$dir"
+            break
+        fi
+    done
+fi
+
+if [[ -z "$PIN_ROOT" || ! -x "$PIN_ROOT/pin" ]]; then
+    echo "Error: Intel Pin not found." >&2
+    echo "" >&2
+    echo "Please download Pin from:" >&2
+    echo "  https://www.intel.com/content/www/us/en/developer/articles/tool/pin-a-binary-instrumentation-tool-downloads.html" >&2
+    echo "" >&2
+    echo "Then set PIN_ROOT:" >&2
+    echo "  export PIN_ROOT=/path/to/pin" >&2
+    exit 1
+fi
+
+PIN="$PIN_ROOT/pin"
+
+# Default options
+CONFIG="intel"
+JSON_OUTPUT=""
+MAX_EVENTS="10000000"
+SAMPLE_RATE="1"
+TRACE_FILE=""
+KEEP_TRACE=""
+
+# Parse options
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --config)
+            CONFIG="$2"
+            shift 2
+            ;;
+        --json)
+            JSON_OUTPUT="--json"
+            shift
+            ;;
+        --max)
+            MAX_EVENTS="$2"
+            shift 2
+            ;;
+        --sample)
+            SAMPLE_RATE="$2"
+            shift 2
+            ;;
+        --output)
+            TRACE_FILE="$2"
+            shift 2
+            ;;
+        --keep-trace)
+            KEEP_TRACE="1"
+            shift
+            ;;
+        --help|-h)
+            head -35 "$0" | tail -30
+            exit 0
+            ;;
+        --)
+            shift
+            break
+            ;;
+        -*)
+            echo "Unknown option: $1" >&2
+            exit 1
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
+# Check for binary
+if [[ $# -lt 1 ]]; then
+    echo "Usage: cache-explore-pin [options] <binary> [args...]" >&2
+    echo "Run 'cache-explore-pin --help' for options" >&2
+    exit 1
+fi
+
+BINARY="$1"
+shift
+
+if [[ ! -x "$BINARY" ]]; then
+    # Try to find in PATH
+    BINARY_PATH=$(which "$BINARY" 2>/dev/null || true)
+    if [[ -z "$BINARY_PATH" ]]; then
+        echo "Error: Binary not found or not executable: $BINARY" >&2
+        exit 1
+    fi
+    BINARY="$BINARY_PATH"
+fi
+
+# Create trace file if not specified
+if [[ -z "$TRACE_FILE" ]]; then
+    TRACE_FILE=$(mktemp /tmp/cache-trace-XXXXXX.txt)
+fi
+
+# Run Pin with our tool
+echo "=== Cache Explorer (Pin Mode) ===" >&2
+echo "Binary: $BINARY" >&2
+echo "Config: $CONFIG" >&2
+echo "" >&2
+
+echo "[1/2] Tracing memory accesses..." >&2
+
+"$PIN" -t "$PIN_TOOL" \
+    -o "$TRACE_FILE" \
+    -max "$MAX_EVENTS" \
+    -sample "$SAMPLE_RATE" \
+    -- "$BINARY" "$@"
+
+echo "[2/2] Analyzing cache behavior..." >&2
+
+# Run cache simulation
+cat "$TRACE_FILE" | "$CACHE_SIM" --config "$CONFIG" $JSON_OUTPUT
+
+# Cleanup
+if [[ -z "$KEEP_TRACE" && -z "$TRACE_OUTPUT" ]]; then
+    rm -f "$TRACE_FILE"
+fi

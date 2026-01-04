@@ -1,0 +1,22 @@
+# BUILD.bazel for Cache Explorer Bazel integration
+#
+# This package provides Bazel rules for cache profiling.
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "cache_explorer.bzl",
+    "check_hit_rate.sh",
+    "run_analysis.sh",
+])
+
+# Example usage target (for testing the integration)
+sh_binary(
+    name = "run_analysis",
+    srcs = ["run_analysis.sh"],
+)
+
+sh_binary(
+    name = "check_hit_rate",
+    srcs = ["check_hit_rate.sh"],
+)

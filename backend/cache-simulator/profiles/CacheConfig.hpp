@@ -95,6 +95,24 @@ struct PrefetchConfig {
     };
   }
 
+  static PrefetchConfig riscv_default() {
+    // RISC-V prefetching varies by implementation
+    // SiFive cores generally have simpler prefetching than x86
+    return {
+      .l1_stream_prefetch = true,
+      .l1_stride_prefetch = false,     // Most RISC-V implementations lack stride detection
+      .l1_prefetch_degree = 1,
+      .l2_stream_prefetch = true,
+      .l2_adjacent_prefetch = false,
+      .l2_prefetch_degree = 2,
+      .l2_max_streams = 4,             // RISC-V typically simpler prefetching
+      .l2_max_distance = 2,
+      .l3_prefetch = false,
+      .pointer_prefetch = false,
+      .dynamic_degree = false
+    };
+  }
+
   static PrefetchConfig none() {
     return {
       .l1_stream_prefetch = false,

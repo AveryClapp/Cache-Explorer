@@ -3229,3 +3229,26 @@ input:focus:not(:focus-visible) {
     font-size: 10px;
   }
 }
+
+/* ===== TLB Statistics ===== */
+.tlb-grid {
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--border);
+}
+
+.tlb-grid::before {
+  content: "TLB Statistics";
+  display: block;
+  font-size: var(--text-small);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tlb-detail {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
