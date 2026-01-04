@@ -32,7 +32,8 @@ import {
   QuickConfigPanel,
   LevelDetail,
   TLBDetail,
-  CacheGrid
+  CacheGrid,
+  HotLinesTable
 } from './components'
 import type { ProjectFile, CommandItem } from './components'
 
@@ -41,7 +42,7 @@ import { PREFETCH_DEFAULTS } from './constants/config'
 import type { PrefetchPolicy, TimelineEvent } from './types'
 
 // Import utilities
-import { formatPercent, fuzzyMatch } from './utils/formatting'
+import { fuzzyMatch } from './utils/formatting'
 
 type Language = 'c' | 'cpp' | 'rust'
 
@@ -923,6 +924,7 @@ function App() {
   const [commandQuery, setCommandQuery] = useState('')
   const [showQuickConfig, setShowQuickConfig] = useState(false)
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0)
+  const [selectedHotLineFile, setSelectedHotLineFile] = useState<string>('')  // File filter for hot lines
   const commandInputRef = useRef<HTMLInputElement>(null)
   const timelineRef = useRef<TimelineEvent[]>([])  // Accumulator during streaming
   const optionsRef = useRef<HTMLDivElement>(null)
@@ -1422,37 +1424,37 @@ function App() {
                     <span className="panel-title">Hot Lines</span>
                     <span className="panel-badge">{resultState.result.hotLines.length}</span>
                   </div>
-                  <div className="hotspots">
-                    {resultState.result.hotLines.slice(0, 10).map((hotLine, i) => {
-                      const maxMisses = Math.max(...resultState.result!.hotLines.slice(0, 10).map(h => h.misses))
-                      const barWidth = maxMisses > 0 ? (hotLine.misses / maxMisses) * 100 : 0
-                      return (
-                        <div
-                          key={i}
-                          className="hotspot"
-                          onClick={() => {
-                            if (editorState.editorRef.current && hotLine.line > 0) {
-                              editorState.editorRef.current.revealLineInCenter(hotLine.line)
-                              editorState.editorRef.current.setPosition({ lineNumber: hotLine.line, column: 1 })
-                              editorState.editorRef.current.focus()
-                            }
-                          }}
-                        >
-                          <div className="hotspot-header">
-                            <span className="hotspot-location">Line {hotLine.line}</span>
-                            <span className="hotspot-stats">
-                              {hotLine.misses.toLocaleString()} misses ({formatPercent(hotLine.missRate)})
-                            </span>
-                          </div>
-                          <div className="hotspot-bar">
-                            <div
-                              className="hotspot-bar-fill"
-                              style={{ width: `${barWidth}%` }}
-                            />
-                          </div>
+                  <div className="panel-body">
+                    {/* File Filter - only show if there are multiple files */}
+                    {useMemo(() => {
+                      const uniqueFiles = new Set(resultState.result?.hotLines.map(h => h.file) || [])
+                      return uniqueFiles.size > 1 ? (
+                        <div className="file-filter">
+                          <label htmlFor="hot-line-file-select">Filter by file:</label>
+                          <select
+                            id="hot-line-file-select"
+                            value={selectedHotLineFile}
+                            onChange={(e) => setSelectedHotLineFile(e.target.value)}
+                            className="file-filter-select"
+                          >
+                            <option value="">All files</option>
+                            {Array.from(uniqueFiles)
+                              .sort()
+                              .map(file => (
+                                <option key={file} value={file}>
+                                  {file}
+                                </option>
+                              ))}
+                          </select>
                         </div>
-                      )
-                    })}
+                      ) : null
+                    }, [resultState.result?.hotLines, selectedHotLineFile])}
+
+                    {/* Hot Lines Table */}
+                    <HotLinesTable
+                      hotLines={resultState.result.hotLines}
+                      filterByFile={selectedHotLineFile}
+                    />
                   </div>
                 </div>
               )}
