@@ -6,3 +6,5 @@ export type { MemoryRegion, MemoryAccess } from './MemoryLayout'
 
 export { FileManager } from './FileManager'
 export type { ProjectFile } from './FileManager'
+
+export { AdvancedOptionsModal } from './AdvancedOptionsModal'
