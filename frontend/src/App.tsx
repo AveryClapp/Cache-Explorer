@@ -1079,10 +1079,15 @@ function App() {
       }]
     }
 
-    // Compress using LZString base64 encoding for Compiler Explorer
-    const compressed = LZString.compressToBase64(JSON.stringify(ceState))
-    // Use hash-based URL format that Compiler Explorer expects
-    const ceUrl = `https://godbolt.org/#z=${compressed}`
+    // Build CE URL with code and settings as query parameters
+    // Compiler Explorer has built-in support for simple URL encoding
+    const params = new URLSearchParams({
+      code: sourceCode,
+      language: lang === 'cpp' ? 'c++' : lang,
+      compiler: ceCmpilerId,
+      options: optFlags.join(' ')
+    })
+    const ceUrl = `https://godbolt.org/?${params.toString()}`
     window.open(ceUrl, '_blank', 'noopener,noreferrer')
   }, [code, language, optLevel, selectedCompiler])
 
