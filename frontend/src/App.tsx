@@ -1079,15 +1079,30 @@ function App() {
       }]
     }
 
-    // Build CE URL with code and settings as query parameters
-    // Compiler Explorer has built-in support for simple URL encoding
-    const params = new URLSearchParams({
-      code: sourceCode,
-      language: lang === 'cpp' ? 'c++' : lang,
-      compiler: ceCmpilerId,
-      options: optFlags.join(' ')
-    })
-    const ceUrl = `https://godbolt.org/?${params.toString()}`
+    // Use Compiler Explorer's direct code loading with hash parameters
+    // Format: #z=<base64-compressed-state>
+    // Build the proper CE state object
+    const ceState = {
+      version: 4,
+      sessions: [{
+        id: 1,
+        language: lang === 'cpp' ? 'c++' : lang,
+        source: sourceCode,
+        compilers: [{
+          id: ceCmpilerId,
+          options: optFlags.join(' '),
+          libs: []
+        }]
+      }]
+    }
+
+    // Use lz-string to compress state
+    const jsonStr = JSON.stringify(ceState)
+    const compressed = LZString.compressToBase64(jsonStr)
+
+    // Encode for safe use in URL
+    const encoded = encodeURIComponent(compressed)
+    const ceUrl = `https://godbolt.org/#z=${encoded}`
     window.open(ceUrl, '_blank', 'noopener,noreferrer')
   }, [code, language, optLevel, selectedCompiler])
 
