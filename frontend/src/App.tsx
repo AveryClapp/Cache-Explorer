@@ -29,7 +29,9 @@ import {
   CacheHierarchyVisualization,
   AccessTimelineDisplay,
   CommandPalette,
-  QuickConfigPanel
+  QuickConfigPanel,
+  LevelDetail,
+  TLBDetail
 } from './components'
 import type { ProjectFile, CommandItem } from './components'
 
@@ -1055,52 +1057,6 @@ function fuzzyMatch(query: string, text: string): boolean {
   return qi === q.length
 }
 
-function LevelDetail({ name, stats }: { name: string; stats: CacheStats }) {
-  return (
-    <div className="level-detail">
-      <div className="level-header">{name}</div>
-      <div className="level-row">
-        <span>Hits</span>
-        <span className="mono">{stats.hits.toLocaleString()}</span>
-      </div>
-      <div className="level-row">
-        <span>Misses</span>
-        <span className="mono">{stats.misses.toLocaleString()}</span>
-      </div>
-      <div className="level-row">
-        <span>Hit Rate</span>
-        <span className={`mono ${stats.hitRate > 0.9 ? 'good' : stats.hitRate > 0.7 ? 'ok' : 'bad'}`}>
-          {formatPercent(stats.hitRate)}
-        </span>
-      </div>
-    </div>
-  )
-}
-
-function TLBDetail({ name, stats }: { name: string; stats: TLBStats }) {
-  const totalAccesses = stats.hits + stats.misses
-  if (totalAccesses === 0) return null
-
-  return (
-    <div className="level-detail tlb-detail">
-      <div className="level-header">{name}</div>
-      <div className="level-row">
-        <span>Hits</span>
-        <span className="mono">{stats.hits.toLocaleString()}</span>
-      </div>
-      <div className="level-row">
-        <span>Misses</span>
-        <span className="mono">{stats.misses.toLocaleString()}</span>
-      </div>
-      <div className="level-row">
-        <span>Hit Rate</span>
-        <span className={`mono ${stats.hitRate > 0.95 ? 'good' : stats.hitRate > 0.85 ? 'ok' : 'bad'}`}>
-          {formatPercent(stats.hitRate)}
-        </span>
-      </div>
-    </div>
-  )
-}
 
 // L1 Cache Grid Visualization - shows final cache state with MESI colors
 function CacheGrid({ cacheState, coreCount }: { cacheState: CacheState; coreCount: number }) {

@@ -3,6 +3,8 @@ export type { CommandItem } from './CommandPalette'
 
 export { QuickConfigPanel } from './QuickConfigPanel'
 
+export { LevelDetail, TLBDetail } from './CacheDetailComponents'
+
 export { CacheGrid } from './CacheGrid'
 export type { CacheLineState, CoreCacheState } from './CacheGrid'
 
