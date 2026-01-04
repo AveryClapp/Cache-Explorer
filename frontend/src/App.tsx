@@ -1002,19 +1002,38 @@ function App() {
     }
   }, [code, config, optLevel, language, defines])
 
-  // Open current code in Compiler Explorer
+  // Open current code in Compiler Explorer with selected compiler and optimization
   const openInCompilerExplorer = useCallback(() => {
     const sourceCode = code
     const lang = language
 
-    // Map our language to CE compiler IDs
-    const compilerMap: Record<string, string> = {
-      c: 'cclang1800',      // Clang trunk for C
-      cpp: 'clang1800',     // Clang trunk for C++
-      rust: 'r1830'         // Rust stable
+    // Map Cache Explorer compilers to Compiler Explorer IDs
+    // Format: "gcc-14" -> "g1400", "clang-19" -> "clang1900", etc.
+    const ceCompilerMap: Record<string, string> = {
+      // GCC
+      'gcc-10': 'g1000',
+      'gcc-11': 'g1100',
+      'gcc-12': 'g1200',
+      'gcc-13': 'g1300',
+      'gcc-14': 'g1400',
+      // Clang
+      'clang-15': 'clang1500',
+      'clang-16': 'clang1600',
+      'clang-17': 'clang1700',
+      'clang-18': 'clang1800',
+      'clang-19': 'clang1900',
+      // Rust
+      'rustc-1.70': 'r1700',
+      'rustc-1.75': 'r1750',
+      'rustc-1.80': 'r1800',
+      'rustc-1.83': 'r1830',
+      // Defaults by language when compiler not found
+      'c': 'cclang1800',
+      'cpp': 'clang1800',
+      'rust': 'r1830'
     }
 
-    // Map our opt levels to CE format
+    // Map Cache Explorer opt levels to CE format
     const optMap: Record<string, string> = {
       '-O0': '-O0',
       '-O1': '-O1',
@@ -1024,6 +1043,29 @@ function App() {
       '-Oz': '-Oz'
     }
 
+    // Determine the CE compiler ID to use
+    // Priority: selectedCompiler > language default
+    let ceCmpilerId = ceCompilerMap[selectedCompiler]
+    if (!ceCmpilerId) {
+      // Fall back to language-specific default
+      if (lang === 'cpp') {
+        ceCmpilerId = ceCompilerMap['cpp'] || 'clang1800'
+      } else if (lang === 'rust') {
+        ceCmpilerId = ceCompilerMap['rust'] || 'r1830'
+      } else {
+        ceCmpilerId = ceCompilerMap['c'] || 'cclang1800'
+      }
+    }
+
+    // Get optimization flags
+    const optFlags = [optMap[optLevel] || '-O2']
+
+    // Add architecture flags for accurate assembly (unless -O0)
+    // This helps Compiler Explorer show CPU-specific optimizations
+    if (optLevel !== '-O0') {
+      optFlags.push('-march=native')
+    }
+
     // Build CE ClientState
     const ceState = {
       sessions: [{
@@ -1031,8 +1073,8 @@ function App() {
         language: lang === 'cpp' ? 'c++' : lang,
         source: sourceCode,
         compilers: [{
-          id: compilerMap[lang] || 'cclang1800',
-          options: optMap[optLevel] || '-O2'
+          id: ceCmpilerId,
+          options: optFlags.join(' ')
         }]
       }]
     }
@@ -1041,7 +1083,7 @@ function App() {
     const compressed = LZString.compressToEncodedURIComponent(JSON.stringify(ceState))
     const ceUrl = `https://godbolt.org/clientstate/${compressed}`
     window.open(ceUrl, '_blank', 'noopener,noreferrer')
-  }, [code, language, optLevel])
+  }, [code, language, optLevel, selectedCompiler])
 
   // Use analysis execution hook
   const { runAnalysis } = useAnalysisExecution({
