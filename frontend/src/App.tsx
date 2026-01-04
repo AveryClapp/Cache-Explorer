@@ -31,13 +31,14 @@ import {
   CommandPalette,
   QuickConfigPanel,
   LevelDetail,
-  TLBDetail
+  TLBDetail,
+  CacheGrid
 } from './components'
 import type { ProjectFile, CommandItem } from './components'
 
 // Import constants and types
 import { PREFETCH_DEFAULTS } from './constants/config'
-import type { PrefetchPolicy, TimelineEvent, CacheState, CacheLineState } from './types'
+import type { PrefetchPolicy, TimelineEvent } from './types'
 
 // Import utilities
 import { formatPercent, fuzzyMatch } from './utils/formatting'
@@ -881,115 +882,6 @@ int main() {
 
 // Helper functions are now in utils/file.ts and imported via hooks
 
-
-// L1 Cache Grid Visualization - shows final cache state with MESI colors
-function CacheGrid({ cacheState, coreCount }: { cacheState: CacheState; coreCount: number }) {
-  const [selectedCore, setSelectedCore] = useState(0)
-
-  if (!cacheState.l1d || cacheState.l1d.length === 0) {
-    return <div className="cache-grid-empty">No cache state available</div>
-  }
-
-  const coreData = cacheState.l1d[selectedCore]
-  if (!coreData) return null
-
-  const { sets, ways, lines } = coreData
-
-  // Create a 2D grid from flat lines array
-  const grid: (CacheLineState | null)[][] = Array.from({ length: sets }, () =>
-    Array(ways).fill(null)
-  )
-
-  for (const line of lines) {
-    if (line.s < sets && line.w < ways) {
-      grid[line.s][line.w] = line
-    }
-  }
-
-  const getStateColor = (state?: string) => {
-    switch (state) {
-      case 'M': return 'state-modified'
-      case 'E': return 'state-exclusive'
-      case 'S': return 'state-shared'
-      default: return 'state-invalid'
-    }
-  }
-
-  const getStateLabel = (state?: string) => {
-    switch (state) {
-      case 'M': return 'Modified'
-      case 'E': return 'Exclusive'
-      case 'S': return 'Shared'
-      default: return 'Invalid'
-    }
-  }
-
-  return (
-    <div className="cache-grid-container">
-      <div className="cache-grid-header">
-        {coreCount > 1 && (
-          <div className="core-selector">
-            <label>Core:</label>
-            <select
-              value={selectedCore}
-              onChange={(e) => setSelectedCore(Number(e.target.value))}
-            >
-              {Array.from({ length: coreCount }, (_, i) => (
-                <option key={i} value={i}>Core {i}</option>
-              ))}
-            </select>
-          </div>
-        )}
-        <div className="cache-grid-legend">
-          <span className="legend-item"><span className="legend-color state-modified"></span>Modified</span>
-          <span className="legend-item"><span className="legend-color state-exclusive"></span>Exclusive</span>
-          <span className="legend-item"><span className="legend-color state-shared"></span>Shared</span>
-          <span className="legend-item"><span className="legend-color state-invalid"></span>Invalid</span>
-        </div>
-      </div>
-
-      <div className="cache-grid-info">
-        L1D: {sets} sets × {ways} ways = {sets * ways} lines
-      </div>
-
-      <div className="cache-grid" style={{
-        gridTemplateColumns: `auto repeat(${ways}, 1fr)`,
-        maxWidth: Math.min(ways * 24 + 40, 600)
-      }}>
-        {/* Header row */}
-        <div className="grid-header-cell"></div>
-        {Array.from({ length: ways }, (_, w) => (
-          <div key={`h${w}`} className="grid-header-cell">W{w}</div>
-        ))}
-
-        {/* Data rows - show all sets or paginate if too many */}
-        {grid.slice(0, Math.min(sets, 64)).map((row, setIdx) => {
-          const cells = [
-            <div key={`label-${setIdx}`} className="grid-set-label">S{setIdx}</div>,
-            ...row.map((line, wayIdx) => (
-              <div
-                key={`${setIdx}-${wayIdx}`}
-                className={`grid-cell ${line?.v ? getStateColor(line.st) : 'state-invalid'}`}
-                title={line?.v
-                  ? `Set ${setIdx}, Way ${wayIdx}\nTag: ${line.t}\nState: ${getStateLabel(line.st)}`
-                  : `Set ${setIdx}, Way ${wayIdx}\nEmpty`
-                }
-              />
-            ))
-          ]
-          return cells
-        })}
-      </div>
-
-      {sets > 64 && (
-        <div className="cache-grid-note">
-          Showing first 64 of {sets} sets
-        </div>
-      )}
-    </div>
-  )
-}
-
 function App() {
   // Embed mode detection from URL params
   const urlParams = new URLSearchParams(window.location.search)
@@ -1586,15 +1478,14 @@ function App() {
                 </div>
               )}
 
-              {resultState.result.cacheState && (
+              {resultState.result.cacheState?.l1d && (
                 <div className="panel">
                   <div className="panel-header">
                     <span className="panel-title">L1 Cache Grid</span>
                     <span className="panel-badge">Final State</span>
                   </div>
                   <CacheGrid
-                    cacheState={resultState.result.cacheState}
-                    coreCount={resultState.result.cores || 1}
+                    cacheState={resultState.result.cacheState.l1d}
                   />
                 </div>
               )}
