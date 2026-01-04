@@ -213,9 +213,15 @@ export function parseSandboxError(error, tempFile = 'input.c') {
     };
   }
 
+  // Filter out bash warnings before processing
+  const filteredStderr = (stderr || '')
+    .split('\n')
+    .filter(line => !line.includes('initialize_job_control') && !line.includes('getpgrp failed'))
+    .join('\n');
+
   // Try to parse JSON error from sandbox
   try {
-    const json = JSON.parse(stderr.trim());
+    const json = JSON.parse(filteredStderr.trim());
     if (json.error) {
       return {
         type: json.error.includes('Compilation') ? 'compile_error' : 'runtime_error',
@@ -229,7 +235,7 @@ export function parseSandboxError(error, tempFile = 'input.c') {
 
   // Check for compile errors in stderr
   const errors = [];
-  const lines = (stderr || '').split('\n');
+  const lines = (filteredStderr || '').split('\n');
 
   for (const line of lines) {
     const match = line.match(/:(\d+):(\d+):\s*(error|warning):\s*(.+)$/);
@@ -252,7 +258,7 @@ export function parseSandboxError(error, tempFile = 'input.c') {
   }
 
   // Runtime errors
-  if (stderr.includes('Segmentation fault') || stderr.includes('SIGSEGV')) {
+  if (filteredStderr.includes('Segmentation fault') || filteredStderr.includes('SIGSEGV')) {
     return {
       type: 'runtime_error',
       message: 'Program crashed (segmentation fault)'
@@ -262,7 +268,7 @@ export function parseSandboxError(error, tempFile = 'input.c') {
   // Generic error
   return {
     type: 'unknown_error',
-    message: stderr || 'Unknown error occurred',
+    message: filteredStderr || 'Unknown error occurred',
     exitCode
   };
 }

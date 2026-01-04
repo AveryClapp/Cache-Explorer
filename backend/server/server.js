@@ -360,10 +360,10 @@ function parseCompileErrors(stderr, tempFile) {
   }
 
   // Check for linker errors
-  if (stderr.includes('undefined reference') || stderr.includes('ld:') || stderr.includes('Undefined symbols')) {
+  if (filteredStderr.includes('undefined reference') || filteredStderr.includes('ld:') || filteredStderr.includes('Undefined symbols')) {
     // Extract the undefined symbol name
-    const undefMatch = stderr.match(/undefined reference to [`']([^'`]+)[`']/) ||
-                       stderr.match(/Undefined symbols.*"([^"]+)"/);
+    const undefMatch = filteredStderr.match(/undefined reference to [`']([^'`]+)[`']/) ||
+                       filteredStderr.match(/Undefined symbols.*"([^"]+)"/);
     const symbol = undefMatch ? undefMatch[1] : null;
 
     return {
@@ -374,25 +374,25 @@ function parseCompileErrors(stderr, tempFile) {
       suggestion: symbol?.startsWith('_')
         ? 'Check that the function is defined, not just declared'
         : 'Check for missing function definitions or library links',
-      raw: stderr.replace(fileRegex, 'input').substring(0, 500)
+      raw: filteredStderr.replace(fileRegex, 'input').substring(0, 500)
     };
   }
 
   // Check for runtime errors using patterns
   for (const { pattern, type, message, suggestion } of runtimeErrorPatterns) {
-    if (pattern.test(stderr)) {
+    if (pattern.test(filteredStderr)) {
       return {
         type: 'runtime_error',
         errorType: type,
         message,
         suggestion,
-        raw: stderr
+        raw: filteredStderr
       };
     }
   }
 
   // Check for timeout
-  if (stderr.includes('timeout') || stderr.includes('timed out')) {
+  if (filteredStderr.includes('timeout') || filteredStderr.includes('timed out')) {
     return {
       type: 'timeout',
       message: 'Execution timed out',
@@ -403,7 +403,7 @@ function parseCompileErrors(stderr, tempFile) {
   // Generic error
   return {
     type: 'unknown_error',
-    message: stderr.replace(fileRegex, 'input').substring(0, 1000)
+    message: filteredStderr.replace(fileRegex, 'input').substring(0, 1000)
   };
 }
 
