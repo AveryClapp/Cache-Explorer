@@ -8,3 +8,11 @@ export { FileManager } from './FileManager'
 export type { ProjectFile } from './FileManager'
 
 export { AdvancedOptionsModal } from './AdvancedOptionsModal'
+
+export { ErrorDisplay } from './ErrorDisplay'
+export { CacheHierarchyDisplay } from './CacheHierarchyDisplay'
+export { CacheStatsDisplay } from './CacheStatsDisplay'
+export { InteractiveCacheGridDisplay } from './InteractiveCacheGridDisplay'
+export { FalseSharingDisplay } from './FalseSharingDisplay'
+export { CacheHierarchyVisualization } from './CacheHierarchyVisualization'
+export { AccessTimelineDisplay } from './AccessTimelineDisplay'
