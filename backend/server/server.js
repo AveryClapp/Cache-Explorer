@@ -281,7 +281,14 @@ const runtimeErrorPatterns = [
 // Parse clang error output into structured format
 function parseCompileErrors(stderr, tempFile) {
   const errors = [];
-  const lines = stderr.split('\n');
+
+  // Filter out harmless bash warnings that appear in sandboxed environments
+  let filteredStderr = stderr
+    .split('\n')
+    .filter(line => !line.includes('initialize_job_control') && !line.includes('getpgrp failed'))
+    .join('\n');
+
+  const lines = filteredStderr.split('\n');
   let currentError = null;
 
   // Create regex to match the temp file path
