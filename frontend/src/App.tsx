@@ -1,8 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import Editor, { DiffEditor } from '@monaco-editor/react'
-import type { Monaco } from '@monaco-editor/react'
-import type { editor } from 'monaco-editor'
-import { initVimMode } from 'monaco-vim'
 import LZString from 'lz-string'
 import './App.css'
 
@@ -14,7 +11,8 @@ import {
   useKeyboardShortcuts,
   useUrlState,
   shareUrl,
-  useMobileResponsive
+  useMobileResponsive,
+  useEditorState
 } from './hooks'
 
 // Import visualization components
@@ -1218,16 +1216,19 @@ function App() {
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0)
   const commandInputRef = useRef<HTMLInputElement>(null)
   const timelineRef = useRef<TimelineEvent[]>([])  // Accumulator during streaming
-  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
-  const monacoRef = useRef<Monaco | null>(null)
-  const decorationsRef = useRef<string[]>([])
-  const stepDecorationsRef = useRef<string[]>([])  // For step-through highlighting
   const optionsRef = useRef<HTMLDivElement>(null)
-  const vimStatusRef = useRef<HTMLDivElement>(null)
-  const vimModeRef = useRef<{ dispose: () => void } | null>(null)
 
   // Monaco language mapping
   const monacoLanguage = language === 'cpp' ? 'cpp' : language === 'rust' ? 'rust' : 'c'
+
+  // Editor state management (refs, Vim mode, decorations)
+  const editorState = useEditorState(
+    vimMode,
+    error,
+    result,
+    timeline,
+    scrubberIndex
+  )
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -1238,26 +1239,6 @@ function App() {
     document.addEventListener('click', handleClick)
     return () => document.removeEventListener('click', handleClick)
   }, [])
-
-  const handleEditorMount = (editor: editor.IStandaloneCodeEditor, monaco: Monaco) => {
-    editorRef.current = editor
-    monacoRef.current = monaco
-  }
-
-  useEffect(() => {
-    if (vimMode && editorRef.current && vimStatusRef.current) {
-      vimModeRef.current = initVimMode(editorRef.current, vimStatusRef.current)
-    } else if (vimModeRef.current) {
-      vimModeRef.current.dispose()
-      vimModeRef.current = null
-    }
-    return () => {
-      if (vimModeRef.current) {
-        vimModeRef.current.dispose()
-        vimModeRef.current = null
-      }
-    }
-  }, [vimMode])
 
   // Use keyboard shortcuts hook (mobile detection is handled by useMobileResponsive hook)
   useKeyboardShortcuts({
@@ -1351,134 +1332,6 @@ function App() {
     window.open(ceUrl, '_blank', 'noopener,noreferrer')
   }, [code, language, optLevel])
 
-  // Apply error markers (red squiggles) for compile errors
-  useEffect(() => {
-    if (!editorRef.current || !monacoRef.current) return
-
-    const monaco = monacoRef.current
-    const editor = editorRef.current
-    const model = editor.getModel()
-    if (!model) return
-
-    // Clear existing markers
-    monaco.editor.setModelMarkers(model, 'cache-explorer', [])
-
-    if (!error || !error.errors || error.errors.length === 0) return
-
-    // Create markers for each error
-    const markers: editor.IMarkerData[] = error.errors.map(err => ({
-      severity: err.severity === 'error'
-        ? monaco.MarkerSeverity.Error
-        : monaco.MarkerSeverity.Warning,
-      message: err.message + (err.suggestion ? `\n\nHint: ${err.suggestion}` : ''),
-      startLineNumber: err.line,
-      startColumn: err.column,
-      endLineNumber: err.line,
-      // Estimate end column: find the end of the problematic token/line
-      endColumn: err.column + (err.sourceLine
-        ? Math.min(20, err.sourceLine.length - err.column + 1)
-        : 10),
-      source: 'Cache Explorer'
-    }))
-
-    monaco.editor.setModelMarkers(model, 'cache-explorer', markers)
-  }, [error])
-
-  // Apply decorations for cache analysis results
-  useEffect(() => {
-    if (!editorRef.current || !monacoRef.current || !result) {
-      if (editorRef.current && decorationsRef.current.length > 0) {
-        decorationsRef.current = editorRef.current.deltaDecorations(decorationsRef.current, [])
-      }
-      return
-    }
-
-    const monaco = monacoRef.current
-    const editor = editorRef.current
-    const model = editor.getModel()
-    if (!model) return
-
-    const decorations: editor.IModelDeltaDecoration[] = []
-
-    for (const line of result.hotLines) {
-      const fileName = line.file.split('/').pop() || line.file
-      if (fileName.includes('cache-explorer') || fileName.startsWith('/tmp/')) {
-        const lineNum = line.line
-        if (lineNum > 0 && lineNum <= model.getLineCount()) {
-          let className = 'line-good'
-          let inlineClass = 'inline-good'
-          if (line.missRate > 0.5) {
-            className = 'line-bad'
-            inlineClass = 'inline-bad'
-          } else if (line.missRate > 0.2) {
-            className = 'line-warn'
-            inlineClass = 'inline-warn'
-          }
-
-          // Background highlight for the whole line
-          decorations.push({
-            range: new monaco.Range(lineNum, 1, lineNum, 1),
-            options: {
-              isWholeLine: true,
-              className,
-              glyphMarginClassName: className.replace('line-', 'glyph-'),
-              glyphMarginHoverMessage: {
-                value: `**${line.misses.toLocaleString()} misses** (${(line.missRate * 100).toFixed(1)}% miss rate)\n\n${line.hits.toLocaleString()} hits total`
-              }
-            }
-          })
-
-          // Inline annotation at end of line showing miss info
-          const lineContent = model.getLineContent(lineNum)
-          decorations.push({
-            range: new monaco.Range(lineNum, lineContent.length + 1, lineNum, lineContent.length + 1),
-            options: {
-              after: {
-                content: ` // ${line.misses} misses (${(line.missRate * 100).toFixed(0)}%)`,
-                inlineClassName: inlineClass
-              }
-            }
-          })
-        }
-      }
-    }
-
-    decorationsRef.current = editor.deltaDecorations(decorationsRef.current, decorations)
-  }, [result])
-
-  // Highlight current line when stepping through timeline
-  useEffect(() => {
-    if (!editorRef.current || !monacoRef.current || !timeline.length) {
-      if (editorRef.current && stepDecorationsRef.current.length > 0) {
-        stepDecorationsRef.current = editorRef.current.deltaDecorations(stepDecorationsRef.current, [])
-      }
-      return
-    }
-
-    const monaco = monacoRef.current
-    const editor = editorRef.current
-    const model = editor.getModel()
-    if (!model) return
-
-    const currentEvent = timeline[scrubberIndex - 1]
-    const decorations: editor.IModelDeltaDecoration[] = []
-
-    if (currentEvent?.n && currentEvent.n > 0 && currentEvent.n <= model.getLineCount()) {
-      const lineNum = currentEvent.n
-      decorations.push({
-        range: new monaco.Range(lineNum, 1, lineNum, 1),
-        options: {
-          isWholeLine: true,
-          className: 'line-step-highlight',
-          glyphMarginClassName: 'glyph-step',
-        }
-      })
-      // Scroll the line into view
-      editor.revealLineInCenterIfOutsideViewport(lineNum)
-    }
-
-    stepDecorationsRef.current = editor.deltaDecorations(stepDecorationsRef.current, decorations)
-  }, [timeline, scrubberIndex])
 
   const runAnalysis = () => {
     // Input validation - check total size across all files
@@ -1810,11 +1663,11 @@ function App() {
               theme={theme === 'dark' ? 'vs-dark' : 'light'}
               value={code}
               onChange={(value) => !isReadOnly && analysisState.updateActiveCode(value || '')}
-              onMount={handleEditorMount}
+              onMount={editorState.handleEditorMount}
               options={{ minimap: { enabled: false }, fontSize: 13, lineNumbers: 'on', scrollBeyondLastLine: false, glyphMargin: true, readOnly: isReadOnly }}
             />
           )}
-          {vimMode && !isEmbedMode && <div ref={vimStatusRef} className="vim-status-bar" />}
+          {vimMode && !isEmbedMode && <div ref={editorState.vimStatusRef} className="vim-status-bar" />}
         </div>
 
         <div className={`results-pane${isMobile && mobilePane !== 'results' ? ' mobile-hidden' : ''}`}>
@@ -1891,10 +1744,10 @@ function App() {
                 <AccessTimelineDisplay
                   events={timeline}
                   onEventClick={(line) => {
-                    if (editorRef.current) {
-                      editorRef.current.revealLineInCenter(line)
-                      editorRef.current.setPosition({ lineNumber: line, column: 1 })
-                      editorRef.current.focus()
+                    if (editorState.editorRef.current) {
+                      editorState.editorRef.current.revealLineInCenter(line)
+                      editorState.editorRef.current.setPosition({ lineNumber: line, column: 1 })
+                      editorState.editorRef.current.focus()
                     }
                   }}
                 />
@@ -1954,10 +1807,10 @@ function App() {
                           key={i}
                           className="hotspot"
                           onClick={() => {
-                            if (editorRef.current && hotLine.line > 0) {
-                              editorRef.current.revealLineInCenter(hotLine.line)
-                              editorRef.current.setPosition({ lineNumber: hotLine.line, column: 1 })
-                              editorRef.current.focus()
+                            if (editorState.editorRef.current && hotLine.line > 0) {
+                              editorState.editorRef.current.revealLineInCenter(hotLine.line)
+                              editorState.editorRef.current.setPosition({ lineNumber: hotLine.line, column: 1 })
+                              editorState.editorRef.current.focus()
                             }
                           }}
                         >
