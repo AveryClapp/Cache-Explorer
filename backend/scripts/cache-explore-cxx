@@ -1,6 +1,7 @@
 #!/bin/bash
 # cache-explore c++ - Drop-in replacement for c++/clang++ with cache profiling
 # Use: CXX="cache-explore c++" make
+set +m  # Disable job control to suppress initialization warnings in sandboxed environments
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BACKEND_DIR="$(dirname "$SCRIPT_DIR")"

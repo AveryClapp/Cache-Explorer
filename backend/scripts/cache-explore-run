@@ -1,6 +1,7 @@
 #!/bin/bash
 # cache-explore run - Analyze an already-instrumented binary
 set -e
+set +m  # Disable job control to suppress initialization warnings in sandboxed environments
 
 CACHE_SIM="${CACHE_EXPLORER_SIM:-$(dirname "$0")/../cache-simulator/build/cache-sim}"
 

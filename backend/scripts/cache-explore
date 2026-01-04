@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+set +m  # Disable job control to suppress initialization warnings in sandboxed environments
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BACKEND_DIR="$(dirname "$SCRIPT_DIR")"
