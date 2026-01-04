@@ -1079,9 +1079,10 @@ function App() {
       }]
     }
 
-    // Compress using LZString with URL-safe encoding (CE uses this format)
-    const compressed = LZString.compressToEncodedURIComponent(JSON.stringify(ceState))
-    const ceUrl = `https://godbolt.org/clientstate/${compressed}`
+    // Compress using LZString base64 encoding for Compiler Explorer
+    const compressed = LZString.compressToBase64(JSON.stringify(ceState))
+    // Use hash-based URL format that Compiler Explorer expects
+    const ceUrl = `https://godbolt.org/#z=${compressed}`
     window.open(ceUrl, '_blank', 'noopener,noreferrer')
   }, [code, language, optLevel, selectedCompiler])
 
