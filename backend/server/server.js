@@ -133,6 +133,23 @@ class ConnectionResourceTracker {
 // Helper Functions
 // ============================================================================
 
+// Sanitize filename to prevent path traversal attacks
+function sanitizeFilename(filename) {
+  if (!filename || typeof filename !== 'string') {
+    return 'unnamed.c';
+  }
+  // Extract just the basename, removing any path components
+  const basename = filename.split(/[/\\]/).pop() || 'unnamed.c';
+  // Remove any null bytes
+  const noNulls = basename.replace(/\0/g, '');
+  // Only allow alphanumeric, dots, underscores, hyphens
+  const sanitized = noNulls.replace(/[^a-zA-Z0-9._-]/g, '_');
+  // Prevent hidden files and ensure non-empty
+  const final = sanitized.replace(/^\.+/, '') || 'unnamed.c';
+  // Limit length
+  return final.slice(0, 255);
+}
+
 // Helper to create temp directory with files
 async function createTempProject(files, language = 'c') {
   const extensions = { c: '.c', cpp: '.cpp', rust: '.rs' };
@@ -143,13 +160,17 @@ async function createTempProject(files, language = 'c') {
 
   // If files is an array, write all files
   if (Array.isArray(files)) {
+    // Create a map from original name to sanitized name for lookup
+    const nameMap = new Map();
     for (const file of files) {
-      const filePath = join(tempDir, file.name);
+      const safeName = sanitizeFilename(file.name);
+      nameMap.set(file.name, safeName);
+      const filePath = join(tempDir, safeName);
       await writeFile(filePath, file.code);
     }
     // Return the first file as the main file (or one containing main())
     const mainFile = files.find(f => f.code.includes('int main') || f.code.includes('fn main')) || files[0];
-    return { tempDir, mainFile: join(tempDir, mainFile.name) };
+    return { tempDir, mainFile: join(tempDir, nameMap.get(mainFile.name)) };
   }
 
   // Backward compatibility: single code string
@@ -650,8 +671,9 @@ app.post('/compile', async (req, res) => {
         }
       }
 
-      // Add prefetch policy if specified
-      if (req.body.prefetch && req.body.prefetch !== 'none') {
+      // Add prefetch policy if specified (whitelist valid policies)
+      const VALID_PREFETCH_POLICIES = ['none', 'next-line', 'stream', 'stride', 'adaptive', 'intel'];
+      if (req.body.prefetch && req.body.prefetch !== 'none' && VALID_PREFETCH_POLICIES.includes(req.body.prefetch)) {
         args.push('--prefetch', req.body.prefetch);
       }
 
@@ -692,7 +714,14 @@ app.post('/compile', async (req, res) => {
           proc.kill('SIGKILL');
         }
       });
-      proc.stderr.on('data', (data) => { stderr += data; });
+      proc.stderr.on('data', (data) => {
+        stderr += data;
+        // Apply same buffer limit as stdout to prevent OOM
+        if (stderr.length > CONFIG.memory.maxOutputBuffer) {
+          killed = true;
+          proc.kill('SIGKILL');
+        }
+      });
 
       proc.on('close', (exitCode) => {
         clearTimeout(timeoutId);
@@ -1088,8 +1117,9 @@ wss.on('connection', (ws) => {
           }
         }
 
-        // Add prefetch policy if specified
-        if (prefetch && prefetch !== 'none') {
+        // Add prefetch policy if specified (whitelist valid policies)
+        const VALID_PREFETCH_POLICIES = ['none', 'next-line', 'stream', 'stride', 'adaptive', 'intel'];
+        if (prefetch && prefetch !== 'none' && VALID_PREFETCH_POLICIES.includes(prefetch)) {
           args.push('--prefetch', prefetch);
         }
 
@@ -1109,8 +1139,10 @@ wss.on('connection', (ws) => {
           args.push('--limit', String(eventLimit));
         }
 
+        console.log(`[WebSocket] spawning: ${CACHE_EXPLORE} ${args.join(' ')}`);
         proc = spawn(CACHE_EXPLORE, args);
         cleanupFn = tracker.addProcess(proc, tempDir);
+        console.log(`[WebSocket] process spawned with PID ${proc.pid}`);
 
         let finalResult = null;
         let partialProgress = null;
@@ -1160,6 +1192,7 @@ wss.on('connection', (ws) => {
         }, CONFIG.streaming.batchIntervalMs);
 
         proc.stdout.on('data', (chunk) => {
+          console.log(`[WebSocket] stdout received ${chunk.length} bytes`);
           lineBuffer += chunk.toString();
           const lines = lineBuffer.split('\n');
           lineBuffer = lines.pop(); // Keep incomplete line in buffer
@@ -1168,7 +1201,9 @@ wss.on('connection', (ws) => {
             if (!line.trim()) continue;
             try {
               const event = JSON.parse(line);
+              console.log(`[WebSocket] parsed event type: ${event.type}`);
               if (event.type === 'start') {
+                console.log(`[WebSocket] sending start event to ws.readyState=${ws.readyState}`);
                 if (ws.readyState === ws.OPEN) {
                   ws.send(JSON.stringify({
                     type: 'status',
@@ -1176,14 +1211,17 @@ wss.on('connection', (ws) => {
                     config: event.config,
                     timeout: timeout / 1000
                   }));
+                  console.log(`[WebSocket] sent start status`);
                 }
               } else if (event.type === 'progress') {
                 partialProgress = event;
                 // Send progress updates at intervals, not every event
                 const now = Date.now();
                 if (now - lastProgressSent >= CONFIG.streaming.progressIntervalMs) {
+                  console.log(`[WebSocket] sending progress ${event.events} events`);
                   if (ws.readyState === ws.OPEN) {
                     ws.send(JSON.stringify({ type: 'progress', ...event }));
+                    console.log(`[WebSocket] sent progress`);
                   }
                   lastProgressSent = now;
                 }
@@ -1195,16 +1233,24 @@ wss.on('connection', (ws) => {
                 }
               } else if (event.type === 'complete') {
                 // Store final result
+                console.log(`[WebSocket] got complete event`);
                 finalResult = event;
               }
-            } catch {
-              // Non-JSON output, ignore
+            } catch (e) {
+              // Non-JSON output, log it for debugging
+              console.log(`[WebSocket] JSON parse error: ${e.message}, line: ${line.slice(0, 100)}`);
             }
           }
         });
 
         proc.stderr.on('data', (chunk) => {
           stderr += chunk;
+          // Apply same buffer limit as stdout to prevent OOM
+          if (stderr.length > CONFIG.memory.maxOutputBuffer) {
+            killed = true;
+            proc.kill('SIGKILL');
+            return;
+          }
           // Stream compilation progress
           const lines = chunk.toString().split('\n');
           for (const line of lines) {

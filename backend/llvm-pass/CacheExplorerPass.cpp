@@ -277,6 +277,17 @@ PreservedAnalyses CacheExplorerPass::run(Function &F,
                                     "__tag_atomic_rmw", M);
   }
 
+  Function *TagAtomicStore = M->getFunction("__tag_atomic_store");
+  if (!TagAtomicStore) {
+    FunctionType *AtomicStoreFnTy =
+        FunctionType::get(Type::getVoidTy(Ctx),
+                          {PointerType::getUnqual(Ctx), Type::getInt32Ty(Ctx),
+                           PointerType::getUnqual(Ctx), Type::getInt32Ty(Ctx)},
+                          false);
+    TagAtomicStore = Function::Create(AtomicStoreFnTy, Function::ExternalLinkage,
+                                      "__tag_atomic_store", M);
+  }
+
   Function *TagAtomicCmpxchg = M->getFunction("__tag_atomic_cmpxchg");
   if (!TagAtomicCmpxchg) {
     FunctionType *AtomicCmpxchgFnTy =
@@ -501,7 +512,7 @@ PreservedAnalyses CacheExplorerPass::run(Function &F,
 
         // Check if it's an atomic store
         if (SI->isAtomic()) {
-          Builder.CreateCall(TagAtomicRMW,  // Atomic stores treated as RMW
+          Builder.CreateCall(TagAtomicStore,
                              {data.Addr, data.SizeVal, data.File, data.Line});
         }
         // Check if it's a vector store

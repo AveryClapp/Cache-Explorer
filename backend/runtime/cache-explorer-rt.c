@@ -32,7 +32,9 @@ static struct {
 static struct {
   char names[MAX_FILES][MAX_FILENAME];
   uint32_t count;
-} file_table;
+  pthread_mutex_t mutex;
+} file_table = { .mutex = PTHREAD_MUTEX_INITIALIZER };
+static int file_overflow_warned = 0;
 
 static int output_fd = -1;
 static int text_mode = 1;
@@ -47,14 +49,32 @@ static uint64_t max_events = 0;
 static atomic_uint_fast64_t total_events = 0;
 
 static uint32_t intern_filename(const char *file) {
+  pthread_mutex_lock(&file_table.mutex);
+
+  // Search for existing entry
   for (uint32_t i = 0; i < file_table.count; i++) {
-    if (strcmp(file_table.names[i], file) == 0)
+    if (strcmp(file_table.names[i], file) == 0) {
+      pthread_mutex_unlock(&file_table.mutex);
       return i;
+    }
   }
+
+  // Add new entry if space available
   if (file_table.count < MAX_FILES) {
-    strncpy(file_table.names[file_table.count], file, MAX_FILENAME - 1);
-    return file_table.count++;
+    uint32_t idx = file_table.count++;
+    strncpy(file_table.names[idx], file, MAX_FILENAME - 1);
+    file_table.names[idx][MAX_FILENAME - 1] = '\0';  // Ensure null termination
+    pthread_mutex_unlock(&file_table.mutex);
+    return idx;
   }
+
+  // File table overflow - warn once and return 0
+  if (!file_overflow_warned) {
+    file_overflow_warned = 1;
+    fprintf(stderr, "[cache-explorer] WARNING: File table overflow (>%d files). "
+            "Additional files will be attributed to first file.\n", MAX_FILES);
+  }
+  pthread_mutex_unlock(&file_table.mutex);
   return 0;
 }
 

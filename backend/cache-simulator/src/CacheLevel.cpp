@@ -175,15 +175,27 @@ AccessInfo CacheLevel::access(uint64_t address, bool is_write) {
   if (is_compulsory) {
     ever_accessed.insert(line_addr);
     unique_lines_accessed++;
+    set_unique_lines[index]++;
     stats.compulsory_misses++;
   } else {
     // Non-compulsory miss: capacity or conflict
-    // Heuristic: if working set (unique lines) > cache capacity, it's capacity
-    // Otherwise it's conflict (same set contention)
+    // Use per-set tracking for better classification:
+    // - Conflict miss: this set has seen more unique lines than its associativity
+    //   (set contention even though overall cache has room)
+    // - Capacity miss: overall working set exceeds cache capacity
+    //   (cache is too small for the working set)
     uint64_t cache_lines = static_cast<uint64_t>(config.num_sets()) * config.associativity;
-    if (unique_lines_accessed > cache_lines) {
+    uint64_t set_assoc = static_cast<uint64_t>(config.associativity);
+
+    if (unique_lines_accessed <= cache_lines && set_unique_lines[index] > set_assoc) {
+      // Working set fits in cache, but this particular set has contention
+      stats.conflict_misses++;
+    } else if (unique_lines_accessed > cache_lines) {
+      // Overall working set exceeds cache capacity
       stats.capacity_misses++;
     } else {
+      // Edge case: re-access to evicted line before we've exceeded either threshold
+      // This is a conflict (set-level thrashing)
       stats.conflict_misses++;
     }
   }

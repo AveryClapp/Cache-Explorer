@@ -152,10 +152,11 @@ SystemAccessResult CacheSystem::access_hierarchy(uint64_t address,
   }
 
   // Handle L3 eviction for inclusive policy
-  if (inclusion_policy == InclusionPolicy::Inclusive && l3_info.was_dirty) {
-    // Back-invalidate all levels when L3 evicts
+  // Inclusive caches must back-invalidate on ALL evictions, not just dirty ones
+  // This ensures lower levels never have lines not present in higher levels
+  if (inclusion_policy == InclusionPolicy::Inclusive && l3_info.evicted_address != 0) {
+    // Back-invalidate all levels when L3 evicts any line
     // Note: l3_info.evicted_address is the OLD line being evicted, not the new one
-    // We've already written it back, but need to invalidate copies in L1/L2
     l2.invalidate(l3_info.evicted_address);
     l1d.invalidate(l3_info.evicted_address);
     l1i.invalidate(l3_info.evicted_address);

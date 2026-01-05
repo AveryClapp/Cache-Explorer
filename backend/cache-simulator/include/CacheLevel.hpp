@@ -28,6 +28,7 @@ private:
   // For 3C miss classification
   std::unordered_set<uint64_t> ever_accessed;  // Track compulsory misses
   uint64_t unique_lines_accessed = 0;          // For capacity estimation
+  std::vector<uint64_t> set_unique_lines;      // Track unique lines per set for conflict detection
 
   int find_victim_lru(const std::vector<CacheLine> &set) const;
   int find_victim_plru(uint64_t set_index);
@@ -49,6 +50,7 @@ public:
     int num_sets = config.num_sets();
     sets.resize(num_sets, std::vector<CacheLine>(config.associativity));
     plru_bits.resize(num_sets, 0);
+    set_unique_lines.resize(num_sets, 0);
   }
 
   const CacheConfig &getConfig() const { return config; }
@@ -57,6 +59,7 @@ public:
     stats.reset();
     ever_accessed.clear();
     unique_lines_accessed = 0;
+    std::fill(set_unique_lines.begin(), set_unique_lines.end(), 0);
   }
 
   int getNumSets() const { return config.num_sets(); }
