@@ -992,7 +992,7 @@ wss.on('connection', (ws) => {
     }
 
     // Apply sensible defaults for web UI to prevent timeouts
-    const eventLimit = limit !== undefined ? limit : 5000000;  // 5M events max (~30s runtime)
+    const eventLimit = limit !== undefined ? limit : 100000;  // Match HTTP default for responsive web UI
     const sampleRate = sample !== undefined ? sample : 1;       // No sampling by default
 
     // Configurable timeout with bounds

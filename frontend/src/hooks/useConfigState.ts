@@ -11,7 +11,7 @@ export function useConfigState() {
   const [customConfig, setCustomConfig] = useState<CustomCacheConfig>(defaultCustomConfig)
   const [defines, setDefines] = useState<DefineEntry[]>([])
   const [sampleRate, setSampleRate] = useState(1)
-  const [eventLimit, setEventLimit] = useState(5000000)
+  const [eventLimit, setEventLimit] = useState(100000)  // Match backend default for responsive web UI
 
   // Fetch compilers on mount
   useEffect(() => {
