@@ -7,8 +7,14 @@ export function useAnalysisState() {
   const [files, setFiles] = useState<FileTab[]>(() => [
     createFileTab('main.c', EXAMPLE_CODE, 'c')
   ])
-  const [activeFileId, setActiveFileId] = useState<string>(() => files[0]?.id || '')
-  const [mainFileId, setMainFileId] = useState<string>(() => files[0]?.id || '')
+  const [activeFileId, setActiveFileId] = useState<string>(() => {
+    const initialFile = createFileTab('main.c', EXAMPLE_CODE, 'c')
+    return initialFile.id
+  })
+  const [mainFileId, setMainFileId] = useState<string>(() => {
+    const initialFile = createFileTab('main.c', EXAMPLE_CODE, 'c')
+    return initialFile.id
+  })
 
   const activeFile = files.find(f => f.id === activeFileId) || files[0]
   const code = activeFile?.code || ''
