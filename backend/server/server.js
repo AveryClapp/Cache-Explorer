@@ -522,7 +522,8 @@ app.post('/compile', async (req, res) => {
   }
 
   // Apply sensible defaults for web UI to prevent timeouts
-  const eventLimit = limit !== undefined ? limit : 5000000;  // 5M events max (~30s runtime)
+  // 100K events = ~1 second runtime, good balance for web UI responsiveness
+  const eventLimit = limit !== undefined ? limit : 100000;
   const sampleRate = sample !== undefined ? sample : 1;       // No sampling by default
 
   // Normalize files for cache key
@@ -579,6 +580,12 @@ app.post('/compile', async (req, res) => {
       const output = result.stdout.trim();
       try {
         const json = JSON.parse(output);
+
+        // Remove cacheState to reduce output size (it's huge and unused by UI)
+        if (json.cacheState) {
+          delete json.cacheState;
+        }
+
         // Cache successful result
         try {
           cacheResult(cacheInputs, json);
@@ -708,6 +715,12 @@ app.post('/compile', async (req, res) => {
 
     try {
       const json = JSON.parse(output);
+
+      // Remove cacheState to reduce output size (it's huge and unused by UI)
+      if (json.cacheState) {
+        delete json.cacheState;
+      }
+
       // Cache successful result
       try {
         cacheResult(cacheInputs, json);
