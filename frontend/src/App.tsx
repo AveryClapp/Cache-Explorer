@@ -976,7 +976,7 @@ function App() {
     configState.setConfig(state.config)
     configState.setOptLevel(state.optLevel)
     if (state.defines) configState.setDefines(state.defines)
-  }, [analysisState, configState])
+  }, [])
 
   useUrlState(
     handleUrlStateLoad,
