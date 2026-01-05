@@ -968,16 +968,18 @@ function App() {
   })
 
   // Use URL state hook for loading and syncing state
+  const handleUrlStateLoad = useCallback((state: any) => {
+    const lang = state.language || 'c'
+    // Load state from URL into hooks
+    analysisState.updateActiveCode(state.code)
+    analysisState.updateActiveLanguage(lang)
+    configState.setConfig(state.config)
+    configState.setOptLevel(state.optLevel)
+    if (state.defines) configState.setDefines(state.defines)
+  }, [analysisState, configState])
+
   useUrlState(
-    (state) => {
-      const lang = state.language || 'c'
-      // Load state from URL into hooks
-      analysisState.updateActiveCode(state.code)
-      analysisState.updateActiveLanguage(lang)
-      configState.setConfig(state.config)
-      configState.setOptLevel(state.optLevel)
-      if (state.defines) configState.setDefines(state.defines)
-    },
+    handleUrlStateLoad,
     [code, config, optLevel, language, defines]
   )
 
