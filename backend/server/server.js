@@ -1059,8 +1059,8 @@ wss.on('connection', (ws) => {
       ws.send(JSON.stringify({ type: 'status', stage: 'compiling' }));
 
       const result = await new Promise((resolve, reject) => {
-        // Use --stream for real-time updates
-        const args = [mainFile, '--config', config, optLevel, '--stream'];
+        // Use --stream for real-time updates and --json for structured output
+        const args = [mainFile, '--config', config, optLevel, '--stream', '--json'];
 
         // Add include path for multi-file projects
         if (Array.isArray(inputFiles) && inputFiles.length > 1) {
