@@ -203,14 +203,16 @@ const CACHE_EXPLORE = join(BACKEND_DIR, 'scripts', 'cache-explore');
 
 // Check sandbox availability on startup
 let sandboxAvailable = false;
-checkSandboxAvailable().then(available => {
-  sandboxAvailable = available;
-  if (available) {
-    console.log('Docker sandbox: ENABLED (secure mode)');
-  } else {
-    console.log('Docker sandbox: DISABLED (development mode - run docker/build-image.sh to enable)');
-  }
-});
+// TEMPORARILY DISABLED: Docker sandbox is failing, use direct execution
+// checkSandboxAvailable().then(available => {
+//   sandboxAvailable = available;
+//   if (available) {
+//     console.log('Docker sandbox: ENABLED (secure mode)');
+//   } else {
+//     console.log('Docker sandbox: DISABLED (development mode - run docker/build-image.sh to enable)');
+//   }
+// });
+console.log('Docker sandbox: DISABLED (troubleshooting mode - using direct execution)');
 
 // ============================================================================
 // Error Handling
