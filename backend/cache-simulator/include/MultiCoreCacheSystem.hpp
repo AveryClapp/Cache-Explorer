@@ -7,6 +7,7 @@
 #include "Prefetcher.hpp"
 #include "TLB.hpp"
 #include <memory>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -81,7 +82,7 @@ private:
   void issue_prefetches(int core, uint64_t miss_addr, uint64_t pc = 0);
 
   void track_access_for_false_sharing(uint64_t addr, uint32_t thread_id,
-                                       bool is_write, const std::string &file,
+                                       bool is_write, std::string_view file,
                                        uint32_t line);
 
 public:
@@ -92,10 +93,10 @@ public:
                        int pf_degree = 2);
 
   MultiCoreAccessResult read(uint64_t address, uint32_t thread_id,
-                              const std::string &file = "", uint32_t line = 0);
+                              std::string_view file = "", uint32_t line = 0);
 
   MultiCoreAccessResult write(uint64_t address, uint32_t thread_id,
-                               const std::string &file = "", uint32_t line = 0);
+                               std::string_view file = "", uint32_t line = 0);
 
   [[nodiscard]] MultiCoreStats get_stats() const;
 

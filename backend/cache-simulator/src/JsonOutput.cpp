@@ -4,7 +4,7 @@
 
 // ========== Utility Functions ==========
 
-std::string JsonOutput::escape(const std::string& s) {
+std::string JsonOutput::escape(std::string_view s) {
     std::string out;
     out.reserve(s.size());
     for (char c : s) {
@@ -251,7 +251,7 @@ void JsonOutput::write_false_sharing_compact(std::ostream& out,
 
 // ========== Prefetch Statistics ==========
 
-void JsonOutput::write_prefetch_stats(std::ostream& out, const std::string& policy_name,
+void JsonOutput::write_prefetch_stats(std::ostream& out, std::string_view policy_name,
                                       int degree, const PrefetchStats& stats) {
     out << ",\n  \"prefetch\": {\n"
         << "    \"policy\": \"" << policy_name << "\",\n"
@@ -297,7 +297,7 @@ void JsonOutput::write_coherence_stats(std::ostream& out, uint64_t invalidations
 
 // ========== Streaming Mode Messages ==========
 
-void JsonOutput::write_stream_start(std::ostream& out, const std::string& config_name,
+void JsonOutput::write_stream_start(std::ostream& out, std::string_view config_name,
                                     bool multicore) {
     out << "{\"type\":\"start\",\"config\":\"" << config_name
         << "\",\"multicore\":" << (multicore ? "true" : "false") << "}\n" << std::flush;

@@ -24,7 +24,7 @@ void ArgParser::print_usage(const char* prog) {
               << "  --l3-assoc <n>      L3 associativity (default: 16)\n";
 }
 
-PrefetchPolicy ArgParser::parse_prefetch_policy(const std::string& name) {
+PrefetchPolicy ArgParser::parse_prefetch_policy(std::string_view name) {
     if (name == "none") return PrefetchPolicy::NONE;
     if (name == "next" || name == "nextline") return PrefetchPolicy::NEXT_LINE;
     if (name == "stream") return PrefetchPolicy::STREAM;
@@ -46,7 +46,7 @@ std::string ArgParser::prefetch_policy_name(PrefetchPolicy p) {
     return "unknown";
 }
 
-CacheHierarchyConfig ArgParser::get_preset_config(const std::string& name) {
+CacheHierarchyConfig ArgParser::get_preset_config(std::string_view name) {
     // Intel presets
     if (name == "intel" || name == "intel12") return make_intel_12th_gen_config();
     if (name == "intel14") return make_intel_14th_gen_config();

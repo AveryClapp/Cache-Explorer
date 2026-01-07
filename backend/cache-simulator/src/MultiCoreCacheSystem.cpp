@@ -67,13 +67,13 @@ void MultiCoreCacheSystem::issue_prefetches(int core, uint64_t miss_addr,
 }
 
 void MultiCoreCacheSystem::track_access_for_false_sharing(
-    uint64_t addr, uint32_t thread_id, bool is_write, const std::string &file,
+    uint64_t addr, uint32_t thread_id, bool is_write, std::string_view file,
     uint32_t line) {
   uint64_t line_addr = get_line_address(addr);
   uint32_t byte_offset = addr & (line_size - 1);
 
   auto &accesses = line_accesses[line_addr];
-  accesses.push_back({thread_id, byte_offset, is_write, file, line});
+  accesses.push_back({thread_id, byte_offset, is_write, std::string(file), line});
 
   std::unordered_set<uint32_t> threads_seen;
   std::unordered_set<uint32_t> offsets_seen;
@@ -95,7 +95,7 @@ void MultiCoreCacheSystem::track_access_for_false_sharing(
 
 MultiCoreAccessResult MultiCoreCacheSystem::read(uint64_t address,
                                                  uint32_t thread_id,
-                                                 const std::string &file,
+                                                 std::string_view file,
                                                  uint32_t line) {
   int core = get_core_for_thread(thread_id);
   track_access_for_false_sharing(address, thread_id, false, file, line);
@@ -142,7 +142,7 @@ MultiCoreAccessResult MultiCoreCacheSystem::read(uint64_t address,
 
 MultiCoreAccessResult MultiCoreCacheSystem::write(uint64_t address,
                                                   uint32_t thread_id,
-                                                  const std::string &file,
+                                                  std::string_view file,
                                                   uint32_t line) {
   int core = get_core_for_thread(thread_id);
   track_access_for_false_sharing(address, thread_id, true, file, line);

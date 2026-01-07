@@ -4,6 +4,7 @@
 #include "MultiCoreCacheSystem.hpp"
 #include "TraceEvent.hpp"
 #include <functional>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -25,8 +26,8 @@ private:
   std::unordered_set<uint32_t> seen_threads;
   std::function<void(const EventResult &)> event_callback;
 
-  std::string make_key(const std::string &file, uint32_t line) {
-    return file + ":" + std::to_string(line);
+  std::string make_key(std::string_view file, uint32_t line) {
+    return std::string(file) + ":" + std::to_string(line);
   }
 
 public:

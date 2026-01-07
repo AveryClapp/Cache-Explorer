@@ -1,12 +1,12 @@
 #include "include/TraceProcessor.hpp"
 #include <algorithm>
 
-std::string TraceProcessor::make_key(const std::string &file, uint32_t line) {
-  return file + ":" + std::to_string(line);
+std::string TraceProcessor::make_key(std::string_view file, uint32_t line) {
+  return std::string(file) + ":" + std::to_string(line);
 }
 
 void TraceProcessor::process_line_access(uint64_t line_addr, bool is_write,
-                                         bool is_icache, const std::string &file,
+                                         bool is_icache, std::string_view file,
                                          uint32_t line, uint32_t event_size) {
   SystemAccessResult result;
   if (is_icache) {
@@ -26,7 +26,7 @@ void TraceProcessor::process_line_access(uint64_t line_addr, bool is_write,
   if (!file.empty()) {
     auto key = make_key(file, line);
     auto &stats = source_stats[key];
-    stats.file = file;
+    stats.file = std::string(file);
     stats.line = line;
     if (result.l1_hit)
       stats.hits++;
@@ -36,7 +36,7 @@ void TraceProcessor::process_line_access(uint64_t line_addr, bool is_write,
 
   if (event_callback) {
     event_callback({result.l1_hit, result.l2_hit, result.l3_hit, line_addr,
-                    event_size, file, line});
+                    event_size, std::string(file), line});
   }
 }
 

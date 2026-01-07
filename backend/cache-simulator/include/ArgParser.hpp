@@ -3,6 +3,7 @@
 #include "../profiles/CacheConfig.hpp"
 #include "Prefetcher.hpp"
 #include <string>
+#include <string_view>
 
 struct SimulatorOptions {
     std::string config_name = "intel";
@@ -37,13 +38,13 @@ public:
     static void print_usage(const char* program_name);
 
     /// Parse prefetch policy name string to enum
-    [[nodiscard]] static PrefetchPolicy parse_prefetch_policy(const std::string& name);
+    [[nodiscard]] static PrefetchPolicy parse_prefetch_policy(std::string_view name);
 
     /// Convert prefetch policy enum to string name
     [[nodiscard]] static std::string prefetch_policy_name(PrefetchPolicy policy);
 
     /// Get cache configuration for a named preset
-    [[nodiscard]] static CacheHierarchyConfig get_preset_config(const std::string& name);
+    [[nodiscard]] static CacheHierarchyConfig get_preset_config(std::string_view name);
 
     /// Build final cache config from options (handles custom vs preset)
     [[nodiscard]] static CacheHierarchyConfig build_cache_config(const SimulatorOptions& opts);

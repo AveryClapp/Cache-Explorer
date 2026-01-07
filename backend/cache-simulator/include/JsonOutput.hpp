@@ -11,6 +11,7 @@
 #include "../profiles/CacheConfig.hpp"
 #include <ostream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 /**
@@ -37,7 +38,7 @@ public:
      * Escape special characters in a string for JSON compliance.
      * Handles: " and \ characters
      */
-    [[nodiscard]] static std::string escape(const std::string& s);
+    [[nodiscard]] static std::string escape(std::string_view s);
 
     /**
      * Get single-character representation of MESI coherence state.
@@ -154,7 +155,7 @@ public:
      * @param degree Prefetch degree
      * @param stats The prefetch statistics
      */
-    static void write_prefetch_stats(std::ostream& out, const std::string& policy_name,
+    static void write_prefetch_stats(std::ostream& out, std::string_view policy_name,
                                      int degree, const PrefetchStats& stats);
 
     // ========== Cache Configuration ==========
@@ -177,7 +178,7 @@ public:
     /**
      * Write streaming mode start message.
      */
-    static void write_stream_start(std::ostream& out, const std::string& config_name,
+    static void write_stream_start(std::ostream& out, std::string_view config_name,
                                    bool multicore);
 
     /**

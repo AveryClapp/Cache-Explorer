@@ -4,6 +4,7 @@
 #include "MemoryAccess.hpp"
 #include "TraceEvent.hpp"
 #include <functional>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -69,11 +70,11 @@ private:
   // Track prefetched addresses to measure usefulness
   std::unordered_set<uint64_t> prefetched_addresses;
 
-  std::string make_key(const std::string &file, uint32_t line);
+  std::string make_key(std::string_view file, uint32_t line);
 
   // Helper to process a single cache line access
   void process_line_access(uint64_t line_addr, bool is_write, bool is_icache,
-                           const std::string &file, uint32_t line,
+                           std::string_view file, uint32_t line,
                            uint32_t event_size);
 
 public:
