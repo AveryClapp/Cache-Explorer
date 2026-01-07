@@ -35,6 +35,12 @@ const DEFAULT_EXTENSIONS: Record<'c' | 'cpp' | 'rust', string> = {
   rust: '.rs',
 }
 
+const LANGUAGE_COLORS: Record<'c' | 'cpp' | 'rust', string> = {
+  c: '#555eb7',
+  cpp: '#f34b7d',
+  rust: '#dea584',
+}
+
 export function FileManager({
   files,
   activeFileId,
@@ -82,6 +88,7 @@ export function FileManager({
 
   const handleContextMenu = (e: React.MouseEvent, fileId: string) => {
     e.preventDefault()
+    e.stopPropagation()
     setContextMenu({ fileId, x: e.clientX, y: e.clientY })
   }
 
@@ -97,29 +104,34 @@ export function FileManager({
     } else if (e.key === 'Escape') {
       setIsCreating(false)
       setEditingFileId(null)
+      setNewFileName('')
+      setEditingName('')
     }
   }
 
-  return (
-    <div className="file-manager" onClick={closeContextMenu}>
-      <div className="file-manager-header">
-        <span className="header-title">Project Files</span>
-        <button
-          className="add-file-btn"
-          onClick={() => setIsCreating(true)}
-          title="Add new file"
-        >
-          +
-        </button>
-      </div>
+  const handleTabClose = (e: React.MouseEvent, fileId: string) => {
+    e.stopPropagation()
+    if (files.length > 1) {
+      onFileDelete(fileId)
+    }
+  }
 
-      <div className="file-list">
+  const handleTabDoubleClick = (e: React.MouseEvent, file: ProjectFile) => {
+    e.stopPropagation()
+    setEditingFileId(file.id)
+    setEditingName(file.name)
+  }
+
+  return (
+    <div className="editor-tabs" onClick={closeContextMenu}>
+      <div className="tabs-container">
         {files.map((file) => (
           <div
             key={file.id}
-            className={`file-item ${file.id === activeFileId ? 'active' : ''} ${file.isMain ? 'main-file' : ''}`}
+            className={`editor-tab ${file.id === activeFileId ? 'active' : ''} ${file.isMain ? 'main-file' : ''}`}
             onClick={() => onFileSelect(file.id)}
             onContextMenu={(e) => handleContextMenu(e, file.id)}
+            onDoubleClick={(e) => handleTabDoubleClick(e, file)}
           >
             {editingFileId === file.id ? (
               <input
@@ -128,23 +140,36 @@ export function FileManager({
                 onChange={(e) => setEditingName(e.target.value)}
                 onBlur={handleRename}
                 onKeyDown={handleKeyDown}
+                onClick={(e) => e.stopPropagation()}
                 autoFocus
-                className="rename-input"
+                className="tab-rename-input"
               />
             ) : (
               <>
-                <span className="file-icon">
-                  {file.language === 'c' ? 'C' : file.language === 'cpp' ? 'C++' : 'Rs'}
+                <span
+                  className="tab-icon"
+                  style={{ backgroundColor: LANGUAGE_COLORS[file.language] }}
+                >
+                  {file.language === 'c' ? 'C' : file.language === 'cpp' ? '++' : 'Rs'}
                 </span>
-                <span className="file-name">{file.name}</span>
-                {file.isMain && <span className="main-badge" title="Main file">★</span>}
+                <span className="tab-name">{file.name}</span>
+                {file.isMain && <span className="tab-main-indicator" title="Entry point">*</span>}
               </>
+            )}
+            {files.length > 1 && (
+              <button
+                className="tab-close"
+                onClick={(e) => handleTabClose(e, file.id)}
+                title="Close file"
+              >
+                ×
+              </button>
             )}
           </div>
         ))}
 
-        {isCreating && (
-          <div className="file-item creating">
+        {isCreating ? (
+          <div className="editor-tab new-tab">
             <input
               type="text"
               value={newFileName}
@@ -156,22 +181,24 @@ export function FileManager({
               onKeyDown={handleKeyDown}
               placeholder="filename.c"
               autoFocus
-              className="new-file-input"
+              className="tab-new-input"
             />
           </div>
+        ) : (
+          <button
+            className="tab-add-btn"
+            onClick={() => setIsCreating(true)}
+            title="Add new file (Ctrl+N)"
+          >
+            +
+          </button>
         )}
       </div>
-
-      {files.length === 0 && !isCreating && (
-        <div className="empty-state">
-          Click + to add a file
-        </div>
-      )}
 
       {/* Context menu */}
       {contextMenu && (
         <div
-          className="context-menu"
+          className="tab-context-menu"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
           <button onClick={() => {
@@ -188,11 +215,11 @@ export function FileManager({
             onSetMainFile(contextMenu.fileId)
             closeContextMenu()
           }}>
-            Set as Main
+            Set as Entry Point
           </button>
           <hr />
           <button
-            className="delete-btn"
+            className="delete-action"
             onClick={() => {
               if (files.length > 1) {
                 onFileDelete(contextMenu.fileId)
@@ -201,14 +228,10 @@ export function FileManager({
             }}
             disabled={files.length <= 1}
           >
-            Delete
+            Close
           </button>
         </div>
       )}
-
-      <div className="file-manager-footer">
-        <span className="file-count">{files.length} file{files.length !== 1 ? 's' : ''}</span>
-      </div>
     </div>
   )
 }

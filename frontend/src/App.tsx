@@ -7,7 +7,7 @@ import LZString from 'lz-string'
 import './App.css'
 
 // Import visualization components
-import { MemoryLayout, FileManager } from './components'
+import { FileManager } from './components'
 import type { ProjectFile } from './components'
 
 // API base URL - in production (Docker), use relative paths; in dev, use localhost
@@ -105,16 +105,6 @@ interface CacheConfig {
   l3: CacheLevelConfig
 }
 
-// Timeline event from streaming progress
-interface TimelineEvent {
-  i: number       // event index
-  t: 'R' | 'W' | 'I'  // type: Read, Write, Instruction fetch
-  l: 1 | 2 | 3 | 4    // hit level: 1=L1, 2=L2, 3=L3, 4=memory
-  a?: number      // memory address (for cache visualization)
-  f?: string      // file (optional)
-  n?: number      // line number (optional)
-}
-
 interface PrefetchStats {
   policy: string
   degree: number
@@ -160,7 +150,6 @@ interface CacheResult {
   hotLines: HotLine[]
   falseSharing?: FalseSharingEvent[]
   suggestions?: OptimizationSuggestion[]
-  timeline?: TimelineEvent[]  // collected timeline events
   prefetch?: PrefetchStats
   cacheState?: CacheState
 }
@@ -172,6 +161,14 @@ interface FileTab {
   name: string
   code: string
   language: Language
+  isMain?: boolean
+}
+
+interface ExampleFile {
+  name: string
+  code: string
+  language: Language
+  isMain?: boolean
 }
 
 interface Example {
@@ -179,6 +176,7 @@ interface Example {
   code: string
   description: string
   language: Language
+  files?: ExampleFile[]  // Optional multi-file support
 }
 
 const EXAMPLES: Record<string, Example> = {
@@ -1007,6 +1005,263 @@ int main() {
 }
 `
   },
+
+  // === Multi-File Examples ===
+  multifile_matrix_c: {
+    name: 'Multi-File Matrix (C)',
+    description: 'Matrix operations split across files',
+    language: 'c',
+    code: `// Multi-file matrix example - see other tabs
+#include "matrix.h"
+#include <stdio.h>
+
+int main() {
+    Matrix* a = matrix_create(64, 64);
+    Matrix* b = matrix_create(64, 64);
+
+    // Initialize with cache-friendly pattern
+    for (int i = 0; i < 64; i++) {
+        for (int j = 0; j < 64; j++) {
+            matrix_set(a, i, j, i + j);
+            matrix_set(b, i, j, i * j);
+        }
+    }
+
+    Matrix* c = matrix_multiply(a, b);
+
+    printf("Result[0][0] = %d\\n", matrix_get(c, 0, 0));
+    printf("Result[63][63] = %d\\n", matrix_get(c, 63, 63));
+
+    matrix_free(a);
+    matrix_free(b);
+    matrix_free(c);
+    return 0;
+}
+`,
+    files: [
+      {
+        name: 'main.c',
+        language: 'c',
+        isMain: true,
+        code: `// Main program - entry point
+#include "matrix.h"
+#include <stdio.h>
+
+int main() {
+    Matrix* a = matrix_create(64, 64);
+    Matrix* b = matrix_create(64, 64);
+
+    // Initialize with cache-friendly pattern
+    for (int i = 0; i < 64; i++) {
+        for (int j = 0; j < 64; j++) {
+            matrix_set(a, i, j, i + j);
+            matrix_set(b, i, j, i * j);
+        }
+    }
+
+    Matrix* c = matrix_multiply(a, b);
+
+    printf("Result[0][0] = %d\\n", matrix_get(c, 0, 0));
+    printf("Result[63][63] = %d\\n", matrix_get(c, 63, 63));
+
+    matrix_free(a);
+    matrix_free(b);
+    matrix_free(c);
+    return 0;
+}
+`
+      },
+      {
+        name: 'matrix.h',
+        language: 'c',
+        code: `// Matrix header - shared data structures
+#ifndef MATRIX_H
+#define MATRIX_H
+
+typedef struct {
+    int* data;
+    int rows;
+    int cols;
+} Matrix;
+
+Matrix* matrix_create(int rows, int cols);
+void matrix_free(Matrix* m);
+int matrix_get(Matrix* m, int row, int col);
+void matrix_set(Matrix* m, int row, int col, int val);
+Matrix* matrix_multiply(Matrix* a, Matrix* b);
+
+#endif
+`
+      },
+      {
+        name: 'matrix.c',
+        language: 'c',
+        code: `// Matrix implementation - cache behavior varies by operation
+#include "matrix.h"
+#include <stdlib.h>
+
+Matrix* matrix_create(int rows, int cols) {
+    Matrix* m = malloc(sizeof(Matrix));
+    m->data = malloc(rows * cols * sizeof(int));
+    m->rows = rows;
+    m->cols = cols;
+    // Initialize to zero - sequential access
+    for (int i = 0; i < rows * cols; i++)
+        m->data[i] = 0;
+    return m;
+}
+
+void matrix_free(Matrix* m) {
+    free(m->data);
+    free(m);
+}
+
+int matrix_get(Matrix* m, int row, int col) {
+    return m->data[row * m->cols + col];
+}
+
+void matrix_set(Matrix* m, int row, int col, int val) {
+    m->data[row * m->cols + col] = val;
+}
+
+Matrix* matrix_multiply(Matrix* a, Matrix* b) {
+    Matrix* c = matrix_create(a->rows, b->cols);
+
+    // Row-major multiplication - good cache behavior
+    for (int i = 0; i < a->rows; i++) {
+        for (int j = 0; j < b->cols; j++) {
+            int sum = 0;
+            for (int k = 0; k < a->cols; k++) {
+                sum += matrix_get(a, i, k) * matrix_get(b, k, j);
+            }
+            matrix_set(c, i, j, sum);
+        }
+    }
+    return c;
+}
+`
+      }
+    ]
+  },
+
+  multifile_vector_cpp: {
+    name: 'Multi-File Vector (C++)',
+    description: 'Template container with cache-aware operations',
+    language: 'cpp',
+    code: `// Multi-file vector example - see other tabs
+#include "vector.hpp"
+#include <cstdio>
+
+int main() {
+    Vector<int> v;
+
+    // Push 1000 elements - amortized allocation
+    for (int i = 0; i < 1000; i++)
+        v.push_back(i);
+
+    // Sequential access - cache friendly
+    long sum = 0;
+    for (size_t i = 0; i < v.size(); i++)
+        sum += v[i];
+
+    printf("Sum: %ld, Size: %zu\\n", sum, v.size());
+    return 0;
+}
+`,
+    files: [
+      {
+        name: 'main.cpp',
+        language: 'cpp',
+        isMain: true,
+        code: `// Main program using custom Vector
+#include "vector.hpp"
+#include <cstdio>
+
+int main() {
+    Vector<int> v;
+
+    // Push 1000 elements - observe reallocation behavior
+    for (int i = 0; i < 1000; i++)
+        v.push_back(i);
+
+    // Sequential access - excellent cache behavior
+    long sum = 0;
+    for (size_t i = 0; i < v.size(); i++)
+        sum += v[i];
+
+    // Random access test
+    int random_sum = 0;
+    for (int i = 0; i < 100; i++) {
+        int idx = (i * 17) % v.size();  // Pseudo-random
+        random_sum += v[idx];
+    }
+
+    printf("Sum: %ld\\n", sum);
+    printf("Random sum: %d\\n", random_sum);
+    printf("Size: %zu, Capacity: %zu\\n", v.size(), v.capacity());
+    return 0;
+}
+`
+      },
+      {
+        name: 'vector.hpp',
+        language: 'cpp',
+        code: `// Cache-aware Vector implementation
+#ifndef VECTOR_HPP
+#define VECTOR_HPP
+
+#include <cstdlib>
+#include <cstring>
+
+template<typename T>
+class Vector {
+private:
+    T* data_;
+    size_t size_;
+    size_t capacity_;
+
+    void grow() {
+        // Double capacity for amortized O(1) push
+        size_t new_cap = capacity_ == 0 ? 8 : capacity_ * 2;
+        T* new_data = static_cast<T*>(malloc(new_cap * sizeof(T)));
+
+        // Copy old data - sequential memory access
+        if (data_) {
+            memcpy(new_data, data_, size_ * sizeof(T));
+            free(data_);
+        }
+        data_ = new_data;
+        capacity_ = new_cap;
+    }
+
+public:
+    Vector() : data_(nullptr), size_(0), capacity_(0) {}
+
+    ~Vector() {
+        if (data_) free(data_);
+    }
+
+    void push_back(const T& val) {
+        if (size_ >= capacity_) grow();
+        data_[size_++] = val;
+    }
+
+    T& operator[](size_t idx) { return data_[idx]; }
+    const T& operator[](size_t idx) const { return data_[idx]; }
+
+    size_t size() const { return size_; }
+    size_t capacity() const { return capacity_; }
+
+    // Cache-friendly iterator access
+    T* begin() { return data_; }
+    T* end() { return data_ + size_; }
+};
+
+#endif
+`
+      }
+    ]
+  },
 }
 
 const EXAMPLE_CODE = EXAMPLES.matrix_row.code
@@ -1035,50 +1290,159 @@ function formatPercent(rate: number): string {
 }
 
 function CacheHierarchy({ result }: { result: CacheResult }) {
+  const config = result.cacheConfig
   const l1d = result.levels.l1d || result.levels.l1!
   const l1i = result.levels.l1i
   const l2 = result.levels.l2
   const l3 = result.levels.l3
+  const cores = result.cores || 1
+  const isMultiCore = result.multicore && cores > 1
 
-  const getRateClass = (rate: number) => rate > 0.95 ? 'excellent' : rate > 0.80 ? 'good' : 'poor'
+  const getHitRateClass = (rate: number) => {
+    if (rate >= 0.95) return 'excellent'
+    if (rate >= 0.8) return 'good'
+    if (rate >= 0.5) return 'moderate'
+    return 'poor'
+  }
+
+  const formatSize = (kb: number) => {
+    if (kb >= 1024) return `${(kb / 1024).toFixed(kb >= 10240 ? 0 : 1)} MB`
+    return `${kb} KB`
+  }
+
+  // Estimate cycles based on typical latencies (in CPU cycles)
+  const LATENCY = { l1: 4, l2: 12, l3: 40, mem: 200 }
+  const l1Hits = l1d.hits + (l1i?.hits || 0)
+  const l2Hits = l2.hits
+  const l3Hits = l3.hits
+  const memAccesses = l3.misses
+
+  const totalCycles = (l1Hits * LATENCY.l1) + (l2Hits * LATENCY.l2) + (l3Hits * LATENCY.l3) + (memAccesses * LATENCY.mem)
+  const idealCycles = (l1Hits + l2Hits + l3Hits + memAccesses) * LATENCY.l1
+  const overhead = totalCycles - idealCycles
+
+  const formatCycles = (n: number) => {
+    if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
+    if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K'
+    return n.toLocaleString()
+  }
+
+  // Per-core stats (divide evenly for display when multicore)
+  const perCoreL1Hits = isMultiCore ? Math.round(l1d.hits / cores) : l1d.hits
+  const perCoreL1Misses = isMultiCore ? Math.round(l1d.misses / cores) : l1d.misses
+  const perCoreL2Hits = isMultiCore ? Math.round(l2.hits / cores) : l2.hits
+  const perCoreL2Misses = isMultiCore ? Math.round(l2.misses / cores) : l2.misses
 
   return (
-    <div className="cache-hierarchy">
-      {/* L1 Row */}
-      <div className="cache-level-row">
-        <div className={`cache-box ${getRateClass(l1d.hitRate)}`} title={`${l1d.hits.toLocaleString()} hits, ${l1d.misses.toLocaleString()} misses`}>
-          <span className="cache-box-rate">{formatPercent(l1d.hitRate)}</span>
-          <span className="cache-box-label">L1 Data</span>
+    <div className="cache-hierarchy-viz">
+      <div className="hierarchy-diagram">
+        {/* CPU Cores Row */}
+        <div className="hierarchy-level cpu">
+          {isMultiCore ? (
+            Array.from({ length: Math.min(cores, 4) }).map((_, i) => (
+              <div key={i} className="level-box cpu-box">
+                <div className="box-label">Core {i}</div>
+              </div>
+            ))
+          ) : (
+            <div className="level-box cpu-box">
+              <div className="box-label">CPU Core</div>
+            </div>
+          )}
+          {isMultiCore && cores > 4 && (
+            <div className="level-box cpu-box" style={{ opacity: 0.7 }}>
+              <div className="box-label">+{cores - 4} more</div>
+            </div>
+          )}
         </div>
-        {l1i && (
-          <div className={`cache-box ${getRateClass(l1i.hitRate)}`} title={`${l1i.hits.toLocaleString()} hits, ${l1i.misses.toLocaleString()} misses`}>
-            <span className="cache-box-rate">{formatPercent(l1i.hitRate)}</span>
-            <span className="cache-box-label">L1 Instr</span>
+
+        {/* L1 Caches Row */}
+        <div className="hierarchy-level l1">
+          {isMultiCore ? (
+            Array.from({ length: Math.min(cores, 4) }).map((_, i) => (
+              <div key={i} className={`level-box l1-box ${getHitRateClass(l1d.hitRate)}`}>
+                <div className="box-label">L1 Data</div>
+                <div className="box-rate">{formatPercent(l1d.hitRate)}</div>
+                {config && <div className="box-size">{formatSize(config.l1d.sizeKB)}</div>}
+                <div className="box-stats">{perCoreL1Hits.toLocaleString()} / {perCoreL1Misses.toLocaleString()}</div>
+              </div>
+            ))
+          ) : (
+            <>
+              <div className={`level-box l1-box ${getHitRateClass(l1d.hitRate)}`}>
+                <div className="box-label">L1 Data</div>
+                <div className="box-rate">{formatPercent(l1d.hitRate)}</div>
+                {config && <div className="box-size">{formatSize(config.l1d.sizeKB)}</div>}
+                <div className="box-stats">{l1d.hits.toLocaleString()} hits / {l1d.misses.toLocaleString()} misses</div>
+              </div>
+              {l1i && (
+                <div className={`level-box l1-box ${getHitRateClass(l1i.hitRate)}`}>
+                  <div className="box-label">L1 Instr</div>
+                  <div className="box-rate">{formatPercent(l1i.hitRate)}</div>
+                  {config && <div className="box-size">{formatSize(config.l1i.sizeKB)}</div>}
+                  <div className="box-stats">{l1i.hits.toLocaleString()} hits / {l1i.misses.toLocaleString()} misses</div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="hierarchy-connector" />
+
+        {/* L2 Cache Row */}
+        <div className="hierarchy-level l2">
+          {isMultiCore ? (
+            Array.from({ length: Math.min(cores, 4) }).map((_, i) => (
+              <div key={i} className={`level-box l2-box ${getHitRateClass(l2.hitRate)}`}>
+                <div className="box-label">L2</div>
+                <div className="box-rate">{formatPercent(l2.hitRate)}</div>
+                {config && <div className="box-size">{formatSize(config.l2.sizeKB)}</div>}
+                <div className="box-stats">{perCoreL2Hits.toLocaleString()} / {perCoreL2Misses.toLocaleString()}</div>
+              </div>
+            ))
+          ) : (
+            <div className={`level-box l2-box ${getHitRateClass(l2.hitRate)}`}>
+              <div className="box-label">L2 Unified</div>
+              <div className="box-rate">{formatPercent(l2.hitRate)}</div>
+              {config && <div className="box-size">{formatSize(config.l2.sizeKB)}</div>}
+              <div className="box-stats">{l2.hits.toLocaleString()} hits / {l2.misses.toLocaleString()} misses</div>
+            </div>
+          )}
+        </div>
+
+        <div className="hierarchy-connector" />
+
+        {/* L3 Shared Cache */}
+        <div className="hierarchy-level l3">
+          <div className={`level-box l3-box ${getHitRateClass(l3.hitRate)}`}>
+            <div className="box-label">L3 Shared</div>
+            <div className="box-rate">{formatPercent(l3.hitRate)}</div>
+            {config && <div className="box-size">{formatSize(config.l3.sizeKB)}</div>}
+            <div className="box-stats">{l3.hits.toLocaleString()} hits / {l3.misses.toLocaleString()} misses</div>
           </div>
+        </div>
+
+        <div className="hierarchy-connector" />
+
+        {/* Main Memory */}
+        <div className="hierarchy-level memory">
+          <div className="level-box memory-box">
+            <div className="box-label">Main Memory</div>
+            <div className="box-stats">{l3.misses.toLocaleString()} accesses</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Estimated Cycles */}
+      <div className="cache-cycles">
+        <div className="cycles-label">Estimated Memory Latency</div>
+        <div className="cycles-value">{formatCycles(totalCycles)} cycles</div>
+        {overhead > 0 && (
+          <div className="cycles-overhead">+{formatCycles(overhead)} from cache misses</div>
         )}
-      </div>
-
-      <div className="cache-connector" />
-
-      {/* L2 */}
-      <div className={`cache-box ${getRateClass(l2.hitRate)}`} title={`${l2.hits.toLocaleString()} hits, ${l2.misses.toLocaleString()} misses`}>
-        <span className="cache-box-rate">{formatPercent(l2.hitRate)}</span>
-        <span className="cache-box-label">L2 Cache</span>
-      </div>
-
-      <div className="cache-connector" />
-
-      {/* L3 */}
-      <div className={`cache-box ${getRateClass(l3.hitRate)}`} title={`${l3.hits.toLocaleString()} hits, ${l3.misses.toLocaleString()} misses`}>
-        <span className="cache-box-rate">{formatPercent(l3.hitRate)}</span>
-        <span className="cache-box-label">L3 Cache</span>
-      </div>
-
-      <div className="cache-connector" />
-
-      {/* Memory */}
-      <div className="cache-memory">
-        Memory ({(l1d.misses + (l1i?.misses || 0) - l2.hits - l3.hits).toLocaleString()} accesses)
+        <div className="cycles-breakdown">
+          L1: {LATENCY.l1}cy • L2: {LATENCY.l2}cy • L3: {LATENCY.l3}cy • Mem: {LATENCY.mem}cy
+        </div>
       </div>
     </div>
   )
@@ -1311,104 +1675,6 @@ function CommandPalette({
   )
 }
 
-// Quick Config Panel Component
-function QuickConfigPanel({
-  isOpen,
-  config,
-  optLevel,
-  prefetchPolicy,
-  compilers,
-  selectedCompiler,
-  onConfigChange,
-  onOptLevelChange,
-  onPrefetchChange,
-  onCompilerChange,
-  onClose
-}: {
-  isOpen: boolean
-  config: string
-  optLevel: string
-  prefetchPolicy: string
-  compilers: Compiler[]
-  selectedCompiler: string
-  onConfigChange: (c: string) => void
-  onOptLevelChange: (o: string) => void
-  onPrefetchChange: (p: string) => void
-  onCompilerChange: (c: string) => void
-  onClose: () => void
-}) {
-  if (!isOpen) return null
-
-  return (
-    <div className="quick-config-overlay" onClick={onClose}>
-      <div className="quick-config" onClick={e => e.stopPropagation()}>
-        <div className="quick-config-header">
-          <span>Quick Settings</span>
-          <button className="quick-config-close" onClick={onClose}>×</button>
-        </div>
-        <div className="quick-config-body">
-          <div className="quick-config-row">
-            <label>Hardware</label>
-            <select value={config} onChange={e => onConfigChange(e.target.value)}>
-              <optgroup label="Learning">
-                <option value="educational">Educational (tiny)</option>
-              </optgroup>
-              <optgroup label="Intel">
-                <option value="intel">Intel 12th Gen</option>
-                <option value="intel14">Intel 14th Gen</option>
-                <option value="xeon">Intel Xeon</option>
-              </optgroup>
-              <optgroup label="AMD">
-                <option value="zen3">AMD Zen 3</option>
-                <option value="amd">AMD Zen 4</option>
-                <option value="epyc">AMD EPYC</option>
-              </optgroup>
-              <optgroup label="Apple">
-                <option value="apple">Apple M1</option>
-                <option value="m2">Apple M2</option>
-                <option value="m3">Apple M3</option>
-              </optgroup>
-              <optgroup label="ARM">
-                <option value="graviton">AWS Graviton 3</option>
-                <option value="rpi4">Raspberry Pi 4</option>
-              </optgroup>
-            </select>
-          </div>
-          <div className="quick-config-row">
-            <label>Optimization</label>
-            <select value={optLevel} onChange={e => onOptLevelChange(e.target.value)}>
-              <option value="-O0">-O0 (debug)</option>
-              <option value="-O1">-O1</option>
-              <option value="-O2">-O2 (recommended)</option>
-              <option value="-O3">-O3 (aggressive)</option>
-            </select>
-          </div>
-          <div className="quick-config-row">
-            <label>Prefetch</label>
-            <select value={prefetchPolicy} onChange={e => onPrefetchChange(e.target.value)}>
-              <option value="none">None</option>
-              <option value="next">Next Line</option>
-              <option value="stream">Stream</option>
-              <option value="stride">Stride</option>
-              <option value="adaptive">Adaptive</option>
-            </select>
-          </div>
-          {compilers.length > 1 && (
-            <div className="quick-config-row">
-              <label>Compiler</label>
-              <select value={selectedCompiler} onChange={e => onCompilerChange(e.target.value)}>
-                {compilers.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
 function LevelDetail({ name, stats }: { name: string; stats: CacheStats }) {
   return (
     <div className="level-detail">
@@ -1427,6 +1693,212 @@ function LevelDetail({ name, stats }: { name: string; stats: CacheStats }) {
           {formatPercent(stats.hitRate)}
         </span>
       </div>
+    </div>
+  )
+}
+
+// Godbolt-style inline settings toolbar
+function SettingsToolbar({
+  config,
+  optLevel,
+  prefetchPolicy,
+  compilers,
+  selectedCompiler,
+  defines,
+  customConfig,
+  eventLimit,
+  onConfigChange,
+  onOptLevelChange,
+  onPrefetchChange,
+  onCompilerChange,
+  onDefinesChange,
+  onCustomConfigChange,
+  onEventLimitChange,
+}: {
+  config: string
+  optLevel: string
+  prefetchPolicy: string
+  compilers: Compiler[]
+  selectedCompiler: string
+  defines: DefineEntry[]
+  customConfig: CustomCacheConfig
+  eventLimit: number
+  onConfigChange: (c: string) => void
+  onOptLevelChange: (o: string) => void
+  onPrefetchChange: (p: string) => void
+  onCompilerChange: (c: string) => void
+  onDefinesChange: (d: DefineEntry[]) => void
+  onCustomConfigChange: (c: CustomCacheConfig) => void
+  onEventLimitChange: (n: number) => void
+}) {
+  const [showMore, setShowMore] = useState(false)
+
+  return (
+    <div className="settings-toolbar">
+      <div className="settings-toolbar-main">
+        {/* Hardware Preset */}
+        <div className="toolbar-group">
+          <label>Hardware</label>
+          <select value={config} onChange={e => onConfigChange(e.target.value)}>
+            <optgroup label="Learning">
+              <option value="educational">Educational</option>
+            </optgroup>
+            <optgroup label="Intel">
+              <option value="intel">Intel 12th Gen</option>
+              <option value="intel14">Intel 14th Gen</option>
+              <option value="xeon">Intel Xeon</option>
+            </optgroup>
+            <optgroup label="AMD">
+              <option value="zen3">AMD Zen 3</option>
+              <option value="amd">AMD Zen 4</option>
+              <option value="epyc">AMD EPYC</option>
+            </optgroup>
+            <optgroup label="Apple">
+              <option value="apple">Apple M1</option>
+              <option value="m2">Apple M2</option>
+              <option value="m3">Apple M3</option>
+            </optgroup>
+            <optgroup label="ARM">
+              <option value="graviton">AWS Graviton 3</option>
+              <option value="rpi4">Raspberry Pi 4</option>
+            </optgroup>
+            <optgroup label="Custom">
+              <option value="custom">Custom Config...</option>
+            </optgroup>
+          </select>
+        </div>
+
+        <div className="toolbar-divider" />
+
+        {/* Optimization Level */}
+        <div className="toolbar-group">
+          <label>Opt</label>
+          <select value={optLevel} onChange={e => onOptLevelChange(e.target.value)}>
+            <option value="-O0">-O0</option>
+            <option value="-O1">-O1</option>
+            <option value="-O2">-O2</option>
+            <option value="-O3">-O3</option>
+            <option value="-Os">-Os</option>
+          </select>
+        </div>
+
+        <div className="toolbar-divider" />
+
+        {/* Compiler */}
+        {compilers.length > 0 && (
+          <>
+            <div className="toolbar-group">
+              <label>Compiler</label>
+              <select value={selectedCompiler} onChange={e => onCompilerChange(e.target.value)}>
+                {compilers.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="toolbar-divider" />
+          </>
+        )}
+
+        {/* Prefetch Policy */}
+        <div className="toolbar-group">
+          <label>Prefetch</label>
+          <select value={prefetchPolicy} onChange={e => onPrefetchChange(e.target.value)}>
+            <option value="none">None</option>
+            <option value="next">Next Line</option>
+            <option value="stream">Stream</option>
+            <option value="stride">Stride</option>
+            <option value="adaptive">Adaptive</option>
+            <option value="intel">Intel DCU</option>
+          </select>
+        </div>
+
+        <div className="toolbar-divider" />
+
+        {/* Event Limit */}
+        <div className="toolbar-group">
+          <label>Limit</label>
+          <select value={eventLimit} onChange={e => onEventLimitChange(parseInt(e.target.value))}>
+            <option value={10000}>10K</option>
+            <option value={50000}>50K</option>
+            <option value={100000}>100K</option>
+            <option value={500000}>500K</option>
+            <option value={1000000}>1M</option>
+          </select>
+        </div>
+
+        {/* More Options Toggle */}
+        <button
+          className={`toolbar-more ${showMore ? 'active' : ''}`}
+          onClick={() => setShowMore(!showMore)}
+          title="More options"
+        >
+          {showMore ? '▲ Less' : '▼ More'}
+        </button>
+      </div>
+
+      {/* Expandable Advanced Options */}
+      {showMore && (
+        <div className="settings-toolbar-advanced">
+          {/* Preprocessor Defines */}
+          <div className="toolbar-advanced-section">
+            <span className="toolbar-advanced-label">Defines:</span>
+            <div className="toolbar-defines">
+              {defines.map((def, i) => (
+                <div key={i} className="toolbar-define">
+                  <span className="define-prefix">-D</span>
+                  <input
+                    type="text"
+                    placeholder="NAME"
+                    value={def.name}
+                    onChange={(e) => {
+                      const newDefs = [...defines]
+                      newDefs[i].name = e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '')
+                      onDefinesChange(newDefs)
+                    }}
+                    className="define-input name"
+                  />
+                  <span className="define-eq">=</span>
+                  <input
+                    type="text"
+                    placeholder="value"
+                    value={def.value}
+                    onChange={(e) => {
+                      const newDefs = [...defines]
+                      newDefs[i].value = e.target.value
+                      onDefinesChange(newDefs)
+                    }}
+                    className="define-input value"
+                  />
+                  <button
+                    className="define-remove"
+                    onClick={() => onDefinesChange(defines.filter((_, j) => j !== i))}
+                  >×</button>
+                </div>
+              ))}
+              <button
+                className="define-add"
+                onClick={() => onDefinesChange([...defines, { name: '', value: '' }])}
+              >+ Add</button>
+            </div>
+          </div>
+
+          {/* Custom Cache Config */}
+          {config === 'custom' && (
+            <div className="toolbar-advanced-section">
+              <span className="toolbar-advanced-label">Cache Config:</span>
+              <div className="toolbar-cache-config">
+                <label>Line<input type="number" value={customConfig.lineSize} onChange={e => onCustomConfigChange({ ...customConfig, lineSize: parseInt(e.target.value) || 64 })} /></label>
+                <label>L1<input type="number" value={customConfig.l1Size} onChange={e => onCustomConfigChange({ ...customConfig, l1Size: parseInt(e.target.value) || 32768 })} /></label>
+                <label>L1 Assoc<input type="number" value={customConfig.l1Assoc} onChange={e => onCustomConfigChange({ ...customConfig, l1Assoc: parseInt(e.target.value) || 8 })} /></label>
+                <label>L2<input type="number" value={customConfig.l2Size} onChange={e => onCustomConfigChange({ ...customConfig, l2Size: parseInt(e.target.value) || 262144 })} /></label>
+                <label>L2 Assoc<input type="number" value={customConfig.l2Assoc} onChange={e => onCustomConfigChange({ ...customConfig, l2Assoc: parseInt(e.target.value) || 8 })} /></label>
+                <label>L3<input type="number" value={customConfig.l3Size} onChange={e => onCustomConfigChange({ ...customConfig, l3Size: parseInt(e.target.value) || 8388608 })} /></label>
+                <label>L3 Assoc<input type="number" value={customConfig.l3Assoc} onChange={e => onCustomConfigChange({ ...customConfig, l3Assoc: parseInt(e.target.value) || 16 })} /></label>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -1548,314 +2020,6 @@ interface CacheLine {
   accessCount: number
 }
 
-// Interactive cache grid with timeline scrubber
-function InteractiveCacheGrid({
-  config,
-  timeline,
-  currentIndex,
-  onIndexChange
-}: {
-  config: CacheLevelConfig
-  timeline: TimelineEvent[]
-  currentIndex: number
-  onIndexChange: (idx: number) => void
-}) {
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [playSpeed, setPlaySpeed] = useState(10)  // events per second
-  const playRef = useRef<number | null>(null)
-
-  // Calculate running stats up to current index
-  const runningStats = useMemo(() => {
-    let hits = 0, misses = 0, reads = 0, writes = 0
-    for (let i = 0; i < currentIndex; i++) {
-      const e = timeline[i]
-      if (e.l === 1) hits++
-      else misses++
-      if (e.t === 'R') reads++
-      else if (e.t === 'W') writes++
-    }
-    return { hits, misses, reads, writes }
-  }, [timeline, currentIndex])
-
-  // Find next miss event
-  const findNextMiss = () => {
-    for (let i = currentIndex; i < timeline.length; i++) {
-      if (timeline[i].l !== 1) {  // Not an L1 hit
-        return i + 1  // Return 1-indexed position
-      }
-    }
-    return timeline.length  // No more misses, go to end
-  }
-
-  // Find previous miss event
-  const findPrevMiss = () => {
-    for (let i = currentIndex - 2; i >= 0; i--) {
-      if (timeline[i].l !== 1) {  // Not an L1 hit
-        return i + 1  // Return 1-indexed position
-      }
-    }
-    return 0  // No previous miss, go to start
-  }
-
-  // Compute cache state up to currentIndex
-  const cacheState = useMemo(() => {
-    const numSets = config.sets
-    const assoc = config.assoc
-    const lineSize = config.lineSize
-
-    const cache: CacheLine[][] = Array.from({ length: numSets }, () =>
-      Array.from({ length: assoc }, () => ({
-        valid: false,
-        tag: 0,
-        dirty: false,
-        lastAccess: -1,
-        accessCount: 0
-      }))
-    )
-
-    const lruOrder: number[][] = Array.from({ length: numSets }, () =>
-      Array.from({ length: assoc }, (_, i) => i)
-    )
-
-    for (let i = 0; i < Math.min(currentIndex, timeline.length); i++) {
-      const event = timeline[i]
-      if (!event.a || event.t === 'I') continue
-
-      const addr = event.a
-      const setIndex = Math.floor(addr / lineSize) % numSets
-      const tag = Math.floor(addr / lineSize / numSets)
-      const isWrite = event.t === 'W'
-
-      const set = cache[setIndex]
-      const lru = lruOrder[setIndex]
-
-      let hitWay = -1
-      for (let way = 0; way < assoc; way++) {
-        if (set[way].valid && set[way].tag === tag) {
-          hitWay = way
-          break
-        }
-      }
-
-      if (hitWay >= 0) {
-        // Hit - update LRU and access info
-        set[hitWay].lastAccess = i
-        set[hitWay].accessCount++
-        if (isWrite) set[hitWay].dirty = true
-
-        // Move to MRU position
-        const idx = lru.indexOf(hitWay)
-        lru.splice(idx, 1)
-        lru.push(hitWay)
-      } else {
-        // Miss - find victim (LRU) and replace
-        const victimWay = lru[0]
-        set[victimWay] = {
-          valid: true,
-          tag,
-          dirty: isWrite,
-          lastAccess: i,
-          accessCount: 1
-        }
-
-        // Move to MRU position
-        lru.shift()
-        lru.push(victimWay)
-      }
-    }
-
-    return cache
-  }, [config, timeline, currentIndex])
-
-  // Playback control
-  useEffect(() => {
-    if (isPlaying && currentIndex < timeline.length) {
-      playRef.current = window.setInterval(() => {
-        onIndexChange(Math.min(currentIndex + 1, timeline.length))
-      }, 1000 / playSpeed)
-    }
-    return () => {
-      if (playRef.current) {
-        clearInterval(playRef.current)
-        playRef.current = null
-      }
-    }
-  }, [isPlaying, currentIndex, timeline.length, playSpeed, onIndexChange])
-
-  // Stop playing when reaching end
-  useEffect(() => {
-    if (currentIndex >= timeline.length) {
-      setIsPlaying(false)
-    }
-  }, [currentIndex, timeline.length])
-
-  const getHeatColor = (line: CacheLine, maxIndex: number) => {
-    if (!line.valid) return 'empty'
-    const recency = maxIndex > 0 ? (line.lastAccess / maxIndex) : 0
-    if (recency > 0.9) return 'hot'
-    if (recency > 0.5) return 'warm'
-    if (recency > 0.1) return 'cool'
-    return 'cold'
-  }
-
-  const currentEvent = timeline[currentIndex - 1]
-  const currentSet = currentEvent?.a
-    ? Math.floor(currentEvent.a / config.lineSize) % config.sets
-    : -1
-
-  return (
-    <div className="interactive-cache-grid">
-      <div className="cache-grid-header">
-        <div className="cache-grid-title">
-          L1D Cache State ({config.sets} sets × {config.assoc} ways)
-        </div>
-        <div className="scrubber-controls">
-          <button
-            className="play-btn"
-            onClick={() => setIsPlaying(!isPlaying)}
-            disabled={currentIndex >= timeline.length}
-            title={isPlaying ? 'Pause' : 'Play'}
-          >
-            {isPlaying ? '⏸' : '▶'}
-          </button>
-          <button
-            className="step-btn"
-            onClick={() => onIndexChange(Math.max(0, currentIndex - 1))}
-            disabled={currentIndex <= 0}
-            title="Previous event"
-          >
-            ◀
-          </button>
-          <button
-            className="step-btn"
-            onClick={() => onIndexChange(Math.min(timeline.length, currentIndex + 1))}
-            disabled={currentIndex >= timeline.length}
-            title="Next event"
-          >
-            ▶
-          </button>
-          <div className="step-divider" />
-          <button
-            className="step-btn skip-miss"
-            onClick={() => onIndexChange(findPrevMiss())}
-            disabled={currentIndex <= 0}
-            title="Previous miss"
-          >
-            ⏮
-          </button>
-          <button
-            className="step-btn skip-miss"
-            onClick={() => onIndexChange(findNextMiss())}
-            disabled={currentIndex >= timeline.length}
-            title="Next miss"
-          >
-            ⏭
-          </button>
-          <select
-            className="speed-select"
-            value={playSpeed}
-            onChange={(e) => setPlaySpeed(Number(e.target.value))}
-            title="Playback speed"
-          >
-            <option value={1}>1x</option>
-            <option value={5}>5x</option>
-            <option value={10}>10x</option>
-            <option value={50}>50x</option>
-            <option value={100}>100x</option>
-          </select>
-        </div>
-        <div className="running-stats">
-          <span className="stat-hit" title="L1 Hits">{runningStats.hits} hits</span>
-          <span className="stat-miss" title="L1 Misses">{runningStats.misses} miss</span>
-          <span className="stat-ratio" title="Hit Rate">
-            {currentIndex > 0 ? ((runningStats.hits / currentIndex) * 100).toFixed(1) : 0}%
-          </span>
-        </div>
-      </div>
-
-      {/* Timeline scrubber */}
-      <div className="timeline-scrubber">
-        <input
-          type="range"
-          min={0}
-          max={timeline.length}
-          value={currentIndex}
-          onChange={(e) => onIndexChange(Number(e.target.value))}
-          className="scrubber-slider"
-        />
-        <div className="scrubber-info">
-          <span>Event {currentIndex} / {timeline.length}</span>
-        </div>
-        {currentEvent && (
-          <div className="current-event-details">
-            <span className={`event-type ${currentEvent.t === 'R' ? 'read' : currentEvent.t === 'W' ? 'write' : 'fetch'}`}>
-              {currentEvent.t === 'R' ? 'READ' : currentEvent.t === 'W' ? 'WRITE' : 'FETCH'}
-            </span>
-            <span className={`event-result ${currentEvent.l === 1 ? 'l1' : currentEvent.l === 2 ? 'l2' : currentEvent.l === 3 ? 'l3' : 'mem'}`}>
-              {currentEvent.l === 1 ? 'L1 Hit' : currentEvent.l === 2 ? 'L2 Hit' : currentEvent.l === 3 ? 'L3 Hit' : 'Memory'}
-            </span>
-            {currentEvent.a && (
-              <span className="event-address">0x{currentEvent.a.toString(16).padStart(8, '0')}</span>
-            )}
-            {currentSet >= 0 && (
-              <span className="event-set">Set {currentSet}</span>
-            )}
-            {currentEvent.f && currentEvent.n && (
-              <span className="event-source">{currentEvent.f}:{currentEvent.n}</span>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Cache grid */}
-      <div className="cache-grid animated">
-        <div className="grid-header">
-          <div className="grid-corner">Set</div>
-          {Array.from({ length: config.assoc }, (_, i) => (
-            <div key={i} className="grid-way-label">W{i}</div>
-          ))}
-        </div>
-        {Array.from({ length: Math.min(config.sets, 16) }, (_, setIdx) => (
-          <div
-            key={setIdx}
-            className={`grid-row ${setIdx === currentSet ? 'active-set' : ''}`}
-          >
-            <div className="grid-set-label">{setIdx}</div>
-            {cacheState[setIdx].map((line: CacheLine, wayIdx: number) => (
-              <div
-                key={wayIdx}
-                className={`grid-cell ${getHeatColor(line, currentIndex)} ${line.dirty ? 'dirty' : ''}`}
-                title={line.valid
-                  ? `Tag: 0x${line.tag.toString(16)}\nAccesses: ${line.accessCount}\nLast: #${line.lastAccess}${line.dirty ? '\n(dirty)' : ''}`
-                  : 'Empty'
-                }
-              >
-                {line.valid && (
-                  <span className="cell-tag">
-                    {line.accessCount > 1 ? line.accessCount : ''}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        ))}
-        {config.sets > 16 && (
-          <div className="grid-ellipsis">... {config.sets - 16} more sets</div>
-        )}
-      </div>
-
-      <div className="cache-grid-legend">
-        <span className="legend-item"><span className="legend-color empty" /> Empty</span>
-        <span className="legend-item"><span className="legend-color cold" /> Cold</span>
-        <span className="legend-item"><span className="legend-color cool" /> Cool</span>
-        <span className="legend-item"><span className="legend-color warm" /> Warm</span>
-        <span className="legend-item"><span className="legend-color hot" /> Hot</span>
-        <span className="legend-item"><span className="legend-color dirty" /> Dirty</span>
-      </div>
-    </div>
-  )
-}
-
 // False Sharing Visualization Component
 function FalseSharingViz({ falseSharing, lineSize = 64 }: {
   falseSharing: FalseSharingEvent[]
@@ -1953,245 +2117,6 @@ function FalseSharingViz({ falseSharing, lineSize = 64 }: {
         <strong>Fix:</strong> Add padding between fields accessed by different threads to ensure they're on separate cache lines.
         For a {lineSize}-byte line, add at least {lineSize} bytes of padding.
       </div>
-    </div>
-  )
-}
-
-function CacheHierarchyViz({ result, timeline, scrubberIndex, onScrubberChange }: {
-  result: CacheResult
-  timeline?: TimelineEvent[]
-  scrubberIndex?: number
-  onScrubberChange?: (idx: number) => void
-}) {
-  const config = result.cacheConfig
-  const levels = result.levels
-
-  const l1d = levels.l1d || levels.l1
-  const l1i = levels.l1i
-  const l2 = levels.l2
-  const l3 = levels.l3
-
-  if (!l1d) return null
-
-  const formatSize = (kb: number) => {
-    if (kb >= 1024) return `${kb / 1024} MB`
-    return `${kb} KB`
-  }
-
-  const getHitRateClass = (rate: number) => {
-    if (rate >= 0.95) return 'excellent'
-    if (rate >= 0.8) return 'good'
-    if (rate >= 0.5) return 'moderate'
-    return 'poor'
-  }
-
-  const HitRateBar = ({ rate, label }: { rate: number; label: string }) => (
-    <div className="hit-rate-bar">
-      <div className="hit-rate-label">{label}</div>
-      <div className="hit-rate-track">
-        <div
-          className={`hit-rate-fill ${getHitRateClass(rate)}`}
-          style={{ width: `${rate * 100}%` }}
-        />
-      </div>
-      <div className="hit-rate-value">{(rate * 100).toFixed(1)}%</div>
-    </div>
-  )
-
-  return (
-    <div className="cache-hierarchy-viz">
-      <div className="hierarchy-title">Cache Hierarchy</div>
-
-      <div className="hierarchy-diagram">
-        {/* CPU Core */}
-        <div className="hierarchy-level cpu">
-          <div className="level-box cpu-box">
-            <div className="box-label">CPU Core</div>
-          </div>
-        </div>
-
-        {/* L1 Caches */}
-        <div className="hierarchy-level l1">
-          <div className={`level-box l1-box ${getHitRateClass(l1d.hitRate)}`}>
-            <div className="box-label">L1 Data</div>
-            {config && <div className="box-size">{formatSize(config.l1d.sizeKB)}</div>}
-            <div className="box-stats">
-              {l1d.hits} hits / {l1d.misses} misses
-            </div>
-          </div>
-          {l1i && (
-            <div className={`level-box l1-box ${getHitRateClass(l1i.hitRate)}`}>
-              <div className="box-label">L1 Instr</div>
-              {config && <div className="box-size">{formatSize(config.l1i.sizeKB)}</div>}
-              <div className="box-stats">
-                {l1i.hits} hits / {l1i.misses} misses
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="hierarchy-connector" />
-
-        {/* L2 Cache */}
-        <div className="hierarchy-level l2">
-          <div className={`level-box l2-box ${getHitRateClass(l2.hitRate)}`}>
-            <div className="box-label">L2 Unified</div>
-            {config && <div className="box-size">{formatSize(config.l2.sizeKB)}</div>}
-            <div className="box-stats">
-              {l2.hits} hits / {l2.misses} misses
-            </div>
-          </div>
-        </div>
-
-        <div className="hierarchy-connector" />
-
-        {/* L3 Cache */}
-        <div className="hierarchy-level l3">
-          <div className={`level-box l3-box ${getHitRateClass(l3.hitRate)}`}>
-            <div className="box-label">L3 Shared</div>
-            {config && <div className="box-size">{formatSize(config.l3.sizeKB)}</div>}
-            <div className="box-stats">
-              {l3.hits} hits / {l3.misses} misses
-            </div>
-          </div>
-        </div>
-
-        <div className="hierarchy-connector" />
-
-        {/* Main Memory */}
-        <div className="hierarchy-level memory">
-          <div className="level-box memory-box">
-            <div className="box-label">Main Memory</div>
-            <div className="box-stats">{l3.misses} accesses</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Interactive Cache Grid with Timeline Scrubber */}
-      {config && config.l1d.sets <= 64 && timeline && timeline.length > 0 && onScrubberChange && (
-        <InteractiveCacheGrid
-          config={config.l1d}
-          timeline={timeline}
-          currentIndex={scrubberIndex ?? timeline.length}
-          onIndexChange={onScrubberChange}
-        />
-      )}
-
-      {/* Static grid fallback when no timeline */}
-      {config && config.l1d.sets <= 64 && (!timeline || timeline.length === 0) && (
-        <div className="cache-grid-section">
-          <div className="cache-grid-title">
-            L1 Data Cache Structure ({config.l1d.sets} sets × {config.l1d.assoc} ways)
-          </div>
-          <div className="cache-grid">
-            <div className="grid-header">
-              <div className="grid-corner">Set</div>
-              {Array.from({ length: config.l1d.assoc }, (_, i) => (
-                <div key={i} className="grid-way-label">Way {i}</div>
-              ))}
-            </div>
-            {Array.from({ length: Math.min(config.l1d.sets, 16) }, (_, setIdx) => (
-              <div key={setIdx} className="grid-row">
-                <div className="grid-set-label">{setIdx}</div>
-                {Array.from({ length: config.l1d.assoc }, (_, wayIdx) => (
-                  <div key={wayIdx} className="grid-cell" title={`Set ${setIdx}, Way ${wayIdx}`} />
-                ))}
-              </div>
-            ))}
-            {config.l1d.sets > 16 && (
-              <div className="grid-ellipsis">... {config.l1d.sets - 16} more sets</div>
-            )}
-          </div>
-          <div className="cache-grid-legend">
-            <span className="legend-item"><span className="legend-color empty" /> Empty</span>
-            <span className="legend-item"><span className="legend-color valid" /> Valid</span>
-            <span className="legend-item"><span className="legend-color dirty" /> Dirty</span>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function AccessTimeline({ events, onEventClick }: { events: TimelineEvent[], onEventClick?: (line: number) => void }) {
-  const maxEvents = 500  // Limit display for performance
-  const displayEvents = events.slice(-maxEvents)
-
-  const getLevelColor = (level: number) => {
-    switch (level) {
-      case 1: return 'level-l1'  // L1 hit - green
-      case 2: return 'level-l2'  // L2 hit - yellow
-      case 3: return 'level-l3'  // L3 hit - orange
-      case 4: return 'level-mem' // Memory - red
-      default: return 'level-mem'
-    }
-  }
-
-  const getLevelName = (level: number) => {
-    switch (level) {
-      case 1: return 'L1'
-      case 2: return 'L2'
-      case 3: return 'L3'
-      case 4: return 'Mem'
-      default: return '?'
-    }
-  }
-
-  const getTypeName = (type: string) => {
-    switch (type) {
-      case 'R': return 'Read'
-      case 'W': return 'Write'
-      case 'I': return 'Fetch'
-      default: return type
-    }
-  }
-
-  // Count events by level
-  const counts = { l1: 0, l2: 0, l3: 0, mem: 0 }
-  for (const e of events) {
-    if (e.l === 1) counts.l1++
-    else if (e.l === 2) counts.l2++
-    else if (e.l === 3) counts.l3++
-    else counts.mem++
-  }
-
-  return (
-    <div className="access-timeline">
-      <div className="timeline-header">
-        <span className="timeline-title">Access Timeline</span>
-        <span className="timeline-count">{events.length.toLocaleString()} events</span>
-      </div>
-
-      <div className="timeline-summary">
-        <span className="timeline-stat level-l1">{counts.l1} L1</span>
-        <span className="timeline-stat level-l2">{counts.l2} L2</span>
-        <span className="timeline-stat level-l3">{counts.l3} L3</span>
-        <span className="timeline-stat level-mem">{counts.mem} Mem</span>
-      </div>
-
-      <div className="timeline-strip">
-        {displayEvents.map((e, idx) => (
-          <div
-            key={idx}
-            className={`timeline-event ${getLevelColor(e.l)}`}
-            title={`#${e.i}: ${getTypeName(e.t)} → ${getLevelName(e.l)}${e.f ? ` (${e.f}:${e.n})` : ''}`}
-            onClick={() => e.n && onEventClick?.(e.n)}
-          />
-        ))}
-      </div>
-
-      <div className="timeline-legend">
-        <span className="legend-item"><span className="legend-dot level-l1" /> L1 Hit</span>
-        <span className="legend-item"><span className="legend-dot level-l2" /> L2 Hit</span>
-        <span className="legend-item"><span className="legend-dot level-l3" /> L3 Hit</span>
-        <span className="legend-item"><span className="legend-dot level-mem" /> Memory</span>
-      </div>
-
-      {events.length > maxEvents && (
-        <div className="timeline-truncated">
-          Showing last {maxEvents} of {events.length.toLocaleString()} events
-        </div>
-      )}
     </div>
   )
 }
@@ -2440,52 +2365,48 @@ function App() {
   const [customConfig, setCustomConfig] = useState<CustomCacheConfig>(defaultCustomConfig)
   const [defines, setDefines] = useState<DefineEntry[]>([])
   const [copied, setCopied] = useState(false)
-  const [showOptions, setShowOptions] = useState(false)
   const [showDetails, setShowDetails] = useState(false)
-  const [showTimeline, setShowTimeline] = useState(false)
   const [diffMode, setDiffMode] = useState(false)
   const [sampleRate, setSampleRate] = useState(1)  // 1 = no sampling
-  const [eventLimit, setEventLimit] = useState(5000000)  // 5M default (~30s max runtime)
+  const [eventLimit, setEventLimit] = useState(20000)  // Start with -O0 default (20K)
   const [longRunning, setLongRunning] = useState(false)
   const [baselineCode, setBaselineCode] = useState<string | null>(null)
-  const [timeline, setTimeline] = useState<TimelineEvent[]>([])
-  const [scrubberIndex, setScrubberIndex] = useState<number>(0)  // For interactive cache grid
   const [vimMode, setVimMode] = useState(false)  // Vim keybindings toggle
   const [showCommandPalette, setShowCommandPalette] = useState(false)
   const [commandQuery, setCommandQuery] = useState('')
-  const [showQuickConfig, setShowQuickConfig] = useState(false)
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0)
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768)
   const [mobilePane, setMobilePane] = useState<'editor' | 'results'>('editor')
   const [selectedHotLineFile, setSelectedHotLineFile] = useState<string>('')  // File filter for hot lines
   const commandInputRef = useRef<HTMLInputElement>(null)
-  const timelineRef = useRef<TimelineEvent[]>([])  // Accumulator during streaming
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const monacoRef = useRef<Monaco | null>(null)
-  const decorationsRef = useRef<string[]>([])
-  const stepDecorationsRef = useRef<string[]>([])  // For step-through highlighting
-  const optionsRef = useRef<HTMLDivElement>(null)
+  const decorationsRef = useRef<string[]>([])  // For hover/miss decorations
   const vimStatusRef = useRef<HTMLDivElement>(null)
   const vimModeRef = useRef<{ dispose: () => void } | null>(null)
 
   // Monaco language mapping
   const monacoLanguage = language === 'cpp' ? 'cpp' : language === 'rust' ? 'rust' : 'c'
 
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (optionsRef.current && !optionsRef.current.contains(e.target as Node)) {
-        setShowOptions(false)
-      }
-    }
-    document.addEventListener('click', handleClick)
-    return () => document.removeEventListener('click', handleClick)
-  }, [])
-
   // Theme sync
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
     localStorage.setItem('cache-explorer-theme', theme)
   }, [theme])
+
+  // Adjust event limit based on optimization level
+  // -O0 generates way more memory events (no register optimization)
+  useEffect(() => {
+    const limits: Record<string, number> = {
+      '-O0': 20000,    // 20K - unoptimized code floods with events
+      '-O1': 50000,    // 50K - partial optimization
+      '-O2': 100000,   // 100K - good optimization
+      '-O3': 100000,   // 100K - aggressive optimization
+      '-Os': 100000,   // 100K - size optimization
+      '-Oz': 100000,   // 100K - aggressive size optimization
+    }
+    setEventLimit(limits[optLevel] || 100000)
+  }, [optLevel])
 
   // Fetch available compilers on mount
   useEffect(() => {
@@ -2550,11 +2471,9 @@ function App() {
         e.preventDefault()
         if (stage === 'idle') runAnalysis()
       }
-      // Escape to close modals
+      // Escape to close command palette
       if (e.key === 'Escape') {
-        setShowOptions(false)
         setShowCommandPalette(false)
-        setShowQuickConfig(false)
       }
     }
     window.addEventListener('keydown', handleKeyDown)
@@ -2766,40 +2685,6 @@ function App() {
     decorationsRef.current = editor.deltaDecorations(decorationsRef.current, decorations)
   }, [result])
 
-  // Highlight current line when stepping through timeline
-  useEffect(() => {
-    if (!editorRef.current || !monacoRef.current || !timeline.length) {
-      if (editorRef.current && stepDecorationsRef.current.length > 0) {
-        stepDecorationsRef.current = editorRef.current.deltaDecorations(stepDecorationsRef.current, [])
-      }
-      return
-    }
-
-    const monaco = monacoRef.current
-    const editor = editorRef.current
-    const model = editor.getModel()
-    if (!model) return
-
-    const currentEvent = timeline[scrubberIndex - 1]
-    const decorations: editor.IModelDeltaDecoration[] = []
-
-    if (currentEvent?.n && currentEvent.n > 0 && currentEvent.n <= model.getLineCount()) {
-      const lineNum = currentEvent.n
-      decorations.push({
-        range: new monaco.Range(lineNum, 1, lineNum, 1),
-        options: {
-          isWholeLine: true,
-          className: 'line-step-highlight',
-          glyphMarginClassName: 'glyph-step',
-        }
-      })
-      // Scroll the line into view
-      editor.revealLineInCenterIfOutsideViewport(lineNum)
-    }
-
-    stepDecorationsRef.current = editor.deltaDecorations(stepDecorationsRef.current, decorations)
-  }, [timeline, scrubberIndex])
-
   const runAnalysis = () => {
     // Input validation - check total size across all files
     const totalSize = files.reduce((sum, f) => sum + f.code.length, 0)
@@ -2815,9 +2700,7 @@ function App() {
     setStage('connecting')
     setError(null)
     setResult(null)
-    setTimeline([])
     setLongRunning(false)
-    timelineRef.current = []
 
     // Set long-running warning after 10 seconds
     const longRunTimeout = setTimeout(() => setLongRunning(true), 10000)
@@ -2846,22 +2729,10 @@ function App() {
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data)
       if (msg.type === 'status') setStage(msg.stage as Stage)
-      else if (msg.type === 'progress') {
-        // Collect timeline events from streaming progress
-        if (msg.timeline && Array.isArray(msg.timeline)) {
-          timelineRef.current = [...timelineRef.current, ...msg.timeline]
-          // Update timeline state periodically (every 200 events)
-          if (timelineRef.current.length % 200 < msg.timeline.length) {
-            setTimeline([...timelineRef.current])
-          }
-        }
-      } else if (msg.type === 'result') {
+      else if (msg.type === 'result') {
         clearTimeout(longRunTimeout)
         setLongRunning(false)
-        // Finalize timeline and set result
-        setTimeline([...timelineRef.current])
-        setResult({ ...(msg.data as CacheResult), timeline: timelineRef.current })
-        setScrubberIndex(timelineRef.current.length)  // Start at end of timeline
+        setResult(msg.data as CacheResult)
         setStage('idle')
         ws.close()
       } else if (msg.type === 'error' || msg.type?.includes('error') || msg.errors) {
@@ -2947,7 +2818,23 @@ function App() {
       icon: '>',
       label: ex.name,
       action: () => {
-        setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, code: ex.code, language: ex.language, name: 'main' + getFileExtension(ex.language) } : f))
+        if (ex.files && ex.files.length > 0) {
+          // Multi-file example: replace all files
+          const newFiles = ex.files.map((f, idx) => ({
+            id: generateFileId(),
+            name: f.name,
+            code: f.code,
+            language: f.language,
+            isMain: f.isMain
+          }))
+          setFiles(newFiles)
+          // Select the main file or first file
+          const mainFile = newFiles.find(f => f.isMain) || newFiles[0]
+          setActiveFileId(mainFile.id)
+        } else {
+          // Single-file example: update active file
+          setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, code: ex.code, language: ex.language, name: 'main' + getFileExtension(ex.language) } : f))
+        }
       },
       category: 'examples'
     })),
@@ -2957,8 +2844,6 @@ function App() {
     { id: 'lang-cpp', icon: ':', label: 'Language: C++', action: () => updateActiveLanguage('cpp'), category: 'settings' },
     { id: 'lang-rust', icon: ':', label: 'Language: Rust', action: () => updateActiveLanguage('rust'), category: 'settings' },
     // Config (*)
-    { id: 'config', icon: '*', label: 'Hardware config...', action: () => setShowQuickConfig(true), category: 'config' },
-    { id: 'options', icon: '*', label: 'Advanced options...', action: () => setShowOptions(true), category: 'config' },
     { id: 'sampling-none', icon: '*', label: 'Sampling: All events', action: () => setSampleRate(1), category: 'config' },
     { id: 'sampling-10', icon: '*', label: 'Sampling: 1:10', action: () => setSampleRate(10), category: 'config' },
     { id: 'sampling-100', icon: '*', label: 'Sampling: 1:100', action: () => setSampleRate(100), category: 'config' },
@@ -2997,32 +2882,11 @@ function App() {
         />
       )}
 
-      {/* Quick Config Panel - hidden in embed mode */}
-      {!isEmbedMode && (
-        <QuickConfigPanel
-          isOpen={showQuickConfig}
-          config={config}
-          optLevel={optLevel}
-          prefetchPolicy={prefetchPolicy}
-          compilers={compilers}
-          selectedCompiler={selectedCompiler}
-          onConfigChange={(c) => {
-            setConfig(c)
-            setPrefetchPolicy(PREFETCH_DEFAULTS[c] || 'none')
-          }}
-          onOptLevelChange={setOptLevel}
-          onPrefetchChange={(p) => setPrefetchPolicy(p as PrefetchPolicy)}
-          onCompilerChange={setSelectedCompiler}
-          onClose={() => setShowQuickConfig(false)}
-        />
-      )}
-
       {/* Topbar - hidden in embed mode */}
       {!isEmbedMode && (
         <div className="topbar">
           <div className="topbar-left">
             <span className="topbar-title">Cache Explorer</span>
-            <span className="topbar-filename">{activeFile?.name || 'main.c'}</span>
           </div>
 
           <div className="topbar-right">
@@ -3031,15 +2895,6 @@ function App() {
               onClick={toggleTheme}
               title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
             />
-            <button
-              className="config-badge"
-              onClick={() => setShowQuickConfig(true)}
-              title="Change configuration"
-            >
-              <span>{configNames[config] || config}</span>
-              <span className="config-badge-divider" />
-              <span>{optLevel}</span>
-            </button>
 
             <button
               onClick={runAnalysis}
@@ -3052,89 +2907,40 @@ function App() {
                   {stageText[stage]}
                 </>
               ) : (
-                <>Run</>
+                <>▶ Run</>
               )}
             </button>
           </div>
         </div>
       )}
 
+      {/* Settings Toolbar - Godbolt style */}
+      {!isEmbedMode && (
+        <SettingsToolbar
+          config={config}
+          optLevel={optLevel}
+          prefetchPolicy={prefetchPolicy}
+          compilers={compilers}
+          selectedCompiler={selectedCompiler}
+          defines={defines}
+          customConfig={customConfig}
+          eventLimit={eventLimit}
+          onConfigChange={(c) => {
+            setConfig(c)
+            setPrefetchPolicy(PREFETCH_DEFAULTS[c] || 'none')
+          }}
+          onOptLevelChange={setOptLevel}
+          onPrefetchChange={(p) => setPrefetchPolicy(p as PrefetchPolicy)}
+          onCompilerChange={setSelectedCompiler}
+          onDefinesChange={setDefines}
+          onCustomConfigChange={setCustomConfig}
+          onEventLimitChange={setEventLimit}
+        />
+      )}
+
       {/* Copied Toast */}
       {copied && (
         <div className="toast">Link copied!</div>
-      )}
-
-      {/* Advanced Options Modal - hidden in embed mode */}
-      {showOptions && !isEmbedMode && (
-        <div className="options-modal-overlay" onClick={() => setShowOptions(false)}>
-          <div className="options-modal" onClick={e => e.stopPropagation()}>
-            <div className="options-modal-header">
-              <span>Advanced Options</span>
-              <button className="quick-config-close" onClick={() => setShowOptions(false)}>×</button>
-            </div>
-            <div className="options-modal-body">
-              <div className="option-section">
-                <div className="option-label">Preprocessor Defines</div>
-                <div className="defines-list">
-                  {defines.map((def, i) => (
-                    <div key={i} className="define-row">
-                      <span className="define-d">-D</span>
-                      <input
-                        type="text"
-                        placeholder="NAME"
-                        value={def.name}
-                        onChange={(e) => {
-                          const newDefs = [...defines]
-                          newDefs[i].name = e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '')
-                          setDefines(newDefs)
-                        }}
-                        className="define-name"
-                      />
-                      <span className="define-eq">=</span>
-                      <input
-                        type="text"
-                        placeholder="value"
-                        value={def.value}
-                        onChange={(e) => {
-                          const newDefs = [...defines]
-                          newDefs[i].value = e.target.value
-                          setDefines(newDefs)
-                        }}
-                        className="define-value"
-                      />
-                      <button className="btn-remove" onClick={() => setDefines(defines.filter((_, j) => j !== i))}>×</button>
-                    </div>
-                  ))}
-                  <button className="btn-add" onClick={() => setDefines([...defines, { name: '', value: '' }])}>
-                    + Add Define
-                  </button>
-                </div>
-              </div>
-
-              {config === 'custom' && (
-                <div className="option-section">
-                  <div className="option-label">Custom Cache Config</div>
-                  <div className="config-grid">
-                    <label>Line Size</label>
-                    <input type="number" value={customConfig.lineSize} onChange={(e) => setCustomConfig({ ...customConfig, lineSize: parseInt(e.target.value) || 64 })} />
-                    <label>L1 Size</label>
-                    <input type="number" value={customConfig.l1Size} onChange={(e) => setCustomConfig({ ...customConfig, l1Size: parseInt(e.target.value) || 32768 })} />
-                    <label>L1 Assoc</label>
-                    <input type="number" value={customConfig.l1Assoc} onChange={(e) => setCustomConfig({ ...customConfig, l1Assoc: parseInt(e.target.value) || 8 })} />
-                    <label>L2 Size</label>
-                    <input type="number" value={customConfig.l2Size} onChange={(e) => setCustomConfig({ ...customConfig, l2Size: parseInt(e.target.value) || 262144 })} />
-                    <label>L2 Assoc</label>
-                    <input type="number" value={customConfig.l2Assoc} onChange={(e) => setCustomConfig({ ...customConfig, l2Assoc: parseInt(e.target.value) || 8 })} />
-                    <label>L3 Size</label>
-                    <input type="number" value={customConfig.l3Size} onChange={(e) => setCustomConfig({ ...customConfig, l3Size: parseInt(e.target.value) || 8388608 })} />
-                    <label>L3 Assoc</label>
-                    <input type="number" value={customConfig.l3Assoc} onChange={(e) => setCustomConfig({ ...customConfig, l3Assoc: parseInt(e.target.value) || 16 })} />
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
       )}
 
       {/* Mobile Tab Switcher */}
@@ -3208,7 +3014,17 @@ function App() {
                   <div className="status-meta">
                     {result.events.toLocaleString()} events | {result.config} config
                     {sampleRate > 1 && ` | ${sampleRate}x sampling`}
+                    {result.events >= eventLimit && (
+                      <span style={{ color: 'var(--warning)', marginLeft: '8px' }}>
+                        ⚠ Truncated at {eventLimit.toLocaleString()} limit
+                      </span>
+                    )}
                   </div>
+                  {result.events >= eventLimit && (
+                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                      Results may not represent full program behavior. Increase limit in Options or use higher optimization (-O2).
+                    </div>
+                  )}
                 </div>
 
                 {/* Cache Hierarchy Diagram */}
@@ -3261,39 +3077,15 @@ function App() {
                   <button className={`btn-toggle ${showDetails ? 'active' : ''}`} onClick={() => setShowDetails(!showDetails)}>
                     {showDetails ? '▼ Details' : '▶ Details'}
                   </button>
-                  <button className={`btn-toggle ${showTimeline ? 'active' : ''}`} onClick={() => setShowTimeline(!showTimeline)}>
-                    {showTimeline ? '▼ Timeline' : '▶ Timeline'}
-                  </button>
                 </div>
 
-              {showTimeline && timeline.length > 0 && (
-                <AccessTimeline
-                  events={timeline}
-                  onEventClick={(line) => {
-                    if (editorRef.current) {
-                      editorRef.current.revealLineInCenter(line)
-                      editorRef.current.setPosition({ lineNumber: line, column: 1 })
-                      editorRef.current.focus()
-                    }
-                  }}
-                />
-              )}
-
               {showDetails && (
-                <>
-                  <div className="details-grid">
-                    <LevelDetail name="L1 Data" stats={result.levels.l1d || result.levels.l1!} />
-                    {result.levels.l1i && <LevelDetail name="L1 Instruction" stats={result.levels.l1i} />}
-                    <LevelDetail name="L2" stats={result.levels.l2} />
-                    <LevelDetail name="L3" stats={result.levels.l3} />
-                  </div>
-                  <CacheHierarchyViz
-                    result={result}
-                    timeline={timeline}
-                    scrubberIndex={scrubberIndex}
-                    onScrubberChange={setScrubberIndex}
-                  />
-                </>
+                <div className="details-grid">
+                  <LevelDetail name="L1 Data" stats={result.levels.l1d || result.levels.l1!} />
+                  {result.levels.l1i && <LevelDetail name="L1 Instruction" stats={result.levels.l1i} />}
+                  <LevelDetail name="L2" stats={result.levels.l2} />
+                  <LevelDetail name="L3" stats={result.levels.l3} />
+                </div>
               )}
 
               {result.coherence && result.coherence.falseSharingEvents > 0 && (
@@ -3411,27 +3203,6 @@ function App() {
                   />
                 </div>
               )}
-
-              {/* Memory Layout Visualization */}
-              {timeline.length > 0 && (
-                <div className="panel">
-                  <div className="panel-header">
-                    <span className="panel-title">Memory Access Pattern</span>
-                    <span className="panel-badge">{timeline.length} accesses</span>
-                  </div>
-                  <MemoryLayout
-                    recentAccesses={timeline.slice(-200).map(e => ({
-                      address: e.a || 0,
-                      size: 8,
-                      isWrite: e.t === 'W',
-                      file: e.f,
-                      line: e.n,
-                      hitLevel: e.l
-                    }))}
-                    maxAccesses={200}
-                  />
-                </div>
-              )}
             </>
           )}
 
@@ -3465,24 +3236,12 @@ function App() {
       </div>
 
       {/* Bottom Control Strip - appears after run, hidden in embed mode */}
-      {result && timeline.length > 0 && !isEmbedMode && (
+      {result && !isEmbedMode && (
         <div className="bottom-strip">
           <div className="bottom-strip-left">
             <span className="strip-stat">{result.events.toLocaleString()} events</span>
             <span className="strip-divider" />
             <span className="strip-stat">{((result.levels.l1d || result.levels.l1!).hitRate * 100).toFixed(1)}% L1</span>
-          </div>
-          <div className="bottom-strip-center">
-            <input
-              type="range"
-              className="timeline-slider"
-              min={0}
-              max={timeline.length - 1}
-              value={scrubberIndex}
-              onChange={(e) => setScrubberIndex(Number(e.target.value))}
-              title="Scrub through cache events"
-            />
-            <span className="timeline-position">{scrubberIndex + 1} / {timeline.length}</span>
           </div>
           <div className="bottom-strip-right">
             <button className="strip-btn" onClick={openInCompilerExplorer} title="View in Compiler Explorer">CE ↗</button>

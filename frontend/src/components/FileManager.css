@@ -1,175 +1,274 @@
-.file-manager {
-  background: var(--bg-panel);
-  border-radius: 8px;
-  font-size: 12px;
+/* IDE-style horizontal file tabs */
+.editor-tabs {
   display: flex;
   flex-direction: column;
-  min-height: 150px;
-  max-height: 300px;
-}
-
-.file-manager-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 12px;
+  background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
+  min-height: 35px;
 }
 
-.header-title {
-  font-weight: bold;
-  color: var(--text-muted);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+.tabs-container {
+  display: flex;
+  align-items: stretch;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }
 
-.add-file-btn {
-  width: 20px;
-  height: 20px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-light);
-  border-radius: 4px;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 14px;
-  line-height: 1;
+.tabs-container::-webkit-scrollbar {
+  height: 3px;
+}
+
+.tabs-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tabs-container::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+
+/* Individual tab */
+.editor-tab {
   display: flex;
   align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-}
-
-.add-file-btn:hover {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: white;
-}
-
-.file-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 4px 0;
-}
-
-.file-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
+  gap: 6px;
+  padding: 0 12px;
+  height: 35px;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border);
   cursor: pointer;
-  transition: background 0.1s;
-  color: var(--text-primary);
+  transition: background 0.15s ease;
+  flex-shrink: 0;
+  min-width: 80px;
+  max-width: 180px;
+  position: relative;
 }
 
-.file-item:hover {
+.editor-tab:hover {
   background: var(--bg-hover);
 }
 
-.file-item.active {
-  background: var(--bg-elevated);
-  border-left: 2px solid var(--accent);
+.editor-tab:hover .tab-close {
+  opacity: 1;
 }
 
-.file-item.main-file {
-  font-weight: 500;
+/* Active tab - mimics VS Code style with bottom border removal illusion */
+.editor-tab.active {
+  background: var(--bg-panel);
+  border-bottom: 2px solid var(--accent);
+  margin-bottom: -1px;
 }
 
-.file-item.creating {
-  background: var(--bg-elevated);
+.editor-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--bg-panel);
 }
 
-.file-icon {
-  width: 20px;
-  height: 16px;
-  background: var(--accent);
+/* Main file indicator */
+.editor-tab.main-file .tab-name {
+  font-weight: 600;
+}
+
+/* Language icon badge */
+.tab-icon {
+  width: 18px;
+  height: 18px;
   border-radius: 3px;
   font-size: 9px;
-  font-weight: bold;
+  font-weight: 700;
   color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  text-transform: uppercase;
+}
+
+/* File name */
+.tab-name {
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.editor-tab.active .tab-name {
+  color: var(--text-primary);
+}
+
+/* Main file asterisk indicator */
+.tab-main-indicator {
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: bold;
+  line-height: 1;
+  margin-left: -2px;
+}
+
+/* Close button */
+.tab-close {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.15s ease;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
 
-.file-name {
-  flex: 1;
+.editor-tab.active .tab-close {
+  opacity: 0.6;
+}
+
+.tab-close:hover {
+  background: rgba(255, 255, 255, 0.1);
   color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  opacity: 1 !important;
 }
 
-.main-badge {
-  color: var(--warning);
-  font-size: 10px;
+/* New tab creating state */
+.editor-tab.new-tab {
+  background: var(--bg-panel);
+  min-width: 120px;
 }
 
-.rename-input,
-.new-file-input {
-  flex: 1;
+/* Input fields for rename/create */
+.tab-rename-input,
+.tab-new-input {
+  width: 100%;
+  max-width: 140px;
   background: var(--bg-base);
   border: 1px solid var(--accent);
-  color: var(--text-primary);
-  padding: 2px 6px;
-  font-size: 12px;
   border-radius: 3px;
+  color: var(--text-primary);
+  font-size: 12px;
+  padding: 2px 6px;
   outline: none;
 }
 
-.empty-state {
-  color: var(--text-muted);
-  text-align: center;
-  padding: 20px;
-  font-size: 11px;
+.tab-rename-input:focus,
+.tab-new-input:focus {
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb, 0, 212, 170), 0.2);
 }
 
-.context-menu {
+/* Add new file button */
+.tab-add-btn {
+  width: 28px;
+  height: 35px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tab-add-btn:hover {
+  background: var(--bg-hover);
+  color: var(--accent);
+}
+
+/* Context menu */
+.tab-context-menu {
   position: fixed;
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
   z-index: 1000;
-  min-width: 120px;
+  min-width: 140px;
   padding: 4px 0;
+  animation: contextMenuFadeIn 0.1s ease-out;
 }
 
-.context-menu button {
+@keyframes contextMenuFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.tab-context-menu button {
   display: block;
   width: 100%;
-  padding: 6px 12px;
+  padding: 8px 14px;
   background: none;
   border: none;
   color: var(--text-primary);
   font-size: 12px;
   text-align: left;
   cursor: pointer;
+  transition: background 0.1s ease;
 }
 
-.context-menu button:hover {
+.tab-context-menu button:hover {
   background: var(--bg-hover);
 }
 
-.context-menu button.delete-btn {
+.tab-context-menu button.delete-action {
   color: var(--error);
 }
 
-.context-menu button.delete-btn:disabled {
+.tab-context-menu button.delete-action:disabled {
   color: var(--text-muted);
   cursor: not-allowed;
 }
 
-.context-menu hr {
+.tab-context-menu button.delete-action:disabled:hover {
+  background: none;
+}
+
+.tab-context-menu hr {
   border: none;
-  border-top: 1px solid var(--border-light);
+  border-top: 1px solid var(--border);
   margin: 4px 0;
 }
 
-.file-manager-footer {
-  padding: 6px 12px;
-  border-top: 1px solid var(--border);
-  color: var(--text-muted);
-  font-size: 10px;
+/* Mobile responsive */
+@media (max-width: 600px) {
+  .editor-tab {
+    padding: 0 8px;
+    min-width: 60px;
+    max-width: 120px;
+  }
+
+  .tab-icon {
+    width: 14px;
+    height: 14px;
+    font-size: 8px;
+  }
+
+  .tab-name {
+    font-size: 11px;
+  }
 }
