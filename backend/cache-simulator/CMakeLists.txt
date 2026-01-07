@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_library(CacheSimulator
   src/CacheLevel.cpp
   src/CacheSystem.cpp
+  src/CoherenceController.cpp
   src/MultiCoreCacheSystem.cpp
   src/MultiCoreTraceProcessor.cpp
   src/OptimizationSuggester.cpp
