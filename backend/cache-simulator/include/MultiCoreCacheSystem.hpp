@@ -97,32 +97,32 @@ public:
   MultiCoreAccessResult write(uint64_t address, uint32_t thread_id,
                                const std::string &file = "", uint32_t line = 0);
 
-  MultiCoreStats get_stats() const;
+  [[nodiscard]] MultiCoreStats get_stats() const;
 
   // Get aggregated TLB stats across all cores
-  TLBHierarchyStats get_tlb_stats() const;
+  [[nodiscard]] TLBHierarchyStats get_tlb_stats() const;
 
   // Get TLB stats for a specific core
-  TLBStats get_tlb_stats_for_core(int core) const;
+  [[nodiscard]] TLBStats get_tlb_stats_for_core(int core) const;
 
-  std::vector<FalseSharingReport> get_false_sharing_reports() const;
+  [[nodiscard]] std::vector<FalseSharingReport> get_false_sharing_reports() const;
 
-  int get_num_cores() const { return num_cores; }
-  uint32_t get_line_size() const { return line_size; }
+  [[nodiscard]] int get_num_cores() const { return num_cores; }
+  [[nodiscard]] uint32_t get_line_size() const { return line_size; }
 
   // MESI state query for testing/debugging
-  CoherenceState get_l1_coherence_state(int core, uint64_t address) const;
+  [[nodiscard]] CoherenceState get_l1_coherence_state(int core, uint64_t address) const;
 
-  bool is_line_in_l1(int core, uint64_t address) const;
+  [[nodiscard]] bool is_line_in_l1(int core, uint64_t address) const;
 
   // Cache state access for visualization
-  const CacheLevel* get_l1_cache(int core) const;
+  [[nodiscard]] const CacheLevel* get_l1_cache(int core) const;
 
   // Prefetcher configuration accessors
-  PrefetchPolicy get_prefetch_policy() const { return prefetch_policy; }
-  int get_prefetch_degree() const { return prefetch_degree; }
+  [[nodiscard]] PrefetchPolicy get_prefetch_policy() const { return prefetch_policy; }
+  [[nodiscard]] int get_prefetch_degree() const { return prefetch_degree; }
 
-  PrefetchStats get_prefetch_stats(int core) const;
+  [[nodiscard]] PrefetchStats get_prefetch_stats(int core) const;
 
   void reset_prefetch_stats();
 };

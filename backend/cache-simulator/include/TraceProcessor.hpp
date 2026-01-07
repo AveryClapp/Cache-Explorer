@@ -13,8 +13,8 @@ struct SourceStats {
   uint32_t line;
   uint64_t hits = 0;
   uint64_t misses = 0;
-  uint64_t total() const { return hits + misses; }
-  double miss_rate() const { return total() ? (double)misses / total() : 0; }
+  [[nodiscard]] uint64_t total() const { return hits + misses; }
+  [[nodiscard]] double miss_rate() const { return total() ? (double)misses / total() : 0; }
 };
 
 // Software prefetch statistics
@@ -23,7 +23,7 @@ struct SoftwarePrefetchStats {
   uint64_t useful = 0;    // Prefetches that were later accessed
   uint64_t redundant = 0; // Prefetches to already-cached lines
   uint64_t evicted = 0;   // Prefetches evicted before use
-  double accuracy() const { return issued ? (double)useful / issued : 0; }
+  [[nodiscard]] double accuracy() const { return issued ? (double)useful / issued : 0; }
 };
 
 // Vector/SIMD operation statistics
@@ -83,24 +83,24 @@ public:
 
   void enable_prefetching(PrefetchPolicy policy, int degree = 2);
   void disable_prefetching();
-  bool is_prefetching_enabled() const;
-  PrefetchPolicy get_prefetch_policy() const;
-  const PrefetchStats &get_prefetch_stats() const;
+  [[nodiscard]] bool is_prefetching_enabled() const;
+  [[nodiscard]] PrefetchPolicy get_prefetch_policy() const;
+  [[nodiscard]] const PrefetchStats &get_prefetch_stats() const;
 
   void process(const TraceEvent &event);
 
-  HierarchyStats get_stats() const;
+  [[nodiscard]] HierarchyStats get_stats() const;
 
-  std::vector<SourceStats> get_hot_lines(size_t limit = 10) const;
+  [[nodiscard]] std::vector<SourceStats> get_hot_lines(size_t limit = 10) const;
 
   void reset();
 
   // Access to cache system for visualization
-  const CacheSystem &get_cache_system() const;
+  [[nodiscard]] const CacheSystem &get_cache_system() const;
 
   // Advanced instrumentation statistics getters
-  const SoftwarePrefetchStats &get_software_prefetch_stats() const;
-  const VectorStats &get_vector_stats() const;
-  const AtomicStats &get_atomic_stats() const;
-  const MemoryIntrinsicStats &get_memory_intrinsic_stats() const;
+  [[nodiscard]] const SoftwarePrefetchStats &get_software_prefetch_stats() const;
+  [[nodiscard]] const VectorStats &get_vector_stats() const;
+  [[nodiscard]] const AtomicStats &get_atomic_stats() const;
+  [[nodiscard]] const MemoryIntrinsicStats &get_memory_intrinsic_stats() const;
 };

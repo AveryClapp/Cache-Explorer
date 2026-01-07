@@ -22,7 +22,7 @@ struct TLBConfig {
     size_t associativity = 4;   // Set associativity
     size_t page_size = 4096;    // Page size in bytes (4KB default)
 
-    size_t num_sets() const {
+    [[nodiscard]] constexpr size_t num_sets() const noexcept {
         return entries / associativity;
     }
 };
@@ -31,14 +31,14 @@ struct TLBStats {
     uint64_t hits = 0;
     uint64_t misses = 0;
 
-    uint64_t total_accesses() const { return hits + misses; }
+    [[nodiscard]] constexpr uint64_t total_accesses() const noexcept { return hits + misses; }
 
-    double hit_rate() const {
+    [[nodiscard]] constexpr double hit_rate() const noexcept {
         if (total_accesses() == 0) return 0.0;
         return static_cast<double>(hits) / total_accesses();
     }
 
-    double miss_rate() const {
+    [[nodiscard]] constexpr double miss_rate() const noexcept {
         if (total_accesses() == 0) return 0.0;
         return static_cast<double>(misses) / total_accesses();
     }
@@ -96,16 +96,16 @@ public:
      */
     void flush();
 
-    const TLBStats& get_stats() const { return stats; }
+    [[nodiscard]] const TLBStats& get_stats() const { return stats; }
 
     void reset_stats();
 
-    const TLBConfig& get_config() const { return config; }
+    [[nodiscard]] const TLBConfig& get_config() const { return config; }
 
     /**
      * Get number of unique pages accessed (working set in pages)
      */
-    size_t get_unique_pages() const { return seen_pages.size(); }
+    [[nodiscard]] size_t get_unique_pages() const { return seen_pages.size(); }
 };
 
 /**

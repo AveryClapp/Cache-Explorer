@@ -66,8 +66,8 @@ const PrefetchStats &TraceProcessor::get_prefetch_stats() const {
 }
 
 void TraceProcessor::process(const TraceEvent &event) {
-  uint32_t line_size = event.is_icache ? cache.get_l1i().getLineSize()
-                                       : cache.get_l1d().getLineSize();
+  uint32_t line_size = event.is_icache ? cache.get_l1i().get_line_size()
+                                       : cache.get_l1d().get_line_size();
 
   // Handle software prefetch hints
   if (event.is_prefetch) {

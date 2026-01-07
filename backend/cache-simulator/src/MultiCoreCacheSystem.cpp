@@ -187,13 +187,13 @@ MultiCoreAccessResult MultiCoreCacheSystem::write(uint64_t address,
 MultiCoreStats MultiCoreCacheSystem::get_stats() const {
   MultiCoreStats stats;
   for (const auto &l1 : l1_caches) {
-    stats.l1_per_core.push_back(l1->getStats());
+    stats.l1_per_core.push_back(l1->get_stats());
   }
   for (const auto &pf : prefetchers) {
-    stats.prefetch_per_core.push_back(pf->getStats());
+    stats.prefetch_per_core.push_back(pf->get_stats());
   }
-  stats.l2 = l2.getStats();
-  stats.l3 = l3.getStats();
+  stats.l2 = l2.get_stats();
+  stats.l3 = l3.get_stats();
   stats.coherence_invalidations = coherence_invalidations;
   stats.false_sharing_events = false_sharing_count;
   return stats;
@@ -257,11 +257,11 @@ const CacheLevel *MultiCoreCacheSystem::get_l1_cache(int core) const {
 PrefetchStats MultiCoreCacheSystem::get_prefetch_stats(int core) const {
   if (core < 0 || core >= num_cores)
     return PrefetchStats{};
-  return prefetchers[core]->getStats();
+  return prefetchers[core]->get_stats();
 }
 
 void MultiCoreCacheSystem::reset_prefetch_stats() {
   for (auto &pf : prefetchers) {
-    pf->resetStats();
+    pf->reset_stats();
   }
 }

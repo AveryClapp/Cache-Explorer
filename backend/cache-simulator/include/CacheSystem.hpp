@@ -63,32 +63,32 @@ public:
   // Prefetching control
   void enable_prefetching(PrefetchPolicy policy, int degree = 2);
   void disable_prefetching();
-  bool is_prefetching_enabled() const { return prefetch_enabled; }
-  const PrefetchStats &get_prefetch_stats() const { return prefetcher.getStats(); }
+  [[nodiscard]] bool is_prefetching_enabled() const { return prefetch_enabled; }
+  [[nodiscard]] const PrefetchStats &get_prefetch_stats() const { return prefetcher.get_stats(); }
 
-  HierarchyStats get_stats() const;
+  [[nodiscard]] HierarchyStats get_stats() const;
   void reset_stats();
 
-  const CacheLevel &get_l1d() const { return l1d; }
-  const CacheLevel &get_l1i() const { return l1i; }
-  const CacheLevel &get_l2() const { return l2; }
-  const CacheLevel &get_l3() const { return l3; }
+  [[nodiscard]] const CacheLevel &get_l1d() const { return l1d; }
+  [[nodiscard]] const CacheLevel &get_l1i() const { return l1i; }
+  [[nodiscard]] const CacheLevel &get_l2() const { return l2; }
+  [[nodiscard]] const CacheLevel &get_l3() const { return l3; }
 
   // TLB access
-  const TLB &get_dtlb() const { return dtlb; }
-  const TLB &get_itlb() const { return itlb; }
-  TLBHierarchyStats get_tlb_stats() const {
+  [[nodiscard]] const TLB &get_dtlb() const { return dtlb; }
+  [[nodiscard]] const TLB &get_itlb() const { return itlb; }
+  [[nodiscard]] TLBHierarchyStats get_tlb_stats() const {
     return {dtlb.get_stats(), itlb.get_stats(), {}};
   }
   void enable_tlb() { tlb_enabled = true; }
   void disable_tlb() { tlb_enabled = false; }
-  bool is_tlb_enabled() const { return tlb_enabled; }
+  [[nodiscard]] bool is_tlb_enabled() const { return tlb_enabled; }
 
-  InclusionPolicy get_inclusion_policy() const { return inclusion_policy; }
-  PrefetchPolicy get_prefetch_policy() const { return prefetcher.getPolicy(); }
+  [[nodiscard]] InclusionPolicy get_inclusion_policy() const { return inclusion_policy; }
+  [[nodiscard]] PrefetchPolicy get_prefetch_policy() const { return prefetcher.get_policy(); }
 
   // Timing stats access
-  const TimingStats& get_timing_stats() const { return timing_stats; }
-  const LatencyConfig& get_latency_config() const { return latency_config; }
+  [[nodiscard]] const TimingStats& get_timing_stats() const { return timing_stats; }
+  [[nodiscard]] const LatencyConfig& get_latency_config() const { return latency_config; }
   void set_latency_config(const LatencyConfig& cfg) { latency_config = cfg; }
 };

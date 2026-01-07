@@ -202,7 +202,7 @@ struct CacheConfig {
   EvictionPolicy policy = EvictionPolicy::LRU;
   WritePolicy write_policy = WritePolicy::Back;
 
-  bool is_valid() const {
+  [[nodiscard]] constexpr bool is_valid() const noexcept {
     if (kb_size == 0 || associativity <= 0 || line_size <= 0) return false;
     if ((line_size & (line_size - 1)) != 0) return false;
     if (num_sets() <= 0) return false;
@@ -210,22 +210,22 @@ struct CacheConfig {
     return true;
   }
 
-  int num_sets() const {
+  [[nodiscard]] constexpr int num_sets() const noexcept {
     return (kb_size * 1024) / (line_size * associativity);
   }
-  int num_lines() const { return (kb_size * 1024) / line_size; }
+  [[nodiscard]] constexpr int num_lines() const noexcept { return (kb_size * 1024) / line_size; }
 
-  int offset_bits() const { return __builtin_ctz(line_size); }
-  int index_bits() const { return __builtin_ctz(num_sets()); }
-  int tag_bits() const { return 64 - offset_bits() - index_bits(); }
+  [[nodiscard]] constexpr int offset_bits() const noexcept { return __builtin_ctz(line_size); }
+  [[nodiscard]] constexpr int index_bits() const noexcept { return __builtin_ctz(num_sets()); }
+  [[nodiscard]] constexpr int tag_bits() const noexcept { return 64 - offset_bits() - index_bits(); }
 
-  uint64_t get_offset(uint64_t addr) const {
+  [[nodiscard]] constexpr uint64_t get_offset(uint64_t addr) const noexcept {
     return addr & ((1ULL << offset_bits()) - 1);
   }
-  uint64_t get_index(uint64_t addr) const {
+  [[nodiscard]] constexpr uint64_t get_index(uint64_t addr) const noexcept {
     return (addr >> offset_bits()) & ((1ULL << index_bits()) - 1);
   }
-  uint64_t get_tag(uint64_t addr) const {
+  [[nodiscard]] constexpr uint64_t get_tag(uint64_t addr) const noexcept {
     return addr >> (offset_bits() + index_bits());
   }
 };

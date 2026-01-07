@@ -26,13 +26,13 @@ struct PrefetchStats {
     prefetches_useless = 0;
   }
 
-  double accuracy() const {
+  [[nodiscard]] constexpr double accuracy() const noexcept {
     if (prefetches_issued == 0)
       return 0.0;
     return static_cast<double>(prefetches_useful) / prefetches_issued;
   }
 
-  double coverage() const {
+  [[nodiscard]] constexpr double coverage() const noexcept {
     // Fraction of demand misses that could have been avoided
     // This requires tracking at a higher level
     return 0.0;
@@ -112,10 +112,10 @@ public:
   void record_useless_prefetch() { stats.prefetches_useless++; }
 
   // Accessors
-  PrefetchPolicy getPolicy() const { return policy; }
-  void setPolicy(PrefetchPolicy p) { policy = p; }
-  int getDegree() const { return prefetch_degree; }
-  void setDegree(int d) { prefetch_degree = d; }
-  const PrefetchStats &getStats() const { return stats; }
-  void resetStats() { stats.reset(); }
+  [[nodiscard]] PrefetchPolicy get_policy() const { return policy; }
+  void set_policy(PrefetchPolicy p) { policy = p; }
+  [[nodiscard]] int get_degree() const { return prefetch_degree; }
+  void set_degree(int d) { prefetch_degree = d; }
+  [[nodiscard]] const PrefetchStats &get_stats() const { return stats; }
+  void reset_stats() { stats.reset(); }
 };

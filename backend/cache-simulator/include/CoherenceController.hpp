@@ -41,9 +41,9 @@ public:
 
   // Detect false sharing: different cores accessing different bytes in same
   // line
-  bool detect_false_sharing(uint64_t address, int line_size);
+  [[nodiscard]] bool detect_false_sharing(uint64_t address, int line_size);
 
   void evict_line(int core_id, uint64_t address);
 
-  int get_sharer_count(uint64_t address) const;
+  [[nodiscard]] int get_sharer_count(uint64_t address) const;
 };

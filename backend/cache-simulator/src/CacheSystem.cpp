@@ -45,14 +45,14 @@ void CacheSystem::issue_prefetches(const std::vector<uint64_t> &addrs) {
 }
 
 void CacheSystem::enable_prefetching(PrefetchPolicy policy, int degree) {
-  prefetcher.setPolicy(policy);
-  prefetcher.setDegree(degree);
+  prefetcher.set_policy(policy);
+  prefetcher.set_degree(degree);
   prefetch_enabled = true;
 }
 
 void CacheSystem::disable_prefetching() {
   prefetch_enabled = false;
-  prefetcher.setPolicy(PrefetchPolicy::NONE);
+  prefetcher.set_policy(PrefetchPolicy::NONE);
 }
 
 SystemAccessResult CacheSystem::access_hierarchy(uint64_t address,
@@ -216,13 +216,13 @@ SystemAccessResult CacheSystem::fetch(uint64_t address, uint64_t pc) {
 }
 
 HierarchyStats CacheSystem::get_stats() const {
-  return {l1d.getStats(), l1i.getStats(), l2.getStats(), l3.getStats(), timing_stats};
+  return {l1d.get_stats(), l1i.get_stats(), l2.get_stats(), l3.get_stats(), timing_stats};
 }
 
 void CacheSystem::reset_stats() {
-  l1d.resetStats();
-  l1i.resetStats();
-  l2.resetStats();
-  l3.resetStats();
+  l1d.reset_stats();
+  l1i.reset_stats();
+  l2.reset_stats();
+  l3.reset_stats();
   timing_stats.reset();
 }

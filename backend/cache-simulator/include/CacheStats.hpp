@@ -13,30 +13,30 @@ struct CacheStats {
   uint64_t capacity_misses = 0;    // Working set exceeds cache size
   uint64_t conflict_misses = 0;    // Limited associativity caused eviction
 
-  uint64_t total_accesses() const { return hits + misses; }
+  [[nodiscard]] constexpr uint64_t total_accesses() const noexcept { return hits + misses; }
 
-  double hit_rate() const {
+  [[nodiscard]] constexpr double hit_rate() const noexcept {
     if (total_accesses() == 0) return 0.0;
     return static_cast<double>(hits) / total_accesses();
   }
 
-  double miss_rate() const {
+  [[nodiscard]] constexpr double miss_rate() const noexcept {
     if (total_accesses() == 0) return 0.0;
     return static_cast<double>(misses) / total_accesses();
   }
 
   // Miss breakdown percentages
-  double compulsory_rate() const {
+  [[nodiscard]] constexpr double compulsory_rate() const noexcept {
     if (misses == 0) return 0.0;
     return static_cast<double>(compulsory_misses) / misses;
   }
 
-  double capacity_rate() const {
+  [[nodiscard]] constexpr double capacity_rate() const noexcept {
     if (misses == 0) return 0.0;
     return static_cast<double>(capacity_misses) / misses;
   }
 
-  double conflict_rate() const {
+  [[nodiscard]] constexpr double conflict_rate() const noexcept {
     if (misses == 0) return 0.0;
     return static_cast<double>(conflict_misses) / misses;
   }
@@ -72,7 +72,7 @@ struct TimingStats {
   uint64_t memory_cycles = 0;         // Cycles from memory accesses
   uint64_t tlb_miss_cycles = 0;       // Additional cycles from TLB misses
 
-  double average_access_latency(uint64_t total_accesses) const {
+  [[nodiscard]] constexpr double average_access_latency(uint64_t total_accesses) const noexcept {
     if (total_accesses == 0) return 0.0;
     return static_cast<double>(total_cycles) / total_accesses;
   }

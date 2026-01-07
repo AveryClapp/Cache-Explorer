@@ -54,20 +54,20 @@ public:
     set_unique_lines.resize(num_sets, 0);
   }
 
-  const CacheConfig &getConfig() const { return config; }
-  const CacheStats &getStats() const { return stats; }
-  void resetStats() {
+  [[nodiscard]] const CacheConfig &get_config() const { return config; }
+  [[nodiscard]] const CacheStats &get_stats() const { return stats; }
+  void reset_stats() {
     stats.reset();
     ever_accessed.clear();
     unique_lines_accessed = 0;
     std::fill(set_unique_lines.begin(), set_unique_lines.end(), 0);
   }
 
-  int getNumSets() const { return config.num_sets(); }
-  int getAssociativity() const { return config.associativity; }
-  int getSizeKB() const { return config.kb_size; }
-  int getLineSize() const { return config.line_size; }
-  EvictionPolicy getEvictionPolicy() const { return config.policy; }
+  [[nodiscard]] int get_num_sets() const { return config.num_sets(); }
+  [[nodiscard]] int get_associativity() const { return config.associativity; }
+  [[nodiscard]] int get_size_kb() const { return config.kb_size; }
+  [[nodiscard]] int get_line_size() const { return config.line_size; }
+  [[nodiscard]] EvictionPolicy get_eviction_policy() const { return config.policy; }
 
   AccessInfo access(uint64_t address, bool is_write);
   AccessInfo install(uint64_t address, bool is_dirty = false);
@@ -77,13 +77,13 @@ public:
   bool is_dirty(uint64_t address) const;
   bool get_line_for_writeback(uint64_t address, bool &was_dirty);
   std::vector<uint64_t> get_all_addresses() const;
-  bool probe(uint64_t address) const { return is_present(address); }
+  [[nodiscard]] bool probe(uint64_t address) const { return is_present(address); }
 
   // Get full cache state for visualization
-  const std::vector<std::vector<CacheLine>>& get_sets() const { return sets; }
+  [[nodiscard]] const std::vector<std::vector<CacheLine>>& get_sets() const { return sets; }
 
   // MESI coherence state management
-  CoherenceState get_coherence_state(uint64_t address) const;
+  [[nodiscard]] CoherenceState get_coherence_state(uint64_t address) const;
   void set_coherence_state(uint64_t address, CoherenceState state);
   bool upgrade_to_modified(uint64_t address);  // Returns true if upgrade was needed
   void downgrade_to_shared(uint64_t address);

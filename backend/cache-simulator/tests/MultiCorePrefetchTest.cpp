@@ -35,7 +35,7 @@ void test_prefetch_none_policy() {
   addrs = pf.on_miss(0x1040);
   assert(addrs.empty());
 
-  assert(pf.getStats().prefetches_issued == 0);
+  assert(pf.get_stats().prefetches_issued == 0);
 
   std::cout << "[PASS] test_prefetch_none_policy\n";
 }
@@ -68,7 +68,7 @@ void test_prefetch_stream_detection() {
   addrs = pf.on_miss(0x1080);
 
   // By now, stream prefetcher should be issuing prefetches
-  auto stats = pf.getStats();
+  auto stats = pf.get_stats();
   // At least some prefetches should be issued after pattern detected
   assert(stats.prefetches_issued >= 1);
 
@@ -104,7 +104,7 @@ void test_prefetch_adaptive() {
     pf.on_miss(0x1000 + i * 64);
   }
 
-  auto stats = pf.getStats();
+  auto stats = pf.get_stats();
   // Adaptive should have issued some prefetches
   assert(stats.prefetches_issued >= 1);
 
@@ -131,15 +131,15 @@ void test_prefetch_stats() {
 
   pf.on_miss(0x1000);  // Issues 2 prefetches
 
-  auto stats = pf.getStats();
+  auto stats = pf.get_stats();
   assert(stats.prefetches_issued == 2);
 
   pf.record_useful_prefetch();
-  stats = pf.getStats();
+  stats = pf.get_stats();
   assert(stats.prefetches_useful == 1);
 
   pf.record_useless_prefetch();
-  stats = pf.getStats();
+  stats = pf.get_stats();
   assert(stats.prefetches_useless == 1);
 
   std::cout << "[PASS] test_prefetch_stats\n";
@@ -157,7 +157,7 @@ void test_prefetch_accuracy() {
   pf.record_useless_prefetch();
   pf.record_useless_prefetch();
 
-  auto stats = pf.getStats();
+  auto stats = pf.get_stats();
   assert(stats.prefetches_issued == 4);
   assert(stats.prefetches_useful == 2);
   double accuracy = stats.accuracy();
@@ -173,8 +173,8 @@ void test_prefetch_reset() {
   pf.on_miss(0x1000);
   pf.record_useful_prefetch();
 
-  pf.resetStats();
-  auto stats = pf.getStats();
+  pf.reset_stats();
+  auto stats = pf.get_stats();
 
   assert(stats.prefetches_issued == 0);
   assert(stats.prefetches_useful == 0);
@@ -275,7 +275,7 @@ void test_prefetch_sequential_benefit() {
     all_prefetched.insert(all_prefetched.end(), addrs.begin(), addrs.end());
   }
 
-  auto stats = pf.getStats();
+  auto stats = pf.get_stats();
 
   // Sequential pattern should trigger many prefetches
   assert(stats.prefetches_issued >= 10);
@@ -296,7 +296,7 @@ void test_prefetch_random_no_benefit() {
     pf.on_miss(addr);
   }
 
-  auto stats = pf.getStats();
+  auto stats = pf.get_stats();
 
   // Stream prefetcher should NOT issue many prefetches for random access
   // (pattern not detected)
@@ -319,7 +319,7 @@ void test_prefetch_strided_benefit() {
     pf.on_miss(0x1000 + i * stride, pc);
   }
 
-  auto stats = pf.getStats();
+  auto stats = pf.get_stats();
 
   // Stride pattern should be detected and prefetches issued
   assert(stats.prefetches_issued >= 1);

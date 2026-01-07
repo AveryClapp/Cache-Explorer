@@ -30,8 +30,8 @@ const char* JsonOutput::coherence_state_char(CoherenceState state) {
 void JsonOutput::write_cache_state(std::ostream& out, const CacheLevel& cache,
                                    int core, bool first, bool multicore) {
     const auto& sets = cache.get_sets();
-    int num_sets = cache.getNumSets();
-    int assoc = cache.getAssociativity();
+    int num_sets = cache.get_num_sets();
+    int assoc = cache.get_associativity();
 
     if (!first) out << ",";
     out << "{\"core\":" << core
