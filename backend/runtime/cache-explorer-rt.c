@@ -32,6 +32,7 @@ static struct {
 static struct {
   char names[MAX_FILES][MAX_FILENAME];
   uint32_t count;
+  uint32_t overflow_count;  // Track how many files couldn't be registered
   pthread_mutex_t mutex;
 } file_table = { .mutex = PTHREAD_MUTEX_INITIALIZER };
 static int file_overflow_warned = 0;
@@ -68,14 +69,16 @@ static uint32_t intern_filename(const char *file) {
     return idx;
   }
 
-  // File table overflow - warn once and return 0
+  // File table overflow - track and warn
+  file_table.overflow_count++;
   if (!file_overflow_warned) {
     file_overflow_warned = 1;
-    fprintf(stderr, "[cache-explorer] WARNING: File table overflow (>%d files). "
-            "Additional files will be attributed to first file.\n", MAX_FILES);
+    fprintf(stderr, "[cache-explorer] WARNING: File table overflow (>%d unique files). "
+            "Additional files will be attributed to first file. "
+            "Consider using fewer source files or merging headers.\n", MAX_FILES);
   }
   pthread_mutex_unlock(&file_table.mutex);
-  return 0;
+  return 0;  // Attribute to first file when overflow
 }
 
 static inline void emit_event_with_src(uint64_t addr_with_flag, uint64_t src_addr,

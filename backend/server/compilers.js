@@ -137,9 +137,10 @@ export function discoverCompilers() {
         timeout: 2000,
       }).trim();
 
-      if (which && !seenVersions.has(`${ver}.0`)) {
+      if (which) {
         const version = getClangVersion(which);
-        if (version) {
+        // Check if we already have this major version
+        if (version && !seenVersions.has(version.full)) {
           const binPath = which.replace(/\/clang-\d+$/, '');
           compilers.push({
             id: `clang-${ver}`,

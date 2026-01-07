@@ -15,6 +15,7 @@ struct AccessInfo {
   AccessResult result;
   bool was_dirty;
   uint64_t evicted_address;
+  bool had_eviction;  // True if a valid line was evicted (for inclusive cache back-invalidation)
 };
 
 class CacheLevel {

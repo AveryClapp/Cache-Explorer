@@ -324,6 +324,7 @@ void test_dirty_eviction() {
 
   assert(info.result == AccessResult::MissWithEviction);
   assert(info.was_dirty == true);
+  assert(info.had_eviction == true);
   assert(info.evicted_address != 0);
 
   std::cout << "[PASS] test_dirty_eviction\n";
@@ -357,23 +358,25 @@ void test_evicted_address_correct() {
   std::cout << "[PASS] test_evicted_address_correct\n";
 }
 
-void test_clean_eviction_no_address() {
+void test_clean_eviction_tracks_address() {
   CacheConfig cfg = make_test_config();
   CacheLevel cache(cfg);
 
   // Fill set with clean lines
+  uint64_t first_addr = make_address(1, 0);
   for (int i = 0; i < 4; i++) {
     cache.access(make_address(i + 1, 0), false);
   }
 
-  // Evict
+  // Evict - clean eviction still tracks address for inclusive cache back-invalidation
   AccessInfo info = cache.access(make_address(5, 0), false);
 
-  assert(info.result == AccessResult::Miss); // Not MissWithEviction
+  assert(info.result == AccessResult::Miss); // Not MissWithEviction (no writeback needed)
   assert(!info.was_dirty);
-  assert(info.evicted_address == 0);
+  assert(info.had_eviction == true);  // Eviction happened
+  assert(info.evicted_address == first_addr);  // Address tracked for back-invalidation
 
-  std::cout << "[PASS] test_clean_eviction_no_address\n";
+  std::cout << "[PASS] test_clean_eviction_tracks_address\n";
 }
 
 void test_is_present() {
@@ -470,6 +473,7 @@ void test_install_evicts_dirty() {
 
   assert(info.result == AccessResult::MissWithEviction);
   assert(info.was_dirty);
+  assert(info.had_eviction);
   assert(info.evicted_address == make_address(1, 0)); // evicted first one
 
   std::cout << "[PASS] test_install_evicts_dirty\n";
@@ -502,7 +506,7 @@ int main() {
   test_read_after_write();
   test_dirty_eviction();
   test_evicted_address_correct();
-  test_clean_eviction_no_address();
+  test_clean_eviction_tracks_address();
 
   // Utility methods
   test_is_present();

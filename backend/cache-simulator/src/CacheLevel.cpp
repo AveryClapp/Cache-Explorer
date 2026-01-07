@@ -163,7 +163,7 @@ AccessInfo CacheLevel::access(uint64_t address, bool is_write) {
       if (is_write)
         set[way].dirty = true;
       stats.hits++;
-      return {AccessResult::Hit, false, 0};
+      return {AccessResult::Hit, false, 0, false};
     }
   }
 
@@ -201,9 +201,10 @@ AccessInfo CacheLevel::access(uint64_t address, bool is_write) {
   }
 
   int victim = find_victim(index);
-  bool was_dirty = set[victim].valid && set[victim].dirty;
-  uint64_t evicted_addr =
-      was_dirty ? rebuild_address(set[victim].tag, index) : 0;
+  bool had_valid_line = set[victim].valid;
+  bool was_dirty = had_valid_line && set[victim].dirty;
+  // Always track evicted address for inclusive cache back-invalidation
+  uint64_t evicted_addr = had_valid_line ? rebuild_address(set[victim].tag, index) : 0;
 
   if (was_dirty)
     stats.writebacks++;
@@ -223,7 +224,7 @@ AccessInfo CacheLevel::access(uint64_t address, bool is_write) {
 
   AccessResult result =
       was_dirty ? AccessResult::MissWithEviction : AccessResult::Miss;
-  return {result, was_dirty, evicted_addr};
+  return {result, was_dirty, evicted_addr, had_valid_line};
 }
 
 AccessInfo CacheLevel::install(uint64_t address, bool is_dirty) {
@@ -242,14 +243,15 @@ AccessInfo CacheLevel::install(uint64_t address, bool is_dirty) {
         set[way].rrip_value = 0;
       }
       update_replacement_state(index, way);
-      return {AccessResult::Hit, false, 0};
+      return {AccessResult::Hit, false, 0, false};
     }
   }
 
   int victim = find_victim(index);
-  bool was_dirty = set[victim].valid && set[victim].dirty;
-  uint64_t evicted_addr =
-      was_dirty ? rebuild_address(set[victim].tag, index) : 0;
+  bool had_valid_line = set[victim].valid;
+  bool was_dirty = had_valid_line && set[victim].dirty;
+  // Always track evicted address for inclusive cache back-invalidation
+  uint64_t evicted_addr = had_valid_line ? rebuild_address(set[victim].tag, index) : 0;
 
   if (was_dirty)
     stats.writebacks++;
@@ -269,7 +271,7 @@ AccessInfo CacheLevel::install(uint64_t address, bool is_dirty) {
 
   AccessResult result =
       was_dirty ? AccessResult::MissWithEviction : AccessResult::Miss;
-  return {result, was_dirty, evicted_addr};
+  return {result, was_dirty, evicted_addr, had_valid_line};
 }
 
 bool CacheLevel::is_present(uint64_t address) const {
@@ -422,15 +424,16 @@ AccessInfo CacheLevel::install_with_state(uint64_t address, CoherenceState state
         set[way].rrip_value = 0;
       }
       update_replacement_state(index, way);
-      return {AccessResult::Hit, false, 0};
+      return {AccessResult::Hit, false, 0, false};
     }
   }
 
   // Need to install new line
   int victim = find_victim(index);
-  bool was_dirty = set[victim].valid && set[victim].dirty;
-  uint64_t evicted_addr =
-      was_dirty ? rebuild_address(set[victim].tag, index) : 0;
+  bool had_valid_line = set[victim].valid;
+  bool was_dirty = had_valid_line && set[victim].dirty;
+  // Always track evicted address for inclusive cache back-invalidation
+  uint64_t evicted_addr = had_valid_line ? rebuild_address(set[victim].tag, index) : 0;
 
   if (was_dirty)
     stats.writebacks++;
@@ -450,5 +453,5 @@ AccessInfo CacheLevel::install_with_state(uint64_t address, CoherenceState state
 
   AccessResult result =
       was_dirty ? AccessResult::MissWithEviction : AccessResult::Miss;
-  return {result, was_dirty, evicted_addr};
+  return {result, was_dirty, evicted_addr, had_valid_line};
 }
