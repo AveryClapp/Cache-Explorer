@@ -20,6 +20,7 @@ struct SystemAccessResult {
   bool itlb_hit;   // Instruction TLB hit
   std::vector<uint64_t> writebacks;
   int prefetches_issued;  // Number of prefetches triggered by this access
+  int cycles;      // Total cycles for this access (for timing model)
 };
 
 class CacheSystem {
@@ -35,6 +36,8 @@ private:
   bool prefetch_enabled;
   bool tlb_enabled;
   std::unordered_set<uint64_t> prefetched_addresses;  // Track prefetched lines
+  LatencyConfig latency_config;  // Timing configuration
+  TimingStats timing_stats;      // Accumulated timing statistics
 
   void handle_inclusive_eviction(uint64_t evicted_addr, CacheLevel &from_level);
   void handle_exclusive_eviction(uint64_t evicted_addr, CacheLevel &from_level,
@@ -50,7 +53,8 @@ public:
         dtlb(TLBConfig{64, 4, 4096}),   // 64-entry, 4-way, 4KB pages
         itlb(TLBConfig{64, 4, 4096}),   // 64-entry, 4-way, 4KB pages
         prefetcher(PrefetchPolicy::NONE, 2, cfg.l1_data.line_size),
-        prefetch_enabled(false), tlb_enabled(true) {}
+        prefetch_enabled(false), tlb_enabled(true),
+        latency_config(cfg.latency), timing_stats() {}
 
   SystemAccessResult read(uint64_t address, uint64_t pc = 0);
   SystemAccessResult write(uint64_t address, uint64_t pc = 0);
@@ -82,4 +86,9 @@ public:
 
   InclusionPolicy get_inclusion_policy() const { return inclusion_policy; }
   PrefetchPolicy get_prefetch_policy() const { return prefetcher.getPolicy(); }
+
+  // Timing stats access
+  const TimingStats& get_timing_stats() const { return timing_stats; }
+  const LatencyConfig& get_latency_config() const { return latency_config; }
+  void set_latency_config(const LatencyConfig& cfg) { latency_config = cfg; }
 };

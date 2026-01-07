@@ -100,16 +100,6 @@ export interface CacheConfig {
   l3: CacheLevelConfig
 }
 
-// Timeline event from streaming progress
-export interface TimelineEvent {
-  i: number       // event index
-  t: 'R' | 'W' | 'I'  // type: Read, Write, Instruction fetch
-  l: 1 | 2 | 3 | 4    // hit level: 1=L1, 2=L2, 3=L3, 4=memory
-  a?: number      // memory address (for cache visualization)
-  f?: string      // file (optional)
-  n?: number      // line number (optional)
-}
-
 export interface PrefetchStats {
   policy: string
   degree: number
@@ -155,7 +145,6 @@ export interface CacheResult {
   hotLines: HotLine[]
   falseSharing?: FalseSharingEvent[]
   suggestions?: OptimizationSuggestion[]
-  timeline?: TimelineEvent[]  // collected timeline events
   prefetch?: PrefetchStats
   cacheState?: CacheState
   tlb?: TLBHierarchyStats

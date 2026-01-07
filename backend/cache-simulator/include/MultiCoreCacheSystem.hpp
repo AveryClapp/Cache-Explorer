@@ -5,6 +5,7 @@
 #include "CacheStats.hpp"
 #include "CoherenceController.hpp"
 #include "Prefetcher.hpp"
+#include "TLB.hpp"
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
@@ -46,6 +47,7 @@ private:
   int num_cores;
   std::vector<std::unique_ptr<CacheLevel>> l1_caches;
   std::vector<std::unique_ptr<Prefetcher>> prefetchers;  // Per-core prefetchers
+  std::vector<std::unique_ptr<TLB>> dtlbs;  // Per-core data TLBs
   CacheLevel l2;
   CacheLevel l3;
   CoherenceController coherence;
@@ -160,6 +162,8 @@ public:
       // Each core gets its own prefetcher with independent state
       prefetchers.push_back(std::make_unique<Prefetcher>(
           pf_policy, pf_degree, l1_cfg.line_size));
+      // Each core gets its own DTLB (64 entries, 4-way, 4KB pages)
+      dtlbs.push_back(std::make_unique<TLB>(TLBConfig{64, 4, 4096}));
     }
   }
 
@@ -167,6 +171,9 @@ public:
                               const std::string &file = "", uint32_t line = 0) {
     int core = get_core_for_thread(thread_id);
     track_access_for_false_sharing(address, thread_id, false, file, line);
+
+    // TLB lookup for data access
+    dtlbs[core]->access(address);
 
     uint64_t line_addr = get_line_address(address);
 
@@ -208,6 +215,9 @@ public:
                                const std::string &file = "", uint32_t line = 0) {
     int core = get_core_for_thread(thread_id);
     track_access_for_false_sharing(address, thread_id, true, file, line);
+
+    // TLB lookup for data access
+    dtlbs[core]->access(address);
 
     uint64_t line_addr = get_line_address(address);
 
@@ -256,6 +266,22 @@ public:
     stats.coherence_invalidations = coherence_invalidations;
     stats.false_sharing_events = false_sharing_count;
     return stats;
+  }
+
+  // Get aggregated TLB stats across all cores
+  TLBHierarchyStats get_tlb_stats() const {
+    TLBHierarchyStats stats;
+    for (const auto &dtlb : dtlbs) {
+      stats.dtlb += dtlb->get_stats();
+    }
+    // ITLB not tracked yet (would need instruction fetch tracking)
+    return stats;
+  }
+
+  // Get TLB stats for a specific core
+  TLBStats get_tlb_stats_for_core(int core) const {
+    if (core < 0 || core >= num_cores) return TLBStats{};
+    return dtlbs[core]->get_stats();
   }
 
   std::vector<FalseSharingReport> get_false_sharing_reports() const {

@@ -54,26 +54,15 @@ interface CacheResult {
   hotLines: HotLine[]
   falseSharing?: unknown
   suggestions?: unknown
-  timeline?: TimelineEvent[]
   prefetch?: unknown
   cacheState?: unknown
   tlb?: unknown
-}
-
-interface TimelineEvent {
-  i: number
-  t: 'R' | 'W' | 'I'
-  l: 1 | 2 | 3 | 4
-  a?: number
-  f?: string
-  n?: number
 }
 
 export interface EditorState {
   editorRef: React.MutableRefObject<editor.IStandaloneCodeEditor | null>
   monacoRef: React.MutableRefObject<Monaco | null>
   decorationsRef: React.MutableRefObject<string[]>
-  stepDecorationsRef: React.MutableRefObject<string[]>
   vimStatusRef: React.MutableRefObject<HTMLDivElement | null>
   vimModeRef: React.MutableRefObject<{ dispose: () => void } | null>
   handleEditorMount: (editor: editor.IStandaloneCodeEditor, monaco: Monaco) => void
@@ -82,14 +71,11 @@ export interface EditorState {
 export function useEditorState(
   vimMode: boolean,
   error: ErrorResult | null,
-  result: CacheResult | null,
-  timeline: TimelineEvent[],
-  scrubberIndex: number
+  result: CacheResult | null
 ): EditorState {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const monacoRef = useRef<Monaco | null>(null)
   const decorationsRef = useRef<string[]>([])
-  const stepDecorationsRef = useRef<string[]>([])
   const vimStatusRef = useRef<HTMLDivElement | null>(null)
   const vimModeRef = useRef<{ dispose: () => void } | null>(null)
 
@@ -209,45 +195,10 @@ export function useEditorState(
     decorationsRef.current = editor.deltaDecorations(decorationsRef.current, decorations)
   }, [result])
 
-  // Highlight current line when stepping through timeline
-  useEffect(() => {
-    if (!editorRef.current || !monacoRef.current || !timeline.length) {
-      if (editorRef.current && stepDecorationsRef.current.length > 0) {
-        stepDecorationsRef.current = editorRef.current.deltaDecorations(stepDecorationsRef.current, [])
-      }
-      return
-    }
-
-    const monaco = monacoRef.current
-    const editor = editorRef.current
-    const model = editor.getModel()
-    if (!model) return
-
-    const currentEvent = timeline[scrubberIndex - 1]
-    const decorations: editor.IModelDeltaDecoration[] = []
-
-    if (currentEvent?.n && currentEvent.n > 0 && currentEvent.n <= model.getLineCount()) {
-      const lineNum = currentEvent.n
-      decorations.push({
-        range: new monaco.Range(lineNum, 1, lineNum, 1),
-        options: {
-          isWholeLine: true,
-          className: 'line-step-highlight',
-          glyphMarginClassName: 'glyph-step',
-        }
-      })
-      // Scroll the line into view
-      editor.revealLineInCenterIfOutsideViewport(lineNum)
-    }
-
-    stepDecorationsRef.current = editor.deltaDecorations(stepDecorationsRef.current, decorations)
-  }, [timeline, scrubberIndex])
-
   return {
     editorRef,
     monacoRef,
     decorationsRef,
-    stepDecorationsRef,
     vimStatusRef,
     vimModeRef,
     handleEditorMount

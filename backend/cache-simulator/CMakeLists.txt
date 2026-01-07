@@ -30,3 +30,6 @@ target_link_libraries(MultiCorePrefetchTest CacheSimulator)
 
 add_executable(AdvancedInstrumentationTest tests/AdvancedInstrumentationTest.cpp)
 target_link_libraries(AdvancedInstrumentationTest CacheSimulator)
+
+add_executable(MultiCoreTLBTest tests/MultiCoreTLBTest.cpp)
+target_link_libraries(MultiCoreTLBTest CacheSimulator)

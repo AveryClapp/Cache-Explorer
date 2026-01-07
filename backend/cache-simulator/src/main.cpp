@@ -525,6 +525,41 @@ int main(int argc, char *argv[]) {
     }
     std::cout << "]";
 
+    // TLB statistics from multi-core system
+    auto tlb_stats = processor.get_cache_system().get_tlb_stats();
+    std::cout << ",\"tlb\":{\"dtlb\":{\"hits\":" << tlb_stats.dtlb.hits
+              << ",\"misses\":" << tlb_stats.dtlb.misses
+              << ",\"hitRate\":" << std::fixed << std::setprecision(3) << tlb_stats.dtlb.hit_rate()
+              << "},\"itlb\":{\"hits\":" << tlb_stats.itlb.hits
+              << ",\"misses\":" << tlb_stats.itlb.misses
+              << ",\"hitRate\":" << std::fixed << std::setprecision(3) << tlb_stats.itlb.hit_rate()
+              << "}}";
+
+    // Timing estimate based on hit counts and latency config
+    uint64_t l1_hit_cycles = l1_total.hits * cfg.latency.l1_hit;
+    uint64_t l2_hit_cycles = stats.l2.hits * cfg.latency.l2_hit;
+    uint64_t l3_hit_cycles = stats.l3.hits * cfg.latency.l3_hit;
+    uint64_t memory_cycles = stats.l3.misses * cfg.latency.memory;
+    uint64_t total_cycles = l1_hit_cycles + l2_hit_cycles + l3_hit_cycles + memory_cycles;
+    uint64_t total_accesses = l1_total.hits + l1_total.misses;
+    double avg_latency = total_accesses > 0 ? static_cast<double>(total_cycles) / total_accesses : 0.0;
+
+    std::cout << ",\"timing\":{"
+              << "\"totalCycles\":" << total_cycles << ","
+              << "\"avgLatency\":" << std::fixed << std::setprecision(2) << avg_latency << ","
+              << "\"breakdown\":{\"l1HitCycles\":" << l1_hit_cycles
+              << ",\"l2HitCycles\":" << l2_hit_cycles
+              << ",\"l3HitCycles\":" << l3_hit_cycles
+              << ",\"memoryCycles\":" << memory_cycles
+              << ",\"tlbMissCycles\":0},"
+              << "\"latencyConfig\":{"
+              << "\"l1Hit\":" << cfg.latency.l1_hit << ","
+              << "\"l2Hit\":" << cfg.latency.l2_hit << ","
+              << "\"l3Hit\":" << cfg.latency.l3_hit << ","
+              << "\"memory\":" << cfg.latency.memory << ","
+              << "\"tlbMissPenalty\":" << cfg.latency.tlb_miss_penalty
+              << "}}";
+
     // Note: Prefetching not yet supported in multi-core streaming mode
     std::cout << "}\n" << std::flush;
     return 0;
@@ -847,6 +882,29 @@ int main(int argc, char *argv[]) {
       std::cout << "    \"itlb\": {\"hits\": " << tlb_stats.itlb.hits
                 << ", \"misses\": " << tlb_stats.itlb.misses
                 << ", \"hitRate\": " << std::fixed << std::setprecision(3) << tlb_stats.itlb.hit_rate() << "}\n";
+      std::cout << "  },\n";
+
+      // Timing statistics
+      auto timing = stats.timing;
+      auto latency_cfg = processor.get_cache_system().get_latency_config();
+      uint64_t total_accesses = stats.l1d.total_accesses() + stats.l1i.total_accesses();
+      std::cout << "  \"timing\": {\n";
+      std::cout << "    \"totalCycles\": " << timing.total_cycles << ",\n";
+      std::cout << "    \"avgLatency\": " << std::fixed << std::setprecision(2) << timing.average_access_latency(total_accesses) << ",\n";
+      std::cout << "    \"breakdown\": {\n";
+      std::cout << "      \"l1HitCycles\": " << timing.l1_hit_cycles << ",\n";
+      std::cout << "      \"l2HitCycles\": " << timing.l2_hit_cycles << ",\n";
+      std::cout << "      \"l3HitCycles\": " << timing.l3_hit_cycles << ",\n";
+      std::cout << "      \"memoryCycles\": " << timing.memory_cycles << ",\n";
+      std::cout << "      \"tlbMissCycles\": " << timing.tlb_miss_cycles << "\n";
+      std::cout << "    },\n";
+      std::cout << "    \"latencyConfig\": {\n";
+      std::cout << "      \"l1Hit\": " << latency_cfg.l1_hit << ",\n";
+      std::cout << "      \"l2Hit\": " << latency_cfg.l2_hit << ",\n";
+      std::cout << "      \"l3Hit\": " << latency_cfg.l3_hit << ",\n";
+      std::cout << "      \"memory\": " << latency_cfg.memory << ",\n";
+      std::cout << "      \"tlbMissPenalty\": " << latency_cfg.tlb_miss_penalty << "\n";
+      std::cout << "    }\n";
       std::cout << "  },\n";
       std::cout << "  \"hotLines\": [\n";
 

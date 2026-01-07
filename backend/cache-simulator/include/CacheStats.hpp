@@ -63,16 +63,52 @@ struct CacheStats {
   }
 };
 
+// Timing statistics for cycle-level analysis
+struct TimingStats {
+  uint64_t total_cycles = 0;          // Total simulated cycles for all accesses
+  uint64_t l1_hit_cycles = 0;         // Cycles from L1 hits
+  uint64_t l2_hit_cycles = 0;         // Cycles from L2 hits
+  uint64_t l3_hit_cycles = 0;         // Cycles from L3 hits
+  uint64_t memory_cycles = 0;         // Cycles from memory accesses
+  uint64_t tlb_miss_cycles = 0;       // Additional cycles from TLB misses
+
+  double average_access_latency(uint64_t total_accesses) const {
+    if (total_accesses == 0) return 0.0;
+    return static_cast<double>(total_cycles) / total_accesses;
+  }
+
+  void reset() {
+    total_cycles = 0;
+    l1_hit_cycles = 0;
+    l2_hit_cycles = 0;
+    l3_hit_cycles = 0;
+    memory_cycles = 0;
+    tlb_miss_cycles = 0;
+  }
+
+  TimingStats& operator+=(const TimingStats& other) {
+    total_cycles += other.total_cycles;
+    l1_hit_cycles += other.l1_hit_cycles;
+    l2_hit_cycles += other.l2_hit_cycles;
+    l3_hit_cycles += other.l3_hit_cycles;
+    memory_cycles += other.memory_cycles;
+    tlb_miss_cycles += other.tlb_miss_cycles;
+    return *this;
+  }
+};
+
 struct HierarchyStats {
   CacheStats l1d;
   CacheStats l1i;
   CacheStats l2;
   CacheStats l3;
+  TimingStats timing;  // Cycle-level timing statistics
 
   void reset() {
     l1d.reset();
     l1i.reset();
     l2.reset();
     l3.reset();
+    timing.reset();
   }
 };

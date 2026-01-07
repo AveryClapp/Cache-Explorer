@@ -132,6 +132,34 @@ interface CacheState {
   l1d: CoreCacheState[]
 }
 
+interface TLBHierarchyStats {
+  dtlb: { hits: number; misses: number; hitRate: number }
+  itlb: { hits: number; misses: number; hitRate: number }
+}
+
+interface TimingBreakdown {
+  l1HitCycles: number
+  l2HitCycles: number
+  l3HitCycles: number
+  memoryCycles: number
+  tlbMissCycles: number
+}
+
+interface LatencyConfig {
+  l1Hit: number
+  l2Hit: number
+  l3Hit: number
+  memory: number
+  tlbMissPenalty: number
+}
+
+interface TimingStats {
+  totalCycles: number
+  avgLatency: number
+  breakdown: TimingBreakdown
+  latencyConfig: LatencyConfig
+}
+
 interface CacheResult {
   config: string
   events: number
@@ -152,6 +180,8 @@ interface CacheResult {
   suggestions?: OptimizationSuggestion[]
   prefetch?: PrefetchStats
   cacheState?: CacheState
+  tlb?: TLBHierarchyStats
+  timing?: TimingStats
 }
 
 type Language = 'c' | 'cpp' | 'rust'
@@ -1697,6 +1727,76 @@ function LevelDetail({ name, stats }: { name: string; stats: CacheStats }) {
   )
 }
 
+interface TLBStats {
+  hits: number
+  misses: number
+  hitRate: number
+}
+
+function TLBDetail({ name, stats }: { name: string; stats: TLBStats }) {
+  const totalAccesses = stats.hits + stats.misses
+  if (totalAccesses === 0) return null
+
+  return (
+    <div className="level-detail tlb-detail">
+      <div className="level-header">{name}</div>
+      <div className="level-row">
+        <span>Hits</span>
+        <span className="mono">{stats.hits.toLocaleString()}</span>
+      </div>
+      <div className="level-row">
+        <span>Misses</span>
+        <span className="mono">{stats.misses.toLocaleString()}</span>
+      </div>
+      <div className="level-row">
+        <span>Hit Rate</span>
+        <span className={`mono ${stats.hitRate > 0.95 ? 'good' : stats.hitRate > 0.85 ? 'ok' : 'bad'}`}>
+          {formatPercent(stats.hitRate)}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function TimingDisplay({ timing }: { timing: TimingStats }) {
+  const { breakdown, latencyConfig, totalCycles, avgLatency } = timing
+  const totalBreakdown = breakdown.l1HitCycles + breakdown.l2HitCycles + breakdown.l3HitCycles + breakdown.memoryCycles
+
+  // Calculate percentages for breakdown bar
+  const l1Pct = totalBreakdown > 0 ? (breakdown.l1HitCycles / totalBreakdown) * 100 : 0
+  const l2Pct = totalBreakdown > 0 ? (breakdown.l2HitCycles / totalBreakdown) * 100 : 0
+  const l3Pct = totalBreakdown > 0 ? (breakdown.l3HitCycles / totalBreakdown) * 100 : 0
+  const memPct = totalBreakdown > 0 ? (breakdown.memoryCycles / totalBreakdown) * 100 : 0
+
+  return (
+    <div className="timing-display">
+      <div className="timing-header">
+        <span className="timing-title">Timing Analysis</span>
+        <span className="timing-summary">
+          {totalCycles.toLocaleString()} cycles ({avgLatency.toFixed(1)} avg)
+        </span>
+      </div>
+      <div className="timing-bar">
+        {l1Pct > 0 && <div className="timing-segment l1" style={{ width: `${l1Pct}%` }} title={`L1 hits: ${breakdown.l1HitCycles.toLocaleString()} cycles (${latencyConfig.l1Hit} cyc/hit)`} />}
+        {l2Pct > 0 && <div className="timing-segment l2" style={{ width: `${l2Pct}%` }} title={`L2 hits: ${breakdown.l2HitCycles.toLocaleString()} cycles (${latencyConfig.l2Hit} cyc/hit)`} />}
+        {l3Pct > 0 && <div className="timing-segment l3" style={{ width: `${l3Pct}%` }} title={`L3 hits: ${breakdown.l3HitCycles.toLocaleString()} cycles (${latencyConfig.l3Hit} cyc/hit)`} />}
+        {memPct > 0 && <div className="timing-segment mem" style={{ width: `${memPct}%` }} title={`Memory: ${breakdown.memoryCycles.toLocaleString()} cycles (${latencyConfig.memory} cyc/access)`} />}
+      </div>
+      <div className="timing-legend">
+        <span className="timing-legend-item"><span className="timing-dot l1" />L1 ({l1Pct.toFixed(0)}%)</span>
+        <span className="timing-legend-item"><span className="timing-dot l2" />L2 ({l2Pct.toFixed(0)}%)</span>
+        <span className="timing-legend-item"><span className="timing-dot l3" />L3 ({l3Pct.toFixed(0)}%)</span>
+        <span className="timing-legend-item"><span className="timing-dot mem" />Memory ({memPct.toFixed(0)}%)</span>
+      </div>
+      {breakdown.tlbMissCycles > 0 && (
+        <div className="timing-tlb-note">
+          +{breakdown.tlbMissCycles.toLocaleString()} cycles from TLB misses
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Godbolt-style inline settings toolbar
 function SettingsToolbar({
   config,
@@ -2009,15 +2109,6 @@ function CacheGrid({ cacheState, coreCount }: { cacheState: CacheState; coreCoun
       )}
     </div>
   )
-}
-
-// Cache line state for visualization
-interface CacheLine {
-  valid: boolean
-  tag: number
-  dirty: boolean
-  lastAccess: number  // event index when last accessed
-  accessCount: number
 }
 
 // False Sharing Visualization Component
@@ -2489,7 +2580,10 @@ function App() {
       // Helper to apply loaded state to the first file
       const applyState = (state: { code: string; config: string; optLevel: string; language?: Language; defines?: DefineEntry[] }) => {
         const lang = state.language || 'c'
-        setFiles([createFileTab(`main${getFileExtension(lang)}`, state.code, lang)])
+        const newFile = createFileTab(`main${getFileExtension(lang)}`, state.code, lang)
+        setFiles([newFile])
+        setActiveFileId(newFile.id)  // Must update to match new file's ID
+        setMainFileId(newFile.id)
         setConfig(state.config)
         setOptLevel(state.optLevel)
         if (state.defines) setDefines(state.defines)
@@ -2787,24 +2881,6 @@ function App() {
   const isLoading = stage !== 'idle'
   const stageText = { idle: '', connecting: 'Connecting...', preparing: 'Preparing...', compiling: 'Compiling...', running: 'Running...', processing: 'Processing...', done: '' }
 
-  // Config display names
-  const configNames: Record<string, string> = {
-    educational: 'Educational',
-    intel: 'Intel 12th Gen',
-    intel14: 'Intel 14th Gen',
-    xeon: 'Intel Xeon',
-    zen3: 'AMD Zen 3',
-    amd: 'AMD Zen 4',
-    epyc: 'AMD EPYC',
-    apple: 'Apple M1',
-    m2: 'Apple M2',
-    m3: 'Apple M3',
-    graviton: 'AWS Graviton 3',
-    rpi4: 'Raspberry Pi 4',
-    embedded: 'Embedded',
-    custom: 'Custom'
-  }
-
   const commands: CommandItem[] = useMemo(() => [
     // Actions (@)
     { id: 'run', icon: '@', label: 'Run analysis', shortcut: '⌘R', action: () => { if (!isLoading) runAnalysis() }, category: 'actions' },
@@ -2820,7 +2896,7 @@ function App() {
       action: () => {
         if (ex.files && ex.files.length > 0) {
           // Multi-file example: replace all files
-          const newFiles = ex.files.map((f, idx) => ({
+          const newFiles = ex.files.map((f) => ({
             id: generateFileId(),
             name: f.name,
             code: f.code,
@@ -2831,6 +2907,7 @@ function App() {
           // Select the main file or first file
           const mainFile = newFiles.find(f => f.isMain) || newFiles[0]
           setActiveFileId(mainFile.id)
+          setMainFileId(mainFile.id)
         } else {
           // Single-file example: update active file
           setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, code: ex.code, language: ex.language, name: 'main' + getFileExtension(ex.language) } : f))
@@ -3080,12 +3157,23 @@ function App() {
                 </div>
 
               {showDetails && (
-                <div className="details-grid">
-                  <LevelDetail name="L1 Data" stats={result.levels.l1d || result.levels.l1!} />
-                  {result.levels.l1i && <LevelDetail name="L1 Instruction" stats={result.levels.l1i} />}
-                  <LevelDetail name="L2" stats={result.levels.l2} />
-                  <LevelDetail name="L3" stats={result.levels.l3} />
-                </div>
+                <>
+                  <div className="details-grid">
+                    <LevelDetail name="L1 Data" stats={result.levels.l1d || result.levels.l1!} />
+                    {result.levels.l1i && <LevelDetail name="L1 Instruction" stats={result.levels.l1i} />}
+                    <LevelDetail name="L2" stats={result.levels.l2} />
+                    <LevelDetail name="L3" stats={result.levels.l3} />
+                  </div>
+                  {result.tlb && (
+                    <div className="tlb-grid">
+                      <TLBDetail name="Data TLB" stats={result.tlb.dtlb} />
+                      <TLBDetail name="Instruction TLB" stats={result.tlb.itlb} />
+                    </div>
+                  )}
+                  {result.timing && (
+                    <TimingDisplay timing={result.timing} />
+                  )}
+                </>
               )}
 
               {result.coherence && result.coherence.falseSharingEvents > 0 && (

@@ -24,7 +24,8 @@ inline CacheHierarchyConfig make_intel_12th_gen_config() {
              .policy = EvictionPolicy::PLRU,
              .write_policy = WritePolicy::Back},
       .inclusion_policy = InclusionPolicy::NINE,
-      .prefetch = PrefetchConfig::intel_default()};
+      .prefetch = PrefetchConfig::intel_default(),
+      .latency = LatencyConfig::intel_default()};
 }
 
 inline CacheHierarchyConfig make_amd_zen4_config() {
@@ -50,7 +51,8 @@ inline CacheHierarchyConfig make_amd_zen4_config() {
              .policy = EvictionPolicy::PLRU,
              .write_policy = WritePolicy::Back},
       .inclusion_policy = InclusionPolicy::Exclusive,
-      .prefetch = PrefetchConfig::amd_default()};
+      .prefetch = PrefetchConfig::amd_default(),
+      .latency = LatencyConfig::amd_default()};
 }
 
 inline CacheHierarchyConfig make_apple_m_series_config() {
@@ -76,7 +78,8 @@ inline CacheHierarchyConfig make_apple_m_series_config() {
              .policy = EvictionPolicy::PLRU,
              .write_policy = WritePolicy::Back},
       .inclusion_policy = InclusionPolicy::NINE,
-      .prefetch = PrefetchConfig::apple_default()};
+      .prefetch = PrefetchConfig::apple_default(),
+      .latency = LatencyConfig::apple_default()};
 }
 
 // Intel 14th Gen (Raptor Lake Refresh) - P-cores
@@ -375,7 +378,8 @@ inline CacheHierarchyConfig make_educational_config() {
              .policy = EvictionPolicy::LRU,
              .write_policy = WritePolicy::Back},
       .inclusion_policy = InclusionPolicy::Inclusive,
-      .prefetch = PrefetchConfig::none()};  // Educational: no prefetch for clarity
+      .prefetch = PrefetchConfig::none(),  // Educational: no prefetch for clarity
+      .latency = LatencyConfig::educational_default()};
 }
 
 // =============================================================================

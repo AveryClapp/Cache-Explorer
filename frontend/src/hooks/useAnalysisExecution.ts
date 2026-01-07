@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react'
-import type { FileTab, Stage, CacheResult, ErrorResult, TimelineEvent, DefineEntry, CustomCacheConfig } from '../types'
+import type { FileTab, Stage, CacheResult, ErrorResult, DefineEntry, CustomCacheConfig } from '../types'
 
 // Constants from config
 const API_BASE = import.meta.env.PROD ? '' : 'http://localhost:3001'
@@ -22,15 +22,11 @@ interface UseAnalysisExecutionParams {
   onStageChange: (stage: Stage) => void
   onResultChange: (result: CacheResult | null) => void
   onErrorChange: (error: ErrorResult | null) => void
-  onTimelineAdd: (events: TimelineEvent[]) => void
-  onTimelineReset: () => void
   onLongRunningChange: (value: boolean) => void
-  onScrubberIndexChange?: (index: number) => void
 }
 
 export function useAnalysisExecution(params: UseAnalysisExecutionParams) {
   const wsRef = useRef<WebSocket | null>(null)
-  const timelineRef = useRef<TimelineEvent[]>([])
   const stageRef = useRef<Stage>('idle')
 
   const runAnalysis = useCallback(() => {
@@ -49,9 +45,7 @@ export function useAnalysisExecution(params: UseAnalysisExecutionParams) {
     params.onStageChange('connecting')
     params.onErrorChange(null)
     params.onResultChange(null)
-    params.onTimelineReset()
     params.onLongRunningChange(false)
-    timelineRef.current = []
 
     // Set long-running warning after 10 seconds
     const longRunTimeout = setTimeout(() => params.onLongRunningChange(true), 10000)
@@ -83,25 +77,10 @@ export function useAnalysisExecution(params: UseAnalysisExecutionParams) {
       if (msg.type === 'status') {
         stageRef.current = msg.stage as Stage
         params.onStageChange(msg.stage as Stage)
-      }
-      else if (msg.type === 'progress') {
-        // Collect timeline events from streaming progress
-        if (msg.timeline && Array.isArray(msg.timeline)) {
-          timelineRef.current = [...timelineRef.current, ...msg.timeline]
-          // Update timeline state periodically (every 200 events)
-          if (timelineRef.current.length % 200 < msg.timeline.length) {
-            params.onTimelineAdd([...timelineRef.current])
-          }
-        }
       } else if (msg.type === 'result') {
         clearTimeout(longRunTimeout)
         params.onLongRunningChange(false)
-        // Finalize timeline and set result
-        params.onTimelineAdd([...timelineRef.current])
-        params.onResultChange({ ...(msg.data as CacheResult), timeline: timelineRef.current })
-        if (params.onScrubberIndexChange) {
-          params.onScrubberIndexChange(timelineRef.current.length)  // Start at end of timeline
-        }
+        params.onResultChange(msg.data as CacheResult)
         stageRef.current = 'idle'
         params.onStageChange('idle')
         ws.close()
@@ -170,10 +149,7 @@ export function useAnalysisExecution(params: UseAnalysisExecutionParams) {
     params.onStageChange,
     params.onResultChange,
     params.onErrorChange,
-    params.onTimelineAdd,
-    params.onTimelineReset,
-    params.onLongRunningChange,
-    params.onScrubberIndexChange
+    params.onLongRunningChange
   ])
 
   return { runAnalysis }

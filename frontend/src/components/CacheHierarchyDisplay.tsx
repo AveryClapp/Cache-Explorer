@@ -25,7 +25,6 @@ interface CacheResult {
   hotLines: any[]
   falseSharing?: any[]
   suggestions?: any[]
-  timeline?: any[]
   prefetch?: any
   cacheState?: any
   tlb?: any

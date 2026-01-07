@@ -7,6 +7,71 @@
 #include <cstdint>
 using CacheSize = uint64_t;
 
+// Latency configuration for timing simulation (in CPU cycles)
+struct LatencyConfig {
+  int l1_hit = 4;           // L1 cache hit latency
+  int l2_hit = 12;          // L2 cache hit latency
+  int l3_hit = 40;          // L3 cache hit latency
+  int memory = 200;         // Main memory latency
+  int tlb_miss_penalty = 7; // Additional cycles for TLB miss (page walk)
+
+  // Vendor-specific latency presets (realistic values from architecture manuals)
+  static LatencyConfig intel_default() {
+    // Intel Alder Lake / Golden Cove (12th gen)
+    return {
+      .l1_hit = 5,          // 5 cycles for L1D
+      .l2_hit = 14,         // ~14 cycles for L2
+      .l3_hit = 50,         // ~50 cycles for L3
+      .memory = 200,        // ~200 cycles for DRAM
+      .tlb_miss_penalty = 7 // Page table walk overhead
+    };
+  }
+
+  static LatencyConfig amd_default() {
+    // AMD Zen 4 (Ryzen 7000 series)
+    return {
+      .l1_hit = 4,          // 4 cycles for L1D
+      .l2_hit = 14,         // ~14 cycles for L2
+      .l3_hit = 46,         // ~46 cycles for L3
+      .memory = 190,        // Slightly better memory controller
+      .tlb_miss_penalty = 8 // Page table walk overhead
+    };
+  }
+
+  static LatencyConfig apple_default() {
+    // Apple M1/M2/M3 (performance cores)
+    return {
+      .l1_hit = 3,          // Very fast L1 (192KB size helps)
+      .l2_hit = 15,         // ~15 cycles for shared L2
+      .l3_hit = 0,          // M-series has SLC, not traditional L3
+      .memory = 100,        // Unified memory is faster than DDR
+      .tlb_miss_penalty = 5 // Efficient page tables
+    };
+  }
+
+  static LatencyConfig educational_default() {
+    // Simple round numbers for learning
+    return {
+      .l1_hit = 1,
+      .l2_hit = 10,
+      .l3_hit = 30,
+      .memory = 100,
+      .tlb_miss_penalty = 10
+    };
+  }
+
+  static LatencyConfig arm_default() {
+    // ARM Neoverse V1 / Graviton 3
+    return {
+      .l1_hit = 4,
+      .l2_hit = 11,
+      .l3_hit = 38,
+      .memory = 150,
+      .tlb_miss_penalty = 6
+    };
+  }
+};
+
 // Prefetch configuration tied to hardware characteristics
 struct PrefetchConfig {
   // L1 prefetcher settings
@@ -171,5 +236,6 @@ struct CacheHierarchyConfig {
   CacheConfig l2;
   CacheConfig l3;
   InclusionPolicy inclusion_policy;
-  PrefetchConfig prefetch = {};  // Default prefetch settings
+  PrefetchConfig prefetch = {};   // Default prefetch settings
+  LatencyConfig latency = {};     // Default latency settings
 };

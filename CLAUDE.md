@@ -1,8 +1,8 @@
 # CLAUDE.md - Cache Explorer Project Guide
 
-## Current Status (January 4, 2026)
+## Current Status (January 7, 2026)
 
-**Overall Completion: ~75%**
+**Overall Completion: ~85%**
 
 | Component | Status | Notes |
 |-----------|--------|-------|
@@ -12,12 +12,14 @@
 | Multi-Core Support | ✅ Complete | MESI coherence, 85 tests passing |
 | Prefetching | ✅ Complete | 6 policies (none/next-line/stream/stride/adaptive/intel) |
 | False Sharing Detection | ✅ Complete | Reports with padding suggestions |
+| TLB Simulation | ✅ Complete | DTLB/ITLB with LRU replacement, displayed in UI |
+| Timing Model | ✅ Complete | Configurable latencies per hardware preset (Intel/AMD/Apple) |
 | CLI Tool | ✅ Working | JSON/text output, hardware presets |
 | Backend - Multi-file | ✅ Complete | Accepts multiple files, compiles together |
 | Frontend - Multi-file | ✅ Complete | Sends all files, displays results per-file |
 | File Attribution UI | ✅ Complete | Results grouped by file with filtering |
 | Assembly View Button | ⚠️ Attempted | Button positioned, CE URL encoding in progress |
-| Web Frontend | ✅ Working | Dark/light modes (light theme improved), multi-file support |
+| Web Frontend | ✅ Working | Dark/light modes, multi-file, TLB display, timing visualization |
 | Web Backend | ✅ Working | Docker sandbox, WebSocket streaming, multi-file compilation |
 | Testing | ✅ 85 tests | CacheLevel(22) + CacheSystem(25) + MESI(19) + Prefetch(19) |
 
@@ -223,6 +225,28 @@ make_educational_config()     // 4KB L1, 32KB L2, 256KB L3
     "issued": 500,
     "useful": 450,
     "accuracy": 0.90
+  },
+  "tlb": {
+    "dtlb": { "hits": 50000, "misses": 10, "hitRate": 0.9998 },
+    "itlb": { "hits": 25000, "misses": 5, "hitRate": 0.9998 }
+  },
+  "timing": {
+    "totalCycles": 125000,
+    "avgLatency": 5.2,
+    "breakdown": {
+      "l1HitCycles": 100000,
+      "l2HitCycles": 5000,
+      "l3HitCycles": 2000,
+      "memoryCycles": 18000,
+      "tlbMissCycles": 70
+    },
+    "latencyConfig": {
+      "l1Hit": 5,
+      "l2Hit": 14,
+      "l3Hit": 50,
+      "memory": 200,
+      "tlbMissPenalty": 7
+    }
   }
 }
 ```
@@ -252,10 +276,10 @@ cd backend/cache-simulator/build
 - **Monaco Editor** - C/C++/Rust syntax highlighting
 - **Dark/Light Mode** - Toggle with persistence
 - **Source Annotations** - Inline miss counts with hover details
-- **Timeline Scrubber** - Step through cache events
 - **Error Display** - Structured compiler error parsing
-- **Examples Gallery** - 10+ built-in examples
+- **Examples Gallery** - 10+ built-in examples (including multi-file)
 - **Share URLs** - LZ-compressed code sharing
+- **Multi-File Support** - Create and manage multiple source files
 
 ---
 
@@ -296,11 +320,10 @@ open http://localhost:3001
 
 ## Known Limitations
 
-- **No TLB simulation** - Cache only, not virtual memory
-- **No timing model** - Hit/miss counts, not cycles
 - **No speculative execution** - All accesses are committed
 - **Intel Pin not integrated** - GCC binaries need manual trace
 - **Single-socket only** - No NUMA simulation
+- **Simplified timing model** - Fixed latencies per level, no variable DRAM latency
 
 ---
 
@@ -355,15 +378,33 @@ cache-explorer/
 
 ---
 
-## Recent Work Summary (January 4, 2026)
+## Recent Work Summary (January 7, 2026)
 
 ### Completed in This Session
 
-**Frontend Refactoring:**
-- Extracted 10+ custom hooks (`useTheme`, `useUrlState`, `useKeyboardShortcuts`, etc.)
-- Extracted 5+ component modules (CommandPalette, QuickConfigPanel, ResultDisplay components)
-- Reduced App.tsx from 3,523 to 1,642 lines (53% reduction)
-- 18 commits with incremental refactoring
+**Timeline Feature Removal:**
+- Removed timeline/scrubber feature from frontend for simplification
+- Cleaned up ~500 lines of timeline-related code
+- Removed unused components: AccessTimelineDisplay, InteractiveCacheGridDisplay, CacheHierarchyVisualization
+- Cleaned up hooks and types referencing timeline
+- Frontend builds cleanly with no TypeScript errors
+
+**Bug Fixes:**
+- Fixed inclusive cache back-invalidation bug (added `had_eviction` tracking)
+- Clean evictions now properly trigger L1/L2 invalidation in inclusive mode
+- All 85 cache simulator tests passing
+
+**Multi-File Examples:**
+- Added C multi-file example (matrix operations with header)
+- Added C++ multi-file example (vector container template)
+- Examples load correctly via command palette
+
+**E2E Tests for Multi-File:**
+- Added `test_multifile_c` - tests C multi-file compilation
+- Added `test_multifile_cpp` - tests C++ multi-file compilation
+- Added `test_multifile_attribution` - tests hot line file attribution
+
+### Previous Session (January 4, 2026)
 
 **Multi-File Support:**
 - ✅ Backend: Accept multiple files via `/api/analyze` endpoint
@@ -375,33 +416,30 @@ cache-explorer/
 **UI Improvements:**
 - ✅ Light theme colors modernized (better WCAG AA contrast)
 - ✅ Component CSS updated to use CSS variables for theming
-- ✅ Bash warning messages filtered from error display
-- ✅ Assembly view button positioned as primary action
 
 **Known Issues:**
 - ⚠️ Compiler Explorer integration: URL encoding/state format not working
-  - Multiple approaches attempted (ClientState path, query params, base64 state)
-  - Button exists and styled correctly, but opens with decode errors
-  - Root cause: Compiler Explorer state format requirements unclear
 
-### Not Completed
-
-**Compiler Explorer Assembly View:**
-- Button is positioned and styled
-- Compiler/optimization mapping is correct
-- URL generation attempted multiple times
-- CE still returns "Decode Error" when loading generated URLs
+**TLB and Timing Implementation (This Session):**
+- ✅ TLB results now displayed in frontend (Data TLB and Instruction TLB under Details)
+- ✅ Added `LatencyConfig` struct with hardware-specific latency presets
+  - Intel: L1=5, L2=14, L3=50, Memory=200 cycles
+  - AMD: L1=4, L2=14, L3=46, Memory=190 cycles
+  - Apple: L1=3, L2=15, L3=0 (SLC), Memory=100 cycles (unified)
+  - Educational: L1=1, L2=10, L3=30, Memory=100 cycles (round numbers)
+- ✅ Added `TimingStats` tracking total cycles and breakdown by cache level
+- ✅ Modified `CacheSystem::access_hierarchy()` to calculate cycles per access
+- ✅ JSON output now includes `timing` object with totalCycles, avgLatency, breakdown, latencyConfig
+- ✅ Frontend displays timing with visual breakdown bar (L1/L2/L3/Memory percentages)
+- ✅ Fixed two build locations (component build and top-level build)
 
 ### What Still Needs Work
 
 1. **Compiler Explorer Fix** - Need to determine correct state serialization format
-2. **E2E Testing** - Multi-file integration tests missing
-3. **Documentation** - Several plan docs are outdated
-4. **TLB Simulation** - Not implemented (listed as known limitation)
-5. **Timing Model** - Hit/miss counts only, no cycle timing
+2. **Multi-core timing** - Timing only works in single-core mode currently
 
 ---
 
-**Last Updated:** January 4, 2026
-**Project Phase:** Beta (multi-file support added, assembly view WIP)
-**Recent Focus:** Frontend refactoring + multi-file implementation
+**Last Updated:** January 7, 2026
+**Project Phase:** Beta (TLB display + timing model complete)
+**Recent Focus:** TLB UI + Timing model with configurable latencies

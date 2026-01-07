@@ -60,11 +60,13 @@ SystemAccessResult CacheSystem::access_hierarchy(uint64_t address,
                                                   CacheLevel &l1,
                                                   TLB &tlb,
                                                   uint64_t pc) {
-  SystemAccessResult result = {false, false, false, false, false, false, {}, 0};
+  SystemAccessResult result = {false, false, false, false, false, false, {}, 0, 0};
 
   // TLB lookup (happens before/in parallel with cache access)
+  bool tlb_miss = false;
   if (tlb_enabled) {
     bool tlb_hit = tlb.access(address);
+    tlb_miss = !tlb_hit;
     if (&tlb == &dtlb) {
       result.dtlb_hit = tlb_hit;
     } else {
@@ -76,6 +78,15 @@ SystemAccessResult CacheSystem::access_hierarchy(uint64_t address,
   AccessInfo l1_info = l1.access(address, is_write);
   if (l1_info.result == AccessResult::Hit) {
     result.l1_hit = true;
+    // Calculate timing: L1 hit
+    result.cycles = latency_config.l1_hit;
+    if (tlb_miss) {
+      result.cycles += latency_config.tlb_miss_penalty;
+      timing_stats.tlb_miss_cycles += latency_config.tlb_miss_penalty;
+    }
+    timing_stats.l1_hit_cycles += latency_config.l1_hit;
+    timing_stats.total_cycles += result.cycles;
+
     // Check if this was a prefetched line (promoted from L2 to L1)
     if (prefetch_enabled && prefetched_addresses.count(address)) {
       prefetcher.record_useful_prefetch();
@@ -106,6 +117,14 @@ SystemAccessResult CacheSystem::access_hierarchy(uint64_t address,
   AccessInfo l2_info = l2.access(address, is_write);
   if (l2_info.result == AccessResult::Hit) {
     result.l2_hit = true;
+    // Calculate timing: L2 hit (includes L1 miss time)
+    result.cycles = latency_config.l2_hit;
+    if (tlb_miss) {
+      result.cycles += latency_config.tlb_miss_penalty;
+      timing_stats.tlb_miss_cycles += latency_config.tlb_miss_penalty;
+    }
+    timing_stats.l2_hit_cycles += latency_config.l2_hit;
+    timing_stats.total_cycles += result.cycles;
 
     // Check if this was a prefetched line - prefetches go to L2
     if (prefetch_enabled && prefetched_addresses.count(address)) {
@@ -136,6 +155,14 @@ SystemAccessResult CacheSystem::access_hierarchy(uint64_t address,
   AccessInfo l3_info = l3.access(address, is_write);
   if (l3_info.result == AccessResult::Hit) {
     result.l3_hit = true;
+    // Calculate timing: L3 hit
+    result.cycles = latency_config.l3_hit;
+    if (tlb_miss) {
+      result.cycles += latency_config.tlb_miss_penalty;
+      timing_stats.tlb_miss_cycles += latency_config.tlb_miss_penalty;
+    }
+    timing_stats.l3_hit_cycles += latency_config.l3_hit;
+    timing_stats.total_cycles += result.cycles;
 
     if (inclusion_policy == InclusionPolicy::Exclusive) {
       l3.invalidate(address);
@@ -146,6 +173,14 @@ SystemAccessResult CacheSystem::access_hierarchy(uint64_t address,
 
   // L3 miss - memory access
   result.memory_access = true;
+  // Calculate timing: memory access
+  result.cycles = latency_config.memory;
+  if (tlb_miss) {
+    result.cycles += latency_config.tlb_miss_penalty;
+    timing_stats.tlb_miss_cycles += latency_config.tlb_miss_penalty;
+  }
+  timing_stats.memory_cycles += latency_config.memory;
+  timing_stats.total_cycles += result.cycles;
 
   if (l3_info.was_dirty) {
     result.writebacks.push_back(l3_info.evicted_address);
@@ -181,7 +216,7 @@ SystemAccessResult CacheSystem::fetch(uint64_t address, uint64_t pc) {
 }
 
 HierarchyStats CacheSystem::get_stats() const {
-  return {l1d.getStats(), l1i.getStats(), l2.getStats(), l3.getStats()};
+  return {l1d.getStats(), l1i.getStats(), l2.getStats(), l3.getStats(), timing_stats};
 }
 
 void CacheSystem::reset_stats() {
@@ -189,4 +224,5 @@ void CacheSystem::reset_stats() {
   l1i.resetStats();
   l2.resetStats();
   l3.resetStats();
+  timing_stats.reset();
 }
