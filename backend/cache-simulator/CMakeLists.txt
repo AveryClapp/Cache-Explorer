@@ -8,7 +8,11 @@ add_library(CacheSimulator
   src/CacheLevel.cpp
   src/CacheSystem.cpp
   src/MultiCoreCacheSystem.cpp
+  src/MultiCoreTraceProcessor.cpp
+  src/OptimizationSuggester.cpp
   src/Prefetcher.cpp
+  src/TLB.cpp
+  src/TraceProcessor.cpp
 )
 target_include_directories(CacheSimulator PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
