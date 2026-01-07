@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_library(CacheSimulator
   src/CacheLevel.cpp
   src/CacheSystem.cpp
+  src/MultiCoreCacheSystem.cpp
   src/Prefetcher.cpp
 )
 target_include_directories(CacheSimulator PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
