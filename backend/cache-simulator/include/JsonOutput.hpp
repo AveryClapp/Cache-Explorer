@@ -1,5 +1,11 @@
 #pragma once
 
+#include <ostream>
+#include <string>
+#include <string_view>
+#include <vector>
+
+#include "../profiles/CacheConfig.hpp"
 #include "CacheLevel.hpp"
 #include "CacheStats.hpp"
 #include "MultiCoreCacheSystem.hpp"
@@ -8,11 +14,6 @@
 #include "Prefetcher.hpp"
 #include "TLB.hpp"
 #include "TraceProcessor.hpp"
-#include "../profiles/CacheConfig.hpp"
-#include <ostream>
-#include <string>
-#include <string_view>
-#include <vector>
 
 /**
  * JsonOutput - Utility class for generating JSON output from cache simulation results.

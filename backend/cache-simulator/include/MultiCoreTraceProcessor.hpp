@@ -1,13 +1,14 @@
 #pragma once
 
-#include "MemoryAccess.hpp"
-#include "MultiCoreCacheSystem.hpp"
-#include "TraceEvent.hpp"
 #include <functional>
 #include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
+#include "MemoryAccess.hpp"
+#include "MultiCoreCacheSystem.hpp"
+#include "TraceEvent.hpp"
 
 struct MultiCoreSourceStats {
   std::string file;
@@ -26,34 +27,29 @@ private:
   std::unordered_set<uint32_t> seen_threads;
   std::function<void(const EventResult &)> event_callback;
 
-  std::string make_key(std::string_view file, uint32_t line) {
-    return std::string(file) + ":" + std::to_string(line);
-  }
+  std::string make_key(std::string_view file, uint32_t line);
 
 public:
   MultiCoreTraceProcessor(int num_cores, const CacheConfig &l1_cfg,
                           const CacheConfig &l2_cfg,
-                          const CacheConfig &l3_cfg)
-      : cache(num_cores, l1_cfg, l2_cfg, l3_cfg) {}
+                          const CacheConfig &l3_cfg);
 
-  void set_event_callback(std::function<void(const EventResult &)> cb) {
-    event_callback = std::move(cb);
-  }
+  void set_event_callback(std::function<void(const EventResult &)> cb);
 
   // Process a trace event through the cache system
   void process(const TraceEvent &event);
 
-  MultiCoreStats get_stats() const { return cache.get_stats(); }
+  [[nodiscard]] MultiCoreStats get_stats() const { return cache.get_stats(); }
 
   // Get the hottest source lines by miss count
-  std::vector<MultiCoreSourceStats> get_hot_lines(size_t limit = 10) const;
+  [[nodiscard]] std::vector<MultiCoreSourceStats> get_hot_lines(size_t limit = 10) const;
 
   // Get false sharing reports from the cache system
-  std::vector<FalseSharingReport> get_false_sharing_reports() const;
+  [[nodiscard]] std::vector<FalseSharingReport> get_false_sharing_reports() const;
 
-  size_t get_thread_count() const { return seen_threads.size(); }
-  int get_num_cores() const { return cache.get_num_cores(); }
+  [[nodiscard]] size_t get_thread_count() const { return seen_threads.size(); }
+  [[nodiscard]] int get_num_cores() const { return cache.get_num_cores(); }
 
   // Access to cache system for visualization
-  const MultiCoreCacheSystem& get_cache_system() const { return cache; }
+  [[nodiscard]] const MultiCoreCacheSystem& get_cache_system() const { return cache; }
 };

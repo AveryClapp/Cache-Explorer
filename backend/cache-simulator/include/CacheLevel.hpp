@@ -1,13 +1,14 @@
 #pragma once
 
-#include "../profiles/CacheConfig.hpp"
-#include "CacheLine.hpp"
-#include "CacheStats.hpp"
-#include "EvictionPolicy.hpp"
 #include <cstdlib>
 #include <stdexcept>
 #include <unordered_set>
 #include <vector>
+
+#include "../profiles/CacheConfig.hpp"
+#include "CacheLine.hpp"
+#include "CacheStats.hpp"
+#include "EvictionPolicy.hpp"
 
 enum class AccessResult { Hit, Miss, MissWithEviction };
 

@@ -1,13 +1,14 @@
 #pragma once
 
+#include <optional>
+#include <unordered_set>
+
 #include "../profiles/CacheConfig.hpp"
 #include "CacheLevel.hpp"
 #include "CacheStats.hpp"
 #include "InclusionPolicy.hpp"
 #include "Prefetcher.hpp"
 #include "TLB.hpp"
-#include <optional>
-#include <unordered_set>
 
 enum class AccessType { Read, Write, InstructionFetch };
 

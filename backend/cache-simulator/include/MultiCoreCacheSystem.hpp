@@ -1,16 +1,17 @@
 #pragma once
 
+#include <memory>
+#include <string_view>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
 #include "../profiles/CacheConfig.hpp"
 #include "CacheLevel.hpp"
 #include "CacheStats.hpp"
 #include "CoherenceController.hpp"
 #include "Prefetcher.hpp"
 #include "TLB.hpp"
-#include <memory>
-#include <string_view>
-#include <unordered_map>
-#include <unordered_set>
-#include <vector>
 
 struct FalseSharingEvent {
   uint64_t cache_line_addr;

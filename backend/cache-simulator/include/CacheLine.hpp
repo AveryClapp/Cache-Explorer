@@ -1,7 +1,8 @@
 #pragma once
 
-#include "CoherenceState.hpp"
 #include <cstdint>
+
+#include "CoherenceState.hpp"
 
 struct CacheLine {
   uint64_t tag = 0;

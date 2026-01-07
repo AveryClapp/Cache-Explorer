@@ -1,9 +1,10 @@
 #pragma once
 
-#include "../profiles/CacheConfig.hpp"
-#include "Prefetcher.hpp"
 #include <string>
 #include <string_view>
+
+#include "../profiles/CacheConfig.hpp"
+#include "Prefetcher.hpp"
 
 struct SimulatorOptions {
     std::string config_name = "intel";

@@ -1,11 +1,12 @@
 #pragma once
 
+#include <string>
+#include <vector>
+
 #include "CacheStats.hpp"
 #include "MultiCoreCacheSystem.hpp"
 #include "MultiCoreTraceProcessor.hpp"
 #include "TraceProcessor.hpp"
-#include <string>
-#include <vector>
 
 struct OptimizationSuggestion {
   std::string type;      // "false_sharing", "high_miss_rate", "strided_access"

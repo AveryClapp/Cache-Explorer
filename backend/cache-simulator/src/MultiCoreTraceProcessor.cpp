@@ -1,5 +1,19 @@
 #include "include/MultiCoreTraceProcessor.hpp"
+
 #include <algorithm>
+
+MultiCoreTraceProcessor::MultiCoreTraceProcessor(int num_cores, const CacheConfig &l1_cfg,
+                                                   const CacheConfig &l2_cfg,
+                                                   const CacheConfig &l3_cfg)
+    : cache(num_cores, l1_cfg, l2_cfg, l3_cfg) {}
+
+void MultiCoreTraceProcessor::set_event_callback(std::function<void(const EventResult &)> cb) {
+    event_callback = std::move(cb);
+}
+
+std::string MultiCoreTraceProcessor::make_key(std::string_view file, uint32_t line) {
+    return std::string(file) + ":" + std::to_string(line);
+}
 
 void MultiCoreTraceProcessor::process(const TraceEvent &event) {
     seen_threads.insert(event.thread_id);

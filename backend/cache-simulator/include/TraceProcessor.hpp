@@ -1,13 +1,14 @@
 #pragma once
 
-#include "CacheSystem.hpp"
-#include "MemoryAccess.hpp"
-#include "TraceEvent.hpp"
 #include <functional>
 #include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
+#include "CacheSystem.hpp"
+#include "MemoryAccess.hpp"
+#include "TraceEvent.hpp"
 
 struct SourceStats {
   std::string file;

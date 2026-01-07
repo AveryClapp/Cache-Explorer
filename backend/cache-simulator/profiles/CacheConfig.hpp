@@ -1,10 +1,10 @@
 #pragma once
 
+#include <cstdint>
+
 #include "../include/EvictionPolicy.hpp"
 #include "../include/InclusionPolicy.hpp"
 #include "../include/WritePolicy.hpp"
-
-#include <cstdint>
 using CacheSize = uint64_t;
 
 // Latency configuration for timing simulation (in CPU cycles)

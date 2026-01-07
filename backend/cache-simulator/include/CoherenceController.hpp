@@ -1,10 +1,11 @@
 #pragma once
 
-#include "CacheLevel.hpp"
-#include "CoherenceState.hpp"
 #include <cstdint>
 #include <unordered_map>
 #include <vector>
+
+#include "CacheLevel.hpp"
+#include "CoherenceState.hpp"
 
 struct SnoopResult {
   bool found;
