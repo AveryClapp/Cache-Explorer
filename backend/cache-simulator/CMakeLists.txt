@@ -5,9 +5,11 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_library(CacheSimulator
+  src/ArgParser.cpp
   src/CacheLevel.cpp
   src/CacheSystem.cpp
   src/CoherenceController.cpp
+  src/JsonOutput.cpp
   src/MultiCoreCacheSystem.cpp
   src/MultiCoreTraceProcessor.cpp
   src/OptimizationSuggester.cpp

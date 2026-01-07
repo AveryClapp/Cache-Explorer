@@ -1,145 +1,12 @@
+#include "../include/ArgParser.hpp"
+#include "../include/JsonOutput.hpp"
 #include "../include/MultiCoreTraceProcessor.hpp"
 #include "../include/OptimizationSuggester.hpp"
 #include "../include/TraceProcessor.hpp"
-#include "../profiles/HardwarePresets.hpp"
 #include <iomanip>
 #include <iostream>
 #include <unordered_set>
 #include <vector>
-
-void print_usage(const char *prog) {
-  std::cerr << "Usage: " << prog << " [options]\n"
-            << "Options:\n"
-            << "  --config <name>   intel|amd|apple|educational|custom (default: intel)\n"
-            << "  --cores <n>       Number of cores to simulate (default: auto)\n"
-            << "  --prefetch <p>    Prefetch policy: none|next|stream|stride|adaptive|intel\n"
-            << "  --prefetch-degree <n>  Number of lines to prefetch (default: 2)\n"
-            << "  --verbose         Print each cache event\n"
-            << "  --json            Output JSON format\n"
-            << "  --stream          Stream individual events as JSON (for real-time)\n"
-            << "  --flamegraph      Output SVG flamegraph of cache misses\n"
-            << "  --help            Show this help\n"
-            << "\nCustom cache config (use with --config custom):\n"
-            << "  --l1-size <bytes>   L1 cache size (default: 32768)\n"
-            << "  --l1-assoc <n>      L1 associativity (default: 8)\n"
-            << "  --l1-line <bytes>   Cache line size (default: 64)\n"
-            << "  --l2-size <bytes>   L2 cache size (default: 262144)\n"
-            << "  --l2-assoc <n>      L2 associativity (default: 8)\n"
-            << "  --l3-size <bytes>   L3 cache size (default: 8388608)\n"
-            << "  --l3-assoc <n>      L3 associativity (default: 16)\n";
-}
-
-PrefetchPolicy parse_prefetch_policy(const std::string &name) {
-  if (name == "none") return PrefetchPolicy::NONE;
-  if (name == "next" || name == "nextline") return PrefetchPolicy::NEXT_LINE;
-  if (name == "stream") return PrefetchPolicy::STREAM;
-  if (name == "stride") return PrefetchPolicy::STRIDE;
-  if (name == "adaptive") return PrefetchPolicy::ADAPTIVE;
-  if (name == "intel") return PrefetchPolicy::INTEL;
-  return PrefetchPolicy::NONE;
-}
-
-std::string prefetch_policy_name(PrefetchPolicy p) {
-  switch (p) {
-    case PrefetchPolicy::NONE: return "none";
-    case PrefetchPolicy::NEXT_LINE: return "next_line";
-    case PrefetchPolicy::STREAM: return "stream";
-    case PrefetchPolicy::STRIDE: return "stride";
-    case PrefetchPolicy::ADAPTIVE: return "adaptive";
-    case PrefetchPolicy::INTEL: return "intel";
-  }
-  return "unknown";
-}
-
-CacheHierarchyConfig get_config(const std::string &name) {
-  // Intel presets
-  if (name == "intel" || name == "intel12") return make_intel_12th_gen_config();
-  if (name == "intel14") return make_intel_14th_gen_config();
-  if (name == "xeon") return make_intel_xeon_config();
-  if (name == "xeon8488c" || name == "sapphire") return make_xeon_8488c_config();
-
-  // AMD presets
-  if (name == "amd" || name == "zen4") return make_amd_zen4_config();
-  if (name == "zen3") return make_amd_zen3_config();
-  if (name == "epyc") return make_amd_epyc_config();
-
-  // Apple presets
-  if (name == "apple" || name == "m1") return make_apple_m_series_config();
-  if (name == "m2") return make_apple_m2_config();
-  if (name == "m3") return make_apple_m3_config();
-
-  // Cloud/ARM presets
-  if (name == "graviton" || name == "graviton3") return make_aws_graviton3_config();
-  if (name == "embedded") return make_embedded_config();
-  if (name == "rpi4" || name == "raspberry") return make_raspberry_pi4_config();
-
-  // Educational preset
-  if (name == "educational") return make_educational_config();
-
-  // Default to Intel 12th gen
-  return make_intel_12th_gen_config();
-}
-
-std::string escape_json(const std::string &s) {
-  std::string out;
-  for (char c : s) {
-    if (c == '"') out += "\\\"";
-    else if (c == '\\') out += "\\\\";
-    else out += c;
-  }
-  return out;
-}
-
-const char* coherence_state_char(CoherenceState s) {
-  switch (s) {
-    case CoherenceState::Modified: return "M";
-    case CoherenceState::Exclusive: return "E";
-    case CoherenceState::Shared: return "S";
-    case CoherenceState::Invalid: return "I";
-  }
-  return "I";
-}
-
-// Output L1 cache state for visualization
-// multicore=true uses actual coherence state, multicore=false derives from dirty bit
-void output_cache_state_json(const CacheLevel& l1, int core, bool first, bool multicore = true) {
-  const auto& sets = l1.get_sets();
-  int num_sets = l1.getNumSets();
-  int assoc = l1.getAssociativity();
-
-  if (!first) std::cout << ",";
-  std::cout << "{\"core\":" << core
-            << ",\"sets\":" << num_sets
-            << ",\"ways\":" << assoc
-            << ",\"lines\":[";
-
-  bool first_line = true;
-  for (int set = 0; set < num_sets; set++) {
-    for (int way = 0; way < assoc; way++) {
-      const auto& line = sets[set][way];
-      if (!first_line) std::cout << ",";
-      first_line = false;
-
-      if (line.valid) {
-        const char* state;
-        if (multicore) {
-          state = coherence_state_char(line.coherence_state);
-        } else {
-          // Single-core: derive state from dirty bit (M=dirty, E=clean)
-          state = line.dirty ? "M" : "E";
-        }
-        std::cout << "{\"s\":" << set
-                  << ",\"w\":" << way
-                  << ",\"v\":1"
-                  << ",\"t\":\"0x" << std::hex << line.tag << std::dec << "\""
-                  << ",\"st\":\"" << state << "\"}";
-      } else {
-        std::cout << "{\"s\":" << set << ",\"w\":" << way << ",\"v\":0}";
-      }
-    }
-  }
-  std::cout << "]}";
-}
 
 // Generate SVG flamegraph showing cache miss distribution
 template<typename HotLineType>
@@ -231,86 +98,24 @@ void output_flamegraph_svg(const std::vector<HotLineType>& hot_lines, const std:
 }
 
 int main(int argc, char *argv[]) {
-  std::string config_name = "intel";
-  int num_cores = 0; // 0 = auto-detect
-  bool verbose = false;
-  bool json_output = false;
-  bool stream_mode = false;
-  bool flamegraph_output = false;
+  // Parse command line arguments
+  SimulatorOptions opts = ArgParser::parse(argc, argv);
 
-  // Prefetching options - will be set from preset config unless overridden
-  PrefetchPolicy prefetch_policy = PrefetchPolicy::NONE;
-  int prefetch_degree = 2;
-  bool prefetch_policy_set = false;  // Track if user explicitly set prefetch
-  bool prefetch_degree_set = false;
-
-  // Custom config defaults
-  size_t l1_size = 32768, l2_size = 262144, l3_size = 8388608;
-  int l1_assoc = 8, l2_assoc = 8, l3_assoc = 16, line_size = 64;
-
-  for (int i = 1; i < argc; i++) {
-    std::string arg = argv[i];
-    if (arg == "--config" && i + 1 < argc) {
-      config_name = argv[++i];
-    } else if (arg == "--cores" && i + 1 < argc) {
-      num_cores = std::stoi(argv[++i]);
-    } else if (arg == "--verbose") {
-      verbose = true;
-    } else if (arg == "--json") {
-      json_output = true;
-    } else if (arg == "--stream") {
-      stream_mode = true;
-      json_output = true;  // Streaming implies JSON
-    } else if (arg == "--flamegraph") {
-      flamegraph_output = true;
-    } else if (arg == "--l1-size" && i + 1 < argc) {
-      l1_size = std::stoull(argv[++i]);
-    } else if (arg == "--l1-assoc" && i + 1 < argc) {
-      l1_assoc = std::stoi(argv[++i]);
-    } else if (arg == "--l1-line" && i + 1 < argc) {
-      line_size = std::stoi(argv[++i]);
-    } else if (arg == "--l2-size" && i + 1 < argc) {
-      l2_size = std::stoull(argv[++i]);
-    } else if (arg == "--l2-assoc" && i + 1 < argc) {
-      l2_assoc = std::stoi(argv[++i]);
-    } else if (arg == "--l3-size" && i + 1 < argc) {
-      l3_size = std::stoull(argv[++i]);
-    } else if (arg == "--l3-assoc" && i + 1 < argc) {
-      l3_assoc = std::stoi(argv[++i]);
-    } else if (arg == "--prefetch" && i + 1 < argc) {
-      prefetch_policy = parse_prefetch_policy(argv[++i]);
-      prefetch_policy_set = true;
-    } else if (arg == "--prefetch-degree" && i + 1 < argc) {
-      prefetch_degree = std::stoi(argv[++i]);
-      prefetch_degree_set = true;
-    } else if (arg == "--help") {
-      print_usage(argv[0]);
-      return 0;
-    }
+  if (opts.show_help) {
+    ArgParser::print_usage(argv[0]);
+    return 0;
   }
 
-  // Build cache config
-  CacheHierarchyConfig cfg;
-  if (config_name == "custom") {
-    cfg.l1_data = {l1_size, l1_assoc, line_size, EvictionPolicy::LRU};
-    cfg.l2 = {l2_size, l2_assoc, line_size, EvictionPolicy::LRU};
-    cfg.l3 = {l3_size, l3_assoc, line_size, EvictionPolicy::LRU};
-  } else {
-    cfg = get_config(config_name);
-  }
-
-  // Apply preset's prefetch config unless user explicitly overrode
-  if (!prefetch_policy_set) {
-    // Use the preset's prefetch settings
-    const PrefetchConfig& pf = cfg.prefetch;
-    if (pf.l2_stream_prefetch || pf.l1_stream_prefetch) {
-      prefetch_policy = PrefetchPolicy::ADAPTIVE;  // Use adaptive for stream+stride
-    }
-    if (!prefetch_degree_set) {
-      // Use L2's max distance as the degree (it's the most aggressive)
-      prefetch_degree = pf.l2_max_distance;
-    }
-  }
+  // Extract commonly used values for readability
+  const std::string& config_name = opts.config_name;
+  int num_cores = opts.num_cores;
+  bool verbose = opts.verbose;
+  bool json_output = opts.json_output;
+  bool stream_mode = opts.stream_mode;
+  bool flamegraph_output = opts.flamegraph_output;
+  PrefetchPolicy prefetch_policy = opts.prefetch_policy;
+  int prefetch_degree = opts.prefetch_degree;
+  CacheHierarchyConfig cfg = opts.cache_config;
 
   // Streaming mode: process events as they arrive and output JSON for each
   // Uses MultiCoreTraceProcessor to handle both single and multi-threaded code
@@ -405,7 +210,7 @@ int main(int argc, char *argv[]) {
                     << ",\"l\":" << e.hit_level
                     << ",\"a\":" << e.address;
           if (!e.file.empty()) {
-            std::cout << ",\"f\":\"" << escape_json(e.file) << "\",\"n\":" << e.line;
+            std::cout << ",\"f\":\"" << JsonOutput::escape(e.file) << "\",\"n\":" << e.line;
           }
           std::cout << "}";
         }
@@ -441,7 +246,7 @@ int main(int argc, char *argv[]) {
                   << ",\"l\":" << e.hit_level
                   << ",\"a\":" << e.address;
         if (!e.file.empty()) {
-          std::cout << ",\"f\":\"" << escape_json(e.file) << "\",\"n\":" << e.line;
+          std::cout << ",\"f\":\"" << JsonOutput::escape(e.file) << "\",\"n\":" << e.line;
         }
         std::cout << "}";
       }
@@ -490,7 +295,7 @@ int main(int argc, char *argv[]) {
     std::cout << ",\"hotLines\":[";
     for (size_t i = 0; i < hot.size(); i++) {
       if (i > 0) std::cout << ",";
-      std::cout << "{\"file\":\"" << escape_json(hot[i].file) << "\""
+      std::cout << "{\"file\":\"" << JsonOutput::escape(hot[i].file) << "\""
                 << ",\"line\":" << hot[i].line
                 << ",\"hits\":" << hot[i].hits
                 << ",\"misses\":" << hot[i].misses
@@ -519,9 +324,9 @@ int main(int argc, char *argv[]) {
       if (i > 0) std::cout << ",";
       std::cout << "{\"type\":\"" << s.type << "\""
                 << ",\"severity\":\"" << s.severity << "\""
-                << ",\"location\":\"" << escape_json(s.location) << "\""
-                << ",\"message\":\"" << escape_json(s.message) << "\""
-                << ",\"fix\":\"" << escape_json(s.fix) << "\"}";
+                << ",\"location\":\"" << JsonOutput::escape(s.location) << "\""
+                << ",\"message\":\"" << JsonOutput::escape(s.message) << "\""
+                << ",\"fix\":\"" << JsonOutput::escape(s.fix) << "\"}";
     }
     std::cout << "]";
 
@@ -652,7 +457,7 @@ int main(int argc, char *argv[]) {
       std::cout << "  \"hotLines\": [\n";
       for (size_t i = 0; i < hot.size(); i++) {
         const auto &h = hot[i];
-        std::cout << "    {\"file\": \"" << escape_json(h.file) << "\", "
+        std::cout << "    {\"file\": \"" << JsonOutput::escape(h.file) << "\", "
                   << "\"line\": " << h.line << ", "
                   << "\"hits\": " << h.hits << ", "
                   << "\"misses\": " << h.misses << ", "
@@ -685,7 +490,7 @@ int main(int argc, char *argv[]) {
           std::cout << "{\"threadId\": " << tid << ", "
                     << "\"offset\": " << a.byte_offset << ", "
                     << "\"isWrite\": " << (a.is_write ? "true" : "false") << ", "
-                    << "\"file\": \"" << escape_json(a.file) << "\", "
+                    << "\"file\": \"" << JsonOutput::escape(a.file) << "\", "
                     << "\"line\": " << a.line << ", "
                     << "\"count\": " << thread_accesses.size() << "}";
         }
@@ -703,9 +508,9 @@ int main(int argc, char *argv[]) {
         const auto &s = suggestions[i];
         std::cout << "    {\"type\": \"" << s.type << "\", "
                   << "\"severity\": \"" << s.severity << "\", "
-                  << "\"location\": \"" << escape_json(s.location) << "\", "
-                  << "\"message\": \"" << escape_json(s.message) << "\", "
-                  << "\"fix\": \"" << escape_json(s.fix) << "\"}"
+                  << "\"location\": \"" << JsonOutput::escape(s.location) << "\", "
+                  << "\"message\": \"" << JsonOutput::escape(s.message) << "\", "
+                  << "\"fix\": \"" << JsonOutput::escape(s.fix) << "\"}"
                   << (i + 1 < suggestions.size() ? ",\n" : "\n");
       }
       std::cout << "  ],\n";
@@ -716,7 +521,7 @@ int main(int argc, char *argv[]) {
       for (int core = 0; core < num_cores; core++) {
         const CacheLevel* l1 = cache_sys.get_l1_cache(core);
         if (l1) {
-          output_cache_state_json(*l1, core, core == 0);
+          JsonOutput::write_cache_state(std::cout, *l1, core, core == 0);
         }
       }
       std::cout << "]}\n";
@@ -910,7 +715,7 @@ int main(int argc, char *argv[]) {
 
       for (size_t i = 0; i < hot.size(); i++) {
         const auto &h = hot[i];
-        std::cout << "    {\"file\": \"" << escape_json(h.file) << "\", "
+        std::cout << "    {\"file\": \"" << JsonOutput::escape(h.file) << "\", "
                   << "\"line\": " << h.line << ", "
                   << "\"hits\": " << h.hits << ", "
                   << "\"misses\": " << h.misses << ", "
@@ -929,9 +734,9 @@ int main(int argc, char *argv[]) {
         const auto &s = suggestions[i];
         std::cout << "    {\"type\": \"" << s.type << "\", "
                   << "\"severity\": \"" << s.severity << "\", "
-                  << "\"location\": \"" << escape_json(s.location) << "\", "
-                  << "\"message\": \"" << escape_json(s.message) << "\", "
-                  << "\"fix\": \"" << escape_json(s.fix) << "\"}"
+                  << "\"location\": \"" << JsonOutput::escape(s.location) << "\", "
+                  << "\"message\": \"" << JsonOutput::escape(s.message) << "\", "
+                  << "\"fix\": \"" << JsonOutput::escape(s.fix) << "\"}"
                   << (i + 1 < suggestions.size() ? ",\n" : "\n");
       }
       std::cout << "  ]";
@@ -939,7 +744,7 @@ int main(int argc, char *argv[]) {
       if (prefetch_policy != PrefetchPolicy::NONE) {
         auto pf_stats = processor.get_prefetch_stats();
         std::cout << ",\n  \"prefetch\": {\n"
-                  << "    \"policy\": \"" << prefetch_policy_name(prefetch_policy) << "\",\n"
+                  << "    \"policy\": \"" << ArgParser::prefetch_policy_name(prefetch_policy) << "\",\n"
                   << "    \"degree\": " << prefetch_degree << ",\n"
                   << "    \"issued\": " << pf_stats.prefetches_issued << ",\n"
                   << "    \"useful\": " << pf_stats.prefetches_useful << ",\n"
@@ -950,7 +755,7 @@ int main(int argc, char *argv[]) {
       // Output L1 cache state for visualization (single core = core 0)
       std::cout << ",\n  \"cacheState\": {\"l1d\": [";
       const auto& cache_sys = processor.get_cache_system();
-      output_cache_state_json(cache_sys.get_l1d(), 0, true, false);  // false = single-core mode
+      JsonOutput::write_cache_state(std::cout, cache_sys.get_l1d(), 0, true, false);  // false = single-core mode
       std::cout << "]}";
 
       std::cout << "\n}\n";
