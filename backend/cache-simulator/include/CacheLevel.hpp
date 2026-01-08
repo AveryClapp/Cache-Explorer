@@ -24,8 +24,14 @@ private:
   CacheConfig config;
   std::vector<std::vector<CacheLine>> sets;
   std::vector<uint64_t> plru_bits;
+  std::vector<int> set_mru_;  // MRU way index per set, -1 if none
   uint64_t access_time = 0;
   CacheStats stats;
+
+  // Cached bit widths for performance (avoid repeated log2 calculations)
+  int cached_offset_bits_;
+  int cached_index_bits_;
+  int cached_tag_shift_;  // offset_bits + index_bits
 
   // For 3C miss classification
   std::unordered_set<uint64_t> ever_accessed;  // Track compulsory misses
@@ -45,15 +51,7 @@ private:
 public:
   CacheLevel() = delete;
 
-  explicit CacheLevel(const CacheConfig &cfg) : config(cfg) {
-    if (!config.is_valid()) {
-      throw std::invalid_argument("Invalid cache configuration");
-    }
-    int num_sets = config.num_sets();
-    sets.resize(num_sets, std::vector<CacheLine>(config.associativity));
-    plru_bits.resize(num_sets, 0);
-    set_unique_lines.resize(num_sets, 0);
-  }
+  explicit CacheLevel(const CacheConfig &cfg);
 
   [[nodiscard]] const CacheConfig &get_config() const { return config; }
   [[nodiscard]] const CacheStats &get_stats() const { return stats; }
@@ -62,6 +60,7 @@ public:
     ever_accessed.clear();
     unique_lines_accessed = 0;
     std::fill(set_unique_lines.begin(), set_unique_lines.end(), 0);
+    std::fill(set_mru_.begin(), set_mru_.end(), -1);
   }
 
   [[nodiscard]] int get_num_sets() const { return config.num_sets(); }

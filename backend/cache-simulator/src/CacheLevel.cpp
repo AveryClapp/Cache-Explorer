@@ -1,5 +1,20 @@
 #include "../include/CacheLevel.hpp"
 
+CacheLevel::CacheLevel(const CacheConfig &cfg)
+    : config(cfg),
+      cached_offset_bits_(cfg.offset_bits()),
+      cached_index_bits_(cfg.index_bits()),
+      cached_tag_shift_(cfg.offset_bits() + cfg.index_bits()) {
+  if (!config.is_valid()) {
+    throw std::invalid_argument("Invalid cache configuration");
+  }
+  int num_sets = config.num_sets();
+  sets.resize(num_sets, std::vector<CacheLine>(config.associativity));
+  plru_bits.resize(num_sets, 0);
+  set_unique_lines.resize(num_sets, 0);
+  set_mru_.resize(num_sets, -1);
+}
+
 int CacheLevel::find_victim_lru(const std::vector<CacheLine> &set) const {
   for (int i = 0; i < config.associativity; i++) {
     if (!set[i].valid)
@@ -140,8 +155,7 @@ int CacheLevel::find_victim(uint64_t set_index) {
 }
 
 uint64_t CacheLevel::rebuild_address(uint64_t tag, uint64_t index) const {
-  return (tag << (config.offset_bits() + config.index_bits())) |
-         (index << config.offset_bits());
+  return (tag << cached_tag_shift_) | (index << cached_offset_bits_);
 }
 
 AccessInfo CacheLevel::access(uint64_t address, bool is_write) {
@@ -153,7 +167,7 @@ AccessInfo CacheLevel::access(uint64_t address, bool is_write) {
   access_time++;
 
   for (int way = 0; way < config.associativity; way++) {
-    if (set[way].valid && set[way].tag == tag) {
+    if (set[way].valid && set[way].tag == tag) [[likely]] {
       set[way].lru_time = access_time;
       // RRIP: promote to near-immediate on hit
       if (config.policy == EvictionPolicy::SRRIP || config.policy == EvictionPolicy::BRRIP) {
