@@ -461,7 +461,20 @@ AccessInfo CacheLevel::install_with_state(uint64_t address, CoherenceState state
 
   access_time++;
 
-  // Check if already present
+  // Try MRU way first (fast path)
+  int mru_way = set_mru_[index];
+  if (mru_way >= 0 && set[mru_way].valid && set[mru_way].tag == tag) [[likely]] {
+    set[mru_way].lru_time = access_time;
+    set[mru_way].coherence_state = state;
+    set[mru_way].dirty = (state == CoherenceState::Modified);
+    if (config.policy == EvictionPolicy::SRRIP || config.policy == EvictionPolicy::BRRIP) {
+      set[mru_way].rrip_value = 0;
+    }
+    update_replacement_state(index, mru_way);
+    return {AccessResult::Hit, false, 0, false};
+  }
+
+  // Full search (MRU miss or invalid MRU)
   for (int way = 0; way < config.associativity; way++) {
     if (set[way].valid && set[way].tag == tag) {
       set[way].lru_time = access_time;
@@ -471,6 +484,7 @@ AccessInfo CacheLevel::install_with_state(uint64_t address, CoherenceState state
         set[way].rrip_value = 0;
       }
       update_replacement_state(index, way);
+      set_mru_[index] = way;  // Update MRU
       return {AccessResult::Hit, false, 0, false};
     }
   }
@@ -497,6 +511,7 @@ AccessInfo CacheLevel::install_with_state(uint64_t address, CoherenceState state
     set[victim].rrip_value = (std::rand() % 32 == 0) ? 2 : 3;
   }
   update_replacement_state(index, victim);
+  set_mru_[index] = victim;  // Update MRU to newly installed line
 
   AccessResult result =
       was_dirty ? AccessResult::MissWithEviction : AccessResult::Miss;
