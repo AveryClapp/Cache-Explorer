@@ -714,6 +714,8 @@ test_multifile_cpp() {
 #ifndef VECTOR_HPP
 #define VECTOR_HPP
 
+#include <cstddef>
+
 template<typename T>
 class SimpleVector {
 private:

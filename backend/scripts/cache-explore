@@ -139,6 +139,7 @@ usage() {
 }
 
 OPT_LEVEL="-O0"
+INPUT_FILES=()  # Array to collect multiple input files
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -160,9 +161,12 @@ while [[ $# -gt 0 ]]; do
     -I*) INCLUDES+=("$1"); shift ;;
     --help) usage; exit 0 ;;
     -*) echo "Unknown option: $1"; usage; exit 1 ;;
-    *) INPUT_FILE="$1"; shift ;;
+    *) INPUT_FILES+=("$1"); shift ;;
   esac
 done
+
+# For backwards compatibility, set INPUT_FILE to first file
+INPUT_FILE="${INPUT_FILES[0]:-}"
 
 if [[ -z "$INPUT_FILE" ]]; then
   echo "Error: No input file specified"
@@ -288,7 +292,10 @@ INPUT_DIR="$(dirname "$INPUT_FILE")"
 # Collect source files
 SOURCE_FILES=()
 
-if [[ -n "$MULTI_FILE" ]]; then
+if [[ ${#INPUT_FILES[@]} -gt 1 ]]; then
+  # Multiple files explicitly passed on command line
+  SOURCE_FILES=("${INPUT_FILES[@]}")
+elif [[ -n "$MULTI_FILE" ]]; then
   # Explicit multi-file mode: collect all source files from the directory
   for file in "$INPUT_DIR"/*.c "$INPUT_DIR"/*.cpp "$INPUT_DIR"/*.cc "$INPUT_DIR"/*.cxx; do
     [[ -e "$file" ]] && SOURCE_FILES+=("$file")
