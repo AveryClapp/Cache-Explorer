@@ -1,10 +1,6 @@
 #include "include/TraceProcessor.hpp"
 #include <algorithm>
 
-std::string TraceProcessor::make_key(std::string_view file, uint32_t line) {
-  return std::string(file) + ":" + std::to_string(line);
-}
-
 void TraceProcessor::process_line_access(uint64_t line_addr, bool is_write,
                                          bool is_icache, std::string_view file,
                                          uint32_t line, uint32_t event_size) {
@@ -24,14 +20,22 @@ void TraceProcessor::process_line_access(uint64_t line_addr, bool is_write,
   }
 
   if (!file.empty()) {
-    auto key = make_key(file, line);
-    auto &stats = source_stats[key];
-    stats.file = std::string(file);
-    stats.line = line;
+    SourceKey key{file, line};
+    auto it = source_stats.find(key);
+    if (it == source_stats.end()) {
+      // First access to this source location - store the file string
+      SourceStats stats;
+      stats.file = std::string(file);
+      stats.line = line;
+      // Use the stored string for the key to ensure lifetime safety
+      auto [inserted_it, _] = source_stats.emplace(
+          SourceKey{stats.file, line}, std::move(stats));
+      it = inserted_it;
+    }
     if (result.l1_hit)
-      stats.hits++;
+      it->second.hits++;
     else
-      stats.misses++;
+      it->second.misses++;
   }
 
   if (event_callback) {

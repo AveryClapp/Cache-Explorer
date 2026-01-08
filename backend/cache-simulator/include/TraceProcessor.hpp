@@ -10,6 +10,24 @@
 #include "MemoryAccess.hpp"
 #include "TraceEvent.hpp"
 
+// Struct key for source location lookup - avoids string allocation in hot path
+struct SourceKey {
+  std::string_view file;
+  uint32_t line;
+
+  bool operator==(const SourceKey &other) const {
+    return line == other.line && file == other.file;
+  }
+};
+
+struct SourceKeyHash {
+  size_t operator()(const SourceKey &k) const {
+    size_t h = std::hash<std::string_view>{}(k.file);
+    h ^= std::hash<uint32_t>{}(k.line) + 0x9e3779b9 + (h << 6) + (h >> 2);
+    return h;
+  }
+};
+
 struct SourceStats {
   std::string file;
   uint32_t line;
@@ -59,7 +77,7 @@ struct MemoryIntrinsicStats {
 class TraceProcessor {
 private:
   CacheSystem cache;
-  std::unordered_map<std::string, SourceStats> source_stats;
+  std::unordered_map<SourceKey, SourceStats, SourceKeyHash> source_stats;
   std::function<void(const EventResult &)> event_callback;
 
   // Advanced instrumentation statistics
@@ -70,8 +88,6 @@ private:
 
   // Track prefetched addresses to measure usefulness
   std::unordered_set<uint64_t> prefetched_addresses;
-
-  std::string make_key(std::string_view file, uint32_t line);
 
   // Helper to process a single cache line access
   void process_line_access(uint64_t line_addr, bool is_write, bool is_icache,
