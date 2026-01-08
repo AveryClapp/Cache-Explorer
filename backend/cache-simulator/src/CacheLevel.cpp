@@ -166,6 +166,22 @@ AccessInfo CacheLevel::access(uint64_t address, bool is_write) {
 
   access_time++;
 
+  // Try MRU way first (fast path - ~80% of hits)
+  int mru_way = set_mru_[index];
+  if (mru_way >= 0 && set[mru_way].valid && set[mru_way].tag == tag) [[likely]] {
+    set[mru_way].lru_time = access_time;
+    // RRIP: promote to near-immediate on hit
+    if (config.policy == EvictionPolicy::SRRIP || config.policy == EvictionPolicy::BRRIP) {
+      set[mru_way].rrip_value = 0;
+    }
+    update_replacement_state(index, mru_way);
+    if (is_write)
+      set[mru_way].dirty = true;
+    stats.hits++;
+    return {AccessResult::Hit, false, 0, false};
+  }
+
+  // Full search (MRU miss or invalid MRU)
   for (int way = 0; way < config.associativity; way++) {
     if (set[way].valid && set[way].tag == tag) [[likely]] {
       set[way].lru_time = access_time;
@@ -177,6 +193,7 @@ AccessInfo CacheLevel::access(uint64_t address, bool is_write) {
       if (is_write)
         set[way].dirty = true;
       stats.hits++;
+      set_mru_[index] = way;  // Update MRU
       return {AccessResult::Hit, false, 0, false};
     }
   }
@@ -235,6 +252,7 @@ AccessInfo CacheLevel::access(uint64_t address, bool is_write) {
     set[victim].rrip_value = (std::rand() % 32 == 0) ? 2 : 3;
   }
   update_replacement_state(index, victim);
+  set_mru_[index] = victim;  // Update MRU to newly installed line
 
   AccessResult result =
       was_dirty ? AccessResult::MissWithEviction : AccessResult::Miss;
@@ -248,6 +266,20 @@ AccessInfo CacheLevel::install(uint64_t address, bool is_dirty) {
 
   access_time++;
 
+  // Try MRU way first (fast path)
+  int mru_way = set_mru_[index];
+  if (mru_way >= 0 && set[mru_way].valid && set[mru_way].tag == tag) [[likely]] {
+    set[mru_way].lru_time = access_time;
+    set[mru_way].dirty |= is_dirty;
+    // RRIP: promote to near-immediate on hit
+    if (config.policy == EvictionPolicy::SRRIP || config.policy == EvictionPolicy::BRRIP) {
+      set[mru_way].rrip_value = 0;
+    }
+    update_replacement_state(index, mru_way);
+    return {AccessResult::Hit, false, 0, false};
+  }
+
+  // Full search (MRU miss or invalid MRU)
   for (int way = 0; way < config.associativity; way++) {
     if (set[way].valid && set[way].tag == tag) {
       set[way].lru_time = access_time;
@@ -257,6 +289,7 @@ AccessInfo CacheLevel::install(uint64_t address, bool is_dirty) {
         set[way].rrip_value = 0;
       }
       update_replacement_state(index, way);
+      set_mru_[index] = way;  // Update MRU
       return {AccessResult::Hit, false, 0, false};
     }
   }

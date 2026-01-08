@@ -76,7 +76,7 @@ SystemAccessResult CacheSystem::access_hierarchy(uint64_t address,
 
   // Try L1
   AccessInfo l1_info = l1.access(address, is_write);
-  if (l1_info.result == AccessResult::Hit) {
+  if (l1_info.result == AccessResult::Hit) [[likely]] {
     result.l1_hit = true;
     // Calculate timing: L1 hit
     result.cycles = latency_config.l1_hit;
@@ -115,7 +115,7 @@ SystemAccessResult CacheSystem::access_hierarchy(uint64_t address,
 
   // Try L2
   AccessInfo l2_info = l2.access(address, is_write);
-  if (l2_info.result == AccessResult::Hit) {
+  if (l2_info.result == AccessResult::Hit) [[likely]] {
     result.l2_hit = true;
     // Calculate timing: L2 hit (includes L1 miss time)
     result.cycles = latency_config.l2_hit;

@@ -31,6 +31,7 @@ std::vector<uint64_t> Prefetcher::on_miss(uint64_t addr, uint64_t pc) {
 
 std::vector<uint64_t> Prefetcher::next_line_prefetch(uint64_t addr) {
   std::vector<uint64_t> result;
+  result.reserve(prefetch_degree);
   uint64_t line_addr = get_line_addr(addr);
 
   // Prefetch next N lines
@@ -44,6 +45,7 @@ std::vector<uint64_t> Prefetcher::stream_prefetch(uint64_t addr, uint64_t pc) {
   update_stream_table(addr);
 
   std::vector<uint64_t> result;
+  result.reserve(prefetch_degree);
   uint64_t line_addr = get_line_addr(addr);
   uint64_t page = get_page(addr);
 
@@ -137,6 +139,7 @@ std::vector<uint64_t> Prefetcher::stride_prefetch(uint64_t addr, uint64_t pc) {
   update_stride_table(addr, pc);
 
   std::vector<uint64_t> result;
+  result.reserve(prefetch_degree);
   auto it = stride_table.find(pc);
   if (it == stride_table.end())
     return result;
