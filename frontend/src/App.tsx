@@ -1319,161 +1319,36 @@ function formatPercent(rate: number): string {
   return (rate * 100).toFixed(1) + '%'
 }
 
-function CacheHierarchy({ result }: { result: CacheResult }) {
-  const config = result.cacheConfig
-  const l1d = result.levels.l1d || result.levels.l1!
-  const l1i = result.levels.l1i
-  const l2 = result.levels.l2
-  const l3 = result.levels.l3
-  const cores = result.cores || 1
-  const isMultiCore = result.multicore && cores > 1
-
-  const getHitRateClass = (rate: number) => {
-    if (rate >= 0.95) return 'excellent'
-    if (rate >= 0.8) return 'good'
-    if (rate >= 0.5) return 'moderate'
-    return 'poor'
+// Format a delta between two values as a percentage change
+function formatDelta(current: number, baseline: number): { text: string; isPositive: boolean; isNeutral: boolean } {
+  const delta = current - baseline
+  const deltaPercent = (delta * 100).toFixed(1)
+  if (Math.abs(delta) < 0.001) {
+    return { text: '0%', isPositive: false, isNeutral: true }
   }
+  const sign = delta > 0 ? '+' : ''
+  return { text: `${sign}${deltaPercent}%`, isPositive: delta > 0, isNeutral: false }
+}
 
-  const formatSize = (kb: number) => {
-    if (kb >= 1024) return `${(kb / 1024).toFixed(kb >= 10240 ? 0 : 1)} MB`
-    return `${kb} KB`
-  }
+// Extract just filename:line from a full path like /tmp/cache-explorer-.../main.c:12
+function formatLocation(location: string): string {
+  // Match filename:line at the end of the path
+  const match = location.match(/([^/]+:\d+)$/)
+  return match ? match[1] : location
+}
 
-  // Estimate cycles based on typical latencies (in CPU cycles)
-  const LATENCY = { l1: 4, l2: 12, l3: 40, mem: 200 }
-  const l1Hits = l1d.hits + (l1i?.hits || 0)
-  const l2Hits = l2.hits
-  const l3Hits = l3.hits
-  const memAccesses = l3.misses
-
-  const totalCycles = (l1Hits * LATENCY.l1) + (l2Hits * LATENCY.l2) + (l3Hits * LATENCY.l3) + (memAccesses * LATENCY.mem)
-  const idealCycles = (l1Hits + l2Hits + l3Hits + memAccesses) * LATENCY.l1
-  const overhead = totalCycles - idealCycles
-
-  const formatCycles = (n: number) => {
-    if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
-    if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K'
-    return n.toLocaleString()
-  }
-
-  // Per-core stats (divide evenly for display when multicore)
-  const perCoreL1Hits = isMultiCore ? Math.round(l1d.hits / cores) : l1d.hits
-  const perCoreL1Misses = isMultiCore ? Math.round(l1d.misses / cores) : l1d.misses
-  const perCoreL2Hits = isMultiCore ? Math.round(l2.hits / cores) : l2.hits
-  const perCoreL2Misses = isMultiCore ? Math.round(l2.misses / cores) : l2.misses
+// Cache Hierarchy Level - individual bar visualization
+function CacheHierarchyLevel({ name, hitRate }: { name: string; hitRate: number }) {
+  const getClass = (rate: number) => rate >= 0.95 ? 'excellent' : rate >= 0.8 ? 'good' : rate >= 0.5 ? 'warning' : 'poor'
+  const levelClass = getClass(hitRate)
 
   return (
-    <div className="cache-hierarchy-viz">
-      <div className="hierarchy-diagram">
-        {/* CPU Cores Row */}
-        <div className="hierarchy-level cpu">
-          {isMultiCore ? (
-            Array.from({ length: Math.min(cores, 4) }).map((_, i) => (
-              <div key={i} className="level-box cpu-box">
-                <div className="box-label">Core {i}</div>
-              </div>
-            ))
-          ) : (
-            <div className="level-box cpu-box">
-              <div className="box-label">CPU Core</div>
-            </div>
-          )}
-          {isMultiCore && cores > 4 && (
-            <div className="level-box cpu-box" style={{ opacity: 0.7 }}>
-              <div className="box-label">+{cores - 4} more</div>
-            </div>
-          )}
-        </div>
-
-        {/* L1 Caches Row */}
-        <div className="hierarchy-level l1">
-          {isMultiCore ? (
-            Array.from({ length: Math.min(cores, 4) }).map((_, i) => (
-              <div key={i} className={`level-box l1-box ${getHitRateClass(l1d.hitRate)}`}>
-                <div className="box-label">L1 Data</div>
-                <div className="box-rate">{formatPercent(l1d.hitRate)}</div>
-                {config && <div className="box-size">{formatSize(config.l1d.sizeKB)}</div>}
-                <div className="box-stats">{perCoreL1Hits.toLocaleString()} / {perCoreL1Misses.toLocaleString()}</div>
-              </div>
-            ))
-          ) : (
-            <>
-              <div className={`level-box l1-box ${getHitRateClass(l1d.hitRate)}`}>
-                <div className="box-label">L1 Data</div>
-                <div className="box-rate">{formatPercent(l1d.hitRate)}</div>
-                {config && <div className="box-size">{formatSize(config.l1d.sizeKB)}</div>}
-                <div className="box-stats">{l1d.hits.toLocaleString()} hits / {l1d.misses.toLocaleString()} misses</div>
-              </div>
-              {l1i && (
-                <div className={`level-box l1-box ${getHitRateClass(l1i.hitRate)}`}>
-                  <div className="box-label">L1 Instr</div>
-                  <div className="box-rate">{formatPercent(l1i.hitRate)}</div>
-                  {config && <div className="box-size">{formatSize(config.l1i.sizeKB)}</div>}
-                  <div className="box-stats">{l1i.hits.toLocaleString()} hits / {l1i.misses.toLocaleString()} misses</div>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
-        <div className="hierarchy-connector" />
-
-        {/* L2 Cache Row */}
-        <div className="hierarchy-level l2">
-          {isMultiCore ? (
-            Array.from({ length: Math.min(cores, 4) }).map((_, i) => (
-              <div key={i} className={`level-box l2-box ${getHitRateClass(l2.hitRate)}`}>
-                <div className="box-label">L2</div>
-                <div className="box-rate">{formatPercent(l2.hitRate)}</div>
-                {config && <div className="box-size">{formatSize(config.l2.sizeKB)}</div>}
-                <div className="box-stats">{perCoreL2Hits.toLocaleString()} / {perCoreL2Misses.toLocaleString()}</div>
-              </div>
-            ))
-          ) : (
-            <div className={`level-box l2-box ${getHitRateClass(l2.hitRate)}`}>
-              <div className="box-label">L2 Unified</div>
-              <div className="box-rate">{formatPercent(l2.hitRate)}</div>
-              {config && <div className="box-size">{formatSize(config.l2.sizeKB)}</div>}
-              <div className="box-stats">{l2.hits.toLocaleString()} hits / {l2.misses.toLocaleString()} misses</div>
-            </div>
-          )}
-        </div>
-
-        <div className="hierarchy-connector" />
-
-        {/* L3 Shared Cache */}
-        <div className="hierarchy-level l3">
-          <div className={`level-box l3-box ${getHitRateClass(l3.hitRate)}`}>
-            <div className="box-label">L3 Shared</div>
-            <div className="box-rate">{formatPercent(l3.hitRate)}</div>
-            {config && <div className="box-size">{formatSize(config.l3.sizeKB)}</div>}
-            <div className="box-stats">{l3.hits.toLocaleString()} hits / {l3.misses.toLocaleString()} misses</div>
-          </div>
-        </div>
-
-        <div className="hierarchy-connector" />
-
-        {/* Main Memory */}
-        <div className="hierarchy-level memory">
-          <div className="level-box memory-box">
-            <div className="box-label">Main Memory</div>
-            <div className="box-stats">{l3.misses.toLocaleString()} accesses</div>
-          </div>
-        </div>
+    <div className={`cache-level ${levelClass}`}>
+      <span className="cache-level-name">{name}</span>
+      <div className="cache-level-bar">
+        <div className="cache-level-fill" style={{ width: `${hitRate * 100}%` }} />
       </div>
-
-      {/* Estimated Cycles */}
-      <div className="cache-cycles">
-        <div className="cycles-label">Estimated Memory Latency</div>
-        <div className="cycles-value">{formatCycles(totalCycles)} cycles</div>
-        {overhead > 0 && (
-          <div className="cycles-overhead">+{formatCycles(overhead)} from cache misses</div>
-        )}
-        <div className="cycles-breakdown">
-          L1: {LATENCY.l1}cy • L2: {LATENCY.l2}cy • L3: {LATENCY.l3}cy • Mem: {LATENCY.mem}cy
-        </div>
-      </div>
+      <span className="cache-level-value">{formatPercent(hitRate)}</span>
     </div>
   )
 }
@@ -1534,20 +1409,18 @@ function fuzzyMatch(query: string, text: string): boolean {
 
 // Prefix-to-category mapping for command palette
 const PREFIX_CATEGORIES: Record<string, string> = {
-  '>': 'examples',
   ':': 'settings',
   '@': 'actions',
   '*': 'config',
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
-  'examples': 'Examples',
   'settings': 'Settings',
   'actions': 'Actions',
   'config': 'Config',
 }
 
-const CATEGORY_ORDER = ['actions', 'examples', 'settings', 'config']
+const CATEGORY_ORDER = ['actions', 'settings', 'config']
 
 // Command Palette Component
 function CommandPalette({
@@ -1687,7 +1560,7 @@ function CommandPalette({
             ref={inputRef}
             type="text"
             className="command-input"
-            placeholder={activePrefix ? `Search ${CATEGORY_LABELS[activeCategory!].toLowerCase()}...` : '> examples  : settings  @ actions  * config'}
+            placeholder={activePrefix ? `Search ${CATEGORY_LABELS[activeCategory!].toLowerCase()}...` : ': settings  @ actions  * config'}
             value={query}
             onChange={e => onQueryChange(e.target.value)}
             onKeyDown={handleKeyDown}
@@ -2455,6 +2328,8 @@ function App() {
   const [error, setError] = useState<ErrorResult | null>(null)
   const [customConfig, setCustomConfig] = useState<CustomCacheConfig>(defaultCustomConfig)
   const [defines, setDefines] = useState<DefineEntry[]>([])
+  const [exampleLangFilter, setExampleLangFilter] = useState<'all' | 'c' | 'cpp'>('all')
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [copied, setCopied] = useState(false)
   const [showDetails, setShowDetails] = useState(false)
   const [diffMode, setDiffMode] = useState(false)
@@ -2462,6 +2337,7 @@ function App() {
   const [eventLimit, setEventLimit] = useState(20000)  // Start with -O0 default (20K)
   const [longRunning, setLongRunning] = useState(false)
   const [baselineCode, setBaselineCode] = useState<string | null>(null)
+  const [baselineResult, setBaselineResult] = useState<CacheResult | null>(null)
   const [vimMode, setVimMode] = useState(false)  // Vim keybindings toggle
   const [showCommandPalette, setShowCommandPalette] = useState(false)
   const [commandQuery, setCommandQuery] = useState('')
@@ -2842,35 +2718,8 @@ function App() {
     // Actions (@)
     { id: 'run', icon: '@', label: 'Run analysis', shortcut: '⌘R', action: () => { if (!isLoading) runAnalysis() }, category: 'actions' },
     { id: 'share', icon: '@', label: 'Share / Copy link', shortcut: '⌘S', action: () => { handleShare(); setCopied(true); setTimeout(() => setCopied(false), 2000) }, category: 'actions' },
-    { id: 'diff-baseline', icon: '@', label: 'Set as diff baseline', action: () => setBaselineCode(code), category: 'actions' },
+    { id: 'diff-baseline', icon: '@', label: 'Set as diff baseline', action: () => { setBaselineCode(code); setBaselineResult(result) }, category: 'actions' },
     { id: 'diff-toggle', icon: '@', label: diffMode ? 'Exit diff mode' : 'Enter diff mode', action: () => { if (baselineCode) setDiffMode(!diffMode) }, category: 'actions' },
-    // Examples (>) - dynamically generated from EXAMPLES
-    ...Object.entries(EXAMPLES).map(([key, ex]) => ({
-      id: `example-${key}`,
-      icon: '>',
-      label: ex.name,
-      action: () => {
-        if (ex.files && ex.files.length > 0) {
-          // Multi-file example: replace all files
-          const newFiles = ex.files.map((f) => ({
-            id: generateFileId(),
-            name: f.name,
-            code: f.code,
-            language: f.language,
-            isMain: f.isMain
-          }))
-          setFiles(newFiles)
-          // Select the main file or first file
-          const mainFile = newFiles.find(f => f.isMain) || newFiles[0]
-          setActiveFileId(mainFile.id)
-          setMainFileId(mainFile.id)
-        } else {
-          // Single-file example: update active file
-          setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, code: ex.code, language: ex.language, name: 'main' + getFileExtension(ex.language) } : f))
-        }
-      },
-      category: 'examples'
-    })),
     // Settings (:)
     { id: 'vim', icon: ':', label: vimMode ? 'Disable Vim mode' : 'Enable Vim mode', action: () => setVimMode(!vimMode), category: 'settings' },
     { id: 'lang-c', icon: ':', label: 'Language: C', action: () => updateActiveLanguage('c'), category: 'settings' },
@@ -2883,7 +2732,7 @@ function App() {
     { id: 'limit-1m', icon: '*', label: 'Event limit: 1M', action: () => setEventLimit(1000000), category: 'config' },
     { id: 'limit-5m', icon: '*', label: 'Event limit: 5M', action: () => setEventLimit(5000000), category: 'config' },
     { id: 'limit-none', icon: '*', label: 'Event limit: None', action: () => setEventLimit(0), category: 'config' },
-  ], [isLoading, activeFileId, vimMode, diffMode, baselineCode, code, handleShare, updateActiveLanguage])
+  ], [isLoading, activeFileId, vimMode, diffMode, baselineCode, code, result, handleShare, updateActiveLanguage])
 
   // Command palette handlers
   const handleCommandSelect = useCallback((cmd: CommandItem) => {
@@ -2915,36 +2764,54 @@ function App() {
         />
       )}
 
-      {/* Topbar - hidden in embed mode */}
+      {/* Header - hidden in embed mode */}
       {!isEmbedMode && (
-        <div className="topbar">
-          <div className="topbar-left">
-            <span className="topbar-title">Cache Explorer</span>
+        <header className="header">
+          <div className="header-left">
+            <div className="logo">
+              <div className="logo-icon">◈</div>
+              <div className="logo-text">
+                <span className="logo-title">Cache Explorer</span>
+                <span className="logo-subtitle">Memory Analysis Tool</span>
+              </div>
+            </div>
           </div>
 
-          <div className="topbar-right">
+          <div className="header-center">
             <button
-              className="theme-toggle"
+              className="btn"
+              onClick={() => setShowCommandPalette(true)}
+              title="Command Palette (⌘K)"
+            >
+              ⌘K Commands
+            </button>
+          </div>
+
+          <div className="header-right">
+            <button
+              className="btn-icon"
               onClick={toggleTheme}
               title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-            />
+            >
+              {theme === 'dark' ? '☀' : '☾'}
+            </button>
 
             <button
               onClick={runAnalysis}
               disabled={isLoading}
-              className={`btn-run-cinema ${isLoading ? 'loading' : ''}`}
+              className="btn-primary"
             >
               {isLoading ? (
                 <>
-                  <span className="run-spinner" />
+                  <span className="loading-spinner" style={{ width: 14, height: 14, marginRight: 6 }} />
                   {stageText[stage]}
                 </>
               ) : (
-                <>▶ Run</>
+                'Execute'
               )}
             </button>
           </div>
-        </div>
+        </header>
       )}
 
       {/* Settings Toolbar - Godbolt style */}
@@ -2994,88 +2861,234 @@ function App() {
         </div>
       )}
 
-      <div className="main">
-        <div className={`editor-pane${isMobile && mobilePane !== 'editor' ? ' mobile-hidden' : ''}`}>
-          {/* FileManager hidden in embed mode */}
+      <div className="workspace">
+        {/* Sidebar - Example List */}
+        {!isEmbedMode && !isMobile && (
+          <aside className={`sidebar${sidebarCollapsed ? ' collapsed' : ''}`}>
+            <button className="sidebar-toggle" onClick={() => setSidebarCollapsed(!sidebarCollapsed)} title={sidebarCollapsed ? 'Show examples' : 'Hide examples'}>
+              {sidebarCollapsed ? '›' : '‹'}
+            </button>
+            {!sidebarCollapsed && (
+              <div className="sidebar-section" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                <div className="sidebar-title">Examples</div>
+                <div className="language-filter">
+                  <button
+                    className={`language-filter-btn${exampleLangFilter === 'all' ? ' active' : ''}`}
+                    onClick={() => setExampleLangFilter('all')}
+                  >All</button>
+                  <button
+                    className={`language-filter-btn${exampleLangFilter === 'c' ? ' active' : ''}`}
+                    onClick={() => setExampleLangFilter('c')}
+                  >C</button>
+                  <button
+                    className={`language-filter-btn${exampleLangFilter === 'cpp' ? ' active' : ''}`}
+                    onClick={() => setExampleLangFilter('cpp')}
+                  >C++</button>
+                </div>
+                <div className="example-list" style={{ flex: 1, overflowY: 'auto' }}>
+                  {Object.entries(EXAMPLES)
+                    .filter(([, ex]) => exampleLangFilter === 'all' || ex.language === exampleLangFilter)
+                    .map(([key, ex]) => (
+                    <button
+                      key={key}
+                      className={`example-item${files[0]?.code === ex.code ? ' active' : ''}`}
+                      onClick={() => {
+                        if (ex.files && ex.files.length > 0) {
+                          const newFiles = ex.files.map((f) => ({
+                            id: generateFileId(),
+                            name: f.name,
+                            code: f.code,
+                            language: f.language,
+                            isMain: f.isMain
+                          }))
+                          setFiles(newFiles)
+                          const mainFile = newFiles.find(f => f.isMain) || newFiles[0]
+                          setActiveFileId(mainFile.id)
+                          setMainFileId(mainFile.id)
+                        } else {
+                          setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, code: ex.code, language: ex.language, name: 'main' + getFileExtension(ex.language) } : f))
+                        }
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span className="example-name">{ex.name}</span>
+                        <span className={`example-lang${ex.language === 'cpp' ? ' cpp' : ''}`}>{ex.language === 'cpp' ? 'C++' : 'C'}</span>
+                      </div>
+                      <span className="example-desc">{ex.description}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </aside>
+        )}
+
+        <div className={`editor-area${isMobile && mobilePane !== 'editor' ? ' mobile-hidden' : ''}`}>
+          {/* Tab Bar */}
           {!isEmbedMode && (
-            <FileManager
-              files={projectFiles}
-              activeFileId={activeFileId}
-              onFileSelect={setActiveFileId}
-              onFileCreate={createFile}
-              onFileDelete={closeFile}
-              onFileRename={renameFile}
-              onSetMainFile={setMainFileId}
-            />
+            <div className="tab-bar">
+              <FileManager
+                files={projectFiles}
+                activeFileId={activeFileId}
+                onFileSelect={setActiveFileId}
+                onFileCreate={createFile}
+                onFileDelete={closeFile}
+                onFileRename={renameFile}
+                onSetMainFile={setMainFileId}
+              />
+            </div>
           )}
-          {diffMode && baselineCode ? (
-            <DiffEditor
-              height={isEmbedMode ? "100%" : "calc(100% - 180px)"}
-              language={monacoLanguage}
-              theme={theme === 'dark' ? 'vs-dark' : 'light'}
-              original={baselineCode}
-              modified={code}
-              onMount={(editor) => {
-                const modifiedEditor = editor.getModifiedEditor()
-                modifiedEditor.onDidChangeModelContent(() => updateActiveCode(modifiedEditor.getValue()))
-              }}
-              options={{ minimap: { enabled: false }, fontSize: 13, renderSideBySide: true, readOnly: isReadOnly }}
-            />
-          ) : (
-            <Editor
-              height={isEmbedMode ? "100%" : (vimMode ? "calc(100% - 204px)" : "calc(100% - 180px)")}
-              language={monacoLanguage}
-              theme={theme === 'dark' ? 'vs-dark' : 'light'}
-              value={code}
-              onChange={(value) => !isReadOnly && updateActiveCode(value || '')}
-              onMount={handleEditorMount}
-              options={{ minimap: { enabled: false }, fontSize: 13, lineNumbers: 'on', scrollBeyondLastLine: false, glyphMargin: true, readOnly: isReadOnly }}
-            />
+
+          <div className="editor-container">
+            {diffMode && baselineCode ? (
+              <DiffEditor
+                height="100%"
+                language={monacoLanguage}
+                theme={theme === 'dark' ? 'vs-dark' : 'light'}
+                original={baselineCode}
+                modified={code}
+                onMount={(editor) => {
+                  const modifiedEditor = editor.getModifiedEditor()
+                  modifiedEditor.onDidChangeModelContent(() => updateActiveCode(modifiedEditor.getValue()))
+                }}
+                options={{ minimap: { enabled: false }, fontSize: 13, renderSideBySide: true, readOnly: isReadOnly }}
+              />
+            ) : (
+              <Editor
+                height="100%"
+                language={monacoLanguage}
+                theme={theme === 'dark' ? 'vs-dark' : 'light'}
+                value={code}
+                onChange={(value) => !isReadOnly && updateActiveCode(value || '')}
+                onMount={handleEditorMount}
+                options={{ minimap: { enabled: false }, fontSize: 13, lineNumbers: 'on', scrollBeyondLastLine: false, glyphMargin: true, readOnly: isReadOnly }}
+              />
+            )}
+          </div>
+
+          {/* Status Bar */}
+          {!isEmbedMode && (
+            <div className="status-bar">
+              <div className="status-bar-left">
+                <span className="status-item">
+                  <span className={`status-indicator ${isLoading ? 'running' : 'idle'}`} />
+                  {isLoading ? stageText[stage] : 'Ready'}
+                </span>
+                <span className="status-item">{language.toUpperCase()}</span>
+              </div>
+              <div className="status-bar-right">
+                {vimMode && <span className="status-item">VIM</span>}
+                <span className="status-item">{config}</span>
+              </div>
+            </div>
           )}
           {vimMode && !isEmbedMode && <div ref={vimStatusRef} className="vim-status-bar" />}
         </div>
 
-        <div className={`results-pane${isMobile && mobilePane !== 'results' ? ' mobile-hidden' : ''}`}>
+        <div className={`results-panel${isMobile && mobilePane !== 'results' ? ' mobile-hidden' : ''}`}>
+          <div className="results-header">
+            <span className="results-title">Analysis Results</span>
+            {result && (
+              <button className="btn" onClick={handleShare} title="Copy link">
+                {copied ? 'Copied!' : 'Share'}
+              </button>
+            )}
+          </div>
           <div className="results-scroll">
             {error && <ErrorDisplay error={error} />}
 
             {result && (
               <>
-                {/* Status Banner */}
-                <div className="status-banner success">
-                  <div className="status-title">Analysis Complete</div>
-                  <div className="status-meta">
-                    {result.events.toLocaleString()} events | {result.config} config
-                    {sampleRate > 1 && ` | ${sampleRate}x sampling`}
-                    {result.events >= eventLimit && (
-                      <span style={{ color: 'var(--warning)', marginLeft: '8px' }}>
-                        ⚠ Truncated at {eventLimit.toLocaleString()} limit
-                      </span>
-                    )}
-                  </div>
-                  {result.events >= eventLimit && (
-                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                      Results may not represent full program behavior. Increase limit in Options or use higher optimization (-O2).
+                {/* Metric Cards */}
+                <div className="metric-grid">
+                  {(() => {
+                    const l1Rate = (result.levels.l1d || result.levels.l1!).hitRate
+                    const l1Baseline = baselineResult ? (baselineResult.levels.l1d || baselineResult.levels.l1!)?.hitRate : null
+                    const l1Delta = diffMode && l1Baseline != null ? formatDelta(l1Rate, l1Baseline) : null
+                    return (
+                      <div className={`metric-card ${l1Rate > 0.95 ? 'excellent' : l1Rate > 0.8 ? 'good' : 'warning'}`}>
+                        <div className="metric-label">L1 Hit Rate</div>
+                        <div className="metric-value">
+                          {formatPercent(l1Rate)}
+                          {l1Delta && !l1Delta.isNeutral && (
+                            <span className={`metric-delta ${l1Delta.isPositive ? 'positive' : 'negative'}`}>
+                              {l1Delta.text}
+                            </span>
+                          )}
+                        </div>
+                        <div className="metric-detail">
+                          {(result.levels.l1d || result.levels.l1!).hits.toLocaleString()} hits
+                        </div>
+                      </div>
+                    )
+                  })()}
+                  {(() => {
+                    const l2Rate = result.levels.l2.hitRate
+                    const l2Baseline = baselineResult?.levels.l2?.hitRate
+                    const l2Delta = diffMode && l2Baseline != null ? formatDelta(l2Rate, l2Baseline) : null
+                    return (
+                      <div className={`metric-card ${l2Rate > 0.95 ? 'excellent' : l2Rate > 0.8 ? 'good' : 'warning'}`}>
+                        <div className="metric-label">L2 Hit Rate</div>
+                        <div className="metric-value">
+                          {formatPercent(l2Rate)}
+                          {l2Delta && !l2Delta.isNeutral && (
+                            <span className={`metric-delta ${l2Delta.isPositive ? 'positive' : 'negative'}`}>
+                              {l2Delta.text}
+                            </span>
+                          )}
+                        </div>
+                        <div className="metric-detail">{result.levels.l2.hits.toLocaleString()} hits</div>
+                      </div>
+                    )
+                  })()}
+                  {(() => {
+                    const l3Rate = result.levels.l3.hitRate
+                    const l3Baseline = baselineResult?.levels.l3?.hitRate
+                    const l3Delta = diffMode && l3Baseline != null ? formatDelta(l3Rate, l3Baseline) : null
+                    return (
+                      <div className={`metric-card ${l3Rate > 0.95 ? 'excellent' : l3Rate > 0.8 ? 'good' : 'warning'}`}>
+                        <div className="metric-label">L3 Hit Rate</div>
+                        <div className="metric-value">
+                          {formatPercent(l3Rate)}
+                          {l3Delta && !l3Delta.isNeutral && (
+                            <span className={`metric-delta ${l3Delta.isPositive ? 'positive' : 'negative'}`}>
+                              {l3Delta.text}
+                            </span>
+                          )}
+                        </div>
+                        <div className="metric-detail">{result.levels.l3.hits.toLocaleString()} hits</div>
+                      </div>
+                    )
+                  })()}
+                </div>
+
+                {/* Cache Hierarchy Visualization */}
+                <div className="cache-hierarchy">
+                  <div className="cache-hierarchy-title">Cache Hierarchy</div>
+                  <div className="cache-levels">
+                    <CacheHierarchyLevel
+                      name="L1"
+                      hitRate={(result.levels.l1d || result.levels.l1!).hitRate}
+                    />
+                    <div className="cache-connector" />
+                    <CacheHierarchyLevel
+                      name="L2"
+                      hitRate={result.levels.l2.hitRate}
+                    />
+                    <div className="cache-connector" />
+                    <CacheHierarchyLevel
+                      name="L3"
+                      hitRate={result.levels.l3.hitRate}
+                    />
+                    <div className="cache-connector" />
+                    <div className="memory-stats">
+                      <span className="memory-stats-label">DRAM</span>
+                      <span className="memory-stats-value">{result.levels.l3.misses.toLocaleString()} accesses</span>
                     </div>
+                  </div>
+                  {result.timing && (
+                    <TimingDisplay timing={result.timing} />
                   )}
-                </div>
-
-                {/* Cache Hierarchy Diagram */}
-                <div className="panel">
-                  <div className="panel-header">
-                    <span className="panel-title">Cache Hierarchy</span>
-                  </div>
-                  <CacheHierarchy result={result} />
-                </div>
-
-                {/* Cache Stats Grid */}
-                <div className="panel">
-                  <div className="panel-header">
-                    <span className="panel-title">Statistics</span>
-                  </div>
-                  <div className="panel-body">
-                    <CacheStats result={result} />
-                  </div>
                 </div>
 
                 {/* Prefetch Stats */}
@@ -3084,21 +3097,19 @@ function App() {
                     <div className="panel-header">
                       <span className="panel-title">Prefetching: {result.prefetch.policy}</span>
                     </div>
-                    <div className="panel-body">
-                      <div className="prefetch-stats">
-                        <div className="prefetch-stat">
-                          <span className="prefetch-stat-value">{result.prefetch.issued.toLocaleString()}</span>
-                          <span className="prefetch-stat-label">Issued</span>
+                    <div className="panel-content">
+                      <div className="metric-grid">
+                        <div className="metric-card">
+                          <div className="metric-label">Issued</div>
+                          <div className="metric-value">{result.prefetch.issued.toLocaleString()}</div>
                         </div>
-                        <div className="prefetch-stat">
-                          <span className="prefetch-stat-value">{result.prefetch.useful.toLocaleString()}</span>
-                          <span className="prefetch-stat-label">Useful</span>
+                        <div className="metric-card">
+                          <div className="metric-label">Useful</div>
+                          <div className="metric-value">{result.prefetch.useful.toLocaleString()}</div>
                         </div>
-                        <div className="prefetch-stat">
-                          <span className={`prefetch-stat-value ${result.prefetch.accuracy > 0.5 ? 'excellent' : result.prefetch.accuracy > 0.2 ? 'good' : 'poor'}`}>
-                            {(result.prefetch.accuracy * 100).toFixed(1)}%
-                          </span>
-                          <span className="prefetch-stat-label">Accuracy</span>
+                        <div className={`metric-card ${result.prefetch.accuracy > 0.5 ? 'excellent' : result.prefetch.accuracy > 0.2 ? 'good' : 'warning'}`}>
+                          <div className="metric-label">Accuracy</div>
+                          <div className="metric-value">{(result.prefetch.accuracy * 100).toFixed(1)}%</div>
                         </div>
                       </div>
                     </div>
@@ -3106,8 +3117,8 @@ function App() {
                 )}
 
                 {/* Toggle Buttons */}
-                <div className="toggle-buttons">
-                  <button className={`btn-toggle ${showDetails ? 'active' : ''}`} onClick={() => setShowDetails(!showDetails)}>
+                <div className="toggle-buttons" style={{ margin: 'var(--space-4) 0' }}>
+                  <button className={`btn ${showDetails ? 'active' : ''}`} onClick={() => setShowDetails(!showDetails)}>
                     {showDetails ? '▼ Details' : '▶ Details'}
                   </button>
                 </div>
@@ -3125,9 +3136,6 @@ function App() {
                       <TLBDetail name="Data TLB" stats={result.tlb.dtlb} />
                       <TLBDetail name="Instruction TLB" stats={result.tlb.itlb} />
                     </div>
-                  )}
-                  {result.timing && (
-                    <TimingDisplay timing={result.timing} />
                   )}
                 </>
               )}
@@ -3148,15 +3156,18 @@ function App() {
                 />
               )}
 
-              {result.hotLines.length > 0 && (
+              {(() => {
+                // Filter hotlines to only show those with more than 1 total access
+                const significantHotLines = result.hotLines.filter(h => (h.hits + h.misses) > 1)
+                return significantHotLines.length > 0 && (
                 <div className="panel">
                   <div className="panel-header">
                     <span className="panel-title">Hot Lines</span>
-                    <span className="panel-badge">{result.hotLines.length}</span>
+                    <span className="panel-badge">{significantHotLines.length}</span>
                   </div>
                   {/* File filter dropdown - only show if multiple files */}
                   {(() => {
-                    const uniqueFiles = new Set(result.hotLines.map(h => h.file).filter(Boolean))
+                    const uniqueFiles = new Set(significantHotLines.map(h => h.file).filter(Boolean))
                     return uniqueFiles.size > 1 ? (
                       <div className="file-filter" style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)' }}>
                         <label htmlFor="hot-line-file-select" style={{ marginRight: '8px', fontSize: '12px' }}>Filter by file:</label>
@@ -3176,7 +3187,7 @@ function App() {
                   })()}
                   <div className="hotspots">
                     {(() => {
-                      const filteredLines = result.hotLines.filter(h => !selectedHotLineFile || h.file === selectedHotLineFile)
+                      const filteredLines = significantHotLines.filter(h => !selectedHotLineFile || h.file === selectedHotLineFile)
                       const maxMisses = Math.max(...filteredLines.slice(0, 10).map(h => h.misses), 1)
                       return filteredLines.slice(0, 10).map((hotLine, i) => {
                         const barWidth = maxMisses > 0 ? (hotLine.misses / maxMisses) * 100 : 0
@@ -3212,7 +3223,7 @@ function App() {
                     })()}
                   </div>
                 </div>
-              )}
+              )})()}
 
               {result.suggestions && result.suggestions.length > 0 && (
                 <div className="panel">
@@ -3225,7 +3236,7 @@ function App() {
                       <div key={i} className={`suggestion ${s.severity}`}>
                         <div className="suggestion-header">
                           <span className={`suggestion-severity ${s.severity}`}>{s.severity}</span>
-                          {s.location && <span className="suggestion-location">{s.location}</span>}
+                          {s.location && <span className="suggestion-location">{formatLocation(s.location)}</span>}
                         </div>
                         <div className="suggestion-message">{s.message}</div>
                         {s.fix && <div className="suggestion-fix">{s.fix}</div>}
@@ -3251,11 +3262,11 @@ function App() {
           )}
 
           {isLoading && (
-            <div className="loading">
-              <div className="spinner" />
-              <span>{stageText[stage]}</span>
+            <div className="loading-state">
+              <div className="loading-spinner" />
+              <div className="loading-text">{stageText[stage]}</div>
               {longRunning && (
-                <div className="long-running-warning">
+                <div style={{ marginTop: 'var(--space-4)', fontSize: 'var(--text-xs)', color: 'var(--signal-warning)' }}>
                   Taking longer than expected. Try enabling sampling in Options.
                 </div>
               )}
@@ -3263,15 +3274,14 @@ function App() {
           )}
 
           {!result && !error && !isLoading && (
-            <div className="placeholder">
-              <div className="placeholder-icon">&gt;_</div>
-              <div className="placeholder-title">Cache Explorer</div>
-              <div className="placeholder-text">
-                Write or paste code, then press <kbd>⌘</kbd>+<kbd>↵</kbd> to analyze cache behavior
+            <div className="empty-state">
+              <div className="empty-state-icon">◈</div>
+              <div className="empty-state-title">Ready to Analyze</div>
+              <div className="empty-state-desc">
+                Write or paste C/C++ code in the editor, then execute to visualize cache behavior.
               </div>
-              <div className="placeholder-tips">
-                <div className="tip">Try pressing ⌘K for examples and settings</div>
-                <div className="tip">Change hardware preset to simulate different CPUs</div>
+              <div className="empty-state-shortcut">
+                Press <kbd>⌘</kbd>+<kbd>Enter</kbd> to run
               </div>
             </div>
           )}
@@ -3279,19 +3289,6 @@ function App() {
         </div>
       </div>
 
-      {/* Bottom Control Strip - appears after run, hidden in embed mode */}
-      {result && !isEmbedMode && (
-        <div className="bottom-strip">
-          <div className="bottom-strip-left">
-            <span className="strip-stat">{result.events.toLocaleString()} events</span>
-            <span className="strip-divider" />
-            <span className="strip-stat">{((result.levels.l1d || result.levels.l1!).hitRate * 100).toFixed(1)}% L1</span>
-          </div>
-          <div className="bottom-strip-right">
-            <button className="strip-btn" onClick={handleShare} title="Share">Share</button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

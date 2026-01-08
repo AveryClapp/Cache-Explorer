@@ -1,63 +1,63 @@
 # Cache Explorer Examples
 
-A collection of programs demonstrating various cache access patterns and optimization techniques.
+A collection of C and C++ programs demonstrating various cache access patterns and optimization techniques.
 
 ## Basic Patterns
 
-| Example | Description | Expected Behavior |
-|---------|-------------|-------------------|
-| `sequential.c` | Linear array traversal | Excellent L1 hit rate (99%+) |
-| `strided.c` | Access every Nth element | Moderate hit rate, depends on stride |
-| `matrix_row.c` | Row-major matrix access | Good cache utilization |
-| `matrix_col.c` | Column-major matrix access | Poor cache utilization |
+| Example | C | C++ | Description | Expected Behavior |
+|---------|---|-----|-------------|-------------------|
+| Sequential | `sequential.c` | `sequential.cpp` | Linear array traversal | Excellent L1 hit rate (99%+) |
+| Strided | `strided.c` | - | Access every Nth element | Moderate hit rate, depends on stride |
+| Matrix Row | `matrix_row.c` | `matrix_row.cpp` | Row-major matrix access | Good cache utilization |
+| Matrix Col | `matrix_col.c` | `matrix_col.cpp` | Column-major matrix access | Poor cache utilization |
 
 ## Data Structures
 
-| Example | Description | Expected Behavior |
-|---------|-------------|-------------------|
-| `linked_list.c` | Pointer chasing traversal | Poor locality, many misses |
-| `hash_table.c` | Hash-based lookups | Random access pattern |
-| `binary_search.c` | Binary search algorithm | Unpredictable access |
-| `memory_pool.c` | Pool vs malloc allocation | Pool has better locality |
+| Example | C | C++ | Description | Expected Behavior |
+|---------|---|-----|-------------|-------------------|
+| Linked List | `linked_list.c` | `linked_list.cpp` | Pointer chasing traversal | Poor locality, many misses |
+| Hash Table | `hash_table.c` | - | Hash-based lookups | Random access pattern |
+| Binary Search | `binary_search.c` | - | Binary search algorithm | Unpredictable access |
+| Memory Pool | `memory_pool.c` | - | Pool vs malloc allocation | Pool has better locality |
 
 ## Optimization Patterns
 
-| Example | Description | Cache Benefit |
-|---------|-------------|---------------|
-| `array_of_structs.c` | AoS layout | Loads unused fields |
-| `struct_of_arrays.c` | SoA layout | Perfect for single-field access |
-| `cache_blocking.c` | Tiled matrix multiply | Keeps tiles in L1 |
-| `loop_interchange.c` | Row vs column loop order | Row-major is cache-friendly |
-| `loop_fusion.c` | Combining multiple loops | Reduces cache traffic |
-| `cache_line_align.c` | Aligned data structures | Avoids split accesses |
+| Example | C | C++ | Description | Cache Benefit |
+|---------|---|-----|-------------|---------------|
+| Array of Structs | `array_of_structs.c` | - | AoS layout | Loads unused fields |
+| Struct of Arrays | `struct_of_arrays.c` | `struct_of_arrays.cpp` | SoA layout | Perfect for single-field access |
+| Cache Blocking | `cache_blocking.c` | `cache_blocking.cpp` | Tiled matrix multiply | Keeps tiles in L1 |
+| Loop Interchange | `loop_interchange.c` | - | Row vs column loop order | Row-major is cache-friendly |
+| Loop Fusion | `loop_fusion.c` | - | Combining multiple loops | Reduces cache traffic |
+| Cache Line Align | `cache_line_align.c` | - | Aligned data structures | Avoids split accesses |
 
 ## Working Set Size
 
-| Example | Description | Expected Behavior |
-|---------|-------------|-------------------|
-| `working_set_small.c` | 16KB dataset | Fits in L1, high hit rate |
-| `working_set_large.c` | 64MB dataset | Exceeds L3, many misses |
+| Example | C | C++ | Description | Expected Behavior |
+|---------|---|-----|-------------|-------------------|
+| Working Set Small | `working_set_small.c` | - | 16KB dataset | Fits in L1, high hit rate |
+| Working Set Large | `working_set_large.c` | - | 64MB dataset | Exceeds L3, many misses |
 
 ## Prefetching
 
-| Example | Description | Expected Behavior |
-|---------|-------------|-------------------|
-| `prefetch_friendly.c` | Sequential access | Prefetcher works well |
-| `prefetch_unfriendly.c` | Random access | Prefetcher cannot help |
+| Example | C | C++ | Description | Expected Behavior |
+|---------|---|-----|-------------|-------------------|
+| Prefetch Friendly | `prefetch_friendly.c` | - | Sequential access | Prefetcher works well |
+| Prefetch Unfriendly | `prefetch_unfriendly.c` | - | Random access | Prefetcher cannot help |
 
 ## Multi-threading
 
-| Example | Description | Expected Behavior |
-|---------|-------------|-------------------|
-| `false_sharing.c` | Adjacent data updates | Cache line ping-pong |
+| Example | C | C++ | Description | Expected Behavior |
+|---------|---|-----|-------------|-------------------|
+| False Sharing | `false_sharing.c` | `false_sharing.cpp` | Adjacent data updates | Cache line ping-pong |
 
 ## Real-World Patterns
 
-| Example | Description | Pattern Type |
-|---------|-------------|--------------|
-| `image_blur.c` | 3x3 box blur | 2D stencil access |
-| `string_search.c` | Substring search | Sequential scan |
-| `quicksort.c` | Divide and conquer sort | Recursive partitioning |
+| Example | C | C++ | Description | Pattern Type |
+|---------|---|-----|-------------|--------------|
+| Image Blur | `image_blur.c` | - | 3x3 box blur | 2D stencil access |
+| String Search | `string_search.c` | - | Substring search | Sequential scan |
+| Quicksort | `quicksort.c` | `quicksort.cpp` | Divide and conquer sort | Recursive partitioning |
 
 ## How to Use
 

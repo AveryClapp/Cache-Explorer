@@ -4,8 +4,10 @@
 
 MultiCoreTraceProcessor::MultiCoreTraceProcessor(int num_cores, const CacheConfig &l1_cfg,
                                                    const CacheConfig &l2_cfg,
-                                                   const CacheConfig &l3_cfg)
-    : cache(num_cores, l1_cfg, l2_cfg, l3_cfg) {}
+                                                   const CacheConfig &l3_cfg,
+                                                   PrefetchPolicy prefetch_policy,
+                                                   int prefetch_degree)
+    : cache(num_cores, l1_cfg, l2_cfg, l3_cfg, prefetch_policy, prefetch_degree) {}
 
 void MultiCoreTraceProcessor::set_event_callback(std::function<void(const EventResult &)> cb) {
     event_callback = std::move(cb);

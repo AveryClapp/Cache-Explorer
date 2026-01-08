@@ -41,3 +41,12 @@ target_link_libraries(AdvancedInstrumentationTest CacheSimulator)
 
 add_executable(MultiCoreTLBTest tests/MultiCoreTLBTest.cpp)
 target_link_libraries(MultiCoreTLBTest CacheSimulator)
+
+add_executable(ArgParserTest tests/ArgParserTest.cpp)
+target_link_libraries(ArgParserTest CacheSimulator)
+
+add_executable(TraceProcessorTest tests/TraceProcessorTest.cpp)
+target_link_libraries(TraceProcessorTest CacheSimulator)
+
+add_executable(JsonOutputTest tests/JsonOutputTest.cpp)
+target_link_libraries(JsonOutputTest CacheSimulator)

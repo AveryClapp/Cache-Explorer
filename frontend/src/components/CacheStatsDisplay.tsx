@@ -1,34 +1,5 @@
 import { formatPercent } from '../utils/formatting'
-
-interface CacheStats {
-  hits: number
-  misses: number
-  hitRate: number
-  writebacks: number
-}
-
-interface CacheResult {
-  config: string
-  events: number
-  multicore?: boolean
-  cores?: number
-  threads?: number
-  cacheConfig?: any
-  levels: {
-    l1?: CacheStats
-    l1d?: CacheStats
-    l1i?: CacheStats
-    l2: CacheStats
-    l3: CacheStats
-  }
-  coherence?: any
-  hotLines: any[]
-  falseSharing?: any[]
-  suggestions?: any[]
-  prefetch?: any
-  cacheState?: any
-  tlb?: any
-}
+import type { CacheResult } from '../types/cache'
 
 interface CacheStatsDisplayProps {
   result: CacheResult

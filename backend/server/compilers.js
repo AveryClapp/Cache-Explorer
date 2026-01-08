@@ -1,6 +1,9 @@
 /**
  * Compiler Discovery and Management
  * Discovers available LLVM/Clang versions on the system
+ *
+ * Note: Cache Explorer requires LLVM/Clang for instrumentation via -fpass-plugin.
+ * GCC is not supported as it doesn't support LLVM passes.
  */
 
 import { existsSync } from 'fs';
@@ -26,7 +29,7 @@ const COMMON_PATHS = [
   '/usr/local/opt/llvm@17/bin',
   '/usr/local/opt/llvm@16/bin',
   '/usr/local/opt/llvm@15/bin',
-  // Linux package managers
+  // Linux package managers (LLVM/Clang)
   '/usr/lib/llvm-21/bin',
   '/usr/lib/llvm-20/bin',
   '/usr/lib/llvm-19/bin',
@@ -35,6 +38,10 @@ const COMMON_PATHS = [
   '/usr/lib/llvm-16/bin',
   '/usr/lib/llvm-15/bin',
   '/usr/lib/llvm-14/bin',
+  // Xcode Command Line Tools (Apple Clang)
+  '/Library/Developer/CommandLineTools/usr/bin',
+  // Xcode.app (Apple Clang)
+  '/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin',
   // System paths
   '/usr/bin',
 ];
@@ -51,13 +58,19 @@ function getClangVersion(clangPath) {
       encoding: 'utf-8',
       timeout: 5000,
     });
+
+    // Check if this is Apple Clang (different versioning scheme)
+    const isAppleClang = output.includes('Apple clang') || output.includes('Apple LLVM');
+
     // Parse version from output like "Homebrew clang version 21.1.8" or "clang version 17.0.6"
+    // or "Apple clang version 15.0.0"
     const match = output.match(/clang version (\d+)\.(\d+)/);
     if (match) {
       return {
         major: parseInt(match[1], 10),
         minor: parseInt(match[2], 10),
         full: `${match[1]}.${match[2]}`,
+        isAppleClang,
       };
     }
     return null;
@@ -117,15 +130,26 @@ export function discoverCompilers() {
       source = 'homebrew';
     } else if (binPath.includes('/usr/lib/llvm')) {
       source = 'apt';
+    } else if (binPath.includes('Xcode') || binPath.includes('CommandLineTools')) {
+      source = 'xcode';
     }
 
+    // Use different naming for Apple Clang vs LLVM Clang
+    const id = version.isAppleClang
+      ? `apple-clang-${version.major}`
+      : `clang-${version.major}`;
+    const name = version.isAppleClang
+      ? `Apple Clang ${version.full}`
+      : `Clang ${version.full}`;
+
     compilers.push({
-      id: `clang-${version.major}`,
-      name: `Clang ${version.full}`,
+      id,
+      name,
       version: version.full,
       major: version.major,
       path: binPath,
       source,
+      isAppleClang: version.isAppleClang || false,
     });
   }
 

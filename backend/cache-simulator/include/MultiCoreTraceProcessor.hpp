@@ -32,7 +32,9 @@ private:
 public:
   MultiCoreTraceProcessor(int num_cores, const CacheConfig &l1_cfg,
                           const CacheConfig &l2_cfg,
-                          const CacheConfig &l3_cfg);
+                          const CacheConfig &l3_cfg,
+                          PrefetchPolicy prefetch_policy = PrefetchPolicy::NONE,
+                          int prefetch_degree = 2);
 
   void set_event_callback(std::function<void(const EventResult &)> cb);
 

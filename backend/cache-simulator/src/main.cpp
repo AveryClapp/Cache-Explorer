@@ -121,9 +121,8 @@ int main(int argc, char *argv[]) {
   // Uses MultiCoreTraceProcessor to handle both single and multi-threaded code
   if (stream_mode) {
     // Use 8 cores max - handles both single and multi-threaded transparently
-    MultiCoreTraceProcessor processor(8, cfg.l1_data, cfg.l2, cfg.l3);
-    // TODO: Add prefetching support to MultiCoreCacheSystem
-    // For now, prefetching only works in single-core batch mode
+    MultiCoreTraceProcessor processor(8, cfg.l1_data, cfg.l2, cfg.l3,
+                                       prefetch_policy, prefetch_degree);
 
     size_t event_count = 0;
     size_t batch_size = 50;  // Batch events for efficiency
@@ -365,7 +364,23 @@ int main(int argc, char *argv[]) {
               << "\"tlbMissPenalty\":" << cfg.latency.tlb_miss_penalty
               << "}}";
 
-    // Note: Prefetching not yet supported in multi-core streaming mode
+    // Prefetch stats (if enabled)
+    if (prefetch_policy != PrefetchPolicy::NONE) {
+      auto mc_stats = processor.get_stats();
+      PrefetchStats total_pf;
+      for (const auto& pf : mc_stats.prefetch_per_core) {
+        total_pf.prefetches_issued += pf.prefetches_issued;
+        total_pf.prefetches_useful += pf.prefetches_useful;
+      }
+      std::cout << ",\"prefetch\":{"
+                << "\"policy\":\"" << ArgParser::prefetch_policy_name(prefetch_policy) << "\","
+                << "\"degree\":" << prefetch_degree << ","
+                << "\"issued\":" << total_pf.prefetches_issued << ","
+                << "\"useful\":" << total_pf.prefetches_useful << ","
+                << "\"accuracy\":" << std::fixed << std::setprecision(3) << total_pf.accuracy()
+                << "}";
+    }
+
     std::cout << "}\n" << std::flush;
     return 0;
   }
@@ -390,7 +405,8 @@ int main(int argc, char *argv[]) {
 
   if (multicore) {
     // Multi-core mode with coherence and false sharing detection
-    MultiCoreTraceProcessor processor(num_cores, cfg.l1_data, cfg.l2, cfg.l3);
+    MultiCoreTraceProcessor processor(num_cores, cfg.l1_data, cfg.l2, cfg.l3,
+                                       prefetch_policy, prefetch_degree);
 
     if (verbose && !json_output) {
       processor.set_event_callback([](const EventResult &r) {
@@ -446,8 +462,16 @@ int main(int argc, char *argv[]) {
       json_level("l3", stats.l3, true);
       std::cout << "  },\n";
 
-      // Note: TLB stats not yet available in multi-core mode (per-core TLBs)
-      // TODO: Aggregate TLB stats from all cores when MultiCoreCacheSystem supports TLB
+      // TLB statistics (aggregated from all cores)
+      auto tlb_stats = processor.get_cache_system().get_tlb_stats();
+      std::cout << "  \"tlb\": {\n";
+      std::cout << "    \"dtlb\": {\"hits\": " << tlb_stats.dtlb.hits
+                << ", \"misses\": " << tlb_stats.dtlb.misses
+                << ", \"hitRate\": " << std::fixed << std::setprecision(3) << tlb_stats.dtlb.hit_rate() << "},\n";
+      std::cout << "    \"itlb\": {\"hits\": " << tlb_stats.itlb.hits
+                << ", \"misses\": " << tlb_stats.itlb.misses
+                << ", \"hitRate\": " << std::fixed << std::setprecision(3) << tlb_stats.itlb.hit_rate() << "}\n";
+      std::cout << "  },\n";
 
       std::cout << "  \"coherence\": {\n";
       std::cout << "    \"invalidations\": " << stats.coherence_invalidations << ",\n";
@@ -515,8 +539,51 @@ int main(int argc, char *argv[]) {
       }
       std::cout << "  ],\n";
 
+      // Timing estimate
+      uint64_t l1_hit_cycles = l1_total.hits * cfg.latency.l1_hit;
+      uint64_t l2_hit_cycles = stats.l2.hits * cfg.latency.l2_hit;
+      uint64_t l3_hit_cycles = stats.l3.hits * cfg.latency.l3_hit;
+      uint64_t memory_cycles = stats.l3.misses * cfg.latency.memory;
+      uint64_t total_cycles = l1_hit_cycles + l2_hit_cycles + l3_hit_cycles + memory_cycles;
+      uint64_t total_accesses = l1_total.hits + l1_total.misses;
+      double avg_latency = total_accesses > 0 ? static_cast<double>(total_cycles) / total_accesses : 0.0;
+
+      std::cout << "  \"timing\": {\n"
+                << "    \"totalCycles\": " << total_cycles << ",\n"
+                << "    \"avgLatency\": " << std::fixed << std::setprecision(2) << avg_latency << ",\n"
+                << "    \"breakdown\": {\n"
+                << "      \"l1HitCycles\": " << l1_hit_cycles << ",\n"
+                << "      \"l2HitCycles\": " << l2_hit_cycles << ",\n"
+                << "      \"l3HitCycles\": " << l3_hit_cycles << ",\n"
+                << "      \"memoryCycles\": " << memory_cycles << "\n"
+                << "    },\n"
+                << "    \"latencyConfig\": {\n"
+                << "      \"l1Hit\": " << cfg.latency.l1_hit << ",\n"
+                << "      \"l2Hit\": " << cfg.latency.l2_hit << ",\n"
+                << "      \"l3Hit\": " << cfg.latency.l3_hit << ",\n"
+                << "      \"memory\": " << cfg.latency.memory << "\n"
+                << "    }\n"
+                << "  }";
+
+      // Prefetch stats (if enabled)
+      if (prefetch_policy != PrefetchPolicy::NONE) {
+        // Aggregate prefetch stats from all cores
+        PrefetchStats total_pf;
+        for (const auto& pf : stats.prefetch_per_core) {
+          total_pf.prefetches_issued += pf.prefetches_issued;
+          total_pf.prefetches_useful += pf.prefetches_useful;
+        }
+        std::cout << ",\n  \"prefetch\": {\n"
+                  << "    \"policy\": \"" << ArgParser::prefetch_policy_name(prefetch_policy) << "\",\n"
+                  << "    \"degree\": " << prefetch_degree << ",\n"
+                  << "    \"issued\": " << total_pf.prefetches_issued << ",\n"
+                  << "    \"useful\": " << total_pf.prefetches_useful << ",\n"
+                  << "    \"accuracy\": " << std::fixed << std::setprecision(3) << total_pf.accuracy() << "\n"
+                  << "  }";
+      }
+
       // Output L1 cache state for visualization
-      std::cout << "  \"cacheState\": {\"l1d\": [";
+      std::cout << ",\n  \"cacheState\": {\"l1d\": [";
       const auto& cache_sys = processor.get_cache_system();
       for (int core = 0; core < num_cores; core++) {
         const CacheLevel* l1 = cache_sys.get_l1_cache(core);
