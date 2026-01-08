@@ -2641,49 +2641,6 @@ function App() {
     }
   }, [code, config, optLevel, language, defines])
 
-  // Open current code in Compiler Explorer
-  const openInCompilerExplorer = useCallback(() => {
-    // Get active file's code
-    const activeFile = files.find(f => f.id === activeFileId)
-    const sourceCode = activeFile?.code || ''
-    const lang = activeFile?.language || 'c'
-
-    // Map our language to CE compiler IDs
-    const compilerMap: Record<string, string> = {
-      c: 'cclang1800',      // Clang trunk for C
-      cpp: 'clang1800',     // Clang trunk for C++
-      rust: 'r1830'         // Rust stable
-    }
-
-    // Map our opt levels to CE format
-    const optMap: Record<string, string> = {
-      '-O0': '-O0',
-      '-O1': '-O1',
-      '-O2': '-O2',
-      '-O3': '-O3',
-      '-Os': '-Os',
-      '-Oz': '-Oz'
-    }
-
-    // Build CE ClientState
-    const ceState = {
-      sessions: [{
-        id: 1,
-        language: lang === 'cpp' ? 'c++' : lang,
-        source: sourceCode,
-        compilers: [{
-          id: compilerMap[lang] || 'cclang1800',
-          options: optMap[optLevel] || '-O2'
-        }]
-      }]
-    }
-
-    // Compress using LZString with URL-safe encoding (CE uses this format)
-    const compressed = LZString.compressToEncodedURIComponent(JSON.stringify(ceState))
-    const ceUrl = `https://godbolt.org/clientstate/${compressed}`
-    window.open(ceUrl, '_blank', 'noopener,noreferrer')
-  }, [files, activeFileId, optLevel])
-
   // Apply error markers (red squiggles) for compile errors
   useEffect(() => {
     if (!editorRef.current || !monacoRef.current) return
@@ -2885,7 +2842,6 @@ function App() {
     // Actions (@)
     { id: 'run', icon: '@', label: 'Run analysis', shortcut: '⌘R', action: () => { if (!isLoading) runAnalysis() }, category: 'actions' },
     { id: 'share', icon: '@', label: 'Share / Copy link', shortcut: '⌘S', action: () => { handleShare(); setCopied(true); setTimeout(() => setCopied(false), 2000) }, category: 'actions' },
-    { id: 'ce', icon: '@', label: 'Open in Compiler Explorer', action: openInCompilerExplorer, category: 'actions' },
     { id: 'diff-baseline', icon: '@', label: 'Set as diff baseline', action: () => setBaselineCode(code), category: 'actions' },
     { id: 'diff-toggle', icon: '@', label: diffMode ? 'Exit diff mode' : 'Enter diff mode', action: () => { if (baselineCode) setDiffMode(!diffMode) }, category: 'actions' },
     // Examples (>) - dynamically generated from EXAMPLES
@@ -2927,7 +2883,7 @@ function App() {
     { id: 'limit-1m', icon: '*', label: 'Event limit: 1M', action: () => setEventLimit(1000000), category: 'config' },
     { id: 'limit-5m', icon: '*', label: 'Event limit: 5M', action: () => setEventLimit(5000000), category: 'config' },
     { id: 'limit-none', icon: '*', label: 'Event limit: None', action: () => setEventLimit(0), category: 'config' },
-  ], [isLoading, activeFileId, vimMode, diffMode, baselineCode, code, handleShare, openInCompilerExplorer, updateActiveLanguage])
+  ], [isLoading, activeFileId, vimMode, diffMode, baselineCode, code, handleShare, updateActiveLanguage])
 
   // Command palette handlers
   const handleCommandSelect = useCallback((cmd: CommandItem) => {
@@ -3332,7 +3288,6 @@ function App() {
             <span className="strip-stat">{((result.levels.l1d || result.levels.l1!).hitRate * 100).toFixed(1)}% L1</span>
           </div>
           <div className="bottom-strip-right">
-            <button className="strip-btn" onClick={openInCompilerExplorer} title="View in Compiler Explorer">CE ↗</button>
             <button className="strip-btn" onClick={handleShare} title="Share">Share</button>
           </div>
         </div>
