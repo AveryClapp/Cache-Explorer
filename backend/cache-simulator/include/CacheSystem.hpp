@@ -30,7 +30,7 @@ private:
   CacheLevel l1d;
   CacheLevel l1i;
   CacheLevel l2;
-  CacheLevel l3;
+  std::optional<CacheLevel> l3_;  // Optional L3 (some CPUs like RPi4 don't have L3)
   TLB dtlb;  // Data TLB
   TLB itlb;  // Instruction TLB
   Prefetcher prefetcher;
@@ -47,10 +47,14 @@ private:
                                        CacheLevel &l1, TLB &tlb, uint64_t pc = 0);
   void issue_prefetches(const std::vector<uint64_t> &addrs);
 
+  // Helper to check if L3 exists
+  [[nodiscard]] bool has_l3() const { return l3_.has_value(); }
+
 public:
   CacheSystem(const CacheHierarchyConfig &cfg)
       : inclusion_policy(cfg.inclusion_policy), l1d(cfg.l1_data),
-        l1i(cfg.l1_inst), l2(cfg.l2), l3(cfg.l3),
+        l1i(cfg.l1_inst), l2(cfg.l2),
+        l3_(cfg.l3.is_valid() ? std::optional<CacheLevel>(cfg.l3) : std::nullopt),
         dtlb(TLBConfig{64, 4, 4096}),   // 64-entry, 4-way, 4KB pages
         itlb(TLBConfig{64, 4, 4096}),   // 64-entry, 4-way, 4KB pages
         prefetcher(PrefetchPolicy::NONE, 2, cfg.l1_data.line_size),
@@ -73,7 +77,7 @@ public:
   [[nodiscard]] const CacheLevel &get_l1d() const { return l1d; }
   [[nodiscard]] const CacheLevel &get_l1i() const { return l1i; }
   [[nodiscard]] const CacheLevel &get_l2() const { return l2; }
-  [[nodiscard]] const CacheLevel &get_l3() const { return l3; }
+  [[nodiscard]] const std::optional<CacheLevel> &get_l3() const { return l3_; }
 
   // TLB access
   [[nodiscard]] const TLB &get_dtlb() const { return dtlb; }
@@ -92,4 +96,14 @@ public:
   [[nodiscard]] const TimingStats& get_timing_stats() const { return timing_stats; }
   [[nodiscard]] const LatencyConfig& get_latency_config() const { return latency_config; }
   void set_latency_config(const LatencyConfig& cfg) { latency_config = cfg; }
+
+  // Fast mode: disable expensive 3C miss classification for performance
+  void set_fast_mode(bool enable) {
+    l1d.set_track_3c_misses(!enable);
+    l1i.set_track_3c_misses(!enable);
+    l2.set_track_3c_misses(!enable);
+    if (l3_.has_value()) {
+      l3_->set_track_3c_misses(!enable);
+    }
+  }
 };

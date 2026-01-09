@@ -5,7 +5,9 @@ MultiCoreCacheSystem::MultiCoreCacheSystem(int cores, const CacheConfig &l1_cfg,
                                            const CacheConfig &l3_cfg,
                                            PrefetchPolicy pf_policy,
                                            int pf_degree)
-    : num_cores(cores), l2(l2_cfg), l3(l3_cfg), coherence(cores),
+    : num_cores(cores), l2(l2_cfg),
+      l3_(l3_cfg.is_valid() ? std::optional<CacheLevel>(l3_cfg) : std::nullopt),
+      coherence(cores),
       prefetch_policy(pf_policy), prefetch_degree(pf_degree),
       line_size(l1_cfg.line_size) {
   for (int i = 0; i < cores; i++) {
@@ -59,7 +61,9 @@ void MultiCoreCacheSystem::issue_prefetches(int core, uint64_t miss_addr,
 
     // Fetch into L2/L3 if needed, then L1
     if (!l2.is_present(line_addr)) {
-      l3.access(line_addr, false);
+      if (has_l3()) {
+        l3_->access(line_addr, false);
+      }
       l2.install(line_addr, false);
     }
     l1_caches[core]->install_with_state(line_addr, pf_state);
@@ -132,11 +136,15 @@ MultiCoreAccessResult MultiCoreCacheSystem::read(uint64_t address,
     return {false, true, false, false};
   }
 
-  auto l3_info = l3.access(line_addr, false);
+  // L2 miss - check L3 if it exists, otherwise go to memory
+  bool l3_hit = false;
+  if (has_l3()) {
+    auto l3_info = l3_->access(line_addr, false);
+    l3_hit = (l3_info.result == AccessResult::Hit);
+  }
   l2.install(line_addr, false);
   l1_caches[core]->install_with_state(line_addr, new_state);
 
-  bool l3_hit = (l3_info.result == AccessResult::Hit);
   return {false, false, l3_hit, !l3_hit};
 }
 
@@ -176,11 +184,15 @@ MultiCoreAccessResult MultiCoreCacheSystem::write(uint64_t address,
     return {false, true, false, false};
   }
 
-  auto l3_info = l3.access(line_addr, false);
+  // L2 miss - check L3 if it exists, otherwise go to memory
+  bool l3_hit = false;
+  if (has_l3()) {
+    auto l3_info = l3_->access(line_addr, false);
+    l3_hit = (l3_info.result == AccessResult::Hit);
+  }
   l2.install(line_addr, false);
   l1_caches[core]->install_with_state(line_addr, CoherenceState::Modified);
 
-  bool l3_hit = (l3_info.result == AccessResult::Hit);
   return {false, false, l3_hit, !l3_hit};
 }
 
@@ -193,7 +205,7 @@ MultiCoreStats MultiCoreCacheSystem::get_stats() const {
     stats.prefetch_per_core.push_back(pf->get_stats());
   }
   stats.l2 = l2.get_stats();
-  stats.l3 = l3.get_stats();
+  stats.l3 = has_l3() ? l3_->get_stats() : CacheStats{};
   stats.coherence_invalidations = coherence_invalidations;
   stats.false_sharing_events = false_sharing_count;
   return stats;
@@ -263,5 +275,15 @@ PrefetchStats MultiCoreCacheSystem::get_prefetch_stats(int core) const {
 void MultiCoreCacheSystem::reset_prefetch_stats() {
   for (auto &pf : prefetchers) {
     pf->reset_stats();
+  }
+}
+
+void MultiCoreCacheSystem::set_fast_mode(bool enable) {
+  for (auto &l1 : l1_caches) {
+    l1->set_track_3c_misses(!enable);
+  }
+  l2.set_track_3c_misses(!enable);
+  if (has_l3()) {
+    l3_->set_track_3c_misses(!enable);
   }
 }

@@ -31,6 +31,10 @@ interface CacheStats {
   misses: number
   hitRate: number
   writebacks: number
+  // 3C miss classification (only available when fast mode is disabled)
+  compulsory?: number  // Cold misses - first access ever
+  capacity?: number    // Working set exceeds cache size
+  conflict?: number    // Limited associativity caused eviction
 }
 
 interface HotLine {
@@ -1330,6 +1334,16 @@ function formatDelta(current: number, baseline: number): { text: string; isPosit
   return { text: `${sign}${deltaPercent}%`, isPositive: delta > 0, isNeutral: false }
 }
 
+// Format a numeric delta (for cycles, counts, etc.) - positive = worse (more cycles/accesses)
+function formatNumericDelta(current: number, baseline: number): { text: string; isWorse: boolean; isNeutral: boolean } {
+  const delta = current - baseline
+  if (delta === 0) {
+    return { text: '0', isWorse: false, isNeutral: true }
+  }
+  const sign = delta > 0 ? '+' : ''
+  return { text: `${sign}${delta.toLocaleString()}`, isWorse: delta > 0, isNeutral: false }
+}
+
 // Extract just filename:line from a full path like /tmp/cache-explorer-.../main.c:12
 function formatLocation(location: string): string {
   // Match filename:line at the end of the path
@@ -1578,7 +1592,149 @@ function CommandPalette({
   )
 }
 
+// Styled dropdown component matching site aesthetic
+interface SelectOption {
+  value: string
+  label: string
+  group?: string
+}
+
+function StyledSelect({
+  value,
+  options,
+  onChange,
+  placeholder = 'Select...',
+}: {
+  value: string
+  options: SelectOption[]
+  onChange: (value: string) => void
+  placeholder?: string
+}) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [highlightedIndex, setHighlightedIndex] = useState(-1)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+
+  const selectedOption = options.find(o => o.value === value)
+  const groups = [...new Set(options.map(o => o.group).filter(Boolean))]
+  const hasGroups = groups.length > 0
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false)
+      }
+    }
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      // Scroll to selected item
+      const idx = options.findIndex(o => o.value === value)
+      if (idx >= 0) setHighlightedIndex(idx)
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [isOpen, value, options])
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!isOpen) {
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
+        e.preventDefault()
+        setIsOpen(true)
+      }
+      return
+    }
+
+    switch (e.key) {
+      case 'Escape':
+        setIsOpen(false)
+        break
+      case 'ArrowDown':
+        e.preventDefault()
+        setHighlightedIndex(prev => Math.min(prev + 1, options.length - 1))
+        break
+      case 'ArrowUp':
+        e.preventDefault()
+        setHighlightedIndex(prev => Math.max(prev - 1, 0))
+        break
+      case 'Enter':
+        e.preventDefault()
+        if (highlightedIndex >= 0 && highlightedIndex < options.length) {
+          onChange(options[highlightedIndex].value)
+          setIsOpen(false)
+        }
+        break
+    }
+  }
+
+  // Scroll highlighted item into view
+  useEffect(() => {
+    if (isOpen && listRef.current && highlightedIndex >= 0) {
+      const items = listRef.current.querySelectorAll('.styled-select-option')
+      items[highlightedIndex]?.scrollIntoView({ block: 'nearest' })
+    }
+  }, [highlightedIndex, isOpen])
+
+  const renderOptions = () => {
+    if (hasGroups) {
+      return groups.map(group => (
+        <div key={group} className="styled-select-group">
+          <div className="styled-select-group-label">{group}</div>
+          {options
+            .filter(o => o.group === group)
+            .map(option => {
+              const idx = options.indexOf(option)
+              return (
+                <div
+                  key={option.value}
+                  className={`styled-select-option ${option.value === value ? 'selected' : ''} ${idx === highlightedIndex ? 'highlighted' : ''}`}
+                  onClick={() => { onChange(option.value); setIsOpen(false) }}
+                  onMouseEnter={() => setHighlightedIndex(idx)}
+                >
+                  {option.value === value && <span className="check-mark">✓</span>}
+                  {option.label}
+                </div>
+              )
+            })}
+        </div>
+      ))
+    }
+
+    return options.map((option, idx) => (
+      <div
+        key={option.value}
+        className={`styled-select-option ${option.value === value ? 'selected' : ''} ${idx === highlightedIndex ? 'highlighted' : ''}`}
+        onClick={() => { onChange(option.value); setIsOpen(false) }}
+        onMouseEnter={() => setHighlightedIndex(idx)}
+      >
+        {option.value === value && <span className="check-mark">✓</span>}
+        {option.label}
+      </div>
+    ))
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className={`styled-select ${isOpen ? 'open' : ''}`}
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+    >
+      <div className="styled-select-trigger" onClick={() => setIsOpen(!isOpen)}>
+        <span className="styled-select-value">{selectedOption?.label || placeholder}</span>
+        <span className="styled-select-arrow">{isOpen ? '▲' : '▼'}</span>
+      </div>
+      {isOpen && (
+        <div ref={listRef} className="styled-select-dropdown">
+          {renderOptions()}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function LevelDetail({ name, stats }: { name: string; stats: CacheStats }) {
+  const has3C = stats.compulsory !== undefined || stats.capacity !== undefined || stats.conflict !== undefined
+  const total3C = (stats.compulsory || 0) + (stats.capacity || 0) + (stats.conflict || 0)
+
   return (
     <div className="level-detail">
       <div className="level-header">{name}</div>
@@ -1596,6 +1752,39 @@ function LevelDetail({ name, stats }: { name: string; stats: CacheStats }) {
           {formatPercent(stats.hitRate)}
         </span>
       </div>
+      {has3C && total3C > 0 && (
+        <div className="level-3c">
+          <div className="level-3c-header">Miss Breakdown</div>
+          <div className="level-3c-bar">
+            {stats.compulsory! > 0 && (
+              <div
+                className="level-3c-segment compulsory"
+                style={{ width: `${(stats.compulsory! / total3C) * 100}%` }}
+                title={`Compulsory: ${stats.compulsory!.toLocaleString()} (${((stats.compulsory! / total3C) * 100).toFixed(1)}%)`}
+              />
+            )}
+            {stats.capacity! > 0 && (
+              <div
+                className="level-3c-segment capacity"
+                style={{ width: `${(stats.capacity! / total3C) * 100}%` }}
+                title={`Capacity: ${stats.capacity!.toLocaleString()} (${((stats.capacity! / total3C) * 100).toFixed(1)}%)`}
+              />
+            )}
+            {stats.conflict! > 0 && (
+              <div
+                className="level-3c-segment conflict"
+                style={{ width: `${(stats.conflict! / total3C) * 100}%` }}
+                title={`Conflict: ${stats.conflict!.toLocaleString()} (${((stats.conflict! / total3C) * 100).toFixed(1)}%)`}
+              />
+            )}
+          </div>
+          <div className="level-3c-legend">
+            <span className="legend-item"><span className="dot compulsory" /> Cold</span>
+            <span className="legend-item"><span className="dot capacity" /> Capacity</span>
+            <span className="legend-item"><span className="dot conflict" /> Conflict</span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1631,7 +1820,7 @@ function TLBDetail({ name, stats }: { name: string; stats: TLBStats }) {
   )
 }
 
-function TimingDisplay({ timing }: { timing: TimingStats }) {
+function TimingDisplay({ timing, baselineTiming, diffMode }: { timing: TimingStats; baselineTiming?: TimingStats | null; diffMode?: boolean }) {
   const { breakdown, latencyConfig, totalCycles, avgLatency } = timing
   const totalBreakdown = breakdown.l1HitCycles + breakdown.l2HitCycles + breakdown.l3HitCycles + breakdown.memoryCycles
 
@@ -1641,12 +1830,30 @@ function TimingDisplay({ timing }: { timing: TimingStats }) {
   const l3Pct = totalBreakdown > 0 ? (breakdown.l3HitCycles / totalBreakdown) * 100 : 0
   const memPct = totalBreakdown > 0 ? (breakdown.memoryCycles / totalBreakdown) * 100 : 0
 
+  // Calculate deltas for diff mode
+  const cyclesDelta = diffMode && baselineTiming ? formatNumericDelta(totalCycles, baselineTiming.totalCycles) : null
+  const latencyDelta = diffMode && baselineTiming ? formatNumericDelta(Math.round(avgLatency * 10), Math.round(baselineTiming.avgLatency * 10)) : null
+
   return (
     <div className="timing-display">
       <div className="timing-header">
         <span className="timing-title">Timing Analysis</span>
         <span className="timing-summary">
-          {totalCycles.toLocaleString()} cycles ({avgLatency.toFixed(1)} avg)
+          {totalCycles.toLocaleString()} cycles
+          {cyclesDelta && (
+            <span className={`timing-delta ${cyclesDelta.isNeutral ? 'neutral' : cyclesDelta.isWorse ? 'worse' : 'better'}`}>
+              {cyclesDelta.text}
+            </span>
+          )}
+          <span className="timing-avg">
+            ({avgLatency.toFixed(1)} avg
+            {latencyDelta && !latencyDelta.isNeutral && (
+              <span className={`timing-delta-inline ${latencyDelta.isWorse ? 'worse' : 'better'}`}>
+                {latencyDelta.isWorse ? '↑' : '↓'}
+              </span>
+            )}
+            )
+          </span>
         </span>
       </div>
       <div className="timing-bar">
@@ -1670,6 +1877,61 @@ function TimingDisplay({ timing }: { timing: TimingStats }) {
   )
 }
 
+// Hardware preset options with groups
+const HARDWARE_OPTIONS: SelectOption[] = [
+  { value: 'educational', label: 'Educational', group: 'Learning' },
+  { value: 'intel', label: 'Intel 12th Gen', group: 'Intel' },
+  { value: 'intel14', label: 'Intel 14th Gen', group: 'Intel' },
+  { value: 'xeon', label: 'Intel Xeon', group: 'Intel' },
+  { value: 'zen3', label: 'AMD Zen 3', group: 'AMD' },
+  { value: 'amd', label: 'AMD Zen 4', group: 'AMD' },
+  { value: 'epyc', label: 'AMD EPYC', group: 'AMD' },
+  { value: 'apple', label: 'Apple M1', group: 'Apple' },
+  { value: 'm2', label: 'Apple M2', group: 'Apple' },
+  { value: 'm3', label: 'Apple M3', group: 'Apple' },
+  { value: 'graviton', label: 'AWS Graviton 3', group: 'ARM' },
+  { value: 'rpi4', label: 'Raspberry Pi 4', group: 'ARM' },
+  { value: 'custom', label: 'Custom Config...', group: 'Custom' },
+]
+
+const OPT_LEVEL_OPTIONS: SelectOption[] = [
+  { value: '-O0', label: '-O0' },
+  { value: '-O1', label: '-O1' },
+  { value: '-O2', label: '-O2' },
+  { value: '-O3', label: '-O3' },
+  { value: '-Os', label: '-Os' },
+]
+
+const PREFETCH_OPTIONS: SelectOption[] = [
+  { value: 'none', label: 'None' },
+  { value: 'next', label: 'Next Line' },
+  { value: 'stream', label: 'Stream' },
+  { value: 'stride', label: 'Stride' },
+  { value: 'adaptive', label: 'Adaptive' },
+  { value: 'intel', label: 'Intel DCU' },
+]
+
+const LIMIT_OPTIONS: SelectOption[] = [
+  { value: '10000', label: '10K' },
+  { value: '50000', label: '50K' },
+  { value: '100000', label: '100K' },
+  { value: '500000', label: '500K' },
+  { value: '1000000', label: '1M' },
+]
+
+const SAMPLE_OPTIONS: SelectOption[] = [
+  { value: '1', label: '1:1 (all)' },
+  { value: '2', label: '1:2' },
+  { value: '4', label: '1:4' },
+  { value: '8', label: '1:8' },
+  { value: '16', label: '1:16' },
+]
+
+const FAST_MODE_OPTIONS: SelectOption[] = [
+  { value: 'false', label: 'Full (3C)' },
+  { value: 'true', label: 'Fast' },
+]
+
 // Godbolt-style inline settings toolbar
 function SettingsToolbar({
   config,
@@ -1680,6 +1942,8 @@ function SettingsToolbar({
   defines,
   customConfig,
   eventLimit,
+  sampleRate,
+  fastMode,
   onConfigChange,
   onOptLevelChange,
   onPrefetchChange,
@@ -1687,6 +1951,8 @@ function SettingsToolbar({
   onDefinesChange,
   onCustomConfigChange,
   onEventLimitChange,
+  onSampleRateChange,
+  onFastModeChange,
 }: {
   config: string
   optLevel: string
@@ -1696,6 +1962,8 @@ function SettingsToolbar({
   defines: DefineEntry[]
   customConfig: CustomCacheConfig
   eventLimit: number
+  sampleRate: number
+  fastMode: boolean
   onConfigChange: (c: string) => void
   onOptLevelChange: (o: string) => void
   onPrefetchChange: (p: string) => void
@@ -1703,8 +1971,13 @@ function SettingsToolbar({
   onDefinesChange: (d: DefineEntry[]) => void
   onCustomConfigChange: (c: CustomCacheConfig) => void
   onEventLimitChange: (n: number) => void
+  onSampleRateChange: (n: number) => void
+  onFastModeChange: (f: boolean) => void
 }) {
   const [showMore, setShowMore] = useState(false)
+
+  // Build compiler options dynamically
+  const compilerOptions: SelectOption[] = compilers.map(c => ({ value: c.id, label: c.name }))
 
   return (
     <div className="settings-toolbar">
@@ -1712,33 +1985,11 @@ function SettingsToolbar({
         {/* Hardware Preset */}
         <div className="toolbar-group">
           <label>Hardware</label>
-          <select value={config} onChange={e => onConfigChange(e.target.value)}>
-            <optgroup label="Learning">
-              <option value="educational">Educational</option>
-            </optgroup>
-            <optgroup label="Intel">
-              <option value="intel">Intel 12th Gen</option>
-              <option value="intel14">Intel 14th Gen</option>
-              <option value="xeon">Intel Xeon</option>
-            </optgroup>
-            <optgroup label="AMD">
-              <option value="zen3">AMD Zen 3</option>
-              <option value="amd">AMD Zen 4</option>
-              <option value="epyc">AMD EPYC</option>
-            </optgroup>
-            <optgroup label="Apple">
-              <option value="apple">Apple M1</option>
-              <option value="m2">Apple M2</option>
-              <option value="m3">Apple M3</option>
-            </optgroup>
-            <optgroup label="ARM">
-              <option value="graviton">AWS Graviton 3</option>
-              <option value="rpi4">Raspberry Pi 4</option>
-            </optgroup>
-            <optgroup label="Custom">
-              <option value="custom">Custom Config...</option>
-            </optgroup>
-          </select>
+          <StyledSelect
+            value={config}
+            options={HARDWARE_OPTIONS}
+            onChange={onConfigChange}
+          />
         </div>
 
         <div className="toolbar-divider" />
@@ -1746,13 +1997,11 @@ function SettingsToolbar({
         {/* Optimization Level */}
         <div className="toolbar-group">
           <label>Opt</label>
-          <select value={optLevel} onChange={e => onOptLevelChange(e.target.value)}>
-            <option value="-O0">-O0</option>
-            <option value="-O1">-O1</option>
-            <option value="-O2">-O2</option>
-            <option value="-O3">-O3</option>
-            <option value="-Os">-Os</option>
-          </select>
+          <StyledSelect
+            value={optLevel}
+            options={OPT_LEVEL_OPTIONS}
+            onChange={onOptLevelChange}
+          />
         </div>
 
         <div className="toolbar-divider" />
@@ -1762,11 +2011,11 @@ function SettingsToolbar({
           <>
             <div className="toolbar-group">
               <label>Compiler</label>
-              <select value={selectedCompiler} onChange={e => onCompilerChange(e.target.value)}>
-                {compilers.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+              <StyledSelect
+                value={selectedCompiler}
+                options={compilerOptions}
+                onChange={onCompilerChange}
+              />
             </div>
             <div className="toolbar-divider" />
           </>
@@ -1775,14 +2024,11 @@ function SettingsToolbar({
         {/* Prefetch Policy */}
         <div className="toolbar-group">
           <label>Prefetch</label>
-          <select value={prefetchPolicy} onChange={e => onPrefetchChange(e.target.value)}>
-            <option value="none">None</option>
-            <option value="next">Next Line</option>
-            <option value="stream">Stream</option>
-            <option value="stride">Stride</option>
-            <option value="adaptive">Adaptive</option>
-            <option value="intel">Intel DCU</option>
-          </select>
+          <StyledSelect
+            value={prefetchPolicy}
+            options={PREFETCH_OPTIONS}
+            onChange={onPrefetchChange}
+          />
         </div>
 
         <div className="toolbar-divider" />
@@ -1790,13 +2036,35 @@ function SettingsToolbar({
         {/* Event Limit */}
         <div className="toolbar-group">
           <label>Limit</label>
-          <select value={eventLimit} onChange={e => onEventLimitChange(parseInt(e.target.value))}>
-            <option value={10000}>10K</option>
-            <option value={50000}>50K</option>
-            <option value={100000}>100K</option>
-            <option value={500000}>500K</option>
-            <option value={1000000}>1M</option>
-          </select>
+          <StyledSelect
+            value={String(eventLimit)}
+            options={LIMIT_OPTIONS}
+            onChange={(v) => onEventLimitChange(parseInt(v))}
+          />
+        </div>
+
+        <div className="toolbar-divider" />
+
+        {/* Sampling Rate */}
+        <div className="toolbar-group">
+          <label>Sample</label>
+          <StyledSelect
+            value={String(sampleRate)}
+            options={SAMPLE_OPTIONS}
+            onChange={(v) => onSampleRateChange(parseInt(v))}
+          />
+        </div>
+
+        <div className="toolbar-divider" />
+
+        {/* Fast Mode Toggle */}
+        <div className="toolbar-group">
+          <label title="Fast mode disables 3C miss classification for ~3x speedup">Mode</label>
+          <StyledSelect
+            value={String(fastMode)}
+            options={FAST_MODE_OPTIONS}
+            onChange={(v) => onFastModeChange(v === 'true')}
+          />
         </div>
 
         {/* More Options Toggle */}
@@ -2326,6 +2594,8 @@ function App() {
   const [result, setResult] = useState<CacheResult | null>(null)
   const [stage, setStage] = useState<Stage>('idle')
   const [error, setError] = useState<ErrorResult | null>(null)
+  const wsRef = useRef<WebSocket | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
   const [customConfig, setCustomConfig] = useState<CustomCacheConfig>(defaultCustomConfig)
   const [defines, setDefines] = useState<DefineEntry[]>([])
   const [exampleLangFilter, setExampleLangFilter] = useState<'all' | 'c' | 'cpp'>('all')
@@ -2334,6 +2604,7 @@ function App() {
   const [showDetails, setShowDetails] = useState(false)
   const [diffMode, setDiffMode] = useState(false)
   const [sampleRate, setSampleRate] = useState(1)  // 1 = no sampling
+  const [fastMode, setFastMode] = useState(false)  // false = full 3C tracking
   const [eventLimit, setEventLimit] = useState(20000)  // Start with -O0 default (20K)
   const [longRunning, setLongRunning] = useState(false)
   const [baselineCode, setBaselineCode] = useState<string | null>(null)
@@ -2612,6 +2883,19 @@ function App() {
     decorationsRef.current = editor.deltaDecorations(decorationsRef.current, decorations)
   }, [result])
 
+  const cancelAnalysis = useCallback(() => {
+    if (wsRef.current) {
+      wsRef.current.close()
+      wsRef.current = null
+    }
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+    }
+    setStage('idle')
+    setLongRunning(false)
+  }, [])
+
   const runAnalysis = () => {
     // Input validation - check total size across all files
     const totalSize = files.reduce((sum, f) => sum + f.code.length, 0)
@@ -2624,6 +2908,9 @@ function App() {
       return
     }
 
+    // Cancel any ongoing analysis
+    cancelAnalysis()
+
     setStage('connecting')
     setError(null)
     setResult(null)
@@ -2633,6 +2920,7 @@ function App() {
     const longRunTimeout = setTimeout(() => setLongRunning(true), 10000)
 
     const ws = new WebSocket(WS_URL)
+    wsRef.current = ws
 
     ws.onopen = () => {
       const payload: Record<string, unknown> = { config, optLevel }
@@ -2650,6 +2938,7 @@ function App() {
       if (sampleRate > 1) payload.sample = sampleRate
       if (eventLimit > 0) payload.limit = eventLimit
       if (selectedCompiler) payload.compiler = selectedCompiler
+      if (fastMode) payload.fast = true
       ws.send(JSON.stringify(payload))
     }
 
@@ -2661,6 +2950,7 @@ function App() {
         setLongRunning(false)
         setResult(msg.data as CacheResult)
         setStage('idle')
+        wsRef.current = null
         ws.close()
       } else if (msg.type === 'error' || msg.type?.includes('error') || msg.errors) {
         // Handle all error types: 'error', 'compile_error', 'linker_error', etc.
@@ -2668,6 +2958,7 @@ function App() {
         setLongRunning(false)
         setError(msg as ErrorResult)
         setStage('idle')
+        wsRef.current = null
         ws.close()
       }
     }
@@ -2676,7 +2967,13 @@ function App() {
     ws.onclose = (e) => { if (!e.wasClean && stage !== 'idle') fallbackToHttp() }
 
     const fallbackToHttp = async () => {
+      wsRef.current = null
       setStage('compiling')
+
+      // Create abort controller for HTTP request
+      const controller = new AbortController()
+      abortControllerRef.current = controller
+
       try {
         const payload: Record<string, unknown> = { config, optLevel }
         // Send files array for multi-file support, single code for backward compatibility
@@ -2692,11 +2989,13 @@ function App() {
         if (prefetchPolicy !== 'none') payload.prefetch = prefetchPolicy
         if (sampleRate > 1) payload.sample = sampleRate
         if (eventLimit > 0) payload.limit = eventLimit
+        if (fastMode) payload.fast = true
 
         const response = await fetch(`${API_BASE}/compile`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
+          signal: controller.signal,
         })
         const data = await response.json()
 
@@ -2704,8 +3003,13 @@ function App() {
         else if (data.levels) setResult(data as CacheResult)
         else setError({ type: 'unknown_error', message: 'Unexpected response' })
       } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') {
+          // Request was cancelled - don't set error
+          return
+        }
         setError({ type: 'server_error', message: err instanceof Error ? err.message : 'Connection failed' })
       } finally {
+        abortControllerRef.current = null
         setStage('idle')
       }
     }
@@ -2720,6 +3024,7 @@ function App() {
     { id: 'share', icon: '@', label: 'Share / Copy link', shortcut: '⌘S', action: () => { handleShare(); setCopied(true); setTimeout(() => setCopied(false), 2000) }, category: 'actions' },
     { id: 'diff-baseline', icon: '@', label: 'Set as diff baseline', action: () => { setBaselineCode(code); setBaselineResult(result) }, category: 'actions' },
     { id: 'diff-toggle', icon: '@', label: diffMode ? 'Exit diff mode' : 'Enter diff mode', action: () => { if (baselineCode) setDiffMode(!diffMode) }, category: 'actions' },
+    { id: 'diff-clear', icon: '@', label: 'Clear diff baseline', action: () => { setBaselineCode(null); setBaselineResult(null); setDiffMode(false) }, category: 'actions' },
     // Settings (:)
     { id: 'vim', icon: ':', label: vimMode ? 'Disable Vim mode' : 'Enable Vim mode', action: () => setVimMode(!vimMode), category: 'settings' },
     { id: 'lang-c', icon: ':', label: 'Language: C', action: () => updateActiveLanguage('c'), category: 'settings' },
@@ -2785,6 +3090,13 @@ function App() {
             >
               ⌘K Commands
             </button>
+            {diffMode && baselineResult && (
+              <div className="diff-mode-badge" title="Comparing against baseline">
+                <span className="diff-mode-icon">⇄</span>
+                <span className="diff-mode-text">Diff Mode</span>
+                <button className="diff-mode-exit" onClick={() => setDiffMode(false)} title="Exit diff mode">×</button>
+              </div>
+            )}
           </div>
 
           <div className="header-right">
@@ -2796,20 +3108,24 @@ function App() {
               {theme === 'dark' ? '☀' : '☾'}
             </button>
 
-            <button
-              onClick={runAnalysis}
-              disabled={isLoading}
-              className="btn-primary"
-            >
-              {isLoading ? (
-                <>
-                  <span className="loading-spinner" style={{ width: 14, height: 14, marginRight: 6 }} />
-                  {stageText[stage]}
-                </>
-              ) : (
-                'Execute'
-              )}
-            </button>
+            {isLoading ? (
+              <button
+                onClick={cancelAnalysis}
+                className="btn-cancel"
+                title="Cancel analysis"
+              >
+                <span className="loading-spinner" style={{ width: 14, height: 14, marginRight: 6 }} />
+                {stageText[stage]}
+                <span className="cancel-x">×</span>
+              </button>
+            ) : (
+              <button
+                onClick={runAnalysis}
+                className="btn-primary"
+              >
+                Execute
+              </button>
+            )}
           </div>
         </header>
       )}
@@ -2825,6 +3141,8 @@ function App() {
           defines={defines}
           customConfig={customConfig}
           eventLimit={eventLimit}
+          sampleRate={sampleRate}
+          fastMode={fastMode}
           onConfigChange={(c) => {
             setConfig(c)
             setPrefetchPolicy(PREFETCH_DEFAULTS[c] || 'none')
@@ -2835,6 +3153,8 @@ function App() {
           onDefinesChange={setDefines}
           onCustomConfigChange={setCustomConfig}
           onEventLimitChange={setEventLimit}
+          onSampleRateChange={setSampleRate}
+          onFastModeChange={setFastMode}
         />
       )}
 
@@ -3075,19 +3395,48 @@ function App() {
                       name="L2"
                       hitRate={result.levels.l2.hitRate}
                     />
+                    {/* Only show L3 if the config has an L3 cache (e.g., not on RPi4) */}
+                    {(result.cacheConfig?.l3?.sizeKB ?? 0) > 0 && (
+                      <>
+                        <div className="cache-connector" />
+                        <CacheHierarchyLevel
+                          name="L3"
+                          hitRate={result.levels.l3.hitRate}
+                        />
+                      </>
+                    )}
                     <div className="cache-connector" />
-                    <CacheHierarchyLevel
-                      name="L3"
-                      hitRate={result.levels.l3.hitRate}
-                    />
-                    <div className="cache-connector" />
-                    <div className="memory-stats">
-                      <span className="memory-stats-label">DRAM</span>
-                      <span className="memory-stats-value">{result.levels.l3.misses.toLocaleString()} accesses</span>
-                    </div>
+                    {(() => {
+                      // DRAM accesses = L3 misses when L3 exists, L2 misses when no L3 (e.g., RPi4)
+                      const hasL3 = (result.cacheConfig?.l3?.sizeKB ?? 0) > 0
+                      const dramAccesses = hasL3 ? result.levels.l3.misses : result.levels.l2.misses
+                      const baselineDram = baselineResult
+                        ? ((baselineResult.cacheConfig?.l3?.sizeKB ?? 0) > 0
+                            ? baselineResult.levels.l3?.misses
+                            : baselineResult.levels.l2?.misses)
+                        : null
+                      const dramDelta = diffMode && baselineDram != null ? formatNumericDelta(dramAccesses, baselineDram) : null
+                      return (
+                        <div className="memory-stats">
+                          <span className="memory-stats-label">DRAM</span>
+                          <span className="memory-stats-value">
+                            {dramAccesses.toLocaleString()} accesses
+                            {dramDelta && !dramDelta.isNeutral && (
+                              <span className={`memory-delta ${dramDelta.isWorse ? 'worse' : 'better'}`}>
+                                {dramDelta.text}
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      )
+                    })()}
                   </div>
                   {result.timing && (
-                    <TimingDisplay timing={result.timing} />
+                    <TimingDisplay
+                      timing={result.timing}
+                      baselineTiming={baselineResult?.timing}
+                      diffMode={diffMode}
+                    />
                   )}
                 </div>
 
@@ -3129,7 +3478,7 @@ function App() {
                     <LevelDetail name="L1 Data" stats={result.levels.l1d || result.levels.l1!} />
                     {result.levels.l1i && <LevelDetail name="L1 Instruction" stats={result.levels.l1i} />}
                     <LevelDetail name="L2" stats={result.levels.l2} />
-                    <LevelDetail name="L3" stats={result.levels.l3} />
+                    {(result.cacheConfig?.l3?.sizeKB ?? 0) > 0 && <LevelDetail name="L3" stats={result.levels.l3} />}
                   </div>
                   {result.tlb && (
                     <div className="tlb-grid">

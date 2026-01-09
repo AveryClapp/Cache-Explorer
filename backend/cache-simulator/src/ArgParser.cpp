@@ -13,6 +13,7 @@ void ArgParser::print_usage(const char* prog) {
               << "  --json            Output JSON format\n"
               << "  --stream          Stream individual events as JSON (for real-time)\n"
               << "  --flamegraph      Output SVG flamegraph of cache misses\n"
+              << "  --fast            Disable 3C miss classification for ~3x faster simulation\n"
               << "  --help            Show this help\n"
               << "\nCustom cache config (use with --config custom):\n"
               << "  --l1-size <bytes>   L1 cache size (default: 32768)\n"
@@ -119,6 +120,8 @@ SimulatorOptions ArgParser::parse(int argc, char* argv[]) {
             opts.json_output = true;  // Streaming implies JSON
         } else if (arg == "--flamegraph") {
             opts.flamegraph_output = true;
+        } else if (arg == "--fast") {
+            opts.fast_mode = true;
         } else if (arg == "--l1-size" && i + 1 < argc) {
             opts.l1_size = std::stoull(argv[++i]);
         } else if (arg == "--l1-assoc" && i + 1 < argc) {

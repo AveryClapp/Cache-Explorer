@@ -159,6 +159,7 @@ app.post('/compile', async (req, res) => {
     language = 'c',
     sample,
     limit,
+    fast,
     timeout: requestedTimeout
   } = req.body;
 
@@ -172,6 +173,7 @@ app.post('/compile', async (req, res) => {
   // 100K events = ~1 second runtime, good balance for web UI responsiveness
   const eventLimit = limit !== undefined ? limit : 100000;
   const sampleRate = sample !== undefined ? sample : 1;       // No sampling by default
+  const fastMode = fast === true;                             // Fast mode disables 3C classification
 
   // Normalize files for cache key
   const normalizedFiles = Array.isArray(inputFiles)
@@ -187,6 +189,7 @@ app.post('/compile', async (req, res) => {
     defines: req.body.defines || [],
     sampleRate,
     eventLimit,
+    fastMode,
   };
 
   try {
@@ -317,6 +320,10 @@ app.post('/compile', async (req, res) => {
       }
       if (eventLimit > 0) {
         args.push('--limit', String(eventLimit));
+      }
+      // Add fast mode flag (disables 3C miss classification for ~3x speedup)
+      if (fastMode) {
+        args.push('--fast');
       }
 
       const proc = spawn(CACHE_EXPLORE, args);
@@ -636,6 +643,7 @@ wss.on('connection', (ws) => {
       prefetch,
       sample,
       limit,
+      fast,
       timeout: requestedTimeout
     } = data;
 
@@ -649,6 +657,7 @@ wss.on('connection', (ws) => {
     // Apply sensible defaults for web UI to prevent timeouts
     const eventLimit = limit !== undefined ? limit : 100000;  // Match HTTP default for responsive web UI
     const sampleRate = sample !== undefined ? sample : 1;       // No sampling by default
+    const fastMode = fast === true;                             // Fast mode disables 3C classification
 
     // Configurable timeout with bounds
     const timeout = Math.min(
@@ -667,6 +676,7 @@ wss.on('connection', (ws) => {
           prefetch: prefetch || 'none',
           sampleRate,
           eventLimit,
+          fastMode,
           customConfig,
           defines: defines || [],
           timeout,
@@ -763,6 +773,10 @@ wss.on('connection', (ws) => {
         }
         if (eventLimit > 0) {
           args.push('--limit', String(eventLimit));
+        }
+        // Add fast mode flag (disables 3C miss classification for ~3x speedup)
+        if (fastMode) {
+          args.push('--fast');
         }
 
         console.log(`[WebSocket] spawning: ${CACHE_EXPLORE} ${args.join(' ')}`);

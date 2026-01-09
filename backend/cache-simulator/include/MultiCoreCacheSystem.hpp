@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <string_view>
 #include <unordered_map>
 #include <unordered_set>
@@ -51,8 +52,11 @@ private:
   std::vector<std::unique_ptr<Prefetcher>> prefetchers;  // Per-core prefetchers
   std::vector<std::unique_ptr<TLB>> dtlbs;  // Per-core data TLBs
   CacheLevel l2;
-  CacheLevel l3;
+  std::optional<CacheLevel> l3_;  // Optional L3 (some CPUs like RPi4 don't have L3)
   CoherenceController coherence;
+
+  // Helper to check if L3 exists
+  [[nodiscard]] bool has_l3() const { return l3_.has_value(); }
 
   PrefetchPolicy prefetch_policy = PrefetchPolicy::NONE;
   int prefetch_degree = 2;
@@ -127,4 +131,7 @@ public:
   [[nodiscard]] PrefetchStats get_prefetch_stats(int core) const;
 
   void reset_prefetch_stats();
+
+  // Fast mode: disable expensive 3C miss classification for performance
+  void set_fast_mode(bool enable);
 };

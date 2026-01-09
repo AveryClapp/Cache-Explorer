@@ -113,6 +113,7 @@ int main(int argc, char *argv[]) {
   bool json_output = opts.json_output;
   bool stream_mode = opts.stream_mode;
   bool flamegraph_output = opts.flamegraph_output;
+  bool fast_mode = opts.fast_mode;
   PrefetchPolicy prefetch_policy = opts.prefetch_policy;
   int prefetch_degree = opts.prefetch_degree;
   CacheHierarchyConfig cfg = opts.cache_config;
@@ -123,6 +124,9 @@ int main(int argc, char *argv[]) {
     // Use 8 cores max - handles both single and multi-threaded transparently
     MultiCoreTraceProcessor processor(8, cfg.l1_data, cfg.l2, cfg.l3,
                                        prefetch_policy, prefetch_degree);
+    if (fast_mode) {
+      processor.set_fast_mode(true);
+    }
 
     size_t event_count = 0;
     size_t batch_size = 50;  // Batch events for efficiency
@@ -407,6 +411,9 @@ int main(int argc, char *argv[]) {
     // Multi-core mode with coherence and false sharing detection
     MultiCoreTraceProcessor processor(num_cores, cfg.l1_data, cfg.l2, cfg.l3,
                                        prefetch_policy, prefetch_degree);
+    if (fast_mode) {
+      processor.set_fast_mode(true);
+    }
 
     if (verbose && !json_output) {
       processor.set_event_callback([](const EventResult &r) {
@@ -673,6 +680,9 @@ int main(int argc, char *argv[]) {
   } else {
     // Single-core mode (original behavior)
     TraceProcessor processor(cfg);
+    if (fast_mode) {
+      processor.set_fast_mode(true);
+    }
     if (prefetch_policy != PrefetchPolicy::NONE) {
       processor.enable_prefetching(prefetch_policy, prefetch_degree);
     }

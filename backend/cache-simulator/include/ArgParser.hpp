@@ -16,6 +16,7 @@ struct SimulatorOptions {
     bool json_output = false;
     bool stream_mode = false;
     bool flamegraph_output = false;
+    bool fast_mode = false;  // Disable 3C miss classification for performance
     bool show_help = false;
     bool prefetch_policy_set = false;
     bool prefetch_degree_set = false;

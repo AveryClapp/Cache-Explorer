@@ -64,6 +64,7 @@ export async function checkSandboxAvailable() {
  * @param {string} options.prefetch - Prefetch policy (none, stream, stride, etc)
  * @param {number} options.sampleRate - Sampling rate (1 = all events)
  * @param {number} options.eventLimit - Max events to process
+ * @param {boolean} options.fastMode - Fast mode (disables 3C classification)
  * @param {Object} options.customConfig - Custom cache parameters
  * @param {Array} options.defines - Preprocessor defines [{name, value}]
  * @param {Function} options.onProgress - Progress callback
@@ -78,6 +79,7 @@ export async function runInSandbox(options) {
     prefetch = 'none',
     sampleRate = 1,
     eventLimit = 5000000,
+    fastMode = false,
     customConfig,
     defines = [],
     onProgress
@@ -126,7 +128,7 @@ export async function runInSandbox(options) {
     dockerArgs.push(SANDBOX_CONFIG.image);
 
     // Add run.sh positional arguments:
-    // CODE_FILE, LANGUAGE, CONFIG, OPT_LEVEL, PREFETCH, SAMPLE_RATE, EVENT_LIMIT
+    // CODE_FILE, LANGUAGE, CONFIG, OPT_LEVEL, PREFETCH, SAMPLE_RATE, EVENT_LIMIT, FAST_MODE
     dockerArgs.push(`/workspace/input.${ext}`);  // CODE_FILE
     dockerArgs.push(language);                    // LANGUAGE
     dockerArgs.push(config);                      // CONFIG
@@ -134,6 +136,7 @@ export async function runInSandbox(options) {
     dockerArgs.push(prefetch);                    // PREFETCH
     dockerArgs.push(String(sampleRate));          // SAMPLE_RATE
     dockerArgs.push(String(eventLimit));          // EVENT_LIMIT
+    dockerArgs.push(fastMode ? '1' : '0');        // FAST_MODE (1 = fast, 0 = full 3C)
 
     if (onProgress) onProgress({ stage: 'compiling' });
 

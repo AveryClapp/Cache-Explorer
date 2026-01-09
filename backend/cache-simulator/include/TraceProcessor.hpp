@@ -116,6 +116,9 @@ public:
   // Access to cache system for visualization
   [[nodiscard]] const CacheSystem &get_cache_system() const;
 
+  // Performance: enable fast mode (disables 3C miss classification)
+  void set_fast_mode(bool enable) { cache.set_fast_mode(enable); }
+
   // Advanced instrumentation statistics getters
   [[nodiscard]] const SoftwarePrefetchStats &get_software_prefetch_stats() const;
   [[nodiscard]] const VectorStats &get_vector_stats() const;

@@ -54,4 +54,7 @@ public:
 
   // Access to cache system for visualization
   [[nodiscard]] const MultiCoreCacheSystem& get_cache_system() const { return cache; }
+
+  // Performance: enable fast mode (disables 3C miss classification)
+  void set_fast_mode(bool enable) { cache.set_fast_mode(enable); }
 };

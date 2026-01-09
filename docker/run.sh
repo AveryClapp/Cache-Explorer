@@ -12,6 +12,7 @@ OPT_LEVEL="${4:--O0}"
 PREFETCH="${5:-none}"
 SAMPLE_RATE="${6:-1}"
 EVENT_LIMIT="${7:-5000000}"
+FAST_MODE="${8:-0}"
 
 # Paths
 PASS="/opt/cache-explorer/CacheProfiler.so"
@@ -89,9 +90,10 @@ fi
 # Simulate cache behavior
 echo '{"type": "progress", "stage": "simulating"}' >&2
 
-$SIM \
-    --config "$CONFIG" \
-    --prefetch "$PREFETCH" \
-    --json \
-    --stream \
-    "$TRACE_FILE"
+# Build simulator arguments
+SIM_ARGS="--config $CONFIG --prefetch $PREFETCH --json --stream"
+if [ "$FAST_MODE" = "1" ]; then
+    SIM_ARGS="$SIM_ARGS --fast"
+fi
+
+$SIM $SIM_ARGS "$TRACE_FILE"

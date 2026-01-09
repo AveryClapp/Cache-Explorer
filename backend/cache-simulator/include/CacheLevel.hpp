@@ -33,7 +33,8 @@ private:
   int cached_index_bits_;
   int cached_tag_shift_;  // offset_bits + index_bits
 
-  // For 3C miss classification
+  // For 3C miss classification (can be disabled for performance)
+  bool track_3c_misses_ = true;
   std::unordered_set<uint64_t> ever_accessed;  // Track compulsory misses
   uint64_t unique_lines_accessed = 0;          // For capacity estimation
   std::vector<uint64_t> set_unique_lines;      // Track unique lines per set for conflict detection
@@ -68,6 +69,10 @@ public:
   [[nodiscard]] int get_size_kb() const { return config.kb_size; }
   [[nodiscard]] int get_line_size() const { return config.line_size; }
   [[nodiscard]] EvictionPolicy get_eviction_policy() const { return config.policy; }
+
+  // Performance: disable 3C miss classification for faster simulation
+  void set_track_3c_misses(bool enable) { track_3c_misses_ = enable; }
+  [[nodiscard]] bool is_tracking_3c_misses() const { return track_3c_misses_; }
 
   AccessInfo access(uint64_t address, bool is_write);
   AccessInfo install(uint64_t address, bool is_dirty = false);

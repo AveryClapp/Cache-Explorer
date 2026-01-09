@@ -3,7 +3,7 @@
 void CacheSystem::handle_inclusive_eviction(uint64_t evicted_addr,
                                              CacheLevel &from_level) {
   // Inclusive: when L2/L3 evicts, must back-invalidate lower levels
-  if (&from_level == &l3) {
+  if (has_l3() && &from_level == &(*l3_)) {
     l2.invalidate(evicted_addr);
     l1d.invalidate(evicted_addr);
     l1i.invalidate(evicted_addr);
@@ -34,9 +34,9 @@ void CacheSystem::issue_prefetches(const std::vector<uint64_t> &addrs) {
         l2.install(addr, false);
       }
 
-      // Also install in L3 for inclusive hierarchy
-      if (!l3.is_present(addr)) {
-        l3.install(addr, false);
+      // Also install in L3 for inclusive hierarchy (if L3 exists)
+      if (has_l3() && !l3_->is_present(addr)) {
+        l3_->install(addr, false);
       }
 
       prefetched_addresses.insert(addr);
@@ -143,58 +143,70 @@ SystemAccessResult CacheSystem::access_hierarchy(uint64_t address,
 
   // L2 miss - handle eviction
   if (l2_info.was_dirty) {
-    if (inclusion_policy == InclusionPolicy::Exclusive) {
-      handle_exclusive_eviction(l2_info.evicted_address, l2, l3,
+    if (inclusion_policy == InclusionPolicy::Exclusive && has_l3()) {
+      handle_exclusive_eviction(l2_info.evicted_address, l2, *l3_,
                                  l2_info.was_dirty);
     } else {
       result.writebacks.push_back(l2_info.evicted_address);
     }
   }
 
-  // Try L3
-  AccessInfo l3_info = l3.access(address, is_write);
-  if (l3_info.result == AccessResult::Hit) {
-    result.l3_hit = true;
-    // Calculate timing: L3 hit
-    result.cycles = latency_config.l3_hit;
+  // Try L3 (if it exists)
+  if (has_l3()) {
+    AccessInfo l3_info = l3_->access(address, is_write);
+    if (l3_info.result == AccessResult::Hit) {
+      result.l3_hit = true;
+      // Calculate timing: L3 hit
+      result.cycles = latency_config.l3_hit;
+      if (tlb_miss) {
+        result.cycles += latency_config.tlb_miss_penalty;
+        timing_stats.tlb_miss_cycles += latency_config.tlb_miss_penalty;
+      }
+      timing_stats.l3_hit_cycles += latency_config.l3_hit;
+      timing_stats.total_cycles += result.cycles;
+
+      if (inclusion_policy == InclusionPolicy::Exclusive) {
+        l3_->invalidate(address);
+      }
+
+      return result;
+    }
+
+    // L3 miss - memory access
+    result.memory_access = true;
+    // Calculate timing: memory access
+    result.cycles = latency_config.memory;
     if (tlb_miss) {
       result.cycles += latency_config.tlb_miss_penalty;
       timing_stats.tlb_miss_cycles += latency_config.tlb_miss_penalty;
     }
-    timing_stats.l3_hit_cycles += latency_config.l3_hit;
+    timing_stats.memory_cycles += latency_config.memory;
     timing_stats.total_cycles += result.cycles;
 
-    if (inclusion_policy == InclusionPolicy::Exclusive) {
-      l3.invalidate(address);
+    if (l3_info.was_dirty) {
+      result.writebacks.push_back(l3_info.evicted_address);
     }
 
-    return result;
-  }
-
-  // L3 miss - memory access
-  result.memory_access = true;
-  // Calculate timing: memory access
-  result.cycles = latency_config.memory;
-  if (tlb_miss) {
-    result.cycles += latency_config.tlb_miss_penalty;
-    timing_stats.tlb_miss_cycles += latency_config.tlb_miss_penalty;
-  }
-  timing_stats.memory_cycles += latency_config.memory;
-  timing_stats.total_cycles += result.cycles;
-
-  if (l3_info.was_dirty) {
-    result.writebacks.push_back(l3_info.evicted_address);
-  }
-
-  // Handle L3 eviction for inclusive policy
-  // Inclusive caches must back-invalidate on ALL evictions, not just dirty ones
-  // This ensures lower levels never have lines not present in higher levels
-  if (inclusion_policy == InclusionPolicy::Inclusive && l3_info.had_eviction) {
-    // Back-invalidate all levels when L3 evicts any line
-    // Note: l3_info.evicted_address is the OLD line being evicted, not the new one
-    l2.invalidate(l3_info.evicted_address);
-    l1d.invalidate(l3_info.evicted_address);
-    l1i.invalidate(l3_info.evicted_address);
+    // Handle L3 eviction for inclusive policy
+    // Inclusive caches must back-invalidate on ALL evictions, not just dirty ones
+    // This ensures lower levels never have lines not present in higher levels
+    if (inclusion_policy == InclusionPolicy::Inclusive && l3_info.had_eviction) {
+      // Back-invalidate all levels when L3 evicts any line
+      // Note: l3_info.evicted_address is the OLD line being evicted, not the new one
+      l2.invalidate(l3_info.evicted_address);
+      l1d.invalidate(l3_info.evicted_address);
+      l1i.invalidate(l3_info.evicted_address);
+    }
+  } else {
+    // No L3 - L2 miss goes directly to memory
+    result.memory_access = true;
+    result.cycles = latency_config.memory;
+    if (tlb_miss) {
+      result.cycles += latency_config.tlb_miss_penalty;
+      timing_stats.tlb_miss_cycles += latency_config.tlb_miss_penalty;
+    }
+    timing_stats.memory_cycles += latency_config.memory;
+    timing_stats.total_cycles += result.cycles;
   }
 
   // Note: Prefetching is now triggered on L1 miss (earlier in hierarchy)
@@ -216,13 +228,16 @@ SystemAccessResult CacheSystem::fetch(uint64_t address, uint64_t pc) {
 }
 
 HierarchyStats CacheSystem::get_stats() const {
-  return {l1d.get_stats(), l1i.get_stats(), l2.get_stats(), l3.get_stats(), timing_stats};
+  CacheStats l3_stats = has_l3() ? l3_->get_stats() : CacheStats{};
+  return {l1d.get_stats(), l1i.get_stats(), l2.get_stats(), l3_stats, timing_stats};
 }
 
 void CacheSystem::reset_stats() {
   l1d.reset_stats();
   l1i.reset_stats();
   l2.reset_stats();
-  l3.reset_stats();
+  if (has_l3()) {
+    l3_->reset_stats();
+  }
   timing_stats.reset();
 }
