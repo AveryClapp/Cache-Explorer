@@ -1335,6 +1335,88 @@ public:
       }
     ]
   },
+
+  // === Rust Examples ===
+  rust_sequential: {
+    name: 'Rust Sequential',
+    description: 'Sequential array access in Rust',
+    language: 'rust' as Language,
+    code: `// Sequential array access in Rust - good cache behavior
+fn main() {
+    const N: usize = 1000;
+    let mut arr = [0i32; N];
+    let mut sum: i32 = 0;
+
+    // Initialize array
+    for i in 0..N {
+        arr[i] = i as i32;
+    }
+
+    // Sequential read - cache friendly
+    for i in 0..N {
+        sum += arr[i];
+    }
+
+    println!("Sum: {}", sum);
+}
+`
+  },
+  rust_matrix: {
+    name: 'Rust Matrix',
+    description: 'Row-major matrix traversal in Rust',
+    language: 'rust' as Language,
+    code: `// Row-major matrix traversal in Rust
+fn main() {
+    const N: usize = 64;
+    let mut matrix = [[0i32; N]; N];
+    let mut sum: i32 = 0;
+
+    // Initialize matrix - row-major order
+    for i in 0..N {
+        for j in 0..N {
+            matrix[i][j] = (i + j) as i32;
+        }
+    }
+
+    // Read in row-major order - cache friendly
+    for i in 0..N {
+        for j in 0..N {
+            sum += matrix[i][j];
+        }
+    }
+
+    println!("Sum: {}", sum);
+}
+`
+  },
+  rust_vec: {
+    name: 'Rust Vec Iteration',
+    description: 'Iterator vs index access comparison',
+    language: 'rust' as Language,
+    code: `// Vec iteration patterns in Rust
+fn main() {
+    const N: usize = 1000;
+    let data: Vec<i32> = (0..N as i32).collect();
+
+    // Method 1: Iterator (optimized by compiler)
+    let sum1: i32 = data.iter().sum();
+
+    // Method 2: Index access
+    let mut sum2: i32 = 0;
+    for i in 0..data.len() {
+        sum2 += data[i];
+    }
+
+    // Method 3: For-each
+    let mut sum3: i32 = 0;
+    for &val in &data {
+        sum3 += val;
+    }
+
+    println!("Sums: {} {} {}", sum1, sum2, sum3);
+}
+`
+  },
 }
 
 const EXAMPLE_CODE = EXAMPLES.matrix_row.code

@@ -19,6 +19,7 @@
 | CLI Tool | ✅ Complete | JSON/text output, hardware presets |
 | Web Frontend | ✅ Complete | Multi-file, dark/light modes, styled dropdowns, cancel button |
 | Web Backend | ✅ Complete | Docker sandbox, WebSocket streaming |
+| Rust Support | ✅ Complete | Via LLVM bitcode pipeline (rustc → opt → clang) |
 | Testing | ✅ 123 tests | CacheLevel(22) + CacheSystem(25) + MESI(19) + Prefetch(18) + TLB(8) + Advanced(31) |
 
 **What's Working:**
@@ -113,6 +114,7 @@ The `cache-explore` script checks the project root build first, so always sync b
 
 ## Architecture
 
+### C/C++ Pipeline
 ```
 User Code → Clang + CacheExplorerPass.so → Instrumented Binary
                                                 ↓
@@ -124,6 +126,22 @@ User Code → Clang + CacheExplorerPass.so → Instrumented Binary
                                                 ↓
                                      WebSocket → Frontend
 ```
+
+### Rust Pipeline (via LLVM Bitcode)
+```
+Rust Code → rustc --emit=llvm-bc → Bitcode (.bc)
+                                        ↓
+                           opt -load-pass-plugin CacheProfiler.so
+                                        ↓
+                              Instrumented Bitcode
+                                        ↓
+                              clang + Runtime → Executable
+                                        ↓
+                              (same as C/C++ from here)
+```
+
+Rust requires the bitcode pipeline because `rustc` doesn't support `-fpass-plugin` like Clang.
+The `opt` tool applies our instrumentation pass to the LLVM bitcode, then Clang links it with the runtime.
 
 ### Cache Hierarchy Model
 
@@ -256,8 +274,8 @@ make_educational_config()     // 4KB L1, 32KB L2, 256KB L3
 ## Docker Deployment
 
 ```bash
-# Build
-docker build -t cache-explorer-sandbox:latest -f docker/Dockerfile.sandbox .
+# Build (includes Rust toolchain)
+docker build -t cache-explorer-sandbox:latest -f docker/Dockerfile .
 
 # Run
 docker run -p 3001:3001 cache-explorer-sandbox:latest
@@ -265,6 +283,13 @@ docker run -p 3001:3001 cache-explorer-sandbox:latest
 # Access
 open http://localhost:3001
 ```
+
+The Docker container includes:
+- LLVM 18 (clang, opt, lld)
+- Rust stable toolchain
+- CacheProfiler.so LLVM pass
+- cache-sim binary
+- Runtime library
 
 ---
 
@@ -300,6 +325,7 @@ open http://localhost:3001
 - **No speculative execution** - All accesses are committed
 - **Single-socket only** - No NUMA simulation
 - **Simplified timing** - Fixed latencies per level
+- **Rust 1.80 pinned** - Rust support requires LLVM 18 compatibility; newer Rust versions use incompatible LLVM
 
 ---
 

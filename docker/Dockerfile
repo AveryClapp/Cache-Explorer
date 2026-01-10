@@ -48,8 +48,10 @@ RUN mkdir -p /build/llvm-pass/build && cd /build/llvm-pass/build \
     && ninja
 
 # Build runtime library
+# -mno-outline-atomics prevents LLVM outline atomics that require compiler-rt
 RUN mkdir -p /build/runtime/build && cd /build/runtime/build \
     && cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release \
+       -DCMAKE_C_FLAGS="-mno-outline-atomics" \
     && ninja
 
 # Build cache simulator
@@ -75,16 +77,31 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc \
     && echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-18 main" > /etc/apt/sources.list.d/llvm.list
 
-# Install only runtime dependencies (no dev packages)
+# Install runtime dependencies including opt for Rust bitcode pipeline
 RUN apt-get update && apt-get install -y --no-install-recommends \
     clang-18 \
     lld-18 \
+    llvm-18 \
     libc6-dev \
     libstdc++6 \
+    libatomic1 \
+    libgcc-11-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/* \
     && ln -s /usr/bin/clang-18 /usr/bin/clang \
     && ln -s /usr/bin/clang++-18 /usr/bin/clang++ \
-    && ln -s /usr/bin/lld-18 /usr/bin/lld
+    && ln -s /usr/bin/lld-18 /usr/bin/lld \
+    && ln -s /usr/bin/opt-18 /usr/bin/opt \
+    && ln -s /usr/bin/llc-18 /usr/bin/llc \
+    && ln -s /usr/bin/clang /usr/bin/cc
+
+# Install Rust 1.80 (uses LLVM 18, matching our pass)
+# Note: Rust stable uses newer LLVM which is incompatible with our LLVM 18 pass
+ENV RUSTUP_HOME=/opt/rust/rustup \
+    CARGO_HOME=/opt/rust/cargo \
+    PATH=/opt/rust/cargo/bin:$PATH
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path --default-toolchain 1.80.1 --profile minimal \
+    && chmod -R a+rx /opt/rust
 
 # Create app directory
 RUN mkdir -p /opt/cache-explorer
