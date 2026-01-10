@@ -3554,18 +3554,24 @@ function App() {
 
           <div className="editor-container">
             {diffMode && baselineCode ? (
-              <DiffEditor
-                height="100%"
-                language={monacoLanguage}
-                theme={theme === 'dark' ? 'vs-dark' : 'light'}
-                original={baselineCode}
-                modified={code}
-                onMount={(editor) => {
-                  const modifiedEditor = editor.getModifiedEditor()
-                  modifiedEditor.onDidChangeModelContent(() => updateActiveCode(modifiedEditor.getValue()))
-                }}
-                options={{ minimap: { enabled: false }, fontSize: 13, renderSideBySide: true, readOnly: isReadOnly }}
-              />
+              <>
+                <div className="diff-labels">
+                  <span className="diff-label baseline">BASELINE (Original)</span>
+                  <span className="diff-label current">CURRENT (Modified)</span>
+                </div>
+                <DiffEditor
+                  height="calc(100% - 28px)"
+                  language={monacoLanguage}
+                  theme={theme === 'dark' ? 'vs-dark' : 'light'}
+                  original={baselineCode}
+                  modified={code}
+                  onMount={(editor) => {
+                    const modifiedEditor = editor.getModifiedEditor()
+                    modifiedEditor.onDidChangeModelContent(() => updateActiveCode(modifiedEditor.getValue()))
+                  }}
+                  options={{ minimap: { enabled: false }, fontSize: 13, renderSideBySide: true, readOnly: isReadOnly }}
+                />
+              </>
             ) : (
               <Editor
                 height="100%"

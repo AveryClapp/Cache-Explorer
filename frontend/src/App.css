@@ -977,6 +977,37 @@ select:focus {
   background: var(--void);
 }
 
+/* Diff Mode Labels */
+.diff-labels {
+  display: flex;
+  height: 28px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.diff-label {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.diff-label.baseline {
+  color: var(--signal-critical);
+  background: rgba(239, 68, 68, 0.1);
+  border-right: 1px solid var(--border);
+}
+
+.diff-label.current {
+  color: var(--signal-success);
+  background: rgba(16, 185, 129, 0.1);
+}
+
 /* Status Bar */
 .status-bar {
   display: flex;
