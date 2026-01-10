@@ -1,219 +1,134 @@
 # Cache Explorer
 
-**Interactive CPU cache profiler - "Compiler Explorer for cache behavior"**
+An interactive CPU cache simulator that shows you exactly which lines of your code cause cache misses.
 
-Paste your C/C++/Rust code, instantly see cache hits and misses with source-level attribution. Understand performance bottlenecks, learn optimization techniques, profile production code.
+<!-- TODO: Add screenshot/gif here -->
+<!-- ![Cache Explorer Demo](docs/demo.gif) -->
 
-![Cache Explorer Demo](docs/images/demo.png)
+## What It Does
 
-## Features
+Write C, C++, or Rust code and instantly see:
+- **L1/L2/L3 hit rates** with miss breakdowns (compulsory, capacity, conflict)
+- **Hot lines** - which source lines cause the most cache misses
+- **Memory access timeline** - watch cache behavior as your code executes
+- **False sharing detection** for multi-threaded code
+- **Prefetcher simulation** (next-line, stride, stream, Intel DCU)
 
-### Visualization
-- **Interactive cache grid** - Watch L1 cache state update in real-time
-- **Step-through execution** - Play/pause/step with timeline scrubber
-- **Source line highlighting** - Current access highlighted in editor
-- **Heat map coloring** - Hot/warm/cool/cold cache line visualization
+## Why LLVM Instead of Pin/DynamoRIO?
 
-### Analysis
-- **Source attribution** - See exactly which lines cause cache misses
-- **Optimization suggestions** - Actionable fix recommendations with severity
-- **False sharing detection** - Identifies multi-threaded cache line conflicts
-- **Hot lines table** - Sortable by hits, misses, miss rate
+Cache Explorer uses LLVM instrumentation rather than binary instrumentation (Intel Pin, DynamoRIO) because **source attribution matters for education**. Pin gives you addresses; we give you `matrix.c:42`. When a student asks "why is my matrix multiply slow?", seeing that line 42 has a 40% miss rate is immediately actionable.
 
-### Configuration
-- **13 hardware presets** - Intel, AMD, Apple Silicon, ARM, embedded
-- **Multiple eviction policies** - LRU, PLRU, Random, SRRIP, BRRIP
-- **Prefetch simulation** - Next-line, stream, stride, adaptive
-- **Sampling modes** - 1x, 10x, 100x for large programs
-
-### Developer Experience
-- **Fast** - 2-5x overhead (vs 50x cachegrind)
-- **CLI + Web UI** - Terminal workflow or interactive browser
-- **Command palette** - Cmd+K with fuzzy search and prefix filters
-- **Vim mode** - Full vim keybindings in editor
-- **22 educational examples** - From sequential access to false sharing
-- **Compiler Explorer integration** - Open code in godbolt.org
+The tradeoff is requiring recompilation, but for learning cache behavior, that's acceptable.
 
 ## Quick Start
 
-### Web UI
+### Docker (Recommended)
 
 ```bash
-# Clone and build
-git clone https://github.com/youruser/cache-explorer.git
+git clone https://github.com/yourusername/cache-explorer.git
 cd cache-explorer
-./scripts/build.sh
+docker build -t cache-explorer -f docker/Dockerfile .
+docker run -p 3001:3001 cache-explorer
+# Open http://localhost:3001
+```
+
+### Local Development
+
+**Prerequisites:** LLVM 18, Node.js 18+, CMake, Ninja
+
+```bash
+# Build backend
+cd backend/cache-simulator && mkdir build && cd build
+cmake .. -G Ninja && ninja
+
+cd ../../llvm-pass && mkdir build && cd build
+cmake .. -G Ninja -DLLVM_DIR=$(llvm-config --cmakedir) && ninja
+
+cd ../../runtime && mkdir build && cd build
+cmake .. -G Ninja && ninja
 
 # Start backend server
-cd backend/server && npm install && npm start
+cd ../../server && npm install && node server.js &
 
-# Start frontend (new terminal)
-cd frontend && npm install && npm run dev
-
-# Open http://localhost:5173
+# Start frontend
+cd ../../frontend && npm install && npm run dev
 ```
 
-### CLI Tool
+## Features
 
-```bash
-# Analyze a source file
-./backend/scripts/cache-explore matrix.c
-
-# With options
-./backend/scripts/cache-explore matrix.c --config amd -O2 --json
-
-# Compare across hardware configs
-./backend/scripts/cache-explore compare matrix.c --configs intel,amd,apple
-
-# Generate HTML report
-./backend/scripts/cache-explore report matrix.c -o report.html
-
-# Build system integration
-./backend/scripts/cache-explore cmake /path/to/project
-./backend/scripts/cache-explore make my_target --run ./my_binary
-```
-
-## Screenshots
-
-| Web Interface | Cache Grid | False Sharing |
-|--------------|------------|---------------|
-| ![Web UI](docs/images/web-ui.png) | ![Cache Grid](docs/images/cache-grid.png) | ![False Sharing](docs/images/false-sharing.png) |
-
-## How It Works
-
-LLVM compiler instrumentation (same approach as AddressSanitizer):
-
-```
-Your Code → Clang + CacheProfiler.so → Instrumented Binary (2-5x overhead)
-                                              ↓
-                                    Runtime library tracks accesses
-                                              ↓
-                                    Cache simulator (L1d/L1i/L2/L3)
-                                              ↓
-                                    WebSocket → Real-time visualization
-```
+| Feature | Description |
+|---------|-------------|
+| Multi-level Cache | L1D/L1I, L2, L3 with configurable sizes and associativity |
+| MESI Coherence | Full Modified/Exclusive/Shared/Invalid protocol |
+| 5 Eviction Policies | LRU, Pseudo-LRU, Random, SRRIP, BRRIP |
+| 6 Prefetch Policies | None, Next-line, Stream, Stride, Adaptive, Intel |
+| TLB Simulation | DTLB/ITLB with configurable entries |
+| Hardware Presets | Intel 12th Gen, AMD Zen4, Apple M-series, Educational |
+| 3C Classification | Compulsory, Capacity, Conflict miss breakdown |
+| Source Attribution | See exactly which line caused each miss |
 
 ## Hardware Presets
 
-| Vendor | Presets | Prefetch Model |
-|--------|---------|----------------|
-| Intel | 12th Gen, 14th Gen, Xeon, **Xeon 8488C** | Stream + stride, adjacent line |
-| AMD | Zen 3, Zen 4, EPYC | L1+L2 only (L3 victim cache) |
-| Apple | M1, M2, M3 | DMP (pointer prefetch) |
-| ARM | AWS Graviton 3, Raspberry Pi 4, Embedded | Standard stream/stride |
-| Other | Educational (no prefetch), Custom | Configurable |
+- **Intel 12th Gen**: 48KB L1, 1.25MB L2, 30MB L3
+- **AMD Zen4**: 32KB L1, 512KB L2, 32MB L3
+- **Apple M-series**: 192KB L1, 12MB L2
+- **Educational**: 4KB L1, 32KB L2, 256KB L3 (small caches to see misses easily)
 
-Each preset includes vendor-specific cache sizes, associativity, and prefetch behavior.
+## Supported Languages
 
-## Example: Row vs Column Major
+- **C** - Full support
+- **C++** - Full support
+- **Rust** - Via LLVM bitcode pipeline (pinned to Rust 1.80 for LLVM 18 compatibility)
 
-```c
-// Bad: column-major access (cache unfriendly)
-for (int j = 0; j < N; j++)
-    for (int i = 0; i < N; i++)
-        matrix[i][j] = 0;  // ❌ L1 hit rate: 87%
+## Architecture
 
-// Good: row-major access (cache friendly)
-for (int i = 0; i < N; i++)
-    for (int j = 0; j < N; j++)
-        matrix[i][j] = 0;  // ✅ L1 hit rate: 99%
+```
+Source Code
+    │
+    ▼
+┌─────────────────────────────────┐
+│  LLVM Instrumentation Pass      │  Inserts callbacks at every load/store
+└─────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────┐
+│  Runtime Library                │  Captures: address, size, file:line, thread
+└─────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────┐
+│  Cache Simulator                │  MESI coherence, prefetching, TLB
+└─────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────┐
+│  Web Frontend                   │  Real-time visualization via WebSocket
+└─────────────────────────────────┘
 ```
 
-Cache Explorer shows you *why* this matters with real numbers.
+## Limitations
 
-## CLI Commands
+- **Requires recompilation** - Can't trace arbitrary binaries (use Pin for that)
+- **No speculative execution** - All memory accesses are treated as committed
+- **Single socket** - No NUMA simulation
+- **Rust 1.80** - Newer Rust versions use LLVM 19+ which is incompatible
 
-| Command | Description |
-|---------|-------------|
-| `cache-explore <source>` | Compile and analyze a source file |
-| `cache-explore run <binary>` | Analyze pre-built instrumented binary |
-| `cache-explore compare <source>` | Compare across hardware configs |
-| `cache-explore report <source> -o out.html` | Generate HTML report |
-| `cache-explore cmake <path>` | Configure CMake project |
-| `cache-explore make [target]` | Build with Makefile |
-| `cache-explore cc` / `c++` | Drop-in compiler wrappers |
-
-## Building from Source
-
-**Prerequisites:**
-- LLVM/Clang 18+ (with pass plugin support)
-- CMake 3.20+
-- Ninja
-- Node.js 18+
+## Running Tests
 
 ```bash
-# macOS
-brew install llvm cmake ninja node
-
-# Build everything
-./scripts/build.sh
-
-# Run tests
-cd backend/cache-simulator/build && ctest
+cd backend/cache-simulator/build
+./CacheLevelTest        # 22 tests
+./CacheSystemTest       # 25 tests
+./MESICoherenceTest     # 19 tests
+./MultiCorePrefetchTest # 18 tests
+./MultiCoreTLBTest      # 8 tests
+./AdvancedInstrumentationTest # 31 tests
 ```
-
-## Project Structure
-
-```
-cache-explorer/
-├── backend/
-│   ├── llvm-pass/          # LLVM instrumentation pass
-│   ├── runtime/            # C runtime library
-│   ├── cache-simulator/    # Cache model (C++)
-│   ├── server/             # WebSocket server (Node.js)
-│   └── scripts/            # CLI tools
-├── frontend/               # React + TypeScript + Monaco
-├── examples/               # Educational code samples
-└── docs/                   # Documentation
-```
-
-## Use Cases
-
-**Learning**: Understand how CPU caches work with visual feedback
-
-**Debugging**: Find cache thrashing, false sharing, poor locality
-
-**Optimization**: Profile before/after, validate improvements
-
-**Teaching**: Interactive demos for computer architecture courses
-
-## Keyboard Shortcuts
-
-| Shortcut | Action |
-|----------|--------|
-| `Cmd+K` | Open command palette |
-| `Cmd+R` | Run analysis |
-| `Cmd+S` | Share / copy link |
-| `>` | Filter to examples |
-| `:` | Filter to settings |
-| `@` | Filter to actions |
-| `*` | Filter to config |
-
-## Documentation
-
-- [User Guide](docs/USER_GUIDE.md) - Complete guide to using Cache Explorer
-- [Quick Start](docs/QUICK_START.md) - Get running in 5 minutes
-- [How to Read Results](docs/HOW_TO_READ_RESULTS.md) - Understanding the output
-- [Optimization Patterns](docs/OPTIMIZATION_PATTERNS.md) - Common fixes
-- [Roadmap](ROADMAP.md) - Future plans
-
-## Contributing
-
-We welcome contributions! Areas where help is needed:
-
-- Additional hardware profiles (RISC-V, older architectures)
-- Educational examples
-- Documentation improvements
-- Testing and bug reports
-
-## Acknowledgments
-
-Inspired by [Compiler Explorer](https://godbolt.org) and the need to make cache behavior as accessible as assembly output.
 
 ## License
 
-MIT - see [LICENSE](LICENSE)
+MIT
 
----
+## Acknowledgments
 
-*Making CPU cache hierarchies understandable*
+Inspired by [Compiler Explorer](https://godbolt.org) and [Cachegrind](https://valgrind.org/docs/manual/cg-manual.html).
