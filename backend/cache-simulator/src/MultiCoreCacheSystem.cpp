@@ -1,4 +1,5 @@
 #include "include/MultiCoreCacheSystem.hpp"
+#include <iostream>
 
 MultiCoreCacheSystem::MultiCoreCacheSystem(int cores, const CacheConfig &l1_cfg,
                                            const CacheConfig &l2_cfg,
@@ -18,6 +19,8 @@ MultiCoreCacheSystem::MultiCoreCacheSystem(int cores, const CacheConfig &l1_cfg,
         std::make_unique<Prefetcher>(pf_policy, pf_degree, l1_cfg.line_size));
     // Each core gets its own DTLB (64 entries, 4-way, 4KB pages)
     dtlbs.push_back(std::make_unique<TLB>(TLBConfig{64, 4, 4096}));
+    // Each core tracks its own prefetched addresses for usefulness measurement
+    prefetched_addresses_per_core.emplace_back();
   }
 }
 
@@ -67,6 +70,9 @@ void MultiCoreCacheSystem::issue_prefetches(int core, uint64_t miss_addr,
       l2.install(line_addr, false);
     }
     l1_caches[core]->install_with_state(line_addr, pf_state);
+
+    // Track this address as prefetched for usefulness measurement
+    prefetched_addresses_per_core[core].insert(line_addr);
   }
 }
 
@@ -111,6 +117,12 @@ MultiCoreAccessResult MultiCoreCacheSystem::read(uint64_t address,
 
   auto l1_info = l1_caches[core]->access(line_addr, false);
   if (l1_info.result == AccessResult::Hit) {
+    // Check if this hit was due to a prefetch
+    auto& pf_addrs = prefetched_addresses_per_core[core];
+    if (pf_addrs.count(line_addr)) {
+      prefetchers[core]->record_useful_prefetch();
+      pf_addrs.erase(line_addr);
+    }
     return {true, false, false, false};
   }
 

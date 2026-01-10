@@ -88,9 +88,13 @@ SystemAccessResult CacheSystem::access_hierarchy(uint64_t address,
     timing_stats.total_cycles += result.cycles;
 
     // Check if this was a prefetched line (promoted from L2 to L1)
-    if (prefetch_enabled && prefetched_addresses.count(address)) {
-      prefetcher.record_useful_prefetch();
-      prefetched_addresses.erase(address);
+    // Must align address to cache line boundary for lookup
+    if (prefetch_enabled) {
+      uint64_t line_addr = address & ~(static_cast<uint64_t>(l1d.get_line_size()) - 1);
+      if (prefetched_addresses.count(line_addr)) {
+        prefetcher.record_useful_prefetch();
+        prefetched_addresses.erase(line_addr);
+      }
     }
     return result;
   }
@@ -127,9 +131,13 @@ SystemAccessResult CacheSystem::access_hierarchy(uint64_t address,
     timing_stats.total_cycles += result.cycles;
 
     // Check if this was a prefetched line - prefetches go to L2
-    if (prefetch_enabled && prefetched_addresses.count(address)) {
-      prefetcher.record_useful_prefetch();
-      prefetched_addresses.erase(address);
+    // Must align address to cache line boundary for lookup
+    if (prefetch_enabled) {
+      uint64_t line_addr = address & ~(static_cast<uint64_t>(l1d.get_line_size()) - 1);
+      if (prefetched_addresses.count(line_addr)) {
+        prefetcher.record_useful_prefetch();
+        prefetched_addresses.erase(line_addr);
+      }
     }
 
     if (inclusion_policy == InclusionPolicy::Exclusive) {

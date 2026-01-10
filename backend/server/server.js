@@ -300,11 +300,10 @@ app.post('/compile', async (req, res) => {
         }
       }
 
-      // Add prefetch policy if specified (whitelist valid policies)
+      // Always pass prefetch policy explicitly (whitelist valid policies)
       const VALID_PREFETCH_POLICIES = ['none', 'next-line', 'stream', 'stride', 'adaptive', 'intel'];
-      if (req.body.prefetch && req.body.prefetch !== 'none' && VALID_PREFETCH_POLICIES.includes(req.body.prefetch)) {
-        args.push('--prefetch', req.body.prefetch);
-      }
+      const prefetchToUse = req.body.prefetch && VALID_PREFETCH_POLICIES.includes(req.body.prefetch) ? req.body.prefetch : 'none';
+      args.push('--prefetch', prefetchToUse);
 
       // Add compiler selection if specified
       if (req.body.compiler) {
@@ -753,11 +752,10 @@ wss.on('connection', (ws) => {
           }
         }
 
-        // Add prefetch policy if specified (whitelist valid policies)
+        // Always pass prefetch policy explicitly (whitelist valid policies)
         const VALID_PREFETCH_POLICIES = ['none', 'next-line', 'stream', 'stride', 'adaptive', 'intel'];
-        if (prefetch && prefetch !== 'none' && VALID_PREFETCH_POLICIES.includes(prefetch)) {
-          args.push('--prefetch', prefetch);
-        }
+        const prefetchToUse = prefetch && VALID_PREFETCH_POLICIES.includes(prefetch) ? prefetch : 'none';
+        args.push('--prefetch', prefetchToUse);
 
         // Add compiler selection if specified
         if (data.compiler) {

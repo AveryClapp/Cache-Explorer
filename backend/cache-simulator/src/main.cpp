@@ -385,6 +385,49 @@ int main(int argc, char *argv[]) {
                 << "}";
     }
 
+    // Advanced instrumentation stats
+    auto sw_pf = processor.get_software_prefetch_stats();
+    auto vec = processor.get_vector_stats();
+    auto atomic = processor.get_atomic_stats();
+    auto mem = processor.get_memory_intrinsic_stats();
+
+    bool has_advanced = sw_pf.issued > 0 || vec.loads > 0 || vec.stores > 0 ||
+                        atomic.load_count > 0 || atomic.store_count > 0 ||
+                        mem.memcpy_count > 0 || mem.memset_count > 0;
+    if (has_advanced) {
+      std::cout << ",\"advancedStats\":{";
+      if (sw_pf.issued > 0) {
+        std::cout << "\"softwarePrefetch\":{\"issued\":" << sw_pf.issued
+                  << ",\"useful\":" << sw_pf.useful
+                  << ",\"accuracy\":" << std::fixed << std::setprecision(3) << sw_pf.accuracy() << "}";
+      }
+      if (vec.loads > 0 || vec.stores > 0) {
+        if (sw_pf.issued > 0) std::cout << ",";
+        std::cout << "\"vector\":{\"loads\":" << vec.loads
+                  << ",\"stores\":" << vec.stores
+                  << ",\"bytesLoaded\":" << vec.bytes_loaded
+                  << ",\"bytesStored\":" << vec.bytes_stored
+                  << ",\"crossLineAccesses\":" << vec.cross_line_accesses << "}";
+      }
+      if (atomic.load_count > 0 || atomic.store_count > 0 || atomic.rmw_count > 0 || atomic.cmpxchg_count > 0) {
+        if (sw_pf.issued > 0 || vec.loads > 0 || vec.stores > 0) std::cout << ",";
+        std::cout << "\"atomic\":{\"loads\":" << atomic.load_count
+                  << ",\"stores\":" << atomic.store_count
+                  << ",\"rmw\":" << atomic.rmw_count
+                  << ",\"cmpxchg\":" << atomic.cmpxchg_count << "}";
+      }
+      if (mem.memcpy_count > 0 || mem.memset_count > 0 || mem.memmove_count > 0) {
+        if (sw_pf.issued > 0 || vec.loads > 0 || vec.stores > 0 || atomic.load_count > 0 || atomic.store_count > 0) std::cout << ",";
+        std::cout << "\"memoryIntrinsics\":{\"memcpyCount\":" << mem.memcpy_count
+                  << ",\"memcpyBytes\":" << mem.memcpy_bytes
+                  << ",\"memsetCount\":" << mem.memset_count
+                  << ",\"memsetBytes\":" << mem.memset_bytes
+                  << ",\"memmoveCount\":" << mem.memmove_count
+                  << ",\"memmoveBytes\":" << mem.memmove_bytes << "}";
+      }
+      std::cout << "}";
+    }
+
     std::cout << "}\n" << std::flush;
     return 0;
   }
@@ -587,6 +630,55 @@ int main(int argc, char *argv[]) {
                   << "    \"useful\": " << total_pf.prefetches_useful << ",\n"
                   << "    \"accuracy\": " << std::fixed << std::setprecision(3) << total_pf.accuracy() << "\n"
                   << "  }";
+      }
+
+      // Advanced instrumentation stats
+      {
+        auto sw_pf = processor.get_software_prefetch_stats();
+        auto vec = processor.get_vector_stats();
+        auto atomic = processor.get_atomic_stats();
+        auto mem = processor.get_memory_intrinsic_stats();
+
+        bool has_advanced = sw_pf.issued > 0 || vec.loads > 0 || vec.stores > 0 ||
+                            atomic.load_count > 0 || atomic.store_count > 0 ||
+                            mem.memcpy_count > 0 || mem.memset_count > 0;
+        if (has_advanced) {
+          std::cout << ",\n  \"advancedStats\": {\n";
+          bool need_comma = false;
+          if (sw_pf.issued > 0) {
+            std::cout << "    \"softwarePrefetch\": {\"issued\": " << sw_pf.issued
+                      << ", \"useful\": " << sw_pf.useful
+                      << ", \"accuracy\": " << std::fixed << std::setprecision(3) << sw_pf.accuracy() << "}";
+            need_comma = true;
+          }
+          if (vec.loads > 0 || vec.stores > 0) {
+            if (need_comma) std::cout << ",\n";
+            std::cout << "    \"vector\": {\"loads\": " << vec.loads
+                      << ", \"stores\": " << vec.stores
+                      << ", \"bytesLoaded\": " << vec.bytes_loaded
+                      << ", \"bytesStored\": " << vec.bytes_stored
+                      << ", \"crossLineAccesses\": " << vec.cross_line_accesses << "}";
+            need_comma = true;
+          }
+          if (atomic.load_count > 0 || atomic.store_count > 0 || atomic.rmw_count > 0 || atomic.cmpxchg_count > 0) {
+            if (need_comma) std::cout << ",\n";
+            std::cout << "    \"atomic\": {\"loads\": " << atomic.load_count
+                      << ", \"stores\": " << atomic.store_count
+                      << ", \"rmw\": " << atomic.rmw_count
+                      << ", \"cmpxchg\": " << atomic.cmpxchg_count << "}";
+            need_comma = true;
+          }
+          if (mem.memcpy_count > 0 || mem.memset_count > 0 || mem.memmove_count > 0) {
+            if (need_comma) std::cout << ",\n";
+            std::cout << "    \"memoryIntrinsics\": {\"memcpyCount\": " << mem.memcpy_count
+                      << ", \"memcpyBytes\": " << mem.memcpy_bytes
+                      << ", \"memsetCount\": " << mem.memset_count
+                      << ", \"memsetBytes\": " << mem.memset_bytes
+                      << ", \"memmoveCount\": " << mem.memmove_count
+                      << ", \"memmoveBytes\": " << mem.memmove_bytes << "}";
+          }
+          std::cout << "\n  }";
+        }
       }
 
       // Output L1 cache state for visualization
@@ -827,6 +919,55 @@ int main(int argc, char *argv[]) {
                   << "    \"useful\": " << pf_stats.prefetches_useful << ",\n"
                   << "    \"accuracy\": " << std::fixed << std::setprecision(3) << pf_stats.accuracy() << "\n"
                   << "  }";
+      }
+
+      // Advanced instrumentation stats
+      {
+        auto sw_pf = processor.get_software_prefetch_stats();
+        auto vec = processor.get_vector_stats();
+        auto atomic = processor.get_atomic_stats();
+        auto mem = processor.get_memory_intrinsic_stats();
+
+        bool has_advanced = sw_pf.issued > 0 || vec.loads > 0 || vec.stores > 0 ||
+                            atomic.load_count > 0 || atomic.store_count > 0 ||
+                            mem.memcpy_count > 0 || mem.memset_count > 0;
+        if (has_advanced) {
+          std::cout << ",\n  \"advancedStats\": {\n";
+          bool need_comma = false;
+          if (sw_pf.issued > 0) {
+            std::cout << "    \"softwarePrefetch\": {\"issued\": " << sw_pf.issued
+                      << ", \"useful\": " << sw_pf.useful
+                      << ", \"accuracy\": " << std::fixed << std::setprecision(3) << sw_pf.accuracy() << "}";
+            need_comma = true;
+          }
+          if (vec.loads > 0 || vec.stores > 0) {
+            if (need_comma) std::cout << ",\n";
+            std::cout << "    \"vector\": {\"loads\": " << vec.loads
+                      << ", \"stores\": " << vec.stores
+                      << ", \"bytesLoaded\": " << vec.bytes_loaded
+                      << ", \"bytesStored\": " << vec.bytes_stored
+                      << ", \"crossLineAccesses\": " << vec.cross_line_accesses << "}";
+            need_comma = true;
+          }
+          if (atomic.load_count > 0 || atomic.store_count > 0 || atomic.rmw_count > 0 || atomic.cmpxchg_count > 0) {
+            if (need_comma) std::cout << ",\n";
+            std::cout << "    \"atomic\": {\"loads\": " << atomic.load_count
+                      << ", \"stores\": " << atomic.store_count
+                      << ", \"rmw\": " << atomic.rmw_count
+                      << ", \"cmpxchg\": " << atomic.cmpxchg_count << "}";
+            need_comma = true;
+          }
+          if (mem.memcpy_count > 0 || mem.memset_count > 0 || mem.memmove_count > 0) {
+            if (need_comma) std::cout << ",\n";
+            std::cout << "    \"memoryIntrinsics\": {\"memcpyCount\": " << mem.memcpy_count
+                      << ", \"memcpyBytes\": " << mem.memcpy_bytes
+                      << ", \"memsetCount\": " << mem.memset_count
+                      << ", \"memsetBytes\": " << mem.memset_bytes
+                      << ", \"memmoveCount\": " << mem.memmove_count
+                      << ", \"memmoveBytes\": " << mem.memmove_bytes << "}";
+          }
+          std::cout << "\n  }";
+        }
       }
 
       // Output L1 cache state for visualization (single core = core 0)

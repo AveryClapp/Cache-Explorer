@@ -106,6 +106,7 @@ PREFETCH=""
 PREFETCH_DEGREE=""
 COMPILER_PATH=""  # Path to LLVM bin directory (e.g., /opt/homebrew/opt/llvm@20/bin)
 MULTI_FILE=""  # Flag to enable multi-file compilation
+FAST_MODE=""  # Flag to disable 3C miss classification for speed
 
 usage() {
   echo "Usage: cache-explore [options] <source.c|.cpp|.rs>"
@@ -154,6 +155,7 @@ while [[ $# -gt 0 ]]; do
     --prefetch) PREFETCH="$2"; shift 2 ;;
     --prefetch-degree) PREFETCH_DEGREE="$2"; shift 2 ;;
     --compiler) COMPILER_PATH="$2"; shift 2 ;;
+    --fast) FAST_MODE="--fast"; shift ;;
     -O*) OPT_LEVEL="$1"; shift ;;
     -D) DEFINES+=("-D$2"); shift 2 ;;
     -D*) DEFINES+=("$1"); shift ;;
@@ -386,9 +388,9 @@ fi
 # Streaming mode: pipe directly for real-time output
 if [[ -n "$STREAM_OUTPUT" ]]; then
   if [[ -n "$RUN_ENV" ]]; then
-    env $RUN_ENV "$BINARY" 2>&1 | "$CACHE_SIM" --config "$CONFIG" $STREAM_OUTPUT $PREFETCH_ARG
+    env $RUN_ENV "$BINARY" 2>&1 | "$CACHE_SIM" --config "$CONFIG" $STREAM_OUTPUT $PREFETCH_ARG $FAST_MODE
   else
-    "$BINARY" 2>&1 | "$CACHE_SIM" --config "$CONFIG" $STREAM_OUTPUT $PREFETCH_ARG
+    "$BINARY" 2>&1 | "$CACHE_SIM" --config "$CONFIG" $STREAM_OUTPUT $PREFETCH_ARG $FAST_MODE
   fi
   EXIT_CODE=${PIPESTATUS[0]}
 else
@@ -404,7 +406,7 @@ else
     echo ""
   fi
 
-  echo "$TRACE" | "$CACHE_SIM" --config "$CONFIG" $VERBOSE $JSON_OUTPUT $PREFETCH_ARG
+  echo "$TRACE" | "$CACHE_SIM" --config "$CONFIG" $VERBOSE $JSON_OUTPUT $PREFETCH_ARG $FAST_MODE
 fi
 
 # Cleanup

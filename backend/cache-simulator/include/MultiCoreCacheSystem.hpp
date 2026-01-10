@@ -78,6 +78,9 @@ private:
   uint64_t false_sharing_count = 0;
   uint32_t line_size;
 
+  // Track prefetched addresses per core to measure usefulness
+  std::vector<std::unordered_set<uint64_t>> prefetched_addresses_per_core;
+
   int get_core_for_thread(uint32_t thread_id);
 
   uint64_t get_line_address(uint64_t addr) const {

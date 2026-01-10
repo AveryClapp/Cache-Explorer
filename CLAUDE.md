@@ -2,7 +2,7 @@
 
 ## Current Status (January 2026)
 
-**Overall Completion: ~95%**
+**Overall Completion: ~98%**
 
 | Component | Status | Notes |
 |-----------|--------|-------|
@@ -14,8 +14,10 @@
 | False Sharing Detection | ✅ Complete | Reports with padding suggestions |
 | TLB Simulation | ✅ Complete | DTLB/ITLB with LRU replacement |
 | Timing Model | ✅ Complete | Configurable latencies per hardware preset |
+| Advanced Stats | ✅ Complete | Vector/SIMD, atomics, memcpy/memset tracking |
+| Fast Mode | ✅ Complete | `--fast` disables 3C classification for ~3x speed |
 | CLI Tool | ✅ Complete | JSON/text output, hardware presets |
-| Web Frontend | ✅ Complete | Multi-file, dark/light modes, TLB display, timing |
+| Web Frontend | ✅ Complete | Multi-file, dark/light modes, styled dropdowns, cancel button |
 | Web Backend | ✅ Complete | Docker sandbox, WebSocket streaming |
 | Testing | ✅ 123 tests | CacheLevel(22) + CacheSystem(25) + MESI(19) + Prefetch(18) + TLB(8) + Advanced(31) |
 
@@ -26,6 +28,9 @@
 
 # With prefetching:
 ./backend/scripts/cache-explore mycode.c --config amd --prefetch stream
+
+# Fast mode (skips 3C miss classification for ~3x speedup):
+./backend/scripts/cache-explore mycode.c --config intel --fast
 
 # Docker sandbox (production):
 docker run -p 3001:3001 cache-explorer-sandbox:latest
@@ -59,6 +64,30 @@ cd backend/cache-simulator/build
 ./MultiCorePrefetchTest && ./MultiCoreTLBTest && ./AdvancedInstrumentationTest
 ```
 
+### After Making C++ Changes
+
+**IMPORTANT:** There are TWO cache-sim binaries - changes won't take effect until both are updated:
+
+```bash
+# 1. Rebuild in the component directory
+cd backend/cache-simulator/build && ninja
+
+# 2. Copy to project root build (used by web server)
+cp backend/cache-simulator/build/cache-sim build/backend/cache-simulator/cache-sim
+
+# 3. Clear the server's result cache
+rm -f backend/server/cache-explorer.db
+
+# 4. Restart the backend server
+lsof -ti:3001 | xargs kill -9; cd backend/server && node server.js &
+```
+
+Binary locations:
+- `backend/cache-simulator/build/cache-sim` - Component build (use for development)
+- `build/backend/cache-simulator/cache-sim` - Project root build (used by `cache-explore` script)
+
+The `cache-explore` script checks the project root build first, so always sync both.
+
 ### Key Files
 
 **Cache Simulator:**
@@ -68,6 +97,7 @@ cd backend/cache-simulator/build
 - `backend/cache-simulator/include/Prefetcher.hpp` - 6 prefetch policies
 - `backend/cache-simulator/include/TLB.hpp` - TLB simulation
 - `backend/cache-simulator/include/CacheStats.hpp` - Stats with 3C miss breakdown
+- `backend/cache-simulator/include/AdvancedStats.hpp` - Vector/atomic/memcpy stats
 
 **LLVM Pass:**
 - `backend/llvm-pass/CacheExplorerPass.cpp` - Instrumentation pass
@@ -211,6 +241,12 @@ make_educational_config()     // 4KB L1, 32KB L2, 256KB L3
   "timing": {
     "totalCycles": 125000,
     "avgLatency": 5.2
+  },
+  "advancedStats": {
+    "vector": { "loads": 100, "stores": 50, "bytesLoaded": 3200, "bytesStored": 1600, "crossLineAccesses": 5 },
+    "atomic": { "loads": 10, "stores": 5, "rmw": 20, "cmpxchg": 2 },
+    "memoryIntrinsics": { "memcpyCount": 5, "memcpyBytes": 4096, "memsetCount": 2, "memsetBytes": 1024 },
+    "softwarePrefetch": { "issued": 50, "useful": 40, "accuracy": 0.80 }
   }
 }
 ```
@@ -254,7 +290,24 @@ open http://localhost:3001
 
 ## Future Work
 
+### High Priority
+- **Rebuild Docker Image** - Current sandbox image doesn't include fast mode or advanced stats
+  ```bash
+  docker build -t cache-explorer-sandbox:latest -f docker/Dockerfile.sandbox .
+  ```
+- **End-to-End Testing** - Test advanced stats display with real vector/atomic code samples
+
+### Medium Priority
 - **Intel Pin Integration** - Support tracing pre-compiled binaries without recompilation
+- **Export Results** - Add button to download JSON/CSV results for offline analysis
+- **Custom Cache Config UI** - Expose all cache parameters in frontend (currently only presets)
+- **Diff Mode Improvements** - Side-by-side code comparison with optimization suggestions
+
+### Low Priority / Nice to Have
+- **Mobile Responsive Design** - Better experience on tablets/phones
+- **Syntax Highlighting in Results** - Highlight source lines in hot lines display
+- **Batch Processing** - Analyze multiple files at once
+- **Shareable URLs** - Encode code + config in URL for sharing
 
 ## Known Limitations
 

@@ -117,6 +117,44 @@ interface PrefetchStats {
   accuracy: number
 }
 
+// Advanced instrumentation stats
+interface SoftwarePrefetchStats {
+  issued: number
+  useful: number
+  accuracy: number
+}
+
+interface VectorStats {
+  loads: number
+  stores: number
+  bytesLoaded: number
+  bytesStored: number
+  crossLineAccesses: number
+}
+
+interface AtomicStats {
+  loads: number
+  stores: number
+  rmw: number
+  cmpxchg: number
+}
+
+interface MemoryIntrinsicStats {
+  memcpyCount: number
+  memcpyBytes: number
+  memsetCount: number
+  memsetBytes: number
+  memmoveCount: number
+  memmoveBytes: number
+}
+
+interface AdvancedStats {
+  softwarePrefetch?: SoftwarePrefetchStats
+  vector?: VectorStats
+  atomic?: AtomicStats
+  memoryIntrinsics?: MemoryIntrinsicStats
+}
+
 interface CacheLineState {
   s: number      // set
   w: number      // way
@@ -186,6 +224,7 @@ interface CacheResult {
   cacheState?: CacheState
   tlb?: TLBHierarchyStats
   timing?: TimingStats
+  advancedStats?: AdvancedStats
 }
 
 type Language = 'c' | 'cpp' | 'rust'
@@ -1760,7 +1799,7 @@ function LevelDetail({ name, stats }: { name: string; stats: CacheStats }) {
               <div
                 className="level-3c-segment compulsory"
                 style={{ width: `${(stats.compulsory! / total3C) * 100}%` }}
-                title={`Compulsory: ${stats.compulsory!.toLocaleString()} (${((stats.compulsory! / total3C) * 100).toFixed(1)}%)`}
+                title={`Cold: ${stats.compulsory!.toLocaleString()} (${((stats.compulsory! / total3C) * 100).toFixed(1)}%)`}
               />
             )}
             {stats.capacity! > 0 && (
@@ -1778,10 +1817,31 @@ function LevelDetail({ name, stats }: { name: string; stats: CacheStats }) {
               />
             )}
           </div>
-          <div className="level-3c-legend">
-            <span className="legend-item"><span className="dot compulsory" /> Cold</span>
-            <span className="legend-item"><span className="dot capacity" /> Capacity</span>
-            <span className="legend-item"><span className="dot conflict" /> Conflict</span>
+          <div className="level-3c-details">
+            {stats.compulsory! > 0 && (
+              <div className="level-3c-item">
+                <span className="dot compulsory" />
+                <span className="label">Cold</span>
+                <span className="value">{stats.compulsory!.toLocaleString()}</span>
+                <span className="percent">{((stats.compulsory! / total3C) * 100).toFixed(1)}%</span>
+              </div>
+            )}
+            {stats.capacity! > 0 && (
+              <div className="level-3c-item">
+                <span className="dot capacity" />
+                <span className="label">Capacity</span>
+                <span className="value">{stats.capacity!.toLocaleString()}</span>
+                <span className="percent">{((stats.capacity! / total3C) * 100).toFixed(1)}%</span>
+              </div>
+            )}
+            {stats.conflict! > 0 && (
+              <div className="level-3c-item">
+                <span className="dot conflict" />
+                <span className="label">Conflict</span>
+                <span className="value">{stats.conflict!.toLocaleString()}</span>
+                <span className="percent">{((stats.conflict! / total3C) * 100).toFixed(1)}%</span>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1838,6 +1898,7 @@ function TimingDisplay({ timing, baselineTiming, diffMode }: { timing: TimingSta
     <div className="timing-display">
       <div className="timing-header">
         <span className="timing-title">Timing Analysis</span>
+        <span className="timing-subtitle">Where time is spent</span>
         <span className="timing-summary">
           {totalCycles.toLocaleString()} cycles
           {cyclesDelta && (
@@ -1863,10 +1924,10 @@ function TimingDisplay({ timing, baselineTiming, diffMode }: { timing: TimingSta
         {memPct > 0 && <div className="timing-segment mem" style={{ width: `${memPct}%` }} title={`Memory: ${breakdown.memoryCycles.toLocaleString()} cycles (${latencyConfig.memory} cyc/access)`} />}
       </div>
       <div className="timing-legend">
-        <span className="timing-legend-item"><span className="timing-dot l1" />L1 ({l1Pct.toFixed(0)}%)</span>
-        <span className="timing-legend-item"><span className="timing-dot l2" />L2 ({l2Pct.toFixed(0)}%)</span>
-        <span className="timing-legend-item"><span className="timing-dot l3" />L3 ({l3Pct.toFixed(0)}%)</span>
-        <span className="timing-legend-item"><span className="timing-dot mem" />Memory ({memPct.toFixed(0)}%)</span>
+        {l1Pct > 0 && <span className="timing-legend-item"><span className="timing-dot l1" />L1 ({l1Pct.toFixed(0)}%)</span>}
+        {l2Pct > 0 && <span className="timing-legend-item"><span className="timing-dot l2" />L2 ({l2Pct.toFixed(0)}%)</span>}
+        {l3Pct > 0 && <span className="timing-legend-item"><span className="timing-dot l3" />L3 ({l3Pct.toFixed(0)}%)</span>}
+        {memPct > 0 && <span className="timing-legend-item"><span className="timing-dot mem" />Memory ({memPct.toFixed(0)}%)</span>}
       </div>
       {breakdown.tlbMissCycles > 0 && (
         <div className="timing-tlb-note">
@@ -3108,6 +3169,38 @@ function App() {
               {theme === 'dark' ? '☀' : '☾'}
             </button>
 
+            {/* Compare button - visible when result exists */}
+            {result && !isLoading && (
+              <button
+                onClick={() => {
+                  if (!baselineResult) {
+                    // Set current as baseline
+                    setBaselineCode(code)
+                    setBaselineResult(result)
+                  } else if (diffMode) {
+                    // Exit diff mode
+                    setDiffMode(false)
+                  } else {
+                    // Enter diff mode
+                    setDiffMode(true)
+                  }
+                }}
+                className={`btn-compare ${baselineResult ? (diffMode ? 'active' : 'has-baseline') : ''}`}
+                title={!baselineResult ? 'Set current result as baseline for comparison' : diffMode ? 'Exit comparison mode' : 'Compare with baseline'}
+              >
+                {!baselineResult ? 'Set Baseline' : diffMode ? 'Exit Compare' : 'Compare'}
+              </button>
+            )}
+            {baselineResult && !diffMode && (
+              <button
+                onClick={() => { setBaselineCode(null); setBaselineResult(null); setDiffMode(false) }}
+                className="btn-icon btn-clear-baseline"
+                title="Clear baseline"
+              >
+                ×
+              </button>
+            )}
+
             {isLoading ? (
               <button
                 onClick={cancelAnalysis}
@@ -3460,6 +3553,111 @@ function App() {
                           <div className="metric-label">Accuracy</div>
                           <div className="metric-value">{(result.prefetch.accuracy * 100).toFixed(1)}%</div>
                         </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Advanced Stats */}
+                {result.advancedStats && (
+                  <div className="panel">
+                    <div className="panel-header">
+                      <span className="panel-title">Advanced Instrumentation</span>
+                    </div>
+                    <div className="panel-content">
+                      <div className="advanced-stats-grid">
+                        {result.advancedStats.vector && (
+                          <div className="advanced-stat-section">
+                            <h4>Vector/SIMD Operations</h4>
+                            <div className="stat-row">
+                              <span>Loads:</span>
+                              <span>{result.advancedStats.vector.loads.toLocaleString()}</span>
+                            </div>
+                            <div className="stat-row">
+                              <span>Stores:</span>
+                              <span>{result.advancedStats.vector.stores.toLocaleString()}</span>
+                            </div>
+                            <div className="stat-row">
+                              <span>Bytes Loaded:</span>
+                              <span>{(result.advancedStats.vector.bytesLoaded / 1024).toFixed(1)} KB</span>
+                            </div>
+                            <div className="stat-row">
+                              <span>Bytes Stored:</span>
+                              <span>{(result.advancedStats.vector.bytesStored / 1024).toFixed(1)} KB</span>
+                            </div>
+                            {result.advancedStats.vector.crossLineAccesses > 0 && (
+                              <div className="stat-row warning">
+                                <span>Cross-Line:</span>
+                                <span>{result.advancedStats.vector.crossLineAccesses.toLocaleString()}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {result.advancedStats.atomic && (
+                          <div className="advanced-stat-section">
+                            <h4>Atomic Operations</h4>
+                            <div className="stat-row">
+                              <span>Loads:</span>
+                              <span>{result.advancedStats.atomic.loads.toLocaleString()}</span>
+                            </div>
+                            <div className="stat-row">
+                              <span>Stores:</span>
+                              <span>{result.advancedStats.atomic.stores.toLocaleString()}</span>
+                            </div>
+                            {result.advancedStats.atomic.rmw > 0 && (
+                              <div className="stat-row">
+                                <span>RMW (fetch_add, etc.):</span>
+                                <span>{result.advancedStats.atomic.rmw.toLocaleString()}</span>
+                              </div>
+                            )}
+                            {result.advancedStats.atomic.cmpxchg > 0 && (
+                              <div className="stat-row">
+                                <span>CAS:</span>
+                                <span>{result.advancedStats.atomic.cmpxchg.toLocaleString()}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {result.advancedStats.memoryIntrinsics && (
+                          <div className="advanced-stat-section">
+                            <h4>Memory Intrinsics</h4>
+                            {result.advancedStats.memoryIntrinsics.memcpyCount > 0 && (
+                              <div className="stat-row">
+                                <span>memcpy:</span>
+                                <span>{result.advancedStats.memoryIntrinsics.memcpyCount.toLocaleString()} ({(result.advancedStats.memoryIntrinsics.memcpyBytes / 1024).toFixed(1)} KB)</span>
+                              </div>
+                            )}
+                            {result.advancedStats.memoryIntrinsics.memsetCount > 0 && (
+                              <div className="stat-row">
+                                <span>memset:</span>
+                                <span>{result.advancedStats.memoryIntrinsics.memsetCount.toLocaleString()} ({(result.advancedStats.memoryIntrinsics.memsetBytes / 1024).toFixed(1)} KB)</span>
+                              </div>
+                            )}
+                            {result.advancedStats.memoryIntrinsics.memmoveCount > 0 && (
+                              <div className="stat-row">
+                                <span>memmove:</span>
+                                <span>{result.advancedStats.memoryIntrinsics.memmoveCount.toLocaleString()} ({(result.advancedStats.memoryIntrinsics.memmoveBytes / 1024).toFixed(1)} KB)</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {result.advancedStats.softwarePrefetch && (
+                          <div className="advanced-stat-section">
+                            <h4>Software Prefetch</h4>
+                            <div className="stat-row">
+                              <span>Issued:</span>
+                              <span>{result.advancedStats.softwarePrefetch.issued.toLocaleString()}</span>
+                            </div>
+                            <div className="stat-row">
+                              <span>Useful:</span>
+                              <span>{result.advancedStats.softwarePrefetch.useful.toLocaleString()}</span>
+                            </div>
+                            <div className="stat-row">
+                              <span>Accuracy:</span>
+                              <span>{(result.advancedStats.softwarePrefetch.accuracy * 100).toFixed(1)}%</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
