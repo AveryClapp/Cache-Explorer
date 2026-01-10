@@ -1941,6 +1941,7 @@ function TimingDisplay({ timing, baselineTiming, diffMode }: { timing: TimingSta
 // Hardware preset options with groups
 const HARDWARE_OPTIONS: SelectOption[] = [
   { value: 'educational', label: 'Educational', group: 'Learning' },
+  { value: 'custom', label: 'Custom', group: 'Custom' },
   { value: 'intel', label: 'Intel 12th Gen', group: 'Intel' },
   { value: 'intel14', label: 'Intel 14th Gen', group: 'Intel' },
   { value: 'xeon', label: 'Intel Xeon', group: 'Intel' },
@@ -1952,7 +1953,6 @@ const HARDWARE_OPTIONS: SelectOption[] = [
   { value: 'm3', label: 'Apple M3', group: 'Apple' },
   { value: 'graviton', label: 'AWS Graviton 3', group: 'ARM' },
   { value: 'rpi4', label: 'Raspberry Pi 4', group: 'ARM' },
-  { value: 'custom', label: 'Custom Config...', group: 'Custom' },
 ]
 
 const OPT_LEVEL_OPTIONS: SelectOption[] = [
@@ -2035,7 +2035,12 @@ function SettingsToolbar({
   onSampleRateChange: (n: number) => void
   onFastModeChange: (f: boolean) => void
 }) {
-  const [showMore, setShowMore] = useState(false)
+  const [showMore, setShowMore] = useState(config === 'custom')
+
+  // Auto-expand when custom is selected
+  useEffect(() => {
+    if (config === 'custom') setShowMore(true)
+  }, [config])
 
   // Build compiler options dynamically
   const compilerOptions: SelectOption[] = compilers.map(c => ({ value: c.id, label: c.name }))
@@ -2186,16 +2191,65 @@ function SettingsToolbar({
 
           {/* Custom Cache Config */}
           {config === 'custom' && (
-            <div className="toolbar-advanced-section">
+            <div className="toolbar-advanced-section custom-cache-section">
               <span className="toolbar-advanced-label">Cache Config:</span>
               <div className="toolbar-cache-config">
-                <label>Line<input type="number" value={customConfig.lineSize} onChange={e => onCustomConfigChange({ ...customConfig, lineSize: parseInt(e.target.value) || 64 })} /></label>
-                <label>L1<input type="number" value={customConfig.l1Size} onChange={e => onCustomConfigChange({ ...customConfig, l1Size: parseInt(e.target.value) || 32768 })} /></label>
-                <label>L1 Assoc<input type="number" value={customConfig.l1Assoc} onChange={e => onCustomConfigChange({ ...customConfig, l1Assoc: parseInt(e.target.value) || 8 })} /></label>
-                <label>L2<input type="number" value={customConfig.l2Size} onChange={e => onCustomConfigChange({ ...customConfig, l2Size: parseInt(e.target.value) || 262144 })} /></label>
-                <label>L2 Assoc<input type="number" value={customConfig.l2Assoc} onChange={e => onCustomConfigChange({ ...customConfig, l2Assoc: parseInt(e.target.value) || 8 })} /></label>
-                <label>L3<input type="number" value={customConfig.l3Size} onChange={e => onCustomConfigChange({ ...customConfig, l3Size: parseInt(e.target.value) || 8388608 })} /></label>
-                <label>L3 Assoc<input type="number" value={customConfig.l3Assoc} onChange={e => onCustomConfigChange({ ...customConfig, l3Assoc: parseInt(e.target.value) || 16 })} /></label>
+                <div className="cache-config-group">
+                  <span className="cache-config-title">Line Size</span>
+                  <select value={customConfig.lineSize} onChange={e => onCustomConfigChange({ ...customConfig, lineSize: parseInt(e.target.value) })}>
+                    <option value={32}>32 B</option>
+                    <option value={64}>64 B</option>
+                    <option value={128}>128 B</option>
+                  </select>
+                </div>
+                <div className="cache-config-group">
+                  <span className="cache-config-title">L1 Data</span>
+                  <select value={customConfig.l1Size} onChange={e => onCustomConfigChange({ ...customConfig, l1Size: parseInt(e.target.value) })}>
+                    <option value={8192}>8 KB</option>
+                    <option value={16384}>16 KB</option>
+                    <option value={32768}>32 KB</option>
+                    <option value={49152}>48 KB</option>
+                    <option value={65536}>64 KB</option>
+                  </select>
+                  <select value={customConfig.l1Assoc} onChange={e => onCustomConfigChange({ ...customConfig, l1Assoc: parseInt(e.target.value) })}>
+                    <option value={4}>4-way</option>
+                    <option value={8}>8-way</option>
+                    <option value={12}>12-way</option>
+                    <option value={16}>16-way</option>
+                  </select>
+                </div>
+                <div className="cache-config-group">
+                  <span className="cache-config-title">L2</span>
+                  <select value={customConfig.l2Size} onChange={e => onCustomConfigChange({ ...customConfig, l2Size: parseInt(e.target.value) })}>
+                    <option value={131072}>128 KB</option>
+                    <option value={262144}>256 KB</option>
+                    <option value={524288}>512 KB</option>
+                    <option value={1048576}>1 MB</option>
+                    <option value={2097152}>2 MB</option>
+                  </select>
+                  <select value={customConfig.l2Assoc} onChange={e => onCustomConfigChange({ ...customConfig, l2Assoc: parseInt(e.target.value) })}>
+                    <option value={4}>4-way</option>
+                    <option value={8}>8-way</option>
+                    <option value={16}>16-way</option>
+                  </select>
+                </div>
+                <div className="cache-config-group">
+                  <span className="cache-config-title">L3</span>
+                  <select value={customConfig.l3Size} onChange={e => onCustomConfigChange({ ...customConfig, l3Size: parseInt(e.target.value) })}>
+                    <option value={0}>None</option>
+                    <option value={2097152}>2 MB</option>
+                    <option value={4194304}>4 MB</option>
+                    <option value={8388608}>8 MB</option>
+                    <option value={16777216}>16 MB</option>
+                    <option value={33554432}>32 MB</option>
+                  </select>
+                  <select value={customConfig.l3Assoc} onChange={e => onCustomConfigChange({ ...customConfig, l3Assoc: parseInt(e.target.value) })} disabled={customConfig.l3Size === 0}>
+                    <option value={8}>8-way</option>
+                    <option value={12}>12-way</option>
+                    <option value={16}>16-way</option>
+                    <option value={20}>20-way</option>
+                  </select>
+                </div>
               </div>
             </div>
           )}
@@ -2677,6 +2731,9 @@ function App() {
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768)
   const [mobilePane, setMobilePane] = useState<'editor' | 'results'>('editor')
   const [selectedHotLineFile, setSelectedHotLineFile] = useState<string>('')  // File filter for hot lines
+  const [batchResults, setBatchResults] = useState<{config: string; result: CacheResult}[]>([])
+  const [showBatchModal, setShowBatchModal] = useState(false)
+  const [batchRunning, setBatchRunning] = useState(false)
   const commandInputRef = useRef<HTMLInputElement>(null)
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const monacoRef = useRef<Monaco | null>(null)
@@ -3079,6 +3136,86 @@ function App() {
   const isLoading = stage !== 'idle'
   const stageText = { idle: '', connecting: 'Connecting...', preparing: 'Preparing...', compiling: 'Compiling...', running: 'Running...', processing: 'Processing...', done: '' }
 
+  // Export functions
+  const exportAsJSON = () => {
+    if (!result) return
+    const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `cache-analysis-${new Date().toISOString().slice(0, 10)}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const exportAsCSV = () => {
+    if (!result) return
+    const lines: string[] = ['Metric,Value']
+    const l1 = result.levels.l1d || result.levels.l1
+    if (l1) {
+      lines.push(`L1 Hits,${l1.hits}`)
+      lines.push(`L1 Misses,${l1.misses}`)
+      lines.push(`L1 Hit Rate,${(l1.hitRate * 100).toFixed(2)}%`)
+    }
+    if (result.levels.l2) {
+      lines.push(`L2 Hits,${result.levels.l2.hits}`)
+      lines.push(`L2 Misses,${result.levels.l2.misses}`)
+      lines.push(`L2 Hit Rate,${(result.levels.l2.hitRate * 100).toFixed(2)}%`)
+    }
+    if (result.levels.l3) {
+      lines.push(`L3 Hits,${result.levels.l3.hits}`)
+      lines.push(`L3 Misses,${result.levels.l3.misses}`)
+      lines.push(`L3 Hit Rate,${(result.levels.l3.hitRate * 100).toFixed(2)}%`)
+    }
+    if (result.timing) {
+      lines.push(`Total Cycles,${result.timing.totalCycles}`)
+      lines.push(`Avg Latency,${result.timing.avgLatency.toFixed(2)}`)
+    }
+    lines.push(`Total Events,${result.events}`)
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `cache-analysis-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  // Batch analysis - compare same code across multiple hardware presets
+  const runBatchAnalysis = async () => {
+    const configs = ['educational', 'intel', 'amd', 'apple']
+    setBatchResults([])
+    setBatchRunning(true)
+    setShowBatchModal(true)
+
+    for (const cfg of configs) {
+      try {
+        const payload = {
+          code: files.length > 1 ? files.map(f => f.code).join('\n// --- FILE SEPARATOR ---\n') : files[0].code,
+          language: files[0].language,
+          config: cfg,
+          optLevel,
+          prefetch: prefetchPolicy,
+          sampleRate,
+          eventLimit,
+          fastMode,
+        }
+        const response = await fetch(`${API_BASE}/compile`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+        const data = await response.json()
+        if (data.levels) {
+          setBatchResults(prev => [...prev, { config: cfg, result: data as CacheResult }])
+        }
+      } catch {
+        // Skip failed configs
+      }
+    }
+    setBatchRunning(false)
+  }
+
   const commands: CommandItem[] = useMemo(() => [
     // Actions (@)
     { id: 'run', icon: '@', label: 'Run analysis', shortcut: '⌘R', action: () => { if (!isLoading) runAnalysis() }, category: 'actions' },
@@ -3086,6 +3223,9 @@ function App() {
     { id: 'diff-baseline', icon: '@', label: 'Set as diff baseline', action: () => { setBaselineCode(code); setBaselineResult(result) }, category: 'actions' },
     { id: 'diff-toggle', icon: '@', label: diffMode ? 'Exit diff mode' : 'Enter diff mode', action: () => { if (baselineCode) setDiffMode(!diffMode) }, category: 'actions' },
     { id: 'diff-clear', icon: '@', label: 'Clear diff baseline', action: () => { setBaselineCode(null); setBaselineResult(null); setDiffMode(false) }, category: 'actions' },
+    { id: 'export-json', icon: '@', label: 'Export results as JSON', action: exportAsJSON, category: 'actions' },
+    { id: 'export-csv', icon: '@', label: 'Export results as CSV', action: exportAsCSV, category: 'actions' },
+    { id: 'batch-analyze', icon: '@', label: 'Compare hardware presets', action: runBatchAnalysis, category: 'actions' },
     // Settings (:)
     { id: 'vim', icon: ':', label: vimMode ? 'Disable Vim mode' : 'Enable Vim mode', action: () => setVimMode(!vimMode), category: 'settings' },
     { id: 'lang-c', icon: ':', label: 'Language: C', action: () => updateActiveLanguage('c'), category: 'settings' },
@@ -3128,6 +3268,53 @@ function App() {
           inputRef={commandInputRef}
           commands={commands}
         />
+      )}
+
+      {/* Batch Results Modal */}
+      {showBatchModal && (
+        <div className="batch-modal-overlay" onClick={() => !batchRunning && setShowBatchModal(false)}>
+          <div className="batch-modal" onClick={e => e.stopPropagation()}>
+            <div className="batch-modal-header">
+              <span className="batch-modal-title">Hardware Comparison</span>
+              <button className="batch-modal-close" onClick={() => setShowBatchModal(false)}>×</button>
+            </div>
+            <div className="batch-modal-content">
+              {batchRunning && batchResults.length < 4 && (
+                <div className="batch-loading">
+                  <span className="loading-spinner" />
+                  Analyzing... ({batchResults.length}/4 complete)
+                </div>
+              )}
+              {batchResults.length > 0 && (
+                <table className="batch-results-table">
+                  <thead>
+                    <tr>
+                      <th>Hardware</th>
+                      <th>L1 Hit Rate</th>
+                      <th>L2 Hit Rate</th>
+                      <th>Cycles</th>
+                      <th>Events</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {batchResults.map(({ config, result: r }) => {
+                      const l1 = r.levels.l1d || r.levels.l1
+                      return (
+                        <tr key={config}>
+                          <td className="config-name">{config.charAt(0).toUpperCase() + config.slice(1)}</td>
+                          <td className={l1 && l1.hitRate > 0.9 ? 'good' : 'warning'}>{l1 ? formatPercent(l1.hitRate) : '-'}</td>
+                          <td className={r.levels.l2?.hitRate && r.levels.l2.hitRate > 0.9 ? 'good' : 'warning'}>{r.levels.l2 ? formatPercent(r.levels.l2.hitRate) : '-'}</td>
+                          <td>{r.timing?.totalCycles.toLocaleString() || '-'}</td>
+                          <td>{r.events.toLocaleString()}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Header - hidden in embed mode */}
@@ -3199,6 +3386,19 @@ function App() {
               >
                 ×
               </button>
+            )}
+
+            {/* Export dropdown */}
+            {result && !isLoading && (
+              <div className="export-dropdown">
+                <button className="btn-export" title="Export results">
+                  Export
+                </button>
+                <div className="export-menu">
+                  <button onClick={exportAsJSON}>JSON</button>
+                  <button onClick={exportAsCSV}>CSV</button>
+                </div>
+              </div>
             )}
 
             {isLoading ? (
@@ -3412,6 +3612,51 @@ function App() {
 
             {result && (
               <>
+                {/* Diff Summary Panel */}
+                {diffMode && baselineResult && (
+                  <div className="diff-summary panel">
+                    <div className="panel-header">
+                      <span className="panel-title">Comparison Summary</span>
+                    </div>
+                    <div className="diff-summary-content">
+                      {(() => {
+                        const l1Cur = (result.levels.l1d || result.levels.l1!).hitRate
+                        const l1Base = (baselineResult.levels.l1d || baselineResult.levels.l1!)?.hitRate ?? 0
+                        const l1Diff = l1Cur - l1Base
+                        const cyclesCur = result.timing?.totalCycles ?? 0
+                        const cyclesBase = baselineResult.timing?.totalCycles ?? 0
+                        const cyclesDiff = cyclesBase > 0 ? ((cyclesCur - cyclesBase) / cyclesBase * 100) : 0
+                        const improved = l1Diff > 0.01 || cyclesDiff < -5
+                        const degraded = l1Diff < -0.01 || cyclesDiff > 5
+                        return (
+                          <div className={`diff-verdict ${improved ? 'improved' : degraded ? 'degraded' : 'neutral'}`}>
+                            <span className="diff-verdict-icon">{improved ? '↑' : degraded ? '↓' : '='}</span>
+                            <span className="diff-verdict-text">
+                              {improved ? 'Performance Improved' : degraded ? 'Performance Degraded' : 'Similar Performance'}
+                            </span>
+                          </div>
+                        )
+                      })()}
+                      <div className="diff-details">
+                        <div className="diff-detail">
+                          <span>L1 Hit Rate:</span>
+                          <span>{formatPercent((result.levels.l1d || result.levels.l1!).hitRate)} vs {formatPercent((baselineResult.levels.l1d || baselineResult.levels.l1!)?.hitRate ?? 0)}</span>
+                        </div>
+                        {result.timing && baselineResult.timing && (
+                          <div className="diff-detail">
+                            <span>Cycles:</span>
+                            <span>{result.timing.totalCycles.toLocaleString()} vs {baselineResult.timing.totalCycles.toLocaleString()}</span>
+                          </div>
+                        )}
+                        <div className="diff-detail">
+                          <span>Events:</span>
+                          <span>{result.events.toLocaleString()} vs {baselineResult.events.toLocaleString()}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Metric Cards */}
                 <div className="metric-grid">
                   {(() => {
@@ -3758,6 +4003,16 @@ function App() {
                                 {hotLine.misses.toLocaleString()} misses ({formatPercent(hotLine.missRate)})
                               </span>
                             </div>
+                            {/* Source code preview */}
+                            {(() => {
+                              const lines = code.split('\n')
+                              const sourceLine = lines[hotLine.line - 1]?.trim()
+                              return sourceLine ? (
+                                <div className="hotspot-code">
+                                  <code>{sourceLine}</code>
+                                </div>
+                              ) : null
+                            })()}
                             <div className="hotspot-bar">
                               <div
                                 className="hotspot-bar-fill"

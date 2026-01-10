@@ -58,37 +58,13 @@ COMPILE_OUTPUT=$($COMPILER $OPT_LEVEL \
     exit 0
 }
 
-# Run instrumented binary
+# Run instrumented binary and pipe directly to cache-sim
 echo '{"type": "progress", "stage": "running"}' >&2
 
-export CACHE_EXPLORER_OUTPUT="$TRACE_FILE"
+# Use text mode (stdout) and pipe directly to cache-sim
+export CACHE_EXPLORER_OUTPUT="-"
 export CACHE_EXPLORER_SAMPLE_RATE="$SAMPLE_RATE"
-export CACHE_EXPLORER_EVENT_LIMIT="$EVENT_LIMIT"
-
-# Run with timeout, capture any runtime errors
-RUN_OUTPUT=$(timeout 10s "$OUTPUT_BIN" 2>&1) || {
-    EXIT_CODE=$?
-    if [ $EXIT_CODE -eq 124 ]; then
-        echo '{"error": "Execution timeout (10s limit)", "type": "timeout"}'
-        exit 0
-    elif [ $EXIT_CODE -eq 137 ]; then
-        echo '{"error": "Out of memory", "type": "runtime_error"}'
-        exit 0
-    else
-        ESCAPED=$(echo "$RUN_OUTPUT" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | tr '\n' ' ')
-        echo "{\"error\": \"Runtime error (exit code $EXIT_CODE)\", \"type\": \"runtime_error\", \"raw\": \"$ESCAPED\"}"
-        exit 0
-    fi
-}
-
-# Check if trace was generated
-if [ ! -f "$TRACE_FILE" ]; then
-    echo '{"error": "No trace data generated - program may not have executed memory operations", "type": "runtime_error"}'
-    exit 0
-fi
-
-# Simulate cache behavior
-echo '{"type": "progress", "stage": "simulating"}' >&2
+export CACHE_EXPLORER_MAX_EVENTS="$EVENT_LIMIT"
 
 # Build simulator arguments
 SIM_ARGS="--config $CONFIG --prefetch $PREFETCH --json --stream"
@@ -96,4 +72,11 @@ if [ "$FAST_MODE" = "1" ]; then
     SIM_ARGS="$SIM_ARGS --fast"
 fi
 
-$SIM $SIM_ARGS "$TRACE_FILE"
+# Run with timeout, pipe output directly to simulator
+timeout 10s "$OUTPUT_BIN" 2>/dev/null | $SIM $SIM_ARGS || {
+    EXIT_CODE=$?
+    if [ $EXIT_CODE -eq 124 ]; then
+        echo '{"error": "Execution timeout (10s limit)", "type": "timeout"}'
+        exit 0
+    fi
+}

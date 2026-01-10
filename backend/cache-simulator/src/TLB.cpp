@@ -1,6 +1,7 @@
 #include "include/TLB.hpp"
 
 #include <climits>
+#include <cstddef>
 
 TLB::TLB(const TLBConfig& cfg)
     : config(cfg)
