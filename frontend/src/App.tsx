@@ -2022,9 +2022,9 @@ const HARDWARE_OPTIONS: SelectOption[] = [
   { value: 'zen3', label: 'AMD Zen 3', group: 'AMD', desc: '32KB L1, 512KB L2, 32MB L3' },
   { value: 'amd', label: 'AMD Zen 4', group: 'AMD', desc: '32KB L1, 1MB L2, 32MB L3' },
   { value: 'epyc', label: 'AMD EPYC', group: 'AMD', desc: '32KB L1, 512KB L2, 256MB L3' },
-  { value: 'apple', label: 'Apple M1', group: 'Apple', desc: '192KB L1, 12MB L2' },
-  { value: 'm2', label: 'Apple M2', group: 'Apple', desc: '192KB L1, 16MB L2' },
-  { value: 'm3', label: 'Apple M3', group: 'Apple', desc: '192KB L1, 18MB L2' },
+  { value: 'apple', label: 'Apple M1', group: 'Apple', desc: '64KB L1, 4MB L2, 32MB SLC' },
+  { value: 'm2', label: 'Apple M2', group: 'Apple', desc: '128KB L1, 16MB L2, 24MB SLC' },
+  { value: 'm3', label: 'Apple M3', group: 'Apple', desc: '128KB L1, 32MB L2, 32MB SLC' },
   { value: 'graviton', label: 'AWS Graviton 3', group: 'ARM', desc: '64KB L1, 1MB L2, 32MB L3' },
   { value: 'rpi4', label: 'Raspberry Pi 4', group: 'ARM', desc: '32KB L1, 1MB L2' },
 ]
