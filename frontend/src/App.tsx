@@ -1970,7 +1970,7 @@ function TLBDetail({ name, stats }: { name: string; stats: TLBStats }) {
 }
 
 function TimingDisplay({ timing, baselineTiming, diffMode }: { timing: TimingStats; baselineTiming?: TimingStats | null; diffMode?: boolean }) {
-  const { breakdown, latencyConfig, totalCycles, avgLatency } = timing
+  const { breakdown, totalCycles, avgLatency } = timing
   const totalBreakdown = breakdown.l1HitCycles + breakdown.l2HitCycles + breakdown.l3HitCycles + breakdown.memoryCycles
 
   // Calculate percentages for breakdown bar
@@ -1981,7 +1981,6 @@ function TimingDisplay({ timing, baselineTiming, diffMode }: { timing: TimingSta
 
   // Calculate deltas for diff mode
   const cyclesDelta = diffMode && baselineTiming ? formatNumericDelta(totalCycles, baselineTiming.totalCycles) : null
-  const latencyDelta = diffMode && baselineTiming ? formatNumericDelta(Math.round(avgLatency * 10), Math.round(baselineTiming.avgLatency * 10)) : null
 
   return (
     <div className="timing-display">
