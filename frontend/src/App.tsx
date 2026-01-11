@@ -1718,6 +1718,7 @@ interface SelectOption {
   value: string
   label: string
   group?: string
+  desc?: string
 }
 
 function StyledSelect({
@@ -1811,7 +1812,10 @@ function StyledSelect({
                   onMouseEnter={() => setHighlightedIndex(idx)}
                 >
                   {option.value === value && <span className="check-mark">✓</span>}
-                  {option.label}
+                  <span className="option-content">
+                    <span className="option-label">{option.label}</span>
+                    {option.desc && <span className="option-desc">{option.desc}</span>}
+                  </span>
                 </div>
               )
             })}
@@ -1827,7 +1831,10 @@ function StyledSelect({
         onMouseEnter={() => setHighlightedIndex(idx)}
       >
         {option.value === value && <span className="check-mark">✓</span>}
-        {option.label}
+        <span className="option-content">
+          <span className="option-label">{option.label}</span>
+          {option.desc && <span className="option-desc">{option.desc}</span>}
+        </span>
       </div>
     ))
   }
@@ -1979,79 +1986,65 @@ function TimingDisplay({ timing, baselineTiming, diffMode }: { timing: TimingSta
   return (
     <div className="timing-display">
       <div className="timing-header">
-        <span className="timing-title">Timing Analysis</span>
-        <span className="timing-subtitle">Where time is spent</span>
-        <span className="timing-summary">
-          {totalCycles.toLocaleString()} cycles
+        <span className="timing-label">Timing</span>
+        <span className="timing-value">
+          {totalCycles.toLocaleString()}
           {cyclesDelta && (
             <span className={`timing-delta ${cyclesDelta.isNeutral ? 'neutral' : cyclesDelta.isWorse ? 'worse' : 'better'}`}>
               {cyclesDelta.text}
             </span>
           )}
-          <span className="timing-avg">
-            ({avgLatency.toFixed(1)} avg
-            {latencyDelta && !latencyDelta.isNeutral && (
-              <span className={`timing-delta-inline ${latencyDelta.isWorse ? 'worse' : 'better'}`}>
-                {latencyDelta.isWorse ? '↑' : '↓'}
-              </span>
-            )}
-            )
-          </span>
         </span>
+        <span className="timing-unit">cycles ({avgLatency.toFixed(1)} avg)</span>
       </div>
       <div className="timing-bar">
-        {l1Pct > 0 && <div className="timing-segment l1" style={{ width: `${l1Pct}%` }} title={`L1 hits: ${breakdown.l1HitCycles.toLocaleString()} cycles (${latencyConfig.l1Hit} cyc/hit)`} />}
-        {l2Pct > 0 && <div className="timing-segment l2" style={{ width: `${l2Pct}%` }} title={`L2 hits: ${breakdown.l2HitCycles.toLocaleString()} cycles (${latencyConfig.l2Hit} cyc/hit)`} />}
-        {l3Pct > 0 && <div className="timing-segment l3" style={{ width: `${l3Pct}%` }} title={`L3 hits: ${breakdown.l3HitCycles.toLocaleString()} cycles (${latencyConfig.l3Hit} cyc/hit)`} />}
-        {memPct > 0 && <div className="timing-segment mem" style={{ width: `${memPct}%` }} title={`Memory: ${breakdown.memoryCycles.toLocaleString()} cycles (${latencyConfig.memory} cyc/access)`} />}
+        {l1Pct > 0 && <div className="timing-segment l1" style={{ width: `${l1Pct}%` }} title={`L1: ${breakdown.l1HitCycles.toLocaleString()} cycles`} />}
+        {l2Pct > 0 && <div className="timing-segment l2" style={{ width: `${l2Pct}%` }} title={`L2: ${breakdown.l2HitCycles.toLocaleString()} cycles`} />}
+        {l3Pct > 0 && <div className="timing-segment l3" style={{ width: `${l3Pct}%` }} title={`L3: ${breakdown.l3HitCycles.toLocaleString()} cycles`} />}
+        {memPct > 0 && <div className="timing-segment mem" style={{ width: `${memPct}%` }} title={`Memory: ${breakdown.memoryCycles.toLocaleString()} cycles`} />}
       </div>
       <div className="timing-legend">
-        {l1Pct > 0 && <span className="timing-legend-item"><span className="timing-dot l1" />L1 ({l1Pct.toFixed(0)}%)</span>}
-        {l2Pct > 0 && <span className="timing-legend-item"><span className="timing-dot l2" />L2 ({l2Pct.toFixed(0)}%)</span>}
-        {l3Pct > 0 && <span className="timing-legend-item"><span className="timing-dot l3" />L3 ({l3Pct.toFixed(0)}%)</span>}
-        {memPct > 0 && <span className="timing-legend-item"><span className="timing-dot mem" />Memory ({memPct.toFixed(0)}%)</span>}
+        {l1Pct > 0 && <span className="timing-legend-item"><span className="timing-dot l1" />L1 {l1Pct.toFixed(0)}%</span>}
+        {l2Pct > 0 && <span className="timing-legend-item"><span className="timing-dot l2" />L2 {l2Pct.toFixed(0)}%</span>}
+        {l3Pct > 0 && <span className="timing-legend-item"><span className="timing-dot l3" />L3 {l3Pct.toFixed(0)}%</span>}
+        {memPct > 0 && <span className="timing-legend-item"><span className="timing-dot mem" />Mem {memPct.toFixed(0)}%</span>}
       </div>
-      {breakdown.tlbMissCycles > 0 && (
-        <div className="timing-tlb-note">
-          +{breakdown.tlbMissCycles.toLocaleString()} cycles from TLB misses
-        </div>
-      )}
     </div>
   )
 }
 
 // Hardware preset options with groups
 const HARDWARE_OPTIONS: SelectOption[] = [
-  { value: 'educational', label: 'Educational', group: 'Learning' },
-  { value: 'custom', label: 'Custom', group: 'Custom' },
-  { value: 'intel', label: 'Intel 12th Gen', group: 'Intel' },
-  { value: 'intel14', label: 'Intel 14th Gen', group: 'Intel' },
-  { value: 'xeon', label: 'Intel Xeon', group: 'Intel' },
-  { value: 'zen3', label: 'AMD Zen 3', group: 'AMD' },
-  { value: 'amd', label: 'AMD Zen 4', group: 'AMD' },
-  { value: 'epyc', label: 'AMD EPYC', group: 'AMD' },
-  { value: 'apple', label: 'Apple M1', group: 'Apple' },
-  { value: 'm2', label: 'Apple M2', group: 'Apple' },
-  { value: 'm3', label: 'Apple M3', group: 'Apple' },
-  { value: 'graviton', label: 'AWS Graviton 3', group: 'ARM' },
-  { value: 'rpi4', label: 'Raspberry Pi 4', group: 'ARM' },
+  { value: 'educational', label: 'Educational', group: 'Learning', desc: 'Small caches (4KB L1) - easy to see misses' },
+  { value: 'custom', label: 'Custom', group: 'Custom', desc: 'Configure your own cache sizes' },
+  { value: 'intel', label: 'Intel 12th Gen', group: 'Intel', desc: '48KB L1, 1.25MB L2, 30MB L3' },
+  { value: 'intel14', label: 'Intel 14th Gen', group: 'Intel', desc: '48KB L1, 2MB L2, 36MB L3' },
+  { value: 'xeon', label: 'Intel Xeon', group: 'Intel', desc: '48KB L1, 2MB L2, 60MB L3' },
+  { value: 'zen3', label: 'AMD Zen 3', group: 'AMD', desc: '32KB L1, 512KB L2, 32MB L3' },
+  { value: 'amd', label: 'AMD Zen 4', group: 'AMD', desc: '32KB L1, 1MB L2, 32MB L3' },
+  { value: 'epyc', label: 'AMD EPYC', group: 'AMD', desc: '32KB L1, 512KB L2, 256MB L3' },
+  { value: 'apple', label: 'Apple M1', group: 'Apple', desc: '192KB L1, 12MB L2' },
+  { value: 'm2', label: 'Apple M2', group: 'Apple', desc: '192KB L1, 16MB L2' },
+  { value: 'm3', label: 'Apple M3', group: 'Apple', desc: '192KB L1, 18MB L2' },
+  { value: 'graviton', label: 'AWS Graviton 3', group: 'ARM', desc: '64KB L1, 1MB L2, 32MB L3' },
+  { value: 'rpi4', label: 'Raspberry Pi 4', group: 'ARM', desc: '32KB L1, 1MB L2' },
 ]
 
 const OPT_LEVEL_OPTIONS: SelectOption[] = [
-  { value: '-O0', label: '-O0' },
-  { value: '-O1', label: '-O1' },
-  { value: '-O2', label: '-O2' },
-  { value: '-O3', label: '-O3' },
-  { value: '-Os', label: '-Os' },
+  { value: '-O0', label: '-O0', desc: 'No optimization - best for debugging' },
+  { value: '-O1', label: '-O1', desc: 'Basic optimizations' },
+  { value: '-O2', label: '-O2', desc: 'Standard optimizations' },
+  { value: '-O3', label: '-O3', desc: 'Aggressive optimizations' },
+  { value: '-Os', label: '-Os', desc: 'Optimize for size' },
 ]
 
 const PREFETCH_OPTIONS: SelectOption[] = [
-  { value: 'none', label: 'None' },
-  { value: 'next', label: 'Next Line' },
-  { value: 'stream', label: 'Stream' },
-  { value: 'stride', label: 'Stride' },
-  { value: 'adaptive', label: 'Adaptive' },
-  { value: 'intel', label: 'Intel DCU' },
+  { value: 'none', label: 'None', desc: 'No hardware prefetching' },
+  { value: 'next', label: 'Next Line', desc: 'Prefetch adjacent cache line on miss' },
+  { value: 'stream', label: 'Stream', desc: 'Detect sequential access patterns' },
+  { value: 'stride', label: 'Stride', desc: 'Detect strided access patterns' },
+  { value: 'adaptive', label: 'Adaptive', desc: 'Combines stream + stride detection' },
+  { value: 'intel', label: 'Intel DCU', desc: 'Intel Data Cache Unit prefetcher' },
 ]
 
 const LIMIT_OPTIONS: SelectOption[] = [
@@ -2071,8 +2064,8 @@ const SAMPLE_OPTIONS: SelectOption[] = [
 ]
 
 const FAST_MODE_OPTIONS: SelectOption[] = [
-  { value: 'false', label: 'Full (3C)' },
-  { value: 'true', label: 'Fast' },
+  { value: 'false', label: 'Full (3C)', desc: 'Tracks compulsory, capacity, conflict misses' },
+  { value: 'true', label: 'Fast', desc: '~3x faster, skips miss classification' },
 ]
 
 // Godbolt-style inline settings toolbar
@@ -2232,42 +2225,54 @@ function SettingsToolbar({
           <div className="toolbar-advanced-section">
             <span className="toolbar-advanced-label">Defines:</span>
             <div className="toolbar-defines">
-              {defines.map((def, i) => (
-                <div key={i} className="toolbar-define">
-                  <span className="define-prefix">-D</span>
-                  <input
-                    type="text"
-                    placeholder="NAME"
-                    value={def.name}
-                    onChange={(e) => {
-                      const newDefs = [...defines]
-                      newDefs[i].name = e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '')
-                      onDefinesChange(newDefs)
-                    }}
-                    className="define-input name"
-                  />
-                  <span className="define-eq">=</span>
-                  <input
-                    type="text"
-                    placeholder="value"
-                    value={def.value}
-                    onChange={(e) => {
-                      const newDefs = [...defines]
-                      newDefs[i].value = e.target.value
-                      onDefinesChange(newDefs)
-                    }}
-                    className="define-input value"
-                  />
-                  <button
-                    className="define-remove"
-                    onClick={() => onDefinesChange(defines.filter((_, j) => j !== i))}
-                  >×</button>
+              {defines.length === 0 ? (
+                <div className="defines-presets">
+                  <button className="define-preset" onClick={() => onDefinesChange([{ name: 'N', value: '1000' }])}>N=1000</button>
+                  <button className="define-preset" onClick={() => onDefinesChange([{ name: 'SIZE', value: '256' }])}>SIZE=256</button>
+                  <button className="define-preset" onClick={() => onDefinesChange([{ name: 'BLOCK', value: '64' }])}>BLOCK=64</button>
+                  <button className="define-preset define-custom" onClick={() => onDefinesChange([{ name: '', value: '' }])}>+ Custom</button>
                 </div>
-              ))}
-              <button
-                className="define-add"
-                onClick={() => onDefinesChange([...defines, { name: '', value: '' }])}
-              >+ Add</button>
+              ) : (
+                <>
+                  {defines.map((def, i) => (
+                    <div key={i} className="toolbar-define">
+                      <span className="define-prefix">-D</span>
+                      <input
+                        type="text"
+                        placeholder="NAME"
+                        value={def.name}
+                        onChange={(e) => {
+                          const newDefs = [...defines]
+                          newDefs[i].name = e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '')
+                          onDefinesChange(newDefs)
+                        }}
+                        className="define-input name"
+                      />
+                      <span className="define-eq">=</span>
+                      <input
+                        type="text"
+                        placeholder="value"
+                        value={def.value}
+                        onChange={(e) => {
+                          const newDefs = [...defines]
+                          newDefs[i].value = e.target.value
+                          onDefinesChange(newDefs)
+                        }}
+                        className="define-input value"
+                      />
+                      <button
+                        className="define-remove"
+                        onClick={() => onDefinesChange(defines.filter((_, j) => j !== i))}
+                        title="Remove define"
+                      >×</button>
+                    </div>
+                  ))}
+                  <button
+                    className="define-add"
+                    onClick={() => onDefinesChange([...defines, { name: '', value: '' }])}
+                  >+</button>
+                </>
+              )}
             </div>
           </div>
 
@@ -3404,22 +3409,16 @@ function App() {
         <header className="header">
           <div className="header-left">
             <div className="logo">
-              <div className="logo-icon">◈</div>
-              <div className="logo-text">
-                <span className="logo-title">Cache Explorer</span>
-                <span className="logo-subtitle">Memory Analysis Tool</span>
+              <div className="logo-mark">
+                <div className="logo-layer l3"></div>
+                <div className="logo-layer l2"></div>
+                <div className="logo-layer l1"></div>
               </div>
+              <span className="logo-title">Cache Explorer</span>
             </div>
           </div>
 
           <div className="header-center">
-            <button
-              className="btn"
-              onClick={() => setShowCommandPalette(true)}
-              title="Command Palette (⌘K)"
-            >
-              ⌘K Commands
-            </button>
             {diffMode && baselineResult && (
               <div className="diff-mode-badge" title="Comparing against baseline">
                 <span className="diff-mode-icon">⇄</span>
@@ -3489,7 +3488,7 @@ function App() {
                 className="btn-cancel"
                 title="Cancel analysis"
               >
-                <span className="loading-spinner" style={{ width: 14, height: 14, marginRight: 6 }} />
+                <span className="btn-spinner" />
                 {stageText[stage]}
                 <span className="cancel-x">×</span>
               </button>
@@ -4165,7 +4164,11 @@ function App() {
 
           {!result && !error && !isLoading && (
             <div className="empty-state">
-              <div className="empty-state-icon">◈</div>
+              <div className="empty-state-logo">
+                <div className="logo-layer l3"></div>
+                <div className="logo-layer l2"></div>
+                <div className="logo-layer l1"></div>
+              </div>
               <div className="empty-state-title">Ready to Analyze</div>
               <div className="empty-state-desc">
                 Write or paste C/C++ code in the editor, then execute to visualize cache behavior.
