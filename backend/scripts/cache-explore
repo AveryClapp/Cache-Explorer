@@ -40,6 +40,7 @@ main_usage() {
   echo "  compare           Compare cache behavior across configs"
   echo "  report            Generate HTML report from analysis"
   echo "  cc/c++            Compiler wrapper for build system integration"
+  echo "  build-pass        Build the LLVM pass locally for your clang version"
   echo ""
   echo "Examples:"
   echo "  cache-explore matrix.c --config educational"
@@ -84,6 +85,10 @@ case "$1" in
   c++)
     shift
     exec "$SCRIPT_DIR/cache-explore-cxx" "$@"
+    ;;
+  build-pass)
+    shift
+    exec "$SCRIPT_DIR/cache-explore-build-pass" "$@"
     ;;
   --help|-h)
     main_usage

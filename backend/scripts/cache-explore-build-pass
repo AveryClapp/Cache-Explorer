@@ -1,0 +1,245 @@
+#!/bin/bash
+#
+# cache-explore-build-pass - Build CacheProfiler.so locally for your LLVM version
+#
+# Builds the LLVM pass from source when no pre-built binary is available.
+# Uses the build-passes.sh script to perform the actual compilation.
+#
+# Usage:
+#   cache-explore build-pass [options]
+#
+# Options:
+#   --llvm-version N    Specify LLVM major version (auto-detect if omitted)
+#   --llvm-dir PATH     Specify LLVM cmake directory directly
+#   --output PATH       Output directory (default: ~/.cache/cache-explorer/passes)
+#   --help              Show this help message
+#
+# Environment variables:
+#   CACHE_EXPLORER_CC         - Clang compiler to use for version detection
+#   CACHE_EXPLORER_CACHE_DIR  - Override cache location
+#
+set -e
+
+# Configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEFAULT_OUTPUT_DIR="$HOME/.cache/cache-explorer/passes"
+OUTPUT_DIR="${CACHE_EXPLORER_CACHE_DIR:-$DEFAULT_OUTPUT_DIR}"
+
+# Options
+LLVM_VERSION=""
+LLVM_DIR=""
+
+#######################################
+# Show usage information
+#######################################
+usage() {
+  echo "cache-explore build-pass - Build CacheProfiler.so locally"
+  echo ""
+  echo "Usage: cache-explore build-pass [options]"
+  echo ""
+  echo "Options:"
+  echo "  --llvm-version N    Specify LLVM major version (auto-detect if omitted)"
+  echo "  --llvm-dir PATH     Specify LLVM cmake directory directly"
+  echo "  --output PATH       Output directory (default: ~/.cache/cache-explorer/passes)"
+  echo "  --help              Show this help message"
+  echo ""
+  echo "Examples:"
+  echo "  cache-explore build-pass                        # Auto-detect LLVM version"
+  echo "  cache-explore build-pass --llvm-version 19      # Build for LLVM 19"
+  echo "  cache-explore build-pass --output ./my-passes   # Custom output directory"
+  echo ""
+  echo "Requirements:"
+  echo "  - LLVM/Clang development files (llvm-dev or llvm@N)"
+  echo "  - CMake and Ninja build system"
+  echo ""
+  echo "The built pass will be cached and reused by cache-explore automatically."
+}
+
+#######################################
+# Detect LLVM major version from clang
+# Globals:
+#   CACHE_EXPLORER_CC
+# Arguments:
+#   None
+# Outputs:
+#   LLVM major version number (e.g., 17, 18, 19)
+#######################################
+detect_llvm_version() {
+  # Find clang - check common locations
+  local clang_cmd=""
+  if [[ -n "${CACHE_EXPLORER_CC:-}" ]]; then
+    clang_cmd="$CACHE_EXPLORER_CC"
+  elif command -v clang &>/dev/null; then
+    clang_cmd="clang"
+  else
+    # Try versioned clang (Ubuntu/Debian)
+    for ver in 21 20 19 18 17 16 15; do
+      if command -v "clang-$ver" &>/dev/null; then
+        clang_cmd="clang-$ver"
+        break
+      fi
+    done
+  fi
+
+  if [[ -z "$clang_cmd" ]]; then
+    echo "Error: clang not found. Please install LLVM/clang or set CACHE_EXPLORER_CC." >&2
+    return 1
+  fi
+
+  # Parse version from clang --version output
+  # Examples:
+  #   "Homebrew clang version 17.0.6"
+  #   "Ubuntu clang version 18.1.3-1ubuntu1"
+  #   "Apple clang version 15.0.0"
+  local version_output
+  version_output=$("$clang_cmd" --version 2>/dev/null | head -1)
+
+  # Extract version number (major.minor.patch or major.minor)
+  local version
+  version=$(echo "$version_output" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1)
+
+  if [[ -z "$version" ]]; then
+    echo "Error: Could not parse LLVM version from: $version_output" >&2
+    return 1
+  fi
+
+  # Extract major version
+  local major_version
+  major_version=$(echo "$version" | cut -d. -f1)
+
+  # Apple clang uses different versioning - warn user
+  if echo "$version_output" | grep -qi "apple"; then
+    echo "Warning: Apple clang detected. Apple clang versions differ from upstream LLVM." >&2
+    echo "         You may need to install upstream LLVM via Homebrew: brew install llvm" >&2
+    echo "         Then set CACHE_EXPLORER_CC=/opt/homebrew/opt/llvm/bin/clang" >&2
+    return 1
+  fi
+
+  echo "$major_version"
+}
+
+#######################################
+# Parse command line arguments
+#######################################
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --llvm-version)
+        if [[ -z "${2:-}" ]]; then
+          echo "Error: --llvm-version requires a version number" >&2
+          exit 1
+        fi
+        LLVM_VERSION="$2"
+        shift 2
+        ;;
+      --llvm-dir)
+        if [[ -z "${2:-}" ]]; then
+          echo "Error: --llvm-dir requires a path" >&2
+          exit 1
+        fi
+        LLVM_DIR="$2"
+        shift 2
+        ;;
+      --output)
+        if [[ -z "${2:-}" ]]; then
+          echo "Error: --output requires a path" >&2
+          exit 1
+        fi
+        OUTPUT_DIR="$2"
+        shift 2
+        ;;
+      --help|-h)
+        usage
+        exit 0
+        ;;
+      *)
+        echo "Error: Unknown option: $1" >&2
+        echo "" >&2
+        usage >&2
+        exit 1
+        ;;
+    esac
+  done
+}
+
+#######################################
+# Main function
+#######################################
+main() {
+  parse_args "$@"
+
+  # Check for build-passes.sh script
+  local build_script="$SCRIPT_DIR/build-passes.sh"
+  if [[ ! -f "$build_script" ]]; then
+    echo "Error: build-passes.sh not found at $build_script" >&2
+    exit 1
+  fi
+
+  # Auto-detect LLVM version if not specified
+  if [[ -z "$LLVM_VERSION" ]]; then
+    echo "Detecting LLVM version..."
+    if ! LLVM_VERSION=$(detect_llvm_version); then
+      echo "" >&2
+      echo "Tip: Specify the version manually with --llvm-version N" >&2
+      exit 1
+    fi
+    echo "Detected LLVM version: $LLVM_VERSION"
+  fi
+
+  # Validate LLVM version
+  if ! [[ "$LLVM_VERSION" =~ ^[0-9]+$ ]]; then
+    echo "Error: Invalid LLVM version: $LLVM_VERSION (must be a number)" >&2
+    exit 1
+  fi
+
+  if [[ "$LLVM_VERSION" -lt 17 ]] || [[ "$LLVM_VERSION" -gt 21 ]]; then
+    echo "Error: LLVM version must be between 17 and 21" >&2
+    exit 1
+  fi
+
+  # Create output directory
+  mkdir -p "$OUTPUT_DIR"
+
+  echo ""
+  echo "Building CacheProfiler.so for LLVM $LLVM_VERSION..."
+  echo "Output directory: $OUTPUT_DIR"
+  echo ""
+
+  # Call build-passes.sh to do the actual build
+  # If LLVM_DIR is specified, we need to modify the environment
+  # For now, build-passes.sh auto-detects LLVM location
+  if ! "$build_script" "$LLVM_VERSION" "$OUTPUT_DIR"; then
+    echo "" >&2
+    echo "Build failed. Please check the error messages above." >&2
+    echo "" >&2
+    echo "Common issues:" >&2
+    echo "  - LLVM development files not installed" >&2
+    echo "  - CMake or Ninja not installed" >&2
+    echo "  - Incompatible LLVM version" >&2
+    exit 1
+  fi
+
+  # Determine the output filename
+  local os arch
+  case "$(uname -s)" in
+    Darwin) os="darwin" ;;
+    Linux) os="linux" ;;
+    *) os="unknown" ;;
+  esac
+  case "$(uname -m)" in
+    x86_64) arch="x64" ;;
+    arm64|aarch64) arch="arm64" ;;
+    *) arch="unknown" ;;
+  esac
+
+  local pass_file="$OUTPUT_DIR/CacheProfiler-llvm${LLVM_VERSION}-${os}-${arch}.so"
+
+  echo ""
+  echo "Build successful!"
+  echo ""
+  echo "Pass location: $pass_file"
+  echo ""
+  echo "The pass will be automatically used by cache-explore when analyzing code."
+}
+
+main "$@"
