@@ -1,0 +1,280 @@
+#!/bin/bash
+#
+# cache-explore-download-pass - Download pre-built CacheProfiler.so from GitHub Releases
+#
+# Downloads the appropriate LLVM pass for the user's platform and LLVM version.
+# Caches downloads to avoid repeated fetches.
+#
+# Usage:
+#   cache-explore-download-pass [LLVM_VERSION]
+#
+# Environment variables:
+#   CACHE_EXPLORER_CACHE_DIR  - Override cache location (default: ~/.cache/cache-explorer/passes)
+#   CACHE_EXPLORER_RELEASE    - Specific release tag (default: latest)
+#   CACHE_EXPLORER_REPO       - GitHub repo (default: placeholder/cache-explorer)
+#
+set -e
+
+# Configuration
+DEFAULT_REPO="placeholder/cache-explorer"  # Will be updated when repo is public
+REPO="${CACHE_EXPLORER_REPO:-$DEFAULT_REPO}"
+RELEASE="${CACHE_EXPLORER_RELEASE:-latest}"
+CACHE_DIR="${CACHE_EXPLORER_CACHE_DIR:-$HOME/.cache/cache-explorer/passes}"
+
+# Parse optional LLVM version argument
+LLVM_VERSION_OVERRIDE="${1:-}"
+
+#######################################
+# Detect LLVM major version from clang
+# Globals:
+#   LLVM_VERSION_OVERRIDE
+# Arguments:
+#   None
+# Outputs:
+#   LLVM major version number (e.g., 17, 18, 19)
+#######################################
+detect_llvm_version() {
+  # Use override if provided
+  if [[ -n "$LLVM_VERSION_OVERRIDE" ]]; then
+    echo "$LLVM_VERSION_OVERRIDE"
+    return 0
+  fi
+
+  # Find clang - check common locations
+  local clang_cmd=""
+  if [[ -n "${CACHE_EXPLORER_CC:-}" ]]; then
+    clang_cmd="$CACHE_EXPLORER_CC"
+  elif command -v clang &>/dev/null; then
+    clang_cmd="clang"
+  else
+    # Try versioned clang (Ubuntu/Debian)
+    for ver in 21 20 19 18 17 16 15; do
+      if command -v "clang-$ver" &>/dev/null; then
+        clang_cmd="clang-$ver"
+        break
+      fi
+    done
+  fi
+
+  if [[ -z "$clang_cmd" ]]; then
+    echo "Error: clang not found. Please install LLVM/clang or set CACHE_EXPLORER_CC." >&2
+    return 1
+  fi
+
+  # Parse version from clang --version output
+  # Examples:
+  #   "Homebrew clang version 17.0.6"
+  #   "Ubuntu clang version 18.1.3-1ubuntu1"
+  #   "Apple clang version 15.0.0"
+  local version_output
+  version_output=$("$clang_cmd" --version 2>/dev/null | head -1)
+
+  # Extract version number (major.minor.patch or major.minor)
+  local version
+  version=$(echo "$version_output" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1)
+
+  if [[ -z "$version" ]]; then
+    echo "Error: Could not parse LLVM version from: $version_output" >&2
+    return 1
+  fi
+
+  # Extract major version
+  local major_version
+  major_version=$(echo "$version" | cut -d. -f1)
+
+  # Apple clang uses different versioning - map to upstream LLVM
+  if echo "$version_output" | grep -qi "apple"; then
+    echo "Warning: Apple clang detected. Apple clang versions differ from upstream LLVM." >&2
+    echo "         You may need to install upstream LLVM via Homebrew: brew install llvm" >&2
+    echo "         Then set CACHE_EXPLORER_CC=/opt/homebrew/opt/llvm/bin/clang" >&2
+    return 1
+  fi
+
+  echo "$major_version"
+}
+
+#######################################
+# Detect platform (OS and architecture)
+# Globals:
+#   None
+# Arguments:
+#   None
+# Outputs:
+#   Platform string (e.g., darwin-arm64, linux-x64)
+#######################################
+detect_platform() {
+  local os arch
+
+  # Detect OS
+  case "$(uname -s)" in
+    Darwin)
+      os="darwin"
+      ;;
+    Linux)
+      os="linux"
+      ;;
+    *)
+      echo "Error: Unsupported operating system: $(uname -s)" >&2
+      return 1
+      ;;
+  esac
+
+  # Detect architecture
+  case "$(uname -m)" in
+    x86_64|amd64)
+      arch="x64"
+      ;;
+    arm64|aarch64)
+      arch="arm64"
+      ;;
+    *)
+      echo "Error: Unsupported architecture: $(uname -m)" >&2
+      return 1
+      ;;
+  esac
+
+  echo "${os}-${arch}"
+}
+
+#######################################
+# Get the download URL for the pass
+# Globals:
+#   REPO, RELEASE
+# Arguments:
+#   llvm_version - LLVM major version
+#   platform - Platform string (os-arch)
+# Outputs:
+#   Download URL
+#######################################
+get_download_url() {
+  local llvm_version="$1"
+  local platform="$2"
+  local filename="CacheProfiler-llvm${llvm_version}-${platform}.so"
+
+  if [[ "$RELEASE" == "latest" ]]; then
+    echo "https://github.com/${REPO}/releases/latest/download/${filename}"
+  else
+    echo "https://github.com/${REPO}/releases/download/${RELEASE}/${filename}"
+  fi
+}
+
+#######################################
+# Get the cache path for the pass
+# Globals:
+#   CACHE_DIR, RELEASE
+# Arguments:
+#   llvm_version - LLVM major version
+#   platform - Platform string (os-arch)
+# Outputs:
+#   Cache file path
+#######################################
+get_cache_path() {
+  local llvm_version="$1"
+  local platform="$2"
+  local filename="CacheProfiler-llvm${llvm_version}-${platform}.so"
+
+  # Include release in path to support multiple versions
+  if [[ "$RELEASE" == "latest" ]]; then
+    echo "${CACHE_DIR}/latest/${filename}"
+  else
+    echo "${CACHE_DIR}/${RELEASE}/${filename}"
+  fi
+}
+
+#######################################
+# Download the pass from GitHub Releases
+# Globals:
+#   None
+# Arguments:
+#   url - Download URL
+#   dest - Destination file path
+# Returns:
+#   0 on success, 1 on failure
+#######################################
+download_pass() {
+  local url="$1"
+  local dest="$2"
+
+  # Create parent directory
+  mkdir -p "$(dirname "$dest")"
+
+  # Download with curl
+  # -f: Fail silently on HTTP errors
+  # -s: Silent mode
+  # -S: Show errors
+  # -L: Follow redirects
+  if curl -fsSL "$url" -o "$dest" 2>/dev/null; then
+    # Make executable
+    chmod +x "$dest"
+    return 0
+  else
+    # Clean up partial download
+    rm -f "$dest"
+    return 1
+  fi
+}
+
+#######################################
+# Main function
+#######################################
+main() {
+  # Detect LLVM version
+  local llvm_version
+  if ! llvm_version=$(detect_llvm_version); then
+    echo "" >&2
+    echo "Tip: You can override the LLVM version with:" >&2
+    echo "  cache-explore-download-pass <VERSION>" >&2
+    echo "" >&2
+    echo "Or build the pass locally with:" >&2
+    echo "  cache-explore build-pass" >&2
+    exit 1
+  fi
+
+  # Detect platform
+  local platform
+  if ! platform=$(detect_platform); then
+    exit 1
+  fi
+
+  # Get cache path
+  local cache_path
+  cache_path=$(get_cache_path "$llvm_version" "$platform")
+
+  # Check if already cached
+  if [[ -f "$cache_path" && -x "$cache_path" ]]; then
+    echo "$cache_path"
+    exit 0
+  fi
+
+  # Get download URL
+  local url
+  url=$(get_download_url "$llvm_version" "$platform")
+
+  # Attempt download
+  echo "Downloading CacheProfiler for LLVM ${llvm_version} (${platform})..." >&2
+  echo "URL: $url" >&2
+
+  if download_pass "$url" "$cache_path"; then
+    echo "" >&2
+    echo "Downloaded successfully to: $cache_path" >&2
+    echo "$cache_path"
+    exit 0
+  else
+    echo "" >&2
+    echo "Error: Failed to download pre-built pass." >&2
+    echo "" >&2
+    echo "Possible reasons:" >&2
+    echo "  - No pre-built binary available for LLVM ${llvm_version} on ${platform}" >&2
+    echo "  - Network connectivity issues" >&2
+    echo "  - Release not yet published" >&2
+    echo "" >&2
+    echo "Solution: Build the pass locally with:" >&2
+    echo "  cache-explore build-pass" >&2
+    echo "" >&2
+    echo "Or specify a different LLVM version:" >&2
+    echo "  cache-explore-download-pass <VERSION>" >&2
+    exit 1
+  fi
+}
+
+main "$@"
