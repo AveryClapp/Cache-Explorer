@@ -23,9 +23,198 @@ CMAKE_MODULE="$BACKEND_DIR/integration/cmake"
 
 # Export for subcommands
 export CACHE_EXPLORER_PATH="$BACKEND_DIR"
-export CACHE_EXPLORER_PASS="$PASS"
 export CACHE_EXPLORER_RUNTIME="$RUNTIME"
 export CACHE_EXPLORER_SIM="$CACHE_SIM"
+
+# Pass cache directory
+PASS_CACHE_DIR="${CACHE_EXPLORER_CACHE_DIR:-$HOME/.cache/cache-explorer/passes}"
+
+#######################################
+# Detect platform (OS and architecture)
+# Arguments:
+#   None
+# Outputs:
+#   Platform string (e.g., darwin-arm64, linux-x64)
+#######################################
+detect_platform() {
+  local os arch
+
+  # Detect OS
+  case "$(uname -s)" in
+    Darwin)
+      os="darwin"
+      ;;
+    Linux)
+      os="linux"
+      ;;
+    *)
+      os="unknown"
+      ;;
+  esac
+
+  # Detect architecture
+  case "$(uname -m)" in
+    x86_64|amd64)
+      arch="x64"
+      ;;
+    arm64|aarch64)
+      arch="arm64"
+      ;;
+    *)
+      arch="unknown"
+      ;;
+  esac
+
+  echo "${os}-${arch}"
+}
+
+#######################################
+# Get LLVM major version from a clang command
+# Arguments:
+#   clang_cmd - Path or command name for clang
+# Outputs:
+#   LLVM major version number (e.g., 17, 18, 19)
+#   Returns 1 if version cannot be detected or is Apple clang
+#######################################
+get_llvm_version() {
+  local clang_cmd="$1"
+
+  # Parse version from clang --version output
+  local version_output
+  version_output=$("$clang_cmd" --version 2>/dev/null | head -1) || return 1
+
+  # Apple clang uses different versioning - not compatible
+  if echo "$version_output" | grep -qi "apple"; then
+    return 1
+  fi
+
+  # Extract version number (major.minor.patch or major.minor)
+  local version
+  version=$(echo "$version_output" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1)
+
+  if [[ -z "$version" ]]; then
+    return 1
+  fi
+
+  # Extract major version
+  echo "$version" | cut -d. -f1
+}
+
+#######################################
+# Resolve the LLVM pass to use
+# Checks: local build -> cached pass -> download
+# Globals:
+#   PASS, COMPILER_PATH, PASS_CACHE_DIR, SCRIPT_DIR
+# Arguments:
+#   None
+# Outputs:
+#   Sets RESOLVED_PASS to the path of the pass to use
+#   Returns 1 on failure
+#######################################
+resolve_pass() {
+  # 1. Check if local development build exists
+  if [[ -f "$PASS" ]]; then
+    RESOLVED_PASS="$PASS"
+    return 0
+  fi
+
+  # 2. Need to detect LLVM version and platform for cached/downloaded passes
+  local clang_cmd=""
+
+  # Find clang command - respect --compiler flag
+  if [[ -n "$COMPILER_PATH" && -x "$COMPILER_PATH/clang" ]]; then
+    clang_cmd="$COMPILER_PATH/clang"
+  elif [[ -n "${CACHE_EXPLORER_CC:-}" ]]; then
+    clang_cmd="$CACHE_EXPLORER_CC"
+  elif command -v clang &>/dev/null; then
+    clang_cmd="clang"
+  else
+    # Try versioned clang (Ubuntu/Debian)
+    for ver in 21 20 19 18 17 16 15; do
+      if command -v "clang-$ver" &>/dev/null; then
+        clang_cmd="clang-$ver"
+        break
+      fi
+    done
+  fi
+
+  if [[ -z "$clang_cmd" ]]; then
+    echo "Error: clang not found. Please install LLVM/clang." >&2
+    return 1
+  fi
+
+  # Get LLVM version
+  local llvm_version
+  if ! llvm_version=$(get_llvm_version "$clang_cmd"); then
+    # Check if it's Apple clang
+    local version_output
+    version_output=$("$clang_cmd" --version 2>/dev/null | head -1)
+    if echo "$version_output" | grep -qi "apple"; then
+      echo "Error: Apple clang detected. Cache Explorer requires upstream LLVM." >&2
+      echo "" >&2
+      echo "To fix this, install LLVM via Homebrew:" >&2
+      echo "  brew install llvm" >&2
+      echo "" >&2
+      echo "Then either:" >&2
+      echo "  1. Use --compiler flag: cache-explore --compiler /opt/homebrew/opt/llvm/bin myfile.c" >&2
+      echo "  2. Set environment: export CACHE_EXPLORER_CC=/opt/homebrew/opt/llvm/bin/clang" >&2
+      return 1
+    fi
+    echo "Error: Could not detect LLVM version from: $clang_cmd" >&2
+    return 1
+  fi
+
+  # Detect platform
+  local platform
+  platform=$(detect_platform)
+
+  # Construct pass filename
+  local pass_filename="CacheProfiler-llvm${llvm_version}-${platform}.so"
+
+  # 3. Check cached pass directory
+  local cached_pass="$PASS_CACHE_DIR/$pass_filename"
+  if [[ -f "$cached_pass" && -x "$cached_pass" ]]; then
+    RESOLVED_PASS="$cached_pass"
+    return 0
+  fi
+
+  # Also check in latest/ subdirectory (where download-pass puts it)
+  local cached_pass_latest="$PASS_CACHE_DIR/latest/$pass_filename"
+  if [[ -f "$cached_pass_latest" && -x "$cached_pass_latest" ]]; then
+    RESOLVED_PASS="$cached_pass_latest"
+    return 0
+  fi
+
+  # 4. Try to download the pass
+  local download_script="$SCRIPT_DIR/cache-explore-download-pass"
+  if [[ -x "$download_script" ]]; then
+    echo "No local pass found. Attempting to download pre-built pass..." >&2
+    local downloaded_pass
+    if downloaded_pass=$("$download_script" "$llvm_version" 2>&1 | tail -1) && [[ -f "$downloaded_pass" ]]; then
+      RESOLVED_PASS="$downloaded_pass"
+      return 0
+    fi
+  fi
+
+  # 5. All options failed - provide helpful error message
+  echo "" >&2
+  echo "Error: Could not find or download CacheProfiler pass for LLVM $llvm_version ($platform)" >&2
+  echo "" >&2
+  echo "Options to resolve this:" >&2
+  echo "" >&2
+  echo "  1. Build the pass locally (recommended):" >&2
+  echo "     cache-explore build-pass" >&2
+  echo "" >&2
+  echo "  2. Build from source (for development):" >&2
+  echo "     cd backend/llvm-pass && mkdir -p build && cd build" >&2
+  echo "     cmake .. -G Ninja -DLLVM_DIR=/path/to/llvm/lib/cmake/llvm" >&2
+  echo "     ninja" >&2
+  echo "" >&2
+  echo "  3. If using a different LLVM version, specify with --compiler:" >&2
+  echo "     cache-explore --compiler /path/to/llvm/bin myfile.c" >&2
+  echo "" >&2
+  return 1
+}
 
 main_usage() {
   echo "Cache Explorer - Visualize CPU cache behavior"
@@ -41,6 +230,7 @@ main_usage() {
   echo "  report            Generate HTML report from analysis"
   echo "  cc/c++            Compiler wrapper for build system integration"
   echo "  build-pass        Build the LLVM pass locally for your clang version"
+  echo "  cache             Manage cached passes (list, clear, size)"
   echo ""
   echo "Examples:"
   echo "  cache-explore matrix.c --config educational"
@@ -89,6 +279,10 @@ case "$1" in
   build-pass)
     shift
     exec "$SCRIPT_DIR/cache-explore-build-pass" "$@"
+    ;;
+  cache)
+    shift
+    exec "$SCRIPT_DIR/cache-explore-cache" "$@"
     ;;
   --help|-h)
     main_usage
@@ -186,11 +380,12 @@ if [[ ! -f "$INPUT_FILE" ]]; then
   exit 1
 fi
 
-# Check dependencies
-if [[ ! -f "$PASS" ]]; then
-  echo "Error: LLVM pass not built. Run: ./scripts/build.sh"
+# Check dependencies - resolve pass (supports local build, cached, or download)
+if ! resolve_pass; then
   exit 1
 fi
+PASS="$RESOLVED_PASS"
+export CACHE_EXPLORER_PASS="$PASS"
 
 if [[ ! -f "$RUNTIME" ]]; then
   echo "Error: Runtime not built. Run: ./scripts/build.sh"

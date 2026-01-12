@@ -1,0 +1,117 @@
+#!/bin/bash
+# Manage the Cache Explorer pass cache
+# Usage: cache-explore cache <command>
+
+set -e
+
+CACHE_DIR="${CACHE_EXPLORER_CACHE_DIR:-$HOME/.cache/cache-explorer/passes}"
+
+usage() {
+    echo "Usage: cache-explore cache <command>"
+    echo ""
+    echo "Manage cached LLVM passes."
+    echo ""
+    echo "Commands:"
+    echo "  list      List cached passes"
+    echo "  clear     Remove all cached passes"
+    echo "  path      Print cache directory path"
+    echo "  size      Show cache size"
+    echo ""
+    echo "Environment:"
+    echo "  CACHE_EXPLORER_CACHE_DIR  Override cache location"
+    echo "                            (default: ~/.cache/cache-explorer/passes)"
+}
+
+cmd_list() {
+    if [[ -d "$CACHE_DIR" ]]; then
+        local found=0
+        # Find all .so files recursively
+        while IFS= read -r -d '' file; do
+            if [[ $found -eq 0 ]]; then
+                echo "Cached passes in $CACHE_DIR:"
+                echo ""
+                found=1
+            fi
+            local size
+            size=$(ls -lh "$file" | awk '{print $5}')
+            local name
+            name=$(basename "$file")
+            local subdir
+            subdir=$(dirname "$file" | sed "s|$CACHE_DIR/||")
+            if [[ "$subdir" == "$CACHE_DIR" ]]; then
+                subdir=""
+            else
+                subdir="$subdir/"
+            fi
+            printf "  %s%-40s %s\n" "$subdir" "$name" "$size"
+        done < <(find "$CACHE_DIR" -name "*.so" -print0 2>/dev/null)
+
+        if [[ $found -eq 0 ]]; then
+            echo "No cached passes found."
+            echo "Cache directory: $CACHE_DIR"
+        fi
+    else
+        echo "No cached passes found."
+        echo "Cache directory: $CACHE_DIR (does not exist)"
+    fi
+}
+
+cmd_clear() {
+    if [[ -d "$CACHE_DIR" ]]; then
+        local count
+        count=$(find "$CACHE_DIR" -name "*.so" 2>/dev/null | wc -l | tr -d ' ')
+        if [[ "$count" -gt 0 ]]; then
+            rm -rf "$CACHE_DIR"
+            echo "Cleared $count cached pass(es)."
+        else
+            echo "Cache already empty."
+        fi
+    else
+        echo "Cache already empty."
+    fi
+}
+
+cmd_path() {
+    echo "$CACHE_DIR"
+}
+
+cmd_size() {
+    if [[ -d "$CACHE_DIR" ]]; then
+        local size
+        size=$(du -sh "$CACHE_DIR" 2>/dev/null | cut -f1)
+        local count
+        count=$(find "$CACHE_DIR" -name "*.so" 2>/dev/null | wc -l | tr -d ' ')
+        echo "Cache size: $size ($count pass(es))"
+        echo "Location: $CACHE_DIR"
+    else
+        echo "Cache size: 0B (0 passes)"
+        echo "Location: $CACHE_DIR (does not exist)"
+    fi
+}
+
+# Main
+case "${1:-}" in
+    list)
+        cmd_list
+        ;;
+    clear)
+        cmd_clear
+        ;;
+    path)
+        cmd_path
+        ;;
+    size)
+        cmd_size
+        ;;
+    --help|-h)
+        usage
+        ;;
+    *)
+        if [[ -n "${1:-}" ]]; then
+            echo "Unknown command: $1" >&2
+            echo "" >&2
+        fi
+        usage
+        exit 1
+        ;;
+esac
