@@ -1,21 +1,6 @@
 import type { ReactNode } from 'react'
-
-interface CacheStats {
-  hits: number
-  misses: number
-  hitRate: number
-  writebacks?: number
-}
-
-interface TLBStats {
-  hits: number
-  misses: number
-  hitRate: number
-}
-
-function formatPercent(rate: number): string {
-  return (rate * 100).toFixed(1) + '%'
-}
+import type { CacheStats, TLBStats } from '../types'
+import { formatPercent } from '../utils/formatting'
 
 interface CacheLevelDetailProps {
   name: string
@@ -23,6 +8,9 @@ interface CacheLevelDetailProps {
 }
 
 export function LevelDetail({ name, stats }: CacheLevelDetailProps): ReactNode {
+  const has3C = stats.compulsory !== undefined || stats.capacity !== undefined || stats.conflict !== undefined
+  const total3C = (stats.compulsory || 0) + (stats.capacity || 0) + (stats.conflict || 0)
+
   return (
     <div className="level-detail">
       <div className="level-header">{name}</div>
@@ -40,6 +28,60 @@ export function LevelDetail({ name, stats }: CacheLevelDetailProps): ReactNode {
           {formatPercent(stats.hitRate)}
         </span>
       </div>
+      {has3C && total3C > 0 && (
+        <div className="level-3c">
+          <div className="level-3c-header">Miss Breakdown</div>
+          <div className="level-3c-bar">
+            {stats.compulsory! > 0 && (
+              <div
+                className="level-3c-segment compulsory"
+                style={{ width: `${(stats.compulsory! / total3C) * 100}%` }}
+                title={`Cold: ${stats.compulsory!.toLocaleString()} (${((stats.compulsory! / total3C) * 100).toFixed(1)}%)`}
+              />
+            )}
+            {stats.capacity! > 0 && (
+              <div
+                className="level-3c-segment capacity"
+                style={{ width: `${(stats.capacity! / total3C) * 100}%` }}
+                title={`Capacity: ${stats.capacity!.toLocaleString()} (${((stats.capacity! / total3C) * 100).toFixed(1)}%)`}
+              />
+            )}
+            {stats.conflict! > 0 && (
+              <div
+                className="level-3c-segment conflict"
+                style={{ width: `${(stats.conflict! / total3C) * 100}%` }}
+                title={`Conflict: ${stats.conflict!.toLocaleString()} (${((stats.conflict! / total3C) * 100).toFixed(1)}%)`}
+              />
+            )}
+          </div>
+          <div className="level-3c-details">
+            {stats.compulsory! > 0 && (
+              <div className="level-3c-item">
+                <span className="dot compulsory" />
+                <span className="label">Cold</span>
+                <span className="value">{stats.compulsory!.toLocaleString()}</span>
+                <span className="percent">{((stats.compulsory! / total3C) * 100).toFixed(1)}%</span>
+              </div>
+            )}
+            {stats.capacity! > 0 && (
+              <div className="level-3c-item">
+                <span className="dot capacity" />
+                <span className="label">Capacity</span>
+                <span className="value">{stats.capacity!.toLocaleString()}</span>
+                <span className="percent">{((stats.capacity! / total3C) * 100).toFixed(1)}%</span>
+              </div>
+            )}
+            {stats.conflict! > 0 && (
+              <div className="level-3c-item">
+                <span className="dot conflict" />
+                <span className="label">Conflict</span>
+                <span className="value">{stats.conflict!.toLocaleString()}</span>
+                <span className="percent">{((stats.conflict! / total3C) * 100).toFixed(1)}%</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

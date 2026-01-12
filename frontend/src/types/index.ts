@@ -1,20 +1,19 @@
-// All type interfaces extracted from App.tsx
+// Cache Explorer Type Definitions
+// Single source of truth for all TypeScript interfaces
 
-export interface Compiler {
-  id: string
-  name: string
-  version: string
-  major: number
-  path: string
-  source: string
-  default?: boolean
-}
+// =============================================================================
+// CACHE STATISTICS
+// =============================================================================
 
 export interface CacheStats {
   hits: number
   misses: number
   hitRate: number
   writebacks: number
+  // 3C miss classification (only available when fast mode is disabled)
+  compulsory?: number  // Cold misses - first access ever
+  capacity?: number    // Working set exceeds cache size
+  conflict?: number    // Limited associativity caused eviction
 }
 
 export interface TLBStats {
@@ -27,6 +26,91 @@ export interface TLBHierarchyStats {
   dtlb: TLBStats
   itlb: TLBStats
 }
+
+export interface CoherenceStats {
+  invalidations: number
+  falseSharingEvents: number
+}
+
+export interface PrefetchStats {
+  policy: string
+  degree: number
+  issued: number
+  useful: number
+  accuracy: number
+}
+
+// =============================================================================
+// ADVANCED INSTRUMENTATION STATS
+// =============================================================================
+
+export interface SoftwarePrefetchStats {
+  issued: number
+  useful: number
+  accuracy: number
+}
+
+export interface VectorStats {
+  loads: number
+  stores: number
+  bytesLoaded: number
+  bytesStored: number
+  crossLineAccesses: number
+}
+
+export interface AtomicStats {
+  loads: number
+  stores: number
+  rmw: number
+  cmpxchg: number
+}
+
+export interface MemoryIntrinsicStats {
+  memcpyCount: number
+  memcpyBytes: number
+  memsetCount: number
+  memsetBytes: number
+  memmoveCount: number
+  memmoveBytes: number
+}
+
+export interface AdvancedStats {
+  softwarePrefetch?: SoftwarePrefetchStats
+  vector?: VectorStats
+  atomic?: AtomicStats
+  memoryIntrinsics?: MemoryIntrinsicStats
+}
+
+// =============================================================================
+// TIMING STATS
+// =============================================================================
+
+export interface TimingBreakdown {
+  l1HitCycles: number
+  l2HitCycles: number
+  l3HitCycles: number
+  memoryCycles: number
+  tlbMissCycles: number
+}
+
+export interface LatencyConfig {
+  l1Hit: number
+  l2Hit: number
+  l3Hit: number
+  memory: number
+  tlbMissPenalty: number
+}
+
+export interface TimingStats {
+  totalCycles: number
+  avgLatency: number
+  breakdown: TimingBreakdown
+  latencyConfig: LatencyConfig
+}
+
+// =============================================================================
+// HOT LINES & FALSE SHARING
+// =============================================================================
 
 export interface HotLine {
   file: string
@@ -52,39 +136,9 @@ export interface FalseSharingEvent {
   accesses: FalseSharingAccess[]
 }
 
-export interface CoherenceStats {
-  invalidations: number
-  falseSharingEvents: number
-}
-
-export interface CompileError {
-  line: number
-  column: number
-  severity: 'error' | 'warning'
-  message: string
-  suggestion?: string
-  notes?: string[]
-  sourceLine?: string
-  caret?: string
-}
-
-export interface ErrorResult {
-  type: 'compile_error' | 'linker_error' | 'runtime_error' | 'timeout' | 'unknown_error' | 'validation_error' | 'server_error'
-  errors?: CompileError[]
-  summary?: string
-  message?: string
-  suggestion?: string
-  raw?: string
-  error?: string
-}
-
-export interface OptimizationSuggestion {
-  type: string
-  severity: 'high' | 'medium' | 'low'
-  location: string
-  message: string
-  fix: string
-}
+// =============================================================================
+// CACHE CONFIGURATION
+// =============================================================================
 
 export interface CacheLevelConfig {
   sizeKB: number
@@ -100,13 +154,19 @@ export interface CacheConfig {
   l3: CacheLevelConfig
 }
 
-export interface PrefetchStats {
-  policy: string
-  degree: number
-  issued: number
-  useful: number
-  accuracy: number
+export interface CustomCacheConfig {
+  l1Size: number
+  l1Assoc: number
+  lineSize: number
+  l2Size: number
+  l2Assoc: number
+  l3Size: number
+  l3Assoc: number
 }
+
+// =============================================================================
+// CACHE STATE (FOR VISUALIZATION)
+// =============================================================================
 
 export interface CacheLineState {
   s: number      // set
@@ -126,6 +186,10 @@ export interface CoreCacheState {
 export interface CacheState {
   l1d: CoreCacheState[]
 }
+
+// =============================================================================
+// ANALYSIS RESULTS
+// =============================================================================
 
 export interface CacheResult {
   config: string
@@ -148,7 +212,46 @@ export interface CacheResult {
   prefetch?: PrefetchStats
   cacheState?: CacheState
   tlb?: TLBHierarchyStats
+  timing?: TimingStats
+  advancedStats?: AdvancedStats
 }
+
+export interface OptimizationSuggestion {
+  type: string
+  severity: 'high' | 'medium' | 'low'
+  location: string
+  message: string
+  fix: string
+}
+
+// =============================================================================
+// ERROR HANDLING
+// =============================================================================
+
+export interface CompileError {
+  line: number
+  column: number
+  severity: 'error' | 'warning'
+  message: string
+  suggestion?: string
+  notes?: string[]
+  sourceLine?: string
+  caret?: string
+}
+
+export interface ErrorResult {
+  type: 'compile_error' | 'linker_error' | 'runtime_error' | 'timeout' | 'unknown_error' | 'validation_error' | 'server_error'
+  errors?: CompileError[]
+  summary?: string
+  message?: string
+  suggestion?: string
+  raw?: string
+  error?: string
+}
+
+// =============================================================================
+// FILES & EDITOR
+// =============================================================================
 
 export type Language = 'c' | 'cpp' | 'rust'
 
@@ -157,6 +260,14 @@ export interface FileTab {
   name: string
   code: string
   language: Language
+  isMain?: boolean
+}
+
+export interface ExampleFile {
+  name: string
+  code: string
+  language: Language
+  isMain?: boolean
 }
 
 export interface Example {
@@ -164,23 +275,22 @@ export interface Example {
   code: string
   description: string
   language: Language
+  files?: ExampleFile[]  // Optional multi-file support
 }
 
+// =============================================================================
+// UI STATE
+// =============================================================================
+
 export type Stage = 'idle' | 'connecting' | 'preparing' | 'compiling' | 'running' | 'processing' | 'done'
+
+export type Theme = 'dark' | 'light'
+
+export type PrefetchPolicy = 'none' | 'next' | 'stream' | 'stride' | 'adaptive'
 
 export interface DefineEntry {
   name: string
   value: string
-}
-
-export interface CustomCacheConfig {
-  l1Size: number
-  l1Assoc: number
-  lineSize: number
-  l2Size: number
-  l2Assoc: number
-  l3Size: number
-  l3Assoc: number
 }
 
 export interface ShareableState {
@@ -191,6 +301,23 @@ export interface ShareableState {
   defines?: DefineEntry[]
 }
 
-export type PrefetchPolicy = 'none' | 'next' | 'stream' | 'stride' | 'adaptive'
+// =============================================================================
+// UI COMPONENTS
+// =============================================================================
 
-export type Theme = 'dark' | 'light'
+export interface SelectOption {
+  value: string
+  label: string
+  group?: string
+  desc?: string
+}
+
+export interface Compiler {
+  id: string
+  name: string
+  version: string
+  major: number
+  path: string
+  source: string
+  default?: boolean
+}
