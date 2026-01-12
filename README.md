@@ -2,9 +2,6 @@
 
 An interactive CPU cache simulator that shows you exactly which lines of your code cause cache misses.
 
-<!-- TODO: Add screenshot/gif here -->
-<!-- ![Cache Explorer Demo](docs/demo.gif) -->
-
 ## What It Does
 
 Write C, C++, or Rust code and instantly see:
@@ -32,7 +29,32 @@ docker run -p 3001:3001 cache-explorer
 # Open http://localhost:3001
 ```
 
-### Local Development
+### CLI Tool
+
+The `cache-explore` command works with LLVM 17-21 and auto-detects your version:
+
+```bash
+# Add to PATH
+export PATH="$PATH:/path/to/cache-explorer/backend/scripts"
+
+# Analyze a C file
+cache-explore mycode.c --config intel --json
+
+# With prefetching simulation
+cache-explore mycode.c --config amd --prefetch stream
+
+# Fast mode (~3x speedup, skips 3C classification)
+cache-explore mycode.c --fast
+
+# Manage pass cache
+cache-explore cache list    # Show cached passes
+cache-explore cache clear   # Remove all cached passes
+cache-explore cache size    # Show cache size
+```
+
+**First-run:** The CLI automatically downloads a pre-built LLVM pass for your version, or builds one locally if not available.
+
+### Local Development (Web UI)
 
 **Prerequisites:** LLVM 18, Node.js 18+, CMake, Ninja
 
@@ -63,22 +85,25 @@ cd ../../frontend && npm install && npm run dev
 | 5 Eviction Policies | LRU, Pseudo-LRU, Random, SRRIP, BRRIP |
 | 6 Prefetch Policies | None, Next-line, Stream, Stride, Adaptive, Intel |
 | TLB Simulation | DTLB/ITLB with configurable entries |
-| Hardware Presets | Intel 12th Gen, AMD Zen4, Apple M-series, Educational |
+| Hardware Presets | 12 presets: Intel, AMD, Apple, ARM, Educational |
 | 3C Classification | Compulsory, Capacity, Conflict miss breakdown |
 | Source Attribution | See exactly which line caused each miss |
 
 ## Hardware Presets
 
-- **Intel 12th Gen**: 48KB L1, 1.25MB L2, 30MB L3
-- **AMD Zen4**: 32KB L1, 512KB L2, 32MB L3
-- **Apple M-series**: 192KB L1, 12MB L2
-- **Educational**: 4KB L1, 32KB L2, 256KB L3 (small caches to see misses easily)
+| Preset | Config |
+|--------|--------|
+| **Intel** | 12th Gen (48KB/1.25MB/30MB), 14th Gen, Xeon |
+| **AMD** | Zen 3, Zen 4 (32KB/1MB/32MB), EPYC |
+| **Apple** | M1 (64KB/4MB/32MB SLC), M2, M3 |
+| **ARM** | AWS Graviton 3, Raspberry Pi 4 |
+| **Educational** | 4KB/32KB/256KB (small caches to see misses easily) |
 
 ## Supported Languages
 
-- **C** - Full support
-- **C++** - Full support
-- **Rust** - Via LLVM bitcode pipeline (pinned to Rust 1.80 for LLVM 18 compatibility)
+- **C** - Full support (LLVM 17-21)
+- **C++** - Full support (LLVM 17-21)
+- **Rust** - Via LLVM bitcode pipeline
 
 ## Architecture
 
@@ -111,7 +136,7 @@ Source Code
 - **Requires recompilation** - Can't trace arbitrary binaries (use Pin for that)
 - **No speculative execution** - All memory accesses are treated as committed
 - **Single socket** - No NUMA simulation
-- **Rust 1.80** - Newer Rust versions use LLVM 19+ which is incompatible
+- **Web UI Rust** - Docker uses Rust 1.80 (LLVM 18). CLI supports LLVM 17-21
 
 ## Running Tests
 

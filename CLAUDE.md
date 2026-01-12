@@ -89,6 +89,32 @@ Binary locations:
 
 The `cache-explore` script checks the project root build first, so always sync both.
 
+### Multi-LLVM Version Support
+
+The CLI automatically detects your LLVM version and downloads the matching pre-built pass:
+
+```bash
+# Auto-detection (recommended) - works with LLVM 17-21
+cache-explore matrix.c
+
+# Specify LLVM installation (if you have multiple versions)
+cache-explore matrix.c --compiler /opt/homebrew/opt/llvm@18/bin
+
+# Build pass locally (if no pre-built available for your LLVM version)
+cache-explore build-pass
+
+# Manage pass cache
+cache-explore cache list    # Show cached passes
+cache-explore cache clear   # Clear cache
+cache-explore cache path    # Show cache location
+cache-explore cache size    # Show cache size
+```
+
+**Supported LLVM Versions:** 17, 18, 19, 20, 21
+**Supported Platforms:** Linux x64, Linux ARM64, macOS ARM64
+
+Pre-built passes are downloaded from GitHub Releases on first run and cached in `~/.cache/cache-explorer/passes/`.
+
 ### Key Files
 
 **Cache Simulator:**
@@ -211,13 +237,22 @@ Core 1 │ L1D   L1I   │──▶│         │──▶│         │
 
 ## Hardware Presets
 
-```cpp
-// In CacheConfig.hpp
-make_intel_12th_gen_config()  // 48KB L1, 1.25MB L2, 30MB L3
-make_amd_zen4_config()        // 32KB L1, 512KB L2, 32MB L3
-make_apple_m_series_config()  // 192KB L1, 12MB L2, shared L3
-make_educational_config()     // 4KB L1, 32KB L2, 256KB L3
-```
+| Preset | L1D | L2 | L3/SLC | Notes |
+|--------|-----|-----|--------|-------|
+| `educational` | 4KB | 32KB | 256KB | Small caches to easily see misses |
+| `intel` | 48KB | 1.25MB | 30MB | Intel 12th Gen (Alder Lake) |
+| `intel14` | 48KB | 2MB | 36MB | Intel 14th Gen (Raptor Lake) |
+| `xeon` | 48KB | 2MB | 60MB | Intel Xeon Scalable |
+| `amd` | 32KB | 1MB | 32MB | AMD Zen 4 (Ryzen 7000) |
+| `zen3` | 32KB | 512KB | 32MB | AMD Zen 3 (Ryzen 5000) |
+| `epyc` | 32KB | 512KB | 256MB | AMD EPYC Server |
+| `apple` | 64KB | 4MB | 32MB SLC | Apple M1 |
+| `m2` | 128KB | 16MB | 24MB SLC | Apple M2 |
+| `m3` | 128KB | 32MB | 32MB SLC | Apple M3 |
+| `graviton` | 64KB | 1MB | 32MB | AWS Graviton 3 |
+| `rpi4` | 32KB | 1MB | — | Raspberry Pi 4 (no L3) |
+
+Apple Silicon uses SLC (System Level Cache) instead of traditional L3 - shared with GPU/NPU.
 
 ---
 
@@ -286,7 +321,7 @@ open http://localhost:3001
 
 The Docker container includes:
 - LLVM 18 (clang, opt, lld)
-- Rust stable toolchain
+- Rust 1.80 (pinned for LLVM 18 compatibility)
 - CacheProfiler.so LLVM pass
 - cache-sim binary
 - Runtime library
