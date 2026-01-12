@@ -22,11 +22,11 @@
   --border: #404040;
   --border-glow: #505050;
 
-  /* ─── Accent Blue (Muted) ─── */
-  --phosphor: #569cd6;
-  --phosphor-dim: #4a8bc2;
+  /* ─── Accent Teal (Logo L1) ─── */
+  --phosphor: #4ec9b0;
+  --phosphor-dim: #3ba992;
   --phosphor-glow: transparent;
-  --phosphor-subtle: rgba(86, 156, 214, 0.1);
+  --phosphor-subtle: rgba(78, 201, 176, 0.1);
 
   /* ─── Text Hierarchy ─── */
   --text-bright: #e8eaed;
@@ -34,12 +34,12 @@
   --text-secondary: #6b7280;
   --text-muted: #404550;
 
-  /* ─── Semantic Signals (Muted) ─── */
-  --signal-excellent: #4ec9b0;
-  --signal-good: #b5cea8;
-  --signal-warning: #dcdcaa;
+  /* ─── Semantic Signals (Logo Colors) ─── */
+  --signal-excellent: #4ec9b0;  /* L1 teal */
+  --signal-good: #b5cea8;       /* L2 green */
+  --signal-warning: #dcdcaa;    /* L3 yellow */
   --signal-critical: #f14c4c;
-  --signal-info: #569cd6;
+  --signal-info: #4ec9b0;       /* L1 teal */
 
   /* ─── Cache Heat Spectrum ─── */
   --heat-cold: #1a2a4a;
@@ -865,6 +865,12 @@ select:focus {
   background: rgba(99, 140, 255, 0.15);
   border-color: rgba(99, 140, 255, 0.5);
   color: #638cff;
+}
+
+.example-lang.rust {
+  background: rgba(222, 165, 132, 0.15);
+  border-color: rgba(222, 165, 132, 0.5);
+  color: #dea584;
 }
 
 .example-item.active .example-lang {
@@ -2326,14 +2332,16 @@ select:focus {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  overflow: visible;
+  position: relative;
+  z-index: 100;
 }
 
 .settings-toolbar-main {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-5);
+  padding: var(--space-2) var(--space-4);
 }
 
 .toolbar-group {
@@ -3192,21 +3200,23 @@ select:focus {
   --border: #d0d4db;
   --border-glow: #c0c4cb;
 
-  --phosphor: #00875a;
-  --phosphor-dim: #006644;
-  --phosphor-glow: rgba(0, 135, 90, 0.12);
-  --phosphor-subtle: rgba(0, 135, 90, 0.06);
+  /* Teal accent (logo L1 - darker for light bg) */
+  --phosphor: #2d9a7e;
+  --phosphor-dim: #1f7a62;
+  --phosphor-glow: rgba(45, 154, 126, 0.12);
+  --phosphor-subtle: rgba(45, 154, 126, 0.06);
 
   --text-bright: #1a1d21;
   --text-primary: #3d4450;
   --text-secondary: #6b7280;
   --text-muted: #9ca3af;
 
-  --signal-excellent: #00875a;
-  --signal-good: #4d8a00;
-  --signal-warning: #b36b00;
+  /* Logo colors adjusted for light mode */
+  --signal-excellent: #2d9a7e;  /* L1 teal */
+  --signal-good: #5a8f3e;       /* L2 green */
+  --signal-warning: #a68a00;    /* L3 yellow */
   --signal-critical: #c41e3a;
-  --signal-info: #0066cc;
+  --signal-info: #2d9a7e;       /* L1 teal */
 }
 
 [data-theme="light"] body::before {

@@ -16,16 +16,6 @@ const WS_URL = import.meta.env.PROD
   ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`
   : 'ws://localhost:3001/ws'
 
-interface Compiler {
-  id: string
-  name: string
-  version: string
-  major: number
-  path: string
-  source: string
-  default?: boolean
-}
-
 interface CacheStats {
   hits: number
   misses: number
@@ -2072,8 +2062,6 @@ function SettingsToolbar({
   config,
   optLevel,
   prefetchPolicy,
-  compilers,
-  selectedCompiler,
   defines,
   customConfig,
   eventLimit,
@@ -2082,7 +2070,6 @@ function SettingsToolbar({
   onConfigChange,
   onOptLevelChange,
   onPrefetchChange,
-  onCompilerChange,
   onDefinesChange,
   onCustomConfigChange,
   onEventLimitChange,
@@ -2092,8 +2079,6 @@ function SettingsToolbar({
   config: string
   optLevel: string
   prefetchPolicy: string
-  compilers: Compiler[]
-  selectedCompiler: string
   defines: DefineEntry[]
   customConfig: CustomCacheConfig
   eventLimit: number
@@ -2102,7 +2087,6 @@ function SettingsToolbar({
   onConfigChange: (c: string) => void
   onOptLevelChange: (o: string) => void
   onPrefetchChange: (p: string) => void
-  onCompilerChange: (c: string) => void
   onDefinesChange: (d: DefineEntry[]) => void
   onCustomConfigChange: (c: CustomCacheConfig) => void
   onEventLimitChange: (n: number) => void
@@ -2115,9 +2099,6 @@ function SettingsToolbar({
   useEffect(() => {
     if (config === 'custom') setShowMore(true)
   }, [config])
-
-  // Build compiler options dynamically
-  const compilerOptions: SelectOption[] = compilers.map(c => ({ value: c.id, label: c.name }))
 
   return (
     <div className="settings-toolbar">
@@ -2146,21 +2127,6 @@ function SettingsToolbar({
 
         <div className="toolbar-divider" />
 
-        {/* Compiler */}
-        {compilers.length > 0 && (
-          <>
-            <div className="toolbar-group">
-              <label>Compiler</label>
-              <StyledSelect
-                value={selectedCompiler}
-                options={compilerOptions}
-                onChange={onCompilerChange}
-              />
-            </div>
-            <div className="toolbar-divider" />
-          </>
-        )}
-
         {/* Prefetch Policy */}
         <div className="toolbar-group">
           <label>Prefetch</label>
@@ -2173,13 +2139,13 @@ function SettingsToolbar({
 
         <div className="toolbar-divider" />
 
-        {/* Event Limit */}
+        {/* Fast Mode Toggle */}
         <div className="toolbar-group">
-          <label>Limit</label>
+          <label title="Fast mode disables 3C miss classification for ~3x speedup">Mode</label>
           <StyledSelect
-            value={String(eventLimit)}
-            options={LIMIT_OPTIONS}
-            onChange={(v) => onEventLimitChange(parseInt(v))}
+            value={String(fastMode)}
+            options={FAST_MODE_OPTIONS}
+            onChange={(v) => onFastModeChange(v === 'true')}
           />
         </div>
 
@@ -2197,13 +2163,13 @@ function SettingsToolbar({
 
         <div className="toolbar-divider" />
 
-        {/* Fast Mode Toggle */}
+        {/* Event Limit */}
         <div className="toolbar-group">
-          <label title="Fast mode disables 3C miss classification for ~3x speedup">Mode</label>
+          <label>Limit</label>
           <StyledSelect
-            value={String(fastMode)}
-            options={FAST_MODE_OPTIONS}
-            onChange={(v) => onFastModeChange(v === 'true')}
+            value={String(eventLimit)}
+            options={LIMIT_OPTIONS}
+            onChange={(v) => onEventLimitChange(parseInt(v))}
           />
         </div>
 
@@ -2783,7 +2749,6 @@ function App() {
   const [config, setConfig] = useState('educational')
   const [optLevel, setOptLevel] = useState('-O0')
   const [prefetchPolicy, setPrefetchPolicy] = useState<PrefetchPolicy>('none')
-  const [compilers, setCompilers] = useState<Compiler[]>([])
   const [selectedCompiler, setSelectedCompiler] = useState<string>('')
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     if (typeof window !== 'undefined') {
@@ -2799,14 +2764,14 @@ function App() {
   const abortControllerRef = useRef<AbortController | null>(null)
   const [customConfig, setCustomConfig] = useState<CustomCacheConfig>(defaultCustomConfig)
   const [defines, setDefines] = useState<DefineEntry[]>([])
-  const [exampleLangFilter, setExampleLangFilter] = useState<'all' | 'c' | 'cpp'>('all')
+  const [exampleLangFilter, setExampleLangFilter] = useState<'all' | 'c' | 'cpp' | 'rust'>('all')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [copied, setCopied] = useState(false)
   const [showDetails, setShowDetails] = useState(false)
   const [diffMode, setDiffMode] = useState(false)
   const [sampleRate, setSampleRate] = useState(1)  // 1 = no sampling
   const [fastMode, setFastMode] = useState(false)  // false = full 3C tracking
-  const [eventLimit, setEventLimit] = useState(20000)  // Start with -O0 default (20K)
+  const [eventLimit, setEventLimit] = useState(100000)  // Default 100K events
   const [longRunning, setLongRunning] = useState(false)
   const [baselineCode, setBaselineCode] = useState<string | null>(null)
   const [baselineResult, setBaselineResult] = useState<CacheResult | null>(null)
@@ -2838,26 +2803,28 @@ function App() {
 
   // Adjust event limit based on optimization level
   // -O0 generates way more memory events (no register optimization)
+  // Auto-adjust limit based on optimization level for better UX
   useEffect(() => {
     const limits: Record<string, number> = {
-      '-O0': 20000,    // 20K - unoptimized code floods with events
-      '-O1': 50000,    // 50K - partial optimization
-      '-O2': 100000,   // 100K - good optimization
-      '-O3': 100000,   // 100K - aggressive optimization
-      '-Os': 100000,   // 100K - size optimization
-      '-Oz': 100000,   // 100K - aggressive size optimization
+      '-O0': 100000,   // 100K - unoptimized generates more events
+      '-O1': 200000,   // 200K - partial optimization
+      '-O2': 500000,   // 500K - good optimization
+      '-O3': 500000,   // 500K - aggressive optimization
+      '-Os': 500000,   // 500K - size optimization
+      '-Oz': 500000,   // 500K - aggressive size optimization
     }
     setEventLimit(limits[optLevel] || 100000)
   }, [optLevel])
 
-  // Fetch available compilers on mount
+  // Fetch default compiler on mount
   useEffect(() => {
     fetch(`${API_BASE}/api/compilers`)
       .then(res => res.json())
       .then(data => {
-        if (data.compilers && data.compilers.length > 0) {
-          setCompilers(data.compilers)
-          setSelectedCompiler(data.default || data.compilers[0].id)
+        if (data.default) {
+          setSelectedCompiler(data.default)
+        } else if (data.compilers && data.compilers.length > 0) {
+          setSelectedCompiler(data.compilers[0].id)
         }
       })
       .catch(err => {
@@ -3509,8 +3476,6 @@ function App() {
           config={config}
           optLevel={optLevel}
           prefetchPolicy={prefetchPolicy}
-          compilers={compilers}
-          selectedCompiler={selectedCompiler}
           defines={defines}
           customConfig={customConfig}
           eventLimit={eventLimit}
@@ -3522,7 +3487,6 @@ function App() {
           }}
           onOptLevelChange={setOptLevel}
           onPrefetchChange={(p) => setPrefetchPolicy(p as PrefetchPolicy)}
-          onCompilerChange={setSelectedCompiler}
           onDefinesChange={setDefines}
           onCustomConfigChange={setCustomConfig}
           onEventLimitChange={setEventLimit}
@@ -3577,6 +3541,10 @@ function App() {
                     className={`language-filter-btn${exampleLangFilter === 'cpp' ? ' active' : ''}`}
                     onClick={() => setExampleLangFilter('cpp')}
                   >C++</button>
+                  <button
+                    className={`language-filter-btn${exampleLangFilter === 'rust' ? ' active' : ''}`}
+                    onClick={() => setExampleLangFilter('rust')}
+                  >Rust</button>
                 </div>
                 <div className="example-list" style={{ flex: 1, overflowY: 'auto' }}>
                   {Object.entries(EXAMPLES)
@@ -3605,7 +3573,7 @@ function App() {
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span className="example-name">{ex.name}</span>
-                        <span className={`example-lang${ex.language === 'cpp' ? ' cpp' : ''}`}>{ex.language === 'cpp' ? 'C++' : 'C'}</span>
+                        <span className={`example-lang ${ex.language}`}>{ex.language === 'cpp' ? 'C++' : ex.language === 'rust' ? 'Rust' : 'C'}</span>
                       </div>
                       <span className="example-desc">{ex.description}</span>
                     </button>

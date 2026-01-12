@@ -1,5 +1,6 @@
 # Build artifacts
 build/
+passes/
 *.o
 *.a
 *.so
@@ -70,3 +71,5 @@ Thumbs.db
 
 # Third-party
 third_party/
+
+docs/plans
