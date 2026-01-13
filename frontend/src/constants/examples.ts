@@ -1,4 +1,19 @@
-import type { Example } from '../types'
+import type { Language } from '../types'
+
+export interface ExampleFile {
+  name: string
+  code: string
+  language: Language
+  isMain?: boolean
+}
+
+export interface Example {
+  name: string
+  code: string
+  description: string
+  language: Language
+  files?: ExampleFile[]
+}
 
 export const EXAMPLES: Record<string, Example> = {
   // === Access Patterns ===
@@ -826,6 +841,313 @@ int main() {
 }
 `
   },
+
+  // === Multi-File Examples ===
+  multifile_matrix_c: {
+    name: 'Multi-File Matrix (C)',
+    description: 'Matrix operations split across files',
+    language: 'c',
+    code: `// Multi-file matrix example - see other tabs
+#include "matrix.h"
+#include <stdio.h>
+
+int main() {
+    Matrix* a = matrix_create(64, 64);
+    Matrix* b = matrix_create(64, 64);
+
+    for (int i = 0; i < 64; i++) {
+        for (int j = 0; j < 64; j++) {
+            matrix_set(a, i, j, i + j);
+            matrix_set(b, i, j, i * j);
+        }
+    }
+
+    Matrix* c = matrix_multiply(a, b);
+
+    printf("Result[0][0] = %d\\n", matrix_get(c, 0, 0));
+    printf("Result[63][63] = %d\\n", matrix_get(c, 63, 63));
+
+    matrix_free(a);
+    matrix_free(b);
+    matrix_free(c);
+    return 0;
+}
+`,
+    files: [
+      {
+        name: 'main.c',
+        language: 'c',
+        isMain: true,
+        code: `// Main program - entry point
+#include "matrix.h"
+#include <stdio.h>
+
+int main() {
+    Matrix* a = matrix_create(64, 64);
+    Matrix* b = matrix_create(64, 64);
+
+    for (int i = 0; i < 64; i++) {
+        for (int j = 0; j < 64; j++) {
+            matrix_set(a, i, j, i + j);
+            matrix_set(b, i, j, i * j);
+        }
+    }
+
+    Matrix* c = matrix_multiply(a, b);
+
+    printf("Result[0][0] = %d\\n", matrix_get(c, 0, 0));
+    printf("Result[63][63] = %d\\n", matrix_get(c, 63, 63));
+
+    matrix_free(a);
+    matrix_free(b);
+    matrix_free(c);
+    return 0;
+}
+`
+      },
+      {
+        name: 'matrix.h',
+        language: 'c',
+        code: `#ifndef MATRIX_H
+#define MATRIX_H
+
+typedef struct {
+    int* data;
+    int rows;
+    int cols;
+} Matrix;
+
+Matrix* matrix_create(int rows, int cols);
+void matrix_free(Matrix* m);
+int matrix_get(Matrix* m, int row, int col);
+void matrix_set(Matrix* m, int row, int col, int val);
+Matrix* matrix_multiply(Matrix* a, Matrix* b);
+
+#endif
+`
+      },
+      {
+        name: 'matrix.c',
+        language: 'c',
+        code: `#include "matrix.h"
+#include <stdlib.h>
+
+Matrix* matrix_create(int rows, int cols) {
+    Matrix* m = malloc(sizeof(Matrix));
+    m->data = malloc(rows * cols * sizeof(int));
+    m->rows = rows;
+    m->cols = cols;
+    for (int i = 0; i < rows * cols; i++)
+        m->data[i] = 0;
+    return m;
 }
 
-export const EXAMPLE_CODE = EXAMPLES.matrix_row.code
+void matrix_free(Matrix* m) {
+    free(m->data);
+    free(m);
+}
+
+int matrix_get(Matrix* m, int row, int col) {
+    return m->data[row * m->cols + col];
+}
+
+void matrix_set(Matrix* m, int row, int col, int val) {
+    m->data[row * m->cols + col] = val;
+}
+
+Matrix* matrix_multiply(Matrix* a, Matrix* b) {
+    Matrix* c = matrix_create(a->rows, b->cols);
+    for (int i = 0; i < a->rows; i++) {
+        for (int j = 0; j < b->cols; j++) {
+            int sum = 0;
+            for (int k = 0; k < a->cols; k++) {
+                sum += matrix_get(a, i, k) * matrix_get(b, k, j);
+            }
+            matrix_set(c, i, j, sum);
+        }
+    }
+    return c;
+}
+`
+      }
+    ]
+  },
+
+  multifile_vector_cpp: {
+    name: 'Multi-File Vector (C++)',
+    description: 'Template container with cache-aware operations',
+    language: 'cpp',
+    code: `#include "vector.hpp"
+#include <cstdio>
+
+int main() {
+    Vector<int> v;
+
+    for (int i = 0; i < 1000; i++)
+        v.push_back(i);
+
+    long sum = 0;
+    for (size_t i = 0; i < v.size(); i++)
+        sum += v[i];
+
+    printf("Sum: %ld, Size: %zu\\n", sum, v.size());
+    return 0;
+}
+`,
+    files: [
+      {
+        name: 'main.cpp',
+        language: 'cpp',
+        isMain: true,
+        code: `#include "vector.hpp"
+#include <cstdio>
+
+int main() {
+    Vector<int> v;
+
+    for (int i = 0; i < 1000; i++)
+        v.push_back(i);
+
+    long sum = 0;
+    for (size_t i = 0; i < v.size(); i++)
+        sum += v[i];
+
+    int random_sum = 0;
+    for (int i = 0; i < 100; i++) {
+        int idx = (i * 17) % v.size();
+        random_sum += v[idx];
+    }
+
+    printf("Sum: %ld\\n", sum);
+    printf("Random sum: %d\\n", random_sum);
+    printf("Size: %zu, Capacity: %zu\\n", v.size(), v.capacity());
+    return 0;
+}
+`
+      },
+      {
+        name: 'vector.hpp',
+        language: 'cpp',
+        code: `#ifndef VECTOR_HPP
+#define VECTOR_HPP
+
+#include <cstdlib>
+#include <cstring>
+
+template<typename T>
+class Vector {
+private:
+    T* data_;
+    size_t size_;
+    size_t capacity_;
+
+    void grow() {
+        size_t new_cap = capacity_ == 0 ? 8 : capacity_ * 2;
+        T* new_data = static_cast<T*>(malloc(new_cap * sizeof(T)));
+        if (data_) {
+            memcpy(new_data, data_, size_ * sizeof(T));
+            free(data_);
+        }
+        data_ = new_data;
+        capacity_ = new_cap;
+    }
+
+public:
+    Vector() : data_(nullptr), size_(0), capacity_(0) {}
+    ~Vector() { if (data_) free(data_); }
+
+    void push_back(const T& val) {
+        if (size_ >= capacity_) grow();
+        data_[size_++] = val;
+    }
+
+    T& operator[](size_t idx) { return data_[idx]; }
+    const T& operator[](size_t idx) const { return data_[idx]; }
+
+    size_t size() const { return size_; }
+    size_t capacity() const { return capacity_; }
+    T* begin() { return data_; }
+    T* end() { return data_ + size_; }
+};
+
+#endif
+`
+      }
+    ]
+  },
+
+  // === Rust Examples ===
+  rust_sequential: {
+    name: 'Rust Sequential',
+    description: 'Sequential array access in Rust',
+    language: 'rust',
+    code: `fn main() {
+    const N: usize = 1000;
+    let mut arr = [0i32; N];
+    let mut sum: i32 = 0;
+
+    for i in 0..N {
+        arr[i] = i as i32;
+    }
+
+    for i in 0..N {
+        sum += arr[i];
+    }
+
+    println!("Sum: {}", sum);
+}
+`
+  },
+  rust_matrix: {
+    name: 'Rust Matrix',
+    description: 'Row-major matrix traversal in Rust',
+    language: 'rust',
+    code: `fn main() {
+    const N: usize = 64;
+    let mut matrix = [[0i32; N]; N];
+    let mut sum: i32 = 0;
+
+    for i in 0..N {
+        for j in 0..N {
+            matrix[i][j] = (i + j) as i32;
+        }
+    }
+
+    for i in 0..N {
+        for j in 0..N {
+            sum += matrix[i][j];
+        }
+    }
+
+    println!("Sum: {}", sum);
+}
+`
+  },
+  rust_vec: {
+    name: 'Rust Vec Iteration',
+    description: 'Iterator vs index access comparison',
+    language: 'rust',
+    code: `fn main() {
+    const N: usize = 1000;
+    let data: Vec<i32> = (0..N as i32).collect();
+
+    let sum1: i32 = data.iter().sum();
+
+    let mut sum2: i32 = 0;
+    for i in 0..data.len() {
+        sum2 += data[i];
+    }
+
+    let mut sum3: i32 = 0;
+    for &val in &data {
+        sum3 += val;
+    }
+
+    println!("Sums: {} {} {}", sum1, sum2, sum3);
+}
+`
+  },
+}
+
+/** Default example code shown on first load */
+export const DEFAULT_EXAMPLE = EXAMPLES.matrix_row.code

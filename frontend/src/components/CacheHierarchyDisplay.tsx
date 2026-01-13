@@ -1,6 +1,27 @@
 import { formatPercent } from '../utils/formatting'
 import type { CacheResult } from '../types/cache'
 
+interface CacheHierarchyLevelProps {
+  name: string
+  hitRate: number
+}
+
+/** Single cache level bar visualization */
+export function CacheHierarchyLevel({ name, hitRate }: CacheHierarchyLevelProps) {
+  const getClass = (rate: number) => rate >= 0.95 ? 'excellent' : rate >= 0.8 ? 'good' : rate >= 0.5 ? 'warning' : 'poor'
+  const levelClass = getClass(hitRate)
+
+  return (
+    <div className={`cache-level ${levelClass}`}>
+      <span className="cache-level-name">{name}</span>
+      <div className="cache-level-bar">
+        <div className="cache-level-fill" style={{ width: `${hitRate * 100}%` }} />
+      </div>
+      <span className="cache-level-value">{formatPercent(hitRate)}</span>
+    </div>
+  )
+}
+
 interface CacheHierarchyDisplayProps {
   result: CacheResult
 }
