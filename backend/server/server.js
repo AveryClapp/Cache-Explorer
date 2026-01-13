@@ -873,6 +873,20 @@ wss.on('connection', (ws) => {
                 // Store final result
                 console.log(`[WebSocket] got complete event`);
                 finalResult = event;
+              } else if (event.error) {
+                // Handle error response from cache-explore script
+                console.log(`[WebSocket] got error event: ${event.error}`);
+                if (ws.readyState === ws.OPEN) {
+                  // Strip temp directory paths from error output for cleaner display
+                  let rawError = event.details || event.error;
+                  rawError = rawError.replace(/\/tmp\/cache-explorer-[a-f0-9-]+\//g, '');
+                  ws.send(JSON.stringify({
+                    type: 'compile_error',
+                    raw: rawError
+                  }));
+                }
+                // Mark as handled error so we don't send generic error later
+                finalResult = { error: event.error, details: event.details };
               }
             } catch (e) {
               // Non-JSON output, log it for debugging
@@ -917,6 +931,18 @@ wss.on('connection', (ws) => {
               const event = JSON.parse(lineBuffer);
               if (event.type === 'complete') {
                 finalResult = event;
+              } else if (event.error && !finalResult) {
+                // Handle error from buffered output if not already processed
+                console.log(`[WebSocket] got error in close handler: ${event.error}`);
+                if (ws.readyState === ws.OPEN) {
+                  let rawError = event.details || event.error;
+                  rawError = rawError.replace(/\/tmp\/cache-explorer-[a-f0-9-]+\//g, '');
+                  ws.send(JSON.stringify({
+                    type: 'compile_error',
+                    raw: rawError
+                  }));
+                }
+                finalResult = { error: event.error, details: event.details };
               }
             } catch {}
           }
@@ -931,6 +957,9 @@ wss.on('connection', (ws) => {
               timeoutMs: timeout,
               partialProgress
             });
+          } else if (exitCode !== 0 && finalResult && finalResult.error) {
+            // Error already sent to client via WebSocket, resolve to avoid duplicate
+            resolve({ data: finalResult, stderr });
           } else if (exitCode !== 0) {
             reject({ stdout: lineBuffer, stderr, exitCode, mainFile, partialProgress });
           } else {

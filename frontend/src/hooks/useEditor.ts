@@ -12,7 +12,6 @@ function generateFileId(): string {
 export function getFileExtension(lang: Language): string {
   switch (lang) {
     case 'cpp': return '.cpp'
-    case 'rust': return '.rs'
     default: return '.c'
   }
 }

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import type { Monaco } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import { initVimMode } from 'monaco-vim'
-import './App.css'
+import './styles/index.css'
 
 // Components
 import {
@@ -94,7 +94,7 @@ function App() {
   }, [])
 
   // FileManager-compatible createFile callback
-  const createFile = useCallback((name: string, language: 'c' | 'cpp' | 'rust') => {
+  const createFile = useCallback((name: string, language: 'c' | 'cpp') => {
     const newFile = createFileTab(name, '', language)
     setFiles(prev => [...prev, newFile])
     setActiveFileId(newFile.id)
@@ -163,20 +163,6 @@ function App() {
     localStorage.setItem('cache-explorer-theme', theme)
   }, [theme])
 
-  // Adjust event limit based on optimization level
-  // -O0 generates way more memory events (no register optimization)
-  // Auto-adjust limit based on optimization level for better UX
-  useEffect(() => {
-    const limits: Record<string, number> = {
-      '-O0': 100000,   // 100K - unoptimized generates more events
-      '-O1': 200000,   // 200K - partial optimization
-      '-O2': 500000,   // 500K - good optimization
-      '-O3': 500000,   // 500K - aggressive optimization
-      '-Os': 500000,   // 500K - size optimization
-      '-Oz': 500000,   // 500K - aggressive size optimization
-    }
-    setEventLimit(limits[optLevel] || 100000)
-  }, [optLevel])
 
   // Fetch default compiler on mount
   useEffect(() => {
@@ -599,7 +585,6 @@ function App() {
     { id: 'vim', icon: ':', label: vimMode ? 'Disable Vim mode' : 'Enable Vim mode', action: () => setVimMode(!vimMode), category: 'settings' },
     { id: 'lang-c', icon: ':', label: 'Language: C', action: () => updateActiveLanguage('c'), category: 'settings' },
     { id: 'lang-cpp', icon: ':', label: 'Language: C++', action: () => updateActiveLanguage('cpp'), category: 'settings' },
-    { id: 'lang-rust', icon: ':', label: 'Language: Rust', action: () => updateActiveLanguage('rust'), category: 'settings' },
     // Config (*)
     { id: 'sampling-none', icon: '*', label: 'Sampling: All events', action: () => setSampleRate(1), category: 'config' },
     { id: 'sampling-10', icon: '*', label: 'Sampling: 1:10', action: () => setSampleRate(10), category: 'config' },

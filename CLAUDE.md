@@ -2,7 +2,7 @@
 
 ## Current Status (January 2026)
 
-**Overall Completion: 100%**
+**Overall Completion: ~98%**
 
 | Component | Status | Notes |
 |-----------|--------|-------|
@@ -19,7 +19,7 @@
 | CLI Tool | ✅ Complete | JSON/text output, hardware presets |
 | Web Frontend | ✅ Complete | Multi-file, dark/light modes, styled dropdowns, cancel button |
 | Web Backend | ✅ Complete | Docker sandbox, WebSocket streaming |
-| Rust Support | ✅ Complete | Via LLVM bitcode pipeline (rustc → opt → clang) |
+| Rust Support | ❌ Not Available | Requires std library linking (backlog) |
 | Testing | ✅ 123 tests | CacheLevel(22) + CacheSystem(25) + MESI(19) + Prefetch(18) + TLB(8) + Advanced(31) |
 
 **What's Working:**
@@ -351,16 +351,20 @@ The Docker container includes:
 ## Future Work
 
 ### Potential Enhancements
+- **Rust Support** - Backend code exists but requires std library linking solution. Options:
+  - Build custom rustc with pass built-in
+  - Use cargo build scripts with LLVM pass (blocked by rustc not supporting `-load-pass-plugin`)
+  - Link Rust std library manually (complex, version-dependent)
 - **Intel Pin Integration** - Support tracing pre-compiled binaries without recompilation
 - **NUMA Simulation** - Multi-socket memory architecture
 - **Speculative Execution Modeling** - Branch prediction and speculative loads
 
 ## Known Limitations
 
+- **No Rust support** - Rust's std library linking is not compatible with the LLVM pass pipeline
 - **No speculative execution** - All accesses are committed
 - **Single-socket only** - No NUMA simulation
 - **Simplified timing** - Fixed latencies per level
-- **Rust 1.80 pinned** - Rust support requires LLVM 18 compatibility; newer Rust versions use incompatible LLVM
 
 ---
 

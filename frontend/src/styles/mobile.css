@@ -1,0 +1,40 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   CACHE STATE VISUALIZATION (Grid)
+   ══════════════════════════════════════════════════════════════════════════ */
+.cache-state-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8px, 1fr));
+  gap: 2px;
+  padding: var(--space-3);
+  background: var(--void);
+  border-radius: var(--radius-md);
+}
+
+.cache-line {
+  aspect-ratio: 1;
+  border-radius: 1px;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.cache-line.invalid {
+  background: var(--heat-cold);
+}
+
+.cache-line.shared {
+  background: var(--signal-info);
+}
+
+.cache-line.exclusive {
+  background: var(--signal-good);
+}
+
+.cache-line.modified {
+  background: var(--signal-critical);
+}
+
+.cache-line:hover {
+  transform: scale(1.5);
+  z-index: 1;
+  box-shadow: 0 0 8px currentColor;
+}
+

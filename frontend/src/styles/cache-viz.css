@@ -1,0 +1,159 @@
+/* ─── Cache Hierarchy Visualization ─── */
+.cache-hierarchy {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+  margin-bottom: var(--space-5);
+}
+
+.cache-hierarchy-title {
+  font-family: var(--font-display);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  color: var(--phosphor);
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  margin-bottom: var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.cache-levels {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.cache-level {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  position: relative;
+}
+
+.cache-level::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--border);
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+}
+
+.cache-level.excellent::before {
+  background: var(--signal-excellent);
+  box-shadow: 0 0 8px var(--phosphor-glow);
+}
+
+.cache-level.good::before {
+  background: var(--signal-good);
+}
+
+.cache-level.warning::before {
+  background: var(--signal-warning);
+}
+
+.cache-level.poor::before {
+  background: var(--signal-critical);
+}
+
+.cache-level-name {
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  width: 48px;
+  flex-shrink: 0;
+}
+
+.cache-level-bar {
+  flex: 1;
+  height: 8px;
+  background: var(--void);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.cache-level-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width var(--duration-normal) var(--ease-out);
+}
+
+.cache-level.excellent .cache-level-fill {
+  background: linear-gradient(90deg, var(--signal-excellent), #00cc6a);
+  box-shadow: 0 0 10px var(--phosphor-glow);
+}
+
+.cache-level.good .cache-level-fill {
+  background: linear-gradient(90deg, var(--signal-good), #66cc00);
+}
+
+.cache-level.warning .cache-level-fill {
+  background: linear-gradient(90deg, var(--signal-warning), #cc9900);
+}
+
+.cache-level.poor .cache-level-fill {
+  background: linear-gradient(90deg, var(--signal-critical), #aa2222);
+}
+
+.cache-level-value {
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--text-bright);
+  width: 56px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.cache-level.excellent .cache-level-value {
+  color: var(--signal-excellent);
+}
+
+.cache-connector {
+  width: 2px;
+  height: 12px;
+  background: var(--border);
+  margin: 0 auto;
+}
+
+.memory-stats {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  background: linear-gradient(135deg, rgba(255, 77, 77, 0.1), rgba(255, 120, 50, 0.08));
+  border: 1px solid rgba(255, 77, 77, 0.3);
+  border-radius: var(--radius-md);
+}
+
+.memory-stats-label {
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--signal-critical);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.memory-stats-value {
+  font-family: var(--font-code);
+  font-size: var(--text-sm);
+  color: var(--signal-critical);
+}
+

@@ -1,0 +1,201 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   MAIN WORKSPACE
+   ══════════════════════════════════════════════════════════════════════════ */
+.workspace {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SIDEBAR - Configuration Panel
+   ══════════════════════════════════════════════════════════════════════════ */
+.sidebar {
+  width: var(--sidebar-width);
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+  position: relative;
+  transition: width 0.2s ease;
+}
+
+.sidebar.collapsed {
+  width: 32px;
+}
+
+.sidebar-toggle {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-2);
+  width: 24px;
+  height: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-md);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  z-index: 10;
+}
+
+.sidebar-toggle:hover {
+  background: var(--elevated);
+  color: var(--phosphor);
+  border-color: var(--phosphor-dim);
+}
+
+.sidebar.collapsed .sidebar-toggle {
+  right: 4px;
+}
+
+.sidebar-section {
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar-section:last-child {
+  flex: 1;
+  border-bottom: none;
+}
+
+.sidebar-title {
+  font-family: var(--font-display);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  color: var(--phosphor);
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  margin-bottom: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.sidebar-title::before {
+  content: '▸';
+  font-size: 8px;
+}
+
+/* Example List */
+.example-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  overflow-y: auto;
+  flex: 1;
+}
+
+.example-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+  text-align: left;
+  width: 100%;
+}
+
+.example-item:hover {
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+.example-item.active {
+  background: var(--phosphor-subtle);
+  border-color: var(--phosphor-dim);
+}
+
+.example-item.active .example-name {
+  color: var(--phosphor);
+}
+
+.example-name {
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.example-desc {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.example-lang {
+  font-family: var(--font-code);
+  font-size: var(--text-2xs);
+  padding: 2px 6px;
+  background: var(--phosphor-subtle);
+  border: 1px solid var(--phosphor-dim);
+  border-radius: var(--radius-sm);
+  color: var(--phosphor);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+  font-weight: 600;
+}
+
+.example-lang.cpp {
+  background: rgba(99, 140, 255, 0.15);
+  border-color: rgba(99, 140, 255, 0.5);
+  color: #638cff;
+}
+
+.example-lang.rust {
+  background: rgba(222, 165, 132, 0.15);
+  border-color: rgba(222, 165, 132, 0.5);
+  color: #dea584;
+}
+
+.example-item.active .example-lang {
+  background: var(--phosphor-glow);
+  border-color: var(--phosphor);
+  color: var(--phosphor);
+}
+
+/* Language Filter */
+.language-filter {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.language-filter-btn {
+  flex: 1;
+  padding: var(--space-2);
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.language-filter-btn:hover {
+  background: var(--surface);
+  color: var(--text-primary);
+}
+
+.language-filter-btn.active {
+  background: var(--phosphor-subtle);
+  border-color: var(--phosphor-dim);
+  color: var(--phosphor);
+}
+

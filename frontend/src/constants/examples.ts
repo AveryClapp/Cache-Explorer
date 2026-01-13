@@ -468,6 +468,70 @@ int main() {
 `
   },
 
+  false_sharing_cpp: {
+    name: 'False Sharing (C++)',
+    description: 'Multi-threaded cache contention with atomics',
+    language: 'cpp',
+    code: `// False sharing demonstration (C++ version)
+// Expected: Cache invalidations when threads modify adjacent data
+#include <iostream>
+#include <thread>
+#include <atomic>
+#include <vector>
+
+constexpr size_t CACHE_LINE_SIZE = 64;
+constexpr size_t NUM_THREADS = 4;
+constexpr size_t ITERATIONS = 100000;
+
+// BAD: counters packed together, will cause false sharing
+struct PackedCounters {
+    std::atomic<int> counters[NUM_THREADS];
+};
+
+// GOOD: counters padded to separate cache lines
+struct alignas(CACHE_LINE_SIZE) PaddedCounter {
+    std::atomic<int> value{0};
+    char padding[CACHE_LINE_SIZE - sizeof(std::atomic<int>)];
+};
+
+struct PaddedCounters {
+    PaddedCounter counters[NUM_THREADS];
+};
+
+PackedCounters packed{};
+PaddedCounters padded{};
+
+void increment_packed(size_t id) {
+    for (size_t i = 0; i < ITERATIONS; ++i)
+        packed.counters[id].fetch_add(1, std::memory_order_relaxed);
+}
+
+void increment_padded(size_t id) {
+    for (size_t i = 0; i < ITERATIONS; ++i)
+        padded.counters[id].value.fetch_add(1, std::memory_order_relaxed);
+}
+
+int main() {
+    std::cout << "False Sharing Demo\\n";
+
+    // Test packed (false sharing)
+    std::vector<std::thread> threads;
+    for (size_t i = 0; i < NUM_THREADS; ++i)
+        threads.emplace_back(increment_packed, i);
+    for (auto& t : threads) t.join();
+
+    // Test padded (no false sharing)
+    threads.clear();
+    for (size_t i = 0; i < NUM_THREADS; ++i)
+        threads.emplace_back(increment_padded, i);
+    for (auto& t : threads) t.join();
+
+    std::cout << "Done\\n";
+    return 0;
+}
+`
+  },
+
   // === Working Set ===
   working_set_small: {
     name: 'Small Working Set',
@@ -1074,78 +1138,6 @@ public:
 `
       }
     ]
-  },
-
-  // === Rust Examples ===
-  rust_sequential: {
-    name: 'Rust Sequential',
-    description: 'Sequential array access in Rust',
-    language: 'rust',
-    code: `fn main() {
-    const N: usize = 1000;
-    let mut arr = [0i32; N];
-    let mut sum: i32 = 0;
-
-    for i in 0..N {
-        arr[i] = i as i32;
-    }
-
-    for i in 0..N {
-        sum += arr[i];
-    }
-
-    println!("Sum: {}", sum);
-}
-`
-  },
-  rust_matrix: {
-    name: 'Rust Matrix',
-    description: 'Row-major matrix traversal in Rust',
-    language: 'rust',
-    code: `fn main() {
-    const N: usize = 64;
-    let mut matrix = [[0i32; N]; N];
-    let mut sum: i32 = 0;
-
-    for i in 0..N {
-        for j in 0..N {
-            matrix[i][j] = (i + j) as i32;
-        }
-    }
-
-    for i in 0..N {
-        for j in 0..N {
-            sum += matrix[i][j];
-        }
-    }
-
-    println!("Sum: {}", sum);
-}
-`
-  },
-  rust_vec: {
-    name: 'Rust Vec Iteration',
-    description: 'Iterator vs index access comparison',
-    language: 'rust',
-    code: `fn main() {
-    const N: usize = 1000;
-    let data: Vec<i32> = (0..N as i32).collect();
-
-    let sum1: i32 = data.iter().sum();
-
-    let mut sum2: i32 = 0;
-    for i in 0..data.len() {
-        sum2 += data[i];
-    }
-
-    let mut sum3: i32 = 0;
-    for &val in &data {
-        sum3 += val;
-    }
-
-    println!("Sums: {} {} {}", sum1, sum2, sum3);
-}
-`
   },
 }
 

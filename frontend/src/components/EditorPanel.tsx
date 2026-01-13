@@ -21,7 +21,7 @@ interface EditorPanelProps {
   files: ProjectFile[]
   activeFileId: string
   onFileSelect: (id: string) => void
-  onFileCreate: (name: string, language: 'c' | 'cpp' | 'rust') => void
+  onFileCreate: (name: string, language: 'c' | 'cpp') => void
   onFileDelete: (id: string) => void
   onFileRename: (id: string, name: string) => void
   onSetMainFile: (id: string) => void
@@ -77,7 +77,7 @@ export function EditorPanel({
   isMobile,
   mobilePane,
 }: EditorPanelProps) {
-  const monacoLanguage = language === 'cpp' ? 'cpp' : language === 'rust' ? 'rust' : 'c'
+  const monacoLanguage = language === 'cpp' ? 'cpp' : 'c'
 
   return (
     <div className={`editor-area${isMobile && mobilePane !== 'editor' ? ' mobile-hidden' : ''}`}>

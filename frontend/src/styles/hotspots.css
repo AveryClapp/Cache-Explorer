@@ -1,0 +1,79 @@
+/* ─── Hot Lines / Hotspots ─── */
+.hotspots {
+  padding: var(--space-3);
+}
+
+.hotspot {
+  padding: var(--space-3);
+  background: var(--elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-2);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.hotspot:hover {
+  background: var(--surface);
+  border-color: var(--phosphor-dim);
+}
+
+.hotspot:last-child {
+  margin-bottom: 0;
+}
+
+.hotspot-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+
+.hotspot-location {
+  font-family: var(--font-code);
+  font-size: var(--text-sm);
+  color: var(--signal-info);
+}
+
+.hotspot-stats {
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.hotspot-code {
+  margin: var(--space-2) 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--void);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--signal-critical);
+  overflow-x: auto;
+}
+
+.hotspot-code code {
+  font-family: var(--font-code);
+  font-size: var(--text-xs);
+  color: var(--text-bright);
+  white-space: nowrap;
+}
+
+.hotspot-bar {
+  height: 4px;
+  background: var(--void);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.hotspot-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--signal-warning), var(--signal-critical));
+  border-radius: 2px;
+  transition: width var(--duration-normal) var(--ease-out);
+}
+
+/* ─── Toggle Buttons ─── */
+.toggle-buttons {
+  display: flex;
+  gap: var(--space-2);
+  margin: var(--space-4) 0;
+}

@@ -1,0 +1,73 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   LIGHT THEME
+   ══════════════════════════════════════════════════════════════════════════ */
+[data-theme="light"] {
+  --void: #f5f6f8;
+  --panel: #ffffff;
+  --surface: #f0f1f3;
+  --elevated: #e8eaed;
+  --border: #d0d4db;
+  --border-glow: #c0c4cb;
+
+  /* Teal accent (logo L1 - darker for light bg) */
+  --phosphor: #2d9a7e;
+  --phosphor-dim: #1f7a62;
+  --phosphor-glow: rgba(45, 154, 126, 0.12);
+  --phosphor-subtle: rgba(45, 154, 126, 0.06);
+
+  --text-bright: #1a1d21;
+  --text-primary: #3d4450;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
+
+  /* Logo colors adjusted for light mode */
+  --signal-excellent: #2d9a7e;  /* L1 teal */
+  --signal-good: #5a8f3e;       /* L2 green */
+  --signal-warning: #a68a00;    /* L3 yellow */
+  --signal-critical: #c41e3a;
+  --signal-info: #2d9a7e;       /* L1 teal */
+}
+
+[data-theme="light"] body::before {
+  display: none;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ANIMATIONS - Entrance
+   ══════════════════════════════════════════════════════════════════════════ */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.metric-card {
+  animation: fadeInUp 0.4s var(--ease-out) backwards;
+}
+
+.metric-card:nth-child(1) { animation-delay: 0.05s; }
+.metric-card:nth-child(2) { animation-delay: 0.1s; }
+.metric-card:nth-child(3) { animation-delay: 0.15s; }
+
+.cache-level {
+  animation: fadeInUp 0.4s var(--ease-out) backwards;
+}
+
+.cache-level:nth-child(1) { animation-delay: 0.1s; }
+.cache-level:nth-child(2) { animation-delay: 0.15s; }
+.cache-level:nth-child(3) { animation-delay: 0.2s; }
+.cache-level:nth-child(4) { animation-delay: 0.25s; }
+
+.panel {
+  animation: fadeIn 0.3s var(--ease-out) backwards;
+}

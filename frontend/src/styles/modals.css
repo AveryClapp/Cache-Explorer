@@ -1,0 +1,333 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   MOBILE RESPONSIVE
+   ══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 1024px) {
+  .sidebar {
+    display: none;
+  }
+
+  .results-panel {
+    width: 360px;
+  }
+}
+
+@media (max-width: 768px) {
+  .workspace {
+    flex-direction: column;
+  }
+
+  .editor-area,
+  .results-panel {
+    width: 100%;
+    height: 100%;
+  }
+
+  .results-panel {
+    border-left: none;
+    border-top: 1px solid var(--border);
+  }
+
+  .mobile-hidden {
+    display: none !important;
+  }
+
+  .metric-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-2);
+  }
+
+  .metric-card {
+    padding: var(--space-3);
+  }
+
+  .quick-config {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .header {
+    padding: 0 var(--space-3);
+    gap: var(--space-2);
+  }
+
+  .header-right {
+    gap: var(--space-2);
+  }
+
+  .logo-title {
+    display: none;
+  }
+
+  .btn-compare,
+  .btn-export,
+  .btn-primary,
+  .btn-cancel {
+    padding: var(--space-2);
+    font-size: var(--text-2xs);
+  }
+
+  /* Settings toolbar mobile */
+  .settings-toolbar-main {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .toolbar-group {
+    flex: 1 1 auto;
+    min-width: 80px;
+  }
+
+  .toolbar-divider {
+    display: none;
+  }
+
+  .toolbar-more {
+    width: 100%;
+    margin-top: var(--space-2);
+  }
+
+  .settings-toolbar-advanced {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+    padding: var(--space-3);
+  }
+
+  .toolbar-advanced-section {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+  }
+
+  .cache-config-group {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  /* Results panel mobile */
+  .results-header {
+    padding: var(--space-3);
+  }
+
+  .panel-header {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .panel-content {
+    padding: var(--space-3);
+  }
+
+  /* Cache hierarchy mobile */
+  .cache-hierarchy {
+    padding: var(--space-3);
+  }
+
+  .cache-levels {
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .cache-connector {
+    width: 2px;
+    height: 16px;
+    margin: 0 auto;
+  }
+
+  /* Export dropdown mobile */
+  .export-dropdown {
+    position: static;
+  }
+
+  .export-menu {
+    position: fixed;
+    bottom: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    min-width: 120px;
+  }
+
+  /* Diff summary mobile */
+  .diff-details {
+    font-size: var(--text-2xs);
+  }
+
+  /* Command palette mobile */
+  .command-palette {
+    margin: var(--space-4);
+    max-height: 70vh;
+  }
+
+  /* Timing chart mobile */
+  .timing-legend {
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    font-size: var(--text-2xs);
+  }
+}
+
+/* Mobile tab switcher */
+.mobile-tab-switcher {
+  display: flex;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: var(--space-2);
+  gap: var(--space-2);
+}
+
+.mobile-tab-switcher button {
+  flex: 1;
+  padding: var(--space-3);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+
+.mobile-tab-switcher button.active {
+  background: var(--phosphor-subtle);
+  border-color: var(--phosphor);
+  color: var(--phosphor);
+}
+
+.mobile-tab-switcher button:hover:not(.active) {
+  background: var(--elevated);
+}
+
+/* Extra small screens */
+@media (max-width: 480px) {
+  .metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .header-right {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .btn-compare,
+  .btn-export {
+    display: none;
+  }
+
+  .toolbar-group label {
+    display: none;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   BATCH MODAL
+   ══════════════════════════════════════════════════════════════════════════ */
+.batch-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.batch-modal {
+  width: 90%;
+  max-width: 700px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.batch-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4);
+  background: var(--elevated);
+  border-bottom: 1px solid var(--border);
+}
+
+.batch-modal-title {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.batch-modal-close {
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: var(--text-xl);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: all var(--duration-fast);
+}
+
+.batch-modal-close:hover {
+  background: var(--surface);
+  color: var(--signal-critical);
+}
+
+.batch-modal-content {
+  padding: var(--space-4);
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.batch-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+}
+
+.batch-results-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+}
+
+.batch-results-table th {
+  text-align: left;
+  padding: var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border);
+}
+
+.batch-results-table td {
+  padding: var(--space-3);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
+}
+
+.batch-results-table tr:last-child td {
+  border-bottom: none;
+}
+
+.batch-results-table .config-name {
+  font-weight: 600;
+}
+
+.batch-results-table td.good {
+  color: var(--signal-success);
+}
+
+.batch-results-table td.warning {
+  color: var(--signal-warning);
+}
+

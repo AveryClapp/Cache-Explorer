@@ -1,0 +1,151 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   EDITOR AREA
+   ══════════════════════════════════════════════════════════════════════════ */
+.editor-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--void);
+  overflow: hidden;
+}
+
+/* Tab Bar */
+.tab-bar {
+  display: flex;
+  align-items: stretch;
+  height: var(--toolbar-height);
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  padding: 0 var(--space-2);
+  gap: var(--space-1);
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-4);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.tab:hover {
+  color: var(--text-primary);
+  background: var(--surface);
+}
+
+.tab.active {
+  color: var(--phosphor);
+  border-bottom-color: var(--phosphor);
+  background: var(--phosphor-subtle);
+}
+
+.tab-lang {
+  font-size: var(--text-2xs);
+  padding: 2px 6px;
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.tab.active .tab-lang {
+  background: var(--phosphor-glow);
+  color: var(--phosphor-dim);
+}
+
+/* Editor Container */
+.editor-container {
+  flex: 1;
+  position: relative;
+  background: var(--void);
+}
+
+/* Diff Mode Labels */
+.diff-labels {
+  display: flex;
+  height: 28px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.diff-label {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.diff-label.baseline {
+  color: var(--signal-critical);
+  background: rgba(239, 68, 68, 0.1);
+  border-right: 1px solid var(--border);
+}
+
+.diff-label.current {
+  color: var(--signal-success);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+/* Status Bar */
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 24px;
+  padding: 0 var(--space-4);
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  font-family: var(--font-display);
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
+}
+
+.status-bar-left,
+.status-bar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.status-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--phosphor);
+  box-shadow: 0 0 6px var(--phosphor);
+}
+
+.status-indicator.idle {
+  background: var(--text-muted);
+  box-shadow: none;
+}
+
+.status-indicator.running {
+  background: var(--signal-warning);
+  box-shadow: 0 0 6px var(--signal-warning);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}

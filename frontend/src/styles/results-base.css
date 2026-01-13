@@ -1,0 +1,36 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   RESULTS PANEL - Instrumentation Readouts
+   ══════════════════════════════════════════════════════════════════════════ */
+.results-panel {
+  width: var(--results-width);
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.results-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.results-title {
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--phosphor);
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+}
+
+.results-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-4);
+}
+

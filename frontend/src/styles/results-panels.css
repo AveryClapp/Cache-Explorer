@@ -1,0 +1,176 @@
+/* ─── Section Panels ─── */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-4);
+  overflow: hidden;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  background: var(--elevated);
+  border-bottom: 1px solid var(--border);
+}
+
+.panel-title {
+  font-family: var(--font-display);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.panel-content {
+  padding: var(--space-4);
+}
+
+/* ─── Diff Summary ─── */
+.diff-summary {
+  margin-bottom: var(--space-4);
+}
+
+.diff-summary-content {
+  padding: var(--space-4);
+}
+
+.diff-verdict {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-3);
+}
+
+.diff-verdict.improved {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid var(--signal-success);
+}
+
+.diff-verdict.degraded {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid var(--signal-critical);
+}
+
+.diff-verdict.neutral {
+  background: var(--elevated);
+  border: 1px solid var(--border);
+}
+
+.diff-verdict-icon {
+  font-size: var(--text-xl);
+  font-weight: 700;
+}
+
+.diff-verdict.improved .diff-verdict-icon {
+  color: var(--signal-success);
+}
+
+.diff-verdict.degraded .diff-verdict-icon {
+  color: var(--signal-critical);
+}
+
+.diff-verdict.neutral .diff-verdict-icon {
+  color: var(--text-muted);
+}
+
+.diff-verdict-text {
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.diff-verdict.improved .diff-verdict-text {
+  color: var(--signal-success);
+}
+
+.diff-verdict.degraded .diff-verdict-text {
+  color: var(--signal-critical);
+}
+
+.diff-verdict.neutral .diff-verdict-text {
+  color: var(--text-secondary);
+}
+
+.diff-details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.diff-detail {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-code);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  padding: var(--space-1) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.diff-detail:last-child {
+  border-bottom: none;
+}
+
+.diff-detail span:last-child {
+  color: var(--text-primary);
+}
+
+/* ─── Hot Lines Table ─── */
+.hotlines-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+}
+
+.hotlines-table th {
+  text-align: left;
+  padding: var(--space-2);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 500;
+  border-bottom: 1px solid var(--border);
+}
+
+.hotlines-table td {
+  padding: var(--space-2);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
+}
+
+.hotlines-table tr:last-child td {
+  border-bottom: none;
+}
+
+.hotlines-table tr:hover td {
+  background: var(--elevated);
+}
+
+.hotline-location {
+  font-family: var(--font-code);
+  color: var(--signal-info);
+}
+
+.hotline-rate {
+  font-weight: 600;
+}
+
+.hotline-rate.high {
+  color: var(--signal-critical);
+}
+
+.hotline-rate.medium {
+  color: var(--signal-warning);
+}
+
+.hotline-rate.low {
+  color: var(--signal-good);
+}
+

@@ -1,0 +1,310 @@
+/* ─── Details Grid ─── */
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.level-detail {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+}
+
+.level-header {
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--phosphor);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.level-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-1) 0;
+  font-size: var(--text-sm);
+}
+
+.level-row span:first-child {
+  color: var(--text-secondary);
+}
+
+.level-row .mono {
+  font-family: var(--font-code);
+  color: var(--text-bright);
+}
+
+.level-row .mono.good {
+  color: var(--signal-excellent);
+}
+
+.level-row .mono.ok {
+  color: var(--signal-warning);
+}
+
+.level-row .mono.bad {
+  color: var(--signal-critical);
+}
+
+/* ─── 3C Miss Breakdown ─── */
+.level-3c {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.level-3c-header {
+  font-size: var(--text-2xs);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-2);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.level-3c-bar {
+  display: flex;
+  height: 10px;
+  border-radius: 5px;
+  overflow: hidden;
+  background: var(--elevated);
+  margin-bottom: var(--space-3);
+}
+
+.level-3c-segment {
+  height: 100%;
+  transition: width var(--duration-fast) var(--ease-out);
+  position: relative;
+}
+
+.level-3c-segment.compulsory {
+  background: var(--signal-info);
+}
+
+.level-3c-segment.capacity {
+  background: var(--signal-warning);
+}
+
+.level-3c-segment.conflict {
+  background: var(--signal-critical);
+}
+
+/* New detailed legend with numbers */
+.level-3c-details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.level-3c-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.level-3c-item .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.level-3c-item .dot.compulsory {
+  background: var(--signal-info);
+}
+
+.level-3c-item .dot.capacity {
+  background: var(--signal-warning);
+}
+
+.level-3c-item .dot.conflict {
+  background: var(--signal-critical);
+}
+
+.level-3c-item .label {
+  color: var(--text-secondary);
+  min-width: 56px;
+}
+
+.level-3c-item .value {
+  color: var(--text-primary);
+  font-family: var(--font-code);
+  margin-left: auto;
+}
+
+.level-3c-item .percent {
+  color: var(--text-muted);
+  font-family: var(--font-code);
+  font-size: var(--text-2xs);
+  min-width: 40px;
+  text-align: right;
+}
+
+/* Legacy legend (fallback) */
+.level-3c-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  margin-top: var(--space-2);
+  font-size: var(--text-2xs);
+  color: var(--text-secondary);
+}
+
+.level-3c-legend .legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.level-3c-legend .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.level-3c-legend .dot.compulsory {
+  background: var(--signal-info);
+}
+
+.level-3c-legend .dot.capacity {
+  background: var(--signal-warning);
+}
+
+.level-3c-legend .dot.conflict {
+  background: var(--signal-critical);
+}
+
+/* ─── TLB Grid ─── */
+.tlb-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.tlb-detail {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+}
+
+/* ─── Timing Display ─── */
+.timing-display {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+/* When timing display is inside cache hierarchy, adjust styling */
+.cache-hierarchy .timing-display {
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  margin-top: var(--space-4);
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.timing-header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.timing-label {
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.timing-value {
+  font-family: var(--font-code);
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--text-bright);
+}
+
+.timing-unit {
+  font-family: var(--font-code);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.timing-bar {
+  display: flex;
+  height: 8px;
+  background: var(--void);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin-bottom: var(--space-2);
+}
+
+.timing-segment {
+  height: 100%;
+  transition: width var(--duration-normal) var(--ease-out);
+}
+
+.timing-segment.l1 {
+  background: var(--signal-excellent);
+}
+
+.timing-segment.l2 {
+  background: var(--signal-good);
+}
+
+.timing-segment.l3 {
+  background: var(--signal-warning);
+}
+
+.timing-segment.mem {
+  background: var(--signal-critical);
+}
+
+.timing-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  font-family: var(--font-code);
+  font-size: var(--text-2xs);
+  color: var(--text-secondary);
+}
+
+.timing-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.timing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+}
+
+.timing-dot.l1 { background: var(--signal-excellent); }
+.timing-dot.l2 { background: var(--signal-good); }
+.timing-dot.l3 { background: var(--signal-warning); }
+.timing-dot.mem { background: var(--signal-critical); }
+
+.timing-tlb-note {
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+

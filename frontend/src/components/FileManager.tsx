@@ -5,7 +5,7 @@ export interface ProjectFile {
   id: string
   name: string
   code: string
-  language: 'c' | 'cpp' | 'rust'
+  language: 'c' | 'cpp'
   isMain?: boolean
 }
 
@@ -13,32 +13,29 @@ interface FileManagerProps {
   files: ProjectFile[]
   activeFileId: string
   onFileSelect: (fileId: string) => void
-  onFileCreate: (name: string, language: 'c' | 'cpp' | 'rust') => void
+  onFileCreate: (name: string, language: 'c' | 'cpp') => void
   onFileDelete: (fileId: string) => void
   onFileRename: (fileId: string, newName: string) => void
   onSetMainFile: (fileId: string) => void
 }
 
-const FILE_EXTENSIONS: Record<string, 'c' | 'cpp' | 'rust'> = {
+const FILE_EXTENSIONS: Record<string, 'c' | 'cpp'> = {
   '.c': 'c',
   '.h': 'c',
   '.cpp': 'cpp',
   '.hpp': 'cpp',
   '.cc': 'cpp',
   '.cxx': 'cpp',
-  '.rs': 'rust',
 }
 
-const DEFAULT_EXTENSIONS: Record<'c' | 'cpp' | 'rust', string> = {
+const DEFAULT_EXTENSIONS: Record<'c' | 'cpp', string> = {
   c: '.c',
   cpp: '.cpp',
-  rust: '.rs',
 }
 
-const LANGUAGE_COLORS: Record<'c' | 'cpp' | 'rust', string> = {
+const LANGUAGE_COLORS: Record<'c' | 'cpp', string> = {
   c: '#555eb7',
   cpp: '#f34b7d',
-  rust: '#dea584',
 }
 
 export function FileManager({
@@ -60,7 +57,7 @@ export function FileManager({
     if (!newFileName.trim()) return
 
     let name = newFileName.trim()
-    let language: 'c' | 'cpp' | 'rust' = 'c'
+    let language: 'c' | 'cpp' = 'c'
 
     // Detect language from extension
     const ext = Object.keys(FILE_EXTENSIONS).find(e => name.endsWith(e))
