@@ -447,6 +447,38 @@ find_clangxx() {
   echo "clang++"
 }
 
+# Find LLVM bin directory (for opt, llc, etc.)
+find_llvm_bin() {
+  # Check --compiler flag (path to LLVM bin directory)
+  if [[ -n "$COMPILER_PATH" && -d "$COMPILER_PATH" ]]; then
+    echo "$COMPILER_PATH"
+    return
+  fi
+  # Try to find from clang location
+  local clang_path
+  clang_path=$(command -v clang 2>/dev/null)
+  if [[ -n "$clang_path" ]]; then
+    dirname "$clang_path"
+    return
+  fi
+  # Check common homebrew locations
+  for dir in /opt/homebrew/opt/llvm/bin /opt/homebrew/opt/llvm@20/bin /usr/local/opt/llvm/bin; do
+    if [[ -d "$dir" && -x "$dir/opt" ]]; then
+      echo "$dir"
+      return
+    fi
+  done
+  # Check versioned paths (Ubuntu)
+  for ver in 21 20 19 18 17 16 15; do
+    if [[ -d "/usr/lib/llvm-$ver/bin" ]]; then
+      echo "/usr/lib/llvm-$ver/bin"
+      return
+    fi
+  done
+  # Fallback - assume tools are in PATH
+  echo ""
+}
+
 # Detect language from file extension
 EXT="${INPUT_FILE##*.}"
 case "$EXT" in
@@ -521,25 +553,98 @@ fi
 
 # Compile based on language
 if [[ "$LANG" == "rust" ]]; then
-  # Rust compilation with LLVM pass
-  # Note: Rust support requires rustc with LLVM pass plugin support
-  if ! rustc --edition 2021 -C opt-level=0 -g \
-    -C llvm-args=-load="$PASS" \
-    -L "$BACKEND_DIR/runtime/build" \
-    -l static=cache-explorer-rt \
-    "$INPUT_FILE" \
-    -o "$BINARY" 2>/tmp/cache-explore-compile-err-$$; then
+  # Rust compilation pipeline: rustc → LLVM IR → opt (pass) → llc → link
+  # This is more robust than trying to load passes directly into rustc
+
+  # Find LLVM tools directory
+  LLVM_BIN="$(find_llvm_bin)"
+  if [[ -z "$LLVM_BIN" ]]; then
+    # Tools should be in PATH
+    OPT_CMD="opt"
+    LLC_CMD="llc"
+    CLANG_CMD="clang"
+  else
+    OPT_CMD="$LLVM_BIN/opt"
+    LLC_CMD="$LLVM_BIN/llc"
+    CLANG_CMD="$LLVM_BIN/clang"
+  fi
+
+  # Verify LLVM tools exist
+  if ! command -v "$OPT_CMD" &>/dev/null && [[ ! -x "$OPT_CMD" ]]; then
     if [[ -n "$JSON_OUTPUT" ]]; then
-      # Properly escape JSON: preserve newlines as \n, escape quotes
-      ESCAPED=$(cat /tmp/cache-explore-compile-err-$$ | python3 -c "import sys,json; print(json.dumps(sys.stdin.read())[1:-1])")
-      echo "{\"error\": \"Compilation failed\", \"details\": \"$ESCAPED\"}"
+      echo "{\"error\": \"LLVM opt not found\", \"details\": \"Install LLVM for Rust support\"}"
     else
-      echo "Compilation failed:" >&2
-      cat /tmp/cache-explore-compile-err-$$ >&2
+      echo "Error: LLVM 'opt' not found. Rust support requires LLVM tools (opt, llc)." >&2
+      echo "Install LLVM via: brew install llvm (macOS) or apt install llvm (Ubuntu)" >&2
     fi
-    rm -f /tmp/cache-explore-compile-err-$$
     exit 1
   fi
+
+  RUST_IR="/tmp/cache-explore-rust-$$.ll"
+  RUST_INSTRUMENTED="/tmp/cache-explore-rust-instrumented-$$.ll"
+  RUST_OBJ="/tmp/cache-explore-rust-$$.o"
+
+  # Step 1: Compile Rust to LLVM IR
+  # -C panic=abort required for no_std code
+  # -C opt-level=1 + debug-assertions=no removes runtime checks that call panic functions
+  if ! rustc --edition 2021 -C opt-level=1 -C panic=abort -C debug-assertions=no \
+    -C overflow-checks=no -g --emit=llvm-ir \
+    -o "$RUST_IR" "$INPUT_FILE" 2>/tmp/cache-explore-compile-err-$$; then
+    if [[ -n "$JSON_OUTPUT" ]]; then
+      ESCAPED=$(cat /tmp/cache-explore-compile-err-$$ | python3 -c "import sys,json; print(json.dumps(sys.stdin.read())[1:-1])")
+      echo "{\"error\": \"Rust compilation failed\", \"details\": \"$ESCAPED\"}"
+    else
+      echo "Rust compilation to IR failed:" >&2
+      cat /tmp/cache-explore-compile-err-$$ >&2
+    fi
+    rm -f /tmp/cache-explore-compile-err-$$ "$RUST_IR"
+    exit 1
+  fi
+
+  # Step 2: Run LLVM pass on the IR (use module-level pass for whole-program IR)
+  if ! "$OPT_CMD" -load-pass-plugin="$PASS" -passes="cache-explorer-module" \
+    -S "$RUST_IR" -o "$RUST_INSTRUMENTED" 2>/tmp/cache-explore-compile-err-$$; then
+    if [[ -n "$JSON_OUTPUT" ]]; then
+      ESCAPED=$(cat /tmp/cache-explore-compile-err-$$ | python3 -c "import sys,json; print(json.dumps(sys.stdin.read())[1:-1])")
+      echo "{\"error\": \"LLVM pass failed\", \"details\": \"$ESCAPED\"}"
+    else
+      echo "LLVM instrumentation pass failed:" >&2
+      cat /tmp/cache-explore-compile-err-$$ >&2
+    fi
+    rm -f /tmp/cache-explore-compile-err-$$ "$RUST_IR" "$RUST_INSTRUMENTED"
+    exit 1
+  fi
+
+  # Step 3: Compile instrumented IR to object file
+  if ! "$LLC_CMD" -filetype=obj -o "$RUST_OBJ" "$RUST_INSTRUMENTED" 2>/tmp/cache-explore-compile-err-$$; then
+    if [[ -n "$JSON_OUTPUT" ]]; then
+      ESCAPED=$(cat /tmp/cache-explore-compile-err-$$ | python3 -c "import sys,json; print(json.dumps(sys.stdin.read())[1:-1])")
+      echo "{\"error\": \"LLVM compilation failed\", \"details\": \"$ESCAPED\"}"
+    else
+      echo "LLVM IR to object compilation failed:" >&2
+      cat /tmp/cache-explore-compile-err-$$ >&2
+    fi
+    rm -f /tmp/cache-explore-compile-err-$$ "$RUST_IR" "$RUST_INSTRUMENTED" "$RUST_OBJ"
+    exit 1
+  fi
+
+  # Step 4: Link with runtime library
+  if ! "$CLANG_CMD" "$RUST_OBJ" "$RUNTIME" -lpthread -ldl -lm \
+    -o "$BINARY" 2>/tmp/cache-explore-compile-err-$$; then
+    if [[ -n "$JSON_OUTPUT" ]]; then
+      ESCAPED=$(cat /tmp/cache-explore-compile-err-$$ | python3 -c "import sys,json; print(json.dumps(sys.stdin.read())[1:-1])")
+      echo "{\"error\": \"Linking failed\", \"details\": \"$ESCAPED\"}"
+    else
+      echo "Linking failed:" >&2
+      cat /tmp/cache-explore-compile-err-$$ >&2
+    fi
+    rm -f /tmp/cache-explore-compile-err-$$ "$RUST_IR" "$RUST_INSTRUMENTED" "$RUST_OBJ"
+    exit 1
+  fi
+
+  # Cleanup intermediate files
+  rm -f "$RUST_IR" "$RUST_INSTRUMENTED" "$RUST_OBJ"
+
 elif ! $COMPILER $OPT_LEVEL $EXTRA_FLAGS -g -fpass-plugin="$PASS" \
   -I"$RUNTIME_INC" \
   "${INCLUDES[@]}" \
