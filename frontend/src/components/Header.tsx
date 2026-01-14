@@ -1,32 +1,32 @@
-import type { CacheResult, Stage } from '../types'
+import type { CacheResult, Stage } from "../types";
 
 interface HeaderProps {
-  theme: 'dark' | 'light'
-  diffMode: boolean
-  baselineResult: CacheResult | null
-  result: CacheResult | null
-  isLoading: boolean
-  stage: Stage
-  code: string
-  onToggleTheme: () => void
-  onSetDiffMode: (mode: boolean) => void
-  onSetBaseline: (code: string, result: CacheResult) => void
-  onClearBaseline: () => void
-  onExportJSON: () => void
-  onExportCSV: () => void
-  onRun: () => void
-  onCancel: () => void
+  theme: "dark" | "light";
+  diffMode: boolean;
+  baselineResult: CacheResult | null;
+  result: CacheResult | null;
+  isLoading: boolean;
+  stage: Stage;
+  code: string;
+  onToggleTheme: () => void;
+  onSetDiffMode: (mode: boolean) => void;
+  onSetBaseline: (code: string, result: CacheResult) => void;
+  onClearBaseline: () => void;
+  onExportJSON: () => void;
+  onExportCSV: () => void;
+  onRun: () => void;
+  onCancel: () => void;
 }
 
 const stageText: Record<Stage, string> = {
-  idle: '',
-  connecting: 'Connecting...',
-  preparing: 'Preparing...',
-  compiling: 'Compiling...',
-  running: 'Running...',
-  processing: 'Processing...',
-  done: ''
-}
+  idle: "",
+  connecting: "Connecting...",
+  preparing: "Preparing...",
+  compiling: "Compiling...",
+  running: "Running...",
+  processing: "Processing...",
+  done: "",
+};
 
 export function Header({
   theme,
@@ -43,7 +43,7 @@ export function Header({
   onExportJSON,
   onExportCSV,
   onRun,
-  onCancel
+  onCancel,
 }: HeaderProps) {
   return (
     <header className="header">
@@ -63,7 +63,13 @@ export function Header({
           <div className="diff-mode-badge" title="Comparing against baseline">
             <span className="diff-mode-icon">⇄</span>
             <span className="diff-mode-text">Diff Mode</span>
-            <button className="diff-mode-exit" onClick={() => onSetDiffMode(false)} title="Exit diff mode">×</button>
+            <button
+              className="diff-mode-exit"
+              onClick={() => onSetDiffMode(false)}
+              title="Exit diff mode"
+            >
+              ×
+            </button>
           </div>
         )}
       </div>
@@ -72,9 +78,9 @@ export function Header({
         <button
           className="btn-icon"
           onClick={onToggleTheme}
-          title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+          title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
         >
-          {theme === 'dark' ? '☀' : '☾'}
+          {theme === "dark" ? "☀" : "☾"}
         </button>
 
         {/* Compare button - visible when result exists */}
@@ -82,17 +88,27 @@ export function Header({
           <button
             onClick={() => {
               if (!baselineResult) {
-                onSetBaseline(code, result)
+                onSetBaseline(code, result);
               } else if (diffMode) {
-                onSetDiffMode(false)
+                onSetDiffMode(false);
               } else {
-                onSetDiffMode(true)
+                onSetDiffMode(true);
               }
             }}
-            className={`btn-compare ${baselineResult ? (diffMode ? 'active' : 'has-baseline') : ''}`}
-            title={!baselineResult ? 'Set current result as baseline for comparison' : diffMode ? 'Exit comparison mode' : 'Compare with baseline'}
+            className={`btn-compare ${baselineResult ? (diffMode ? "active" : "has-baseline") : ""}`}
+            title={
+              !baselineResult
+                ? "Set current result as baseline for comparison"
+                : diffMode
+                  ? "Exit comparison mode"
+                  : "Compare with baseline"
+            }
           >
-            {!baselineResult ? 'Set Baseline' : diffMode ? 'Exit Compare' : 'Compare'}
+            {!baselineResult
+              ? "Set Baseline"
+              : diffMode
+                ? "Exit Compare"
+                : "Compare"}
           </button>
         )}
         {baselineResult && !diffMode && (
@@ -103,20 +119,6 @@ export function Header({
           >
             ×
           </button>
-        )}
-
-        {/* Export dropdown */}
-        {result && !isLoading && (
-          <div className="export-dropdown">
-            <button className="btn-export" title="Export results">
-              Export
-            </button>
-            <div className="export-menu">
-              <span className="export-menu-label">Export results</span>
-              <button onClick={onExportJSON}>JSON</button>
-              <button onClick={onExportCSV}>CSV</button>
-            </div>
-          </div>
         )}
 
         {isLoading ? (
@@ -130,14 +132,11 @@ export function Header({
             <span className="cancel-x">×</span>
           </button>
         ) : (
-          <button
-            onClick={onRun}
-            className="btn-primary"
-          >
+          <button onClick={onRun} className="btn-primary">
             Execute
           </button>
         )}
       </div>
     </header>
-  )
+  );
 }

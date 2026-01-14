@@ -29,6 +29,9 @@ Suggestions:
   - Consider blocking for better L2 utilization
 ```
 
+<p align="center"> <img src="assets/zero-state.png" width="900" alt="Zero state – code view with no analysis results yet"> </p>
+
+<p align="center"> <img src="assets/basic-overview.png" width="420" alt="Basic overview of cache hit and miss rates"> <img src="assets/advanced-instrumentation.png" width="420" alt="Advanced instrumentation showing detailed memory access tracing"> </p> <p align="center"> <img src="assets/details.png" width="420" alt="Detailed cache access breakdown per source line"> <img src="assets/hotlines.png" width="420" alt="Hot lines view highlighting cache-miss-heavy code"> </p>
 <!-- [Screenshot of web UI here] -->
 
 ## Quick Start
@@ -64,7 +67,6 @@ cd cache-explorer
 - **False sharing detection** - Find hidden performance killers in threaded code
 - **6 prefetch policies** - None, Next-line, Stream, Stride, Adaptive, Intel DCU
 - **14 hardware presets** - Intel, AMD, Apple Silicon, ARM, Educational
-- **TLB simulation** - DTLB/ITLB with configurable entries
 - **Real-time visualization** - WebSocket streaming to interactive UI
 - **Works offline** - No cloud, no rate limits, your code stays local
 
