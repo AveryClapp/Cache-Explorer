@@ -1,6 +1,8 @@
 # Cache Explorer
 
-![Demo](assets/demo.gif)
+<p align="center">
+        <img src="assets/demo.gif" width="600" alt="Demo">
+</p>
 
 > Visualize CPU cache behavior in real-time. See exactly which lines of your code cause cache misses.
 
