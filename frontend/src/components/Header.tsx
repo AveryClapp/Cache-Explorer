@@ -112,6 +112,7 @@ export function Header({
               Export
             </button>
             <div className="export-menu">
+              <span className="export-menu-label">Export results</span>
               <button onClick={onExportJSON}>JSON</button>
               <button onClick={onExportCSV}>CSV</button>
             </div>

@@ -764,6 +764,8 @@ function App() {
           editorRef={editorRef}
           copied={copied}
           onShare={handleShare}
+          onExportJSON={() => result && exportAsJSON(result)}
+          onExportCSV={() => result && exportAsCSV(result)}
           isMobile={isMobile}
           mobilePane={mobilePane}
         />

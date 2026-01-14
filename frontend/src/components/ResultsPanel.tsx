@@ -33,6 +33,8 @@ interface ResultsPanelProps {
   editorRef: React.RefObject<editor.IStandaloneCodeEditor | null>
   copied: boolean
   onShare: () => void
+  onExportJSON?: () => void
+  onExportCSV?: () => void
   isMobile: boolean
   mobilePane: 'editor' | 'results'
 }
@@ -53,6 +55,8 @@ export function ResultsPanel({
   editorRef,
   copied,
   onShare,
+  onExportJSON,
+  onExportCSV,
   isMobile,
   mobilePane,
 }: ResultsPanelProps) {
@@ -61,9 +65,17 @@ export function ResultsPanel({
       <div className="results-header">
         <span className="results-title">Analysis Results</span>
         {result && (
-          <button className="btn" onClick={onShare} title="Copy link">
-            {copied ? 'Copied!' : 'Share'}
-          </button>
+          <div className="results-actions">
+            <button className="btn btn-small" onClick={onExportJSON} title="Download JSON">
+              JSON
+            </button>
+            <button className="btn btn-small" onClick={onExportCSV} title="Download CSV">
+              CSV
+            </button>
+            <button className="btn btn-small" onClick={onShare} title="Copy link">
+              {copied ? 'Copied!' : 'Share'}
+            </button>
+          </div>
         )}
       </div>
       <div className="results-scroll">

@@ -79,9 +79,15 @@ CacheHierarchyConfig ArgParser::get_preset_config(std::string_view name) {
 CacheHierarchyConfig ArgParser::build_cache_config(const SimulatorOptions& opts) {
     if (opts.config_name == "custom") {
         CacheHierarchyConfig cfg;
-        cfg.l1_data = {opts.l1_size, opts.l1_assoc, opts.line_size, EvictionPolicy::LRU};
-        cfg.l2 = {opts.l2_size, opts.l2_assoc, opts.line_size, EvictionPolicy::LRU};
-        cfg.l3 = {opts.l3_size, opts.l3_assoc, opts.line_size, EvictionPolicy::LRU};
+        // Convert bytes to KB for CacheConfig which expects kb_size
+        size_t l1_kb = opts.l1_size / 1024;
+        size_t l2_kb = opts.l2_size / 1024;
+        size_t l3_kb = opts.l3_size / 1024;
+        cfg.l1_data = {l1_kb, opts.l1_assoc, opts.line_size, EvictionPolicy::LRU};
+        cfg.l1_inst = {l1_kb, opts.l1_assoc, opts.line_size, EvictionPolicy::LRU};  // Same as L1 data
+        cfg.l2 = {l2_kb, opts.l2_assoc, opts.line_size, EvictionPolicy::LRU};
+        cfg.l3 = {l3_kb, opts.l3_assoc, opts.line_size, EvictionPolicy::LRU};
+        cfg.inclusion_policy = InclusionPolicy::NINE;
         return cfg;
     }
     return get_preset_config(opts.config_name);

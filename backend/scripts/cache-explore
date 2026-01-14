@@ -340,6 +340,7 @@ usage() {
 
 OPT_LEVEL="-O0"
 INPUT_FILES=()  # Array to collect multiple input files
+CUSTOM_CONFIG_ARGS=""  # Custom cache config args to pass to cache-sim
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -355,6 +356,13 @@ while [[ $# -gt 0 ]]; do
     --prefetch-degree) PREFETCH_DEGREE="$2"; shift 2 ;;
     --compiler) COMPILER_PATH="$2"; shift 2 ;;
     --fast) FAST_MODE="--fast"; shift ;;
+    --l1-size) CUSTOM_CONFIG_ARGS="$CUSTOM_CONFIG_ARGS --l1-size $2"; shift 2 ;;
+    --l1-assoc) CUSTOM_CONFIG_ARGS="$CUSTOM_CONFIG_ARGS --l1-assoc $2"; shift 2 ;;
+    --l1-line) CUSTOM_CONFIG_ARGS="$CUSTOM_CONFIG_ARGS --l1-line $2"; shift 2 ;;
+    --l2-size) CUSTOM_CONFIG_ARGS="$CUSTOM_CONFIG_ARGS --l2-size $2"; shift 2 ;;
+    --l2-assoc) CUSTOM_CONFIG_ARGS="$CUSTOM_CONFIG_ARGS --l2-assoc $2"; shift 2 ;;
+    --l3-size) CUSTOM_CONFIG_ARGS="$CUSTOM_CONFIG_ARGS --l3-size $2"; shift 2 ;;
+    --l3-assoc) CUSTOM_CONFIG_ARGS="$CUSTOM_CONFIG_ARGS --l3-assoc $2"; shift 2 ;;
     -O*) OPT_LEVEL="$1"; shift ;;
     -D) DEFINES+=("-D$2"); shift 2 ;;
     -D*) DEFINES+=("$1"); shift ;;
@@ -751,9 +759,9 @@ fi
 # Streaming mode: pipe directly for real-time output
 if [[ -n "$STREAM_OUTPUT" ]]; then
   if [[ -n "$RUN_ENV" ]]; then
-    env $RUN_ENV "$BINARY" 2>&1 | "$CACHE_SIM" --config "$CONFIG" $STREAM_OUTPUT $PREFETCH_ARG $FAST_MODE
+    env $RUN_ENV "$BINARY" 2>&1 | "$CACHE_SIM" --config "$CONFIG" $STREAM_OUTPUT $PREFETCH_ARG $FAST_MODE $CUSTOM_CONFIG_ARGS
   else
-    "$BINARY" 2>&1 | "$CACHE_SIM" --config "$CONFIG" $STREAM_OUTPUT $PREFETCH_ARG $FAST_MODE
+    "$BINARY" 2>&1 | "$CACHE_SIM" --config "$CONFIG" $STREAM_OUTPUT $PREFETCH_ARG $FAST_MODE $CUSTOM_CONFIG_ARGS
   fi
   EXIT_CODE=${PIPESTATUS[0]}
 else
@@ -769,7 +777,7 @@ else
     echo ""
   fi
 
-  echo "$TRACE" | "$CACHE_SIM" --config "$CONFIG" $VERBOSE $JSON_OUTPUT $PREFETCH_ARG $FAST_MODE
+  echo "$TRACE" | "$CACHE_SIM" --config "$CONFIG" $VERBOSE $JSON_OUTPUT $PREFETCH_ARG $FAST_MODE $CUSTOM_CONFIG_ARGS
 fi
 
 # Cleanup
