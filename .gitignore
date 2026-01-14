@@ -58,6 +58,16 @@ dist/
 .vite/
 *.log
 
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
 # IDEs
 .vscode/
 .idea/
