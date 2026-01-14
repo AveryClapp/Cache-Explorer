@@ -13,26 +13,26 @@
 **Before Cache Explorer:**
 "Why is my code slow?" → Guesswork, profilers, prayer
 
-**After Cache Explorer:**
-
-```
-$ cache-explore matrix.c --config intel
-
-L1 Hit Rate: 94.2%  |  L2: 78.1%  |  L3: 99.8%
-
-Hot Lines:
-  matrix.c:42    1,245 misses (column-major access pattern)
-  matrix.c:38      892 misses (strided access)
-
-Suggestions:
-  - Swap loop order at line 42 for ~10x fewer L1 misses
-  - Consider blocking for better L2 utilization
-```
-
 <p align="center"> <img src="assets/zero-state.png" width="900" alt="Zero state – code view with no analysis results yet"> </p>
 
-<p align="center"> <img src="assets/basic-overview.png" width="420" alt="Basic overview of cache hit and miss rates"> <img src="assets/advanced-instrumentation.png" width="420" alt="Advanced instrumentation showing detailed memory access tracing"> </p> <p align="center"> <img src="assets/details.png" width="420" alt="Detailed cache access breakdown per source line"> <img src="assets/hotlines.png" width="420" alt="Hot lines view highlighting cache-miss-heavy code"> </p>
-<!-- [Screenshot of web UI here] -->
+**After Cache Explorer:**
+
+<details>
+<summary><strong>UI Screenshots (click to expand)</strong></summary>
+
+<br>
+
+<p align="center">
+  <img src="assets/basic-overview.png" width="360">
+  <img src="assets/advanced-instrumentation.png" width="360">
+</p>
+
+<p align="center">
+  <img src="assets/details.png" width="360">
+  <img src="assets/hotlines.png" width="360">
+</p>
+
+</details>
 
 ## Quick Start
 
