@@ -1,8 +1,8 @@
 # Cache Explorer
 
-[![CI](https://github.com/AveryClapp/cache-explorer/actions/workflows/ci.yml/badge.svg)](https://github.com/AveryClapp/cache-explorer/actions/workflows/ci.yml)
-[![GitHub release](https://img.shields.io/github/v/release/AveryClapp/cache-explorer)](https://github.com/AveryClapp/cache-explorer/releases)
-[![GitHub stars](https://img.shields.io/github/stars/AveryClapp/cache-explorer)](https://github.com/AveryClapp/cache-explorer/stargazers)
+[![CI](https://github.com/AveryClapp/Cache-Explorer/actions/workflows/ci.yml/badge.svg)](https://github.com/AveryClapp/Cache-Explorer/actions/workflows/ci.yml)
+[![GitHub release](https://img.shields.io/github/v/release/AveryClapp/Cache-Explorer)](https://github.com/AveryClapp/Cache-Explorer/releases)
+[![GitHub stars](https://img.shields.io/github/stars/AveryClapp/Cache-Explorer)](https://github.com/AveryClapp/Cache-Explorer/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 > Visualize CPU cache behavior in real-time. See exactly which lines of your code cause cache misses.
@@ -26,8 +26,8 @@
 
 <br>
 
-| | |
-|:--:|:--:|
+|                                             |                                             |
+| :-----------------------------------------: | :-----------------------------------------: |
 | <img src="assets/report-1.png" width="400"> | <img src="assets/report-2.png" width="400"> |
 | <img src="assets/report-3.png" width="400"> | <img src="assets/report-4.png" width="400"> |
 
