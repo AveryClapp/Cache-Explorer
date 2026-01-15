@@ -29,10 +29,8 @@ services:
         reservations:
           cpus: '0.5'
           memory: 512M
-    # Security: read-only filesystem where possible
-    read_only: true
     tmpfs:
-      - /tmp:mode=1777,size=100M
+      - /tmp:mode=1777,size=100M,exec
     restart: unless-stopped
 
 networks:

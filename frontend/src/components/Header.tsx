@@ -12,8 +12,6 @@ interface HeaderProps {
   onSetDiffMode: (mode: boolean) => void;
   onSetBaseline: (code: string, result: CacheResult) => void;
   onClearBaseline: () => void;
-  onExportJSON: () => void;
-  onExportCSV: () => void;
   onRun: () => void;
   onCancel: () => void;
 }
@@ -40,8 +38,6 @@ export function Header({
   onSetDiffMode,
   onSetBaseline,
   onClearBaseline,
-  onExportJSON,
-  onExportCSV,
   onRun,
   onCancel,
 }: HeaderProps) {

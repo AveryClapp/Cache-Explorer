@@ -21,8 +21,7 @@ __pycache__/
 docs/
 *.md
 
-# Exclude frontend (built separately, not needed in sandbox container)
-frontend/
+# Note: frontend/ is needed for docker-compose builds
 
 # Exclude test files
 tests/

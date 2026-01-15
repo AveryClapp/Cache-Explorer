@@ -647,8 +647,6 @@ function App() {
           onSetDiffMode={setDiffMode}
           onSetBaseline={(c, r) => { setBaselineCode(c); setBaselineResult(r) }}
           onClearBaseline={() => { setBaselineCode(null); setBaselineResult(null); setDiffMode(false) }}
-          onExportJSON={() => result && exportAsJSON(result)}
-          onExportCSV={() => result && exportAsCSV(result)}
           onRun={runAnalysis}
           onCancel={cancelAnalysis}
         />

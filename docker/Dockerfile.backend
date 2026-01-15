@@ -55,12 +55,18 @@ FROM ubuntu:24.04
 RUN apt-get update && apt-get install -y \
     wget \
     bc \
-    nodejs \
-    npm \
+    curl \
+    lsb-release \
+    software-properties-common \
+    gnupg \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Node.js 20
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs
+
 # Install LLVM 18 runtime components
-RUN wget -qO- https://apt.llvm.org/llvm.sh | bash -s 18
+RUN apt-get update && wget -qO- https://apt.llvm.org/llvm.sh | bash -s 18
 RUN apt-get install -y clang-18
 
 # Set LLVM paths
@@ -85,7 +91,10 @@ RUN chmod +x ./backend/scripts/*
 
 # Install Node.js dependencies
 WORKDIR /app/backend/server
-RUN npm ci --only=production
+RUN npm ci --omit=dev
+
+# Fix ownership for non-root user
+RUN chown -R cache-explorer:cache-explorer /app
 
 # Set environment
 ENV CACHE_EXPLORER_PATH=/app/backend
