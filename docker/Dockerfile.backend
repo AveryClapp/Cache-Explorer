@@ -10,10 +10,13 @@ RUN apt-get update && apt-get install -y \
     ninja-build \
     git \
     bc \
+    lsb-release \
+    software-properties-common \
+    gnupg \
     && rm -rf /var/lib/apt/lists/*
 
 # Install LLVM 18
-RUN wget -qO- https://apt.llvm.org/llvm.sh | bash -s 18
+RUN apt-get update && wget -qO- https://apt.llvm.org/llvm.sh | bash -s 18
 RUN apt-get install -y llvm-18-dev clang-18 lld-18
 
 # Set LLVM paths

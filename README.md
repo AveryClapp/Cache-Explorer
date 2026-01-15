@@ -37,23 +37,32 @@
 ### Docker (Easiest)
 
 ```bash
-docker pull ghcr.io/AveryClapp/cache-explorer:latest
-docker run -p 3001:3001 cache-explorer
-# Open http://localhost:3001
-```
-
-### CLI Tool
-
-```bash
-# macOS
-brew install llvm cmake ninja
-
-# Clone and build
 git clone https://github.com/AveryClapp/cache-explorer.git
 cd cache-explorer
-./scripts/build.sh
+docker-compose up --build
+# Open http://localhost:8080
+```
 
-# Analyze your code
+### From Source
+
+```bash
+git clone https://github.com/AveryClapp/cache-explorer.git
+cd cache-explorer
+
+# Build (requires LLVM 18, CMake, Ninja)
+cd backend/cache-simulator && mkdir -p build && cd build && cmake .. -G Ninja && ninja && cd ../../..
+cd backend/llvm-pass && mkdir -p build && cd build && cmake .. -G Ninja -DLLVM_DIR=$(llvm-config --cmakedir) && ninja && cd ../../..
+cd backend/runtime && mkdir -p build && cd build && cmake .. -G Ninja && ninja && cd ../../..
+
+# Run
+cd backend/server && npm install && node server.js &
+cd frontend && npm install && npm run dev
+# Open http://localhost:5173
+```
+
+### CLI Only
+
+```bash
 ./backend/scripts/cache-explore mycode.c --config intel --json
 ```
 
