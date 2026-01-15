@@ -6,6 +6,8 @@
 
 > Visualize CPU cache behavior in real-time. See exactly which lines of your code cause cache misses.
 
+[![CI](https://github.com/AveryClapp/cache-explorer/actions/workflows/ci.yml/badge.svg)](https://github.com/AveryClapp/cache-explorer/actions/workflows/ci.yml)
+[![GitHub stars](https://img.shields.io/github/stars/AveryClapp/cache-explorer)](https://github.com/AveryClapp/cache-explorer/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ## Why Cache Explorer?
