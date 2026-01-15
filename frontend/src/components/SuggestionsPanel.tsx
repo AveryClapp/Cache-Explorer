@@ -4,6 +4,9 @@ interface SuggestionsPanelProps {
   suggestions: OptimizationSuggestion[]
 }
 
+// Strip temp directory paths from locations
+const stripTempPath = (path: string) => path.replace(/\/tmp\/cache-explorer-[a-f0-9-]+\//g, '')
+
 export function SuggestionsPanel({ suggestions }: SuggestionsPanelProps) {
   if (!suggestions || suggestions.length === 0) return null
 
@@ -18,7 +21,7 @@ export function SuggestionsPanel({ suggestions }: SuggestionsPanelProps) {
           <div key={i} className={`suggestion ${s.severity}`}>
             <div className="suggestion-header">
               <span className={`suggestion-severity ${s.severity}`}>{s.severity}</span>
-              {s.location && <span className="suggestion-location">{s.location}</span>}
+              {s.location && <span className="suggestion-location">{stripTempPath(s.location)}</span>}
             </div>
             <div className="suggestion-message">{s.message}</div>
             {s.fix && <div className="suggestion-fix">{s.fix}</div>}

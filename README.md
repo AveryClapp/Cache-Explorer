@@ -10,27 +10,23 @@
 
 ## Why Cache Explorer?
 
-**Before Cache Explorer:**
-"Why is my code slow?" → Guesswork, profilers, prayer
+**Before:** "Why is my code slow?" → Guesswork, profilers, prayer
 
-<p align="center"> <img src="assets/zero-state.png" width="900" alt="Zero state – code view with no analysis results yet"> </p>
+**After:** Exact line-by-line cache miss attribution
 
-**After Cache Explorer:**
+<p align="center">
+  <img src="assets/base.png" width="800" alt="Cache Explorer UI">
+</p>
 
 <details>
-<summary><strong>UI Screenshots (click to expand)</strong></summary>
+<summary><strong>Results Panels (click to expand)</strong></summary>
 
 <br>
 
-<p align="center">
-  <img src="assets/basic-overview.png" width="360">
-  <img src="assets/advanced-instrumentation.png" width="360">
-</p>
-
-<p align="center">
-  <img src="assets/details.png" width="360">
-  <img src="assets/hotlines.png" width="360">
-</p>
+| | |
+|:--:|:--:|
+| <img src="assets/report-1.png" width="400"> | <img src="assets/report-2.png" width="400"> |
+| <img src="assets/report-3.png" width="400"> | <img src="assets/report-4.png" width="400"> |
 
 </details>
 

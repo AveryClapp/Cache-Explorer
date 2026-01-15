@@ -2,6 +2,9 @@ import { useMemo } from 'react'
 import type { HotLine } from '../types'
 import { formatPercent } from '../utils/formatting'
 
+// Strip temp directory paths and show just filename
+const stripTempPath = (path: string) => path.replace(/\/tmp\/cache-explorer-[a-f0-9-]+\//g, '')
+
 interface HotLinesTableProps {
   hotLines: HotLine[]
   filterByFile?: string  // Empty string or undefined = all files
@@ -75,7 +78,7 @@ export function HotLinesTable({ hotLines, filterByFile = '' }: HotLinesTableProp
           {Object.entries(filesToShow).map(([file, lines]) => (
             <div key={file} className="hot-lines-file-group">
               <div className="file-group-header">
-                <h4 className="file-header">{file}</h4>
+                <h4 className="file-header">{stripTempPath(file)}</h4>
                 <span className="file-badge">{lines.length} lines</span>
               </div>
               <table className="hot-lines-table">
