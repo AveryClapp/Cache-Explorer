@@ -1,14 +1,15 @@
 # Cache Explorer
 
-<p align="center">
-        <img src="assets/demo.gif" width="600" alt="Demo">
-</p>
+[![CI](https://github.com/AveryClapp/cache-explorer/actions/workflows/ci.yml/badge.svg)](https://github.com/AveryClapp/cache-explorer/actions/workflows/ci.yml)
+[![GitHub release](https://img.shields.io/github/v/release/AveryClapp/cache-explorer)](https://github.com/AveryClapp/cache-explorer/releases)
+[![GitHub stars](https://img.shields.io/github/stars/AveryClapp/cache-explorer)](https://github.com/AveryClapp/cache-explorer/stargazers)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 > Visualize CPU cache behavior in real-time. See exactly which lines of your code cause cache misses.
 
-[![CI](https://github.com/AveryClapp/cache-explorer/actions/workflows/ci.yml/badge.svg)](https://github.com/AveryClapp/cache-explorer/actions/workflows/ci.yml)
-[![GitHub stars](https://img.shields.io/github/stars/AveryClapp/cache-explorer)](https://github.com/AveryClapp/cache-explorer/stargazers)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+<p align="center">
+  <img src="assets/demo.gif" width="600" alt="Demo">
+</p>
 
 ## Why Cache Explorer?
 
