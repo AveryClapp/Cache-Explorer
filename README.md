@@ -35,7 +35,7 @@
 ### Docker (Easiest)
 
 ```bash
-docker pull ghcr.io/yourusername/cache-explorer:latest
+docker pull ghcr.io/AveryClapp/cache-explorer:latest
 docker run -p 3001:3001 cache-explorer
 # Open http://localhost:3001
 ```
@@ -47,7 +47,7 @@ docker run -p 3001:3001 cache-explorer
 brew install llvm cmake ninja
 
 # Clone and build
-git clone https://github.com/yourusername/cache-explorer.git
+git clone https://github.com/AveryClapp/cache-explorer.git
 cd cache-explorer
 ./scripts/build.sh
 
@@ -130,7 +130,7 @@ sudo apt install cmake ninja-build nodejs npm
 ### Build
 
 ```bash
-git clone https://github.com/yourusername/cache-explorer.git
+git clone https://github.com/AveryClapp/cache-explorer.git
 cd cache-explorer
 
 # Build everything

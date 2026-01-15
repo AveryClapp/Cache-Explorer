@@ -15,7 +15,7 @@ Thanks for your interest in contributing! This guide will help you get started.
 
 ```bash
 # Clone the repo
-git clone https://github.com/yourusername/cache-explorer.git
+git clone https://github.com/AveryClapp/cache-explorer.git
 cd cache-explorer
 
 # Build the cache simulator
@@ -184,7 +184,7 @@ Look for issues labeled `good first issue`:
 
 ## Questions?
 
-- Open a [Discussion](https://github.com/yourusername/cache-explorer/discussions)
+- Open a [Discussion](https://github.com/AveryClapp/cache-explorer/discussions)
 - Check [CLAUDE.md](./CLAUDE.md) for detailed architecture docs
 
 ## License

@@ -1,8 +1,8 @@
 blank_issues_enabled: true
 contact_links:
   - name: Questions & Discussion
-    url: https://github.com/yourusername/cache-explorer/discussions
+    url: https://github.com/AveryClapp/cache-explorer/discussions
     about: Ask questions, share ideas, or discuss cache-related topics
   - name: Documentation
-    url: https://github.com/yourusername/cache-explorer/blob/main/CLAUDE.md
+    url: https://github.com/AveryClapp/cache-explorer/blob/main/CLAUDE.md
     about: Check the detailed architecture documentation
