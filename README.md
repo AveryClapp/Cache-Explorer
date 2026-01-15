@@ -21,17 +21,10 @@
   <img src="assets/base.png" width="800" alt="Cache Explorer UI">
 </p>
 
-<details>
-<summary><strong>Results Panels (click to expand)</strong></summary>
-
-<br>
-
 |                                             |                                             |
 | :-----------------------------------------: | :-----------------------------------------: |
 | <img src="assets/report-1.png" width="400"> | <img src="assets/report-2.png" width="400"> |
 | <img src="assets/report-3.png" width="400"> | <img src="assets/report-4.png" width="400"> |
-
-</details>
 
 ## Quick Start
 
