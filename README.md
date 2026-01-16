@@ -18,7 +18,7 @@
 **After:** Exact line-by-line cache miss attribution
 
 <p align="center">
-  <video src="assets/demo-1.mov" width="750" controls autoplay muted loop>
+  <video src="assets/demo-vid.mp4" width="750" controls autoplay muted loop>
     Your browser does not support the video tag.
   </video>
 </p>
