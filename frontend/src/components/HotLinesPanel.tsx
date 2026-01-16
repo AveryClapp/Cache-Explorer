@@ -47,14 +47,16 @@ export function HotLinesPanel({ hotLines, code, selectedFile, onFileChange, edit
         {filteredLines.slice(0, 10).map((hotLine, i) => {
           const barWidth = maxMisses > 0 ? (hotLine.misses / maxMisses) * 100 : 0
           const lines = code.split('\n')
-          const sourceLine = lines[hotLine.line - 1]?.trim()
+          // Only show code preview if this hotline is from the selected file (or only one file exists)
+          const isCurrentFile = uniqueFiles.size === 1 || (selectedFile && hotLine.file === selectedFile)
+          const sourceLine = isCurrentFile ? lines[hotLine.line - 1]?.trim() : null
 
           return (
             <div
               key={i}
               className="hotspot"
               onClick={() => {
-                if (editorRef.current && hotLine.line > 0) {
+                if (editorRef.current && hotLine.line > 0 && isCurrentFile) {
                   editorRef.current.revealLineInCenter(hotLine.line)
                   editorRef.current.setPosition({ lineNumber: hotLine.line, column: 1 })
                   editorRef.current.focus()
@@ -69,7 +71,7 @@ export function HotLinesPanel({ hotLines, code, selectedFile, onFileChange, edit
                   {hotLine.misses.toLocaleString()} misses ({formatPercent(hotLine.missRate)})
                 </span>
               </div>
-              {/* Source code preview */}
+              {/* Source code preview - only show if from current file */}
               {sourceLine && (
                 <div className="hotspot-code">
                   <code>{sourceLine}</code>

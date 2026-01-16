@@ -18,13 +18,10 @@
 **After:** Exact line-by-line cache miss attribution
 
 <p align="center">
-  <img src="assets/base.png" width="800" alt="Cache Explorer UI">
+  <video src="assets/demo-1.mov" width="750" controls autoplay muted loop>
+    Your browser does not support the video tag.
+  </video>
 </p>
-
-|                                             |                                             |
-| :-----------------------------------------: | :-----------------------------------------: |
-| <img src="assets/report-1.png" width="400"> | <img src="assets/report-2.png" width="400"> |
-| <img src="assets/report-3.png" width="400"> | <img src="assets/report-4.png" width="400"> |
 
 ## Quick Start
 
