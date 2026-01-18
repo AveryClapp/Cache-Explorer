@@ -83,3 +83,6 @@ Thumbs.db
 third_party/
 
 docs/plans
+
+# Worktrees
+.worktrees/
