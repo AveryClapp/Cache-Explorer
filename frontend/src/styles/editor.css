@@ -72,7 +72,7 @@
 .diff-labels {
   display: flex;
   height: 28px;
-  background: var(--surface);
+  background: var(--panel);
   border-bottom: 1px solid var(--border);
 }
 
@@ -82,21 +82,19 @@
   align-items: center;
   justify-content: center;
   font-family: var(--font-display);
-  font-size: var(--text-2xs);
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.05em;
 }
 
 .diff-label.baseline {
-  color: var(--signal-critical);
-  background: rgba(239, 68, 68, 0.1);
+  color: var(--text-secondary);
   border-right: 1px solid var(--border);
 }
 
 .diff-label.current {
-  color: var(--signal-success);
-  background: rgba(16, 185, 129, 0.1);
+  color: var(--signal-info);
 }
 
 /* Status Bar */

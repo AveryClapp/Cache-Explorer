@@ -4,19 +4,70 @@ import type { editor } from 'monaco-editor'
 
 interface HotLinesPanelProps {
   hotLines: HotLine[]
+  baselineHotLines?: HotLine[]
+  diffMode?: boolean
   code: string
   selectedFile: string
   onFileChange: (file: string) => void
   editorRef: React.RefObject<editor.IStandaloneCodeEditor | null>
 }
 
-export function HotLinesPanel({ hotLines, code, selectedFile, onFileChange, editorRef }: HotLinesPanelProps) {
+interface HotLineWithDelta extends HotLine {
+  delta?: number
+  isNew?: boolean
+  isResolved?: boolean
+}
+
+export function HotLinesPanel({ hotLines, baselineHotLines, diffMode, code, selectedFile, onFileChange, editorRef }: HotLinesPanelProps) {
   // Filter hotlines to only show those with more than 1 total access
   const significantHotLines = hotLines.filter(h => (h.hits + h.misses) > 1)
 
   if (significantHotLines.length === 0) return null
 
-  const filteredLines = significantHotLines.filter(h => !selectedFile || h.file === selectedFile)
+  // Build lookup for baseline by source location
+  const baselineLookup = new Map<string, HotLine>()
+  if (diffMode && baselineHotLines) {
+    for (const line of baselineHotLines) {
+      const key = `${line.file}:${line.line}`
+      baselineLookup.set(key, line)
+    }
+  }
+
+  // Compute deltas and track matched baseline lines
+  const matchedKeys = new Set<string>()
+  let hotLinesWithDelta: HotLineWithDelta[] = significantHotLines.map(h => {
+    const key = `${h.file}:${h.line}`
+    const baseline = baselineLookup.get(key)
+    if (baseline) {
+      matchedKeys.add(key)
+      return { ...h, delta: h.misses - baseline.misses }
+    }
+    return { ...h, isNew: diffMode }
+  })
+
+  // Resolved lines: in baseline but not in current (improved and dropped off)
+  const resolvedLines: HotLineWithDelta[] = diffMode && baselineHotLines
+    ? baselineHotLines
+        .filter(h => {
+          const key = `${h.file}:${h.line}`
+          return !matchedKeys.has(key) && (h.hits + h.misses) > 1
+        })
+        .map(h => ({ ...h, isResolved: true, delta: -h.misses }))
+    : []
+
+  // Sort: regressions first (positive delta), then by miss count
+  if (diffMode) {
+    hotLinesWithDelta.sort((a, b) => {
+      if (a.isNew && !b.isNew) return -1
+      if (!a.isNew && b.isNew) return 1
+      const deltaA = a.delta ?? 0
+      const deltaB = b.delta ?? 0
+      if (deltaA !== deltaB) return deltaB - deltaA
+      return b.misses - a.misses
+    })
+  }
+
+  const filteredLines = hotLinesWithDelta.filter(h => !selectedFile || h.file === selectedFile)
   const maxMisses = Math.max(...filteredLines.slice(0, 10).map(h => h.misses), 1)
   const uniqueFiles = new Set(significantHotLines.map(h => h.file).filter(Boolean))
 
@@ -51,10 +102,18 @@ export function HotLinesPanel({ hotLines, code, selectedFile, onFileChange, edit
           const isCurrentFile = uniqueFiles.size === 1 || (selectedFile && hotLine.file === selectedFile)
           const sourceLine = isCurrentFile ? lines[hotLine.line - 1]?.trim() : null
 
+          // Determine CSS classes based on delta state
+          const hotspotClasses = ['hotspot']
+          if (diffMode && hotLine.isNew) {
+            hotspotClasses.push('hotspot-new')
+          } else if (diffMode && hotLine.delta !== undefined && hotLine.delta > 0) {
+            hotspotClasses.push('hotspot-regression')
+          }
+
           return (
             <div
               key={i}
-              className="hotspot"
+              className={hotspotClasses.join(' ')}
               onClick={() => {
                 if (editorRef.current && hotLine.line > 0 && isCurrentFile) {
                   editorRef.current.revealLineInCenter(hotLine.line)
@@ -66,9 +125,16 @@ export function HotLinesPanel({ hotLines, code, selectedFile, onFileChange, edit
               <div className="hotspot-header">
                 <span className="hotspot-location">
                   {hotLine.file ? `${hotLine.file.split('/').pop()}:` : ''}Line {hotLine.line}
+                  {hotLine.isNew && <span className="hotspot-badge new">NEW</span>}
                 </span>
                 <span className="hotspot-stats">
-                  {hotLine.misses.toLocaleString()} misses ({formatPercent(hotLine.missRate)})
+                  {hotLine.misses.toLocaleString()} misses
+                  {diffMode && hotLine.delta !== undefined && hotLine.delta !== 0 && (
+                    <span className={`hotspot-delta ${hotLine.delta > 0 ? 'negative' : 'positive'}`}>
+                      {hotLine.delta > 0 ? '\u25B2' : '\u25BC'} {Math.abs(hotLine.delta).toLocaleString()}
+                    </span>
+                  )}
+                  <span className="hotspot-rate">({formatPercent(hotLine.missRate)})</span>
                 </span>
               </div>
               {/* Source code preview - only show if from current file */}
@@ -87,6 +153,30 @@ export function HotLinesPanel({ hotLines, code, selectedFile, onFileChange, edit
           )
         })}
       </div>
+
+      {/* Resolved section - lines that improved and dropped off hot list */}
+      {diffMode && resolvedLines.length > 0 && (
+        <details className="resolved-section">
+          <summary className="resolved-header">
+            <span className="resolved-icon">✓</span>
+            {resolvedLines.length} Resolved Hot Line{resolvedLines.length !== 1 ? 's' : ''}
+          </summary>
+          <div className="hotspots resolved">
+            {resolvedLines.slice(0, 5).map((hotLine, i) => (
+              <div key={i} className="hotspot hotspot-resolved">
+                <div className="hotspot-header">
+                  <span className="hotspot-location">
+                    {hotLine.file ? `${hotLine.file.split('/').pop()}:` : ''}Line {hotLine.line}
+                  </span>
+                  <span className="hotspot-stats resolved">
+                    Was {hotLine.misses.toLocaleString()} misses
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
     </div>
   )
 }

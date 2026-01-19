@@ -20,6 +20,7 @@ import {
 interface ResultsPanelProps {
   result: CacheResult | null
   baselineResult: CacheResult | null
+  baselineConfig?: string | null
   error: ErrorResult | null
   isLoading: boolean
   stage: Stage
@@ -42,6 +43,7 @@ interface ResultsPanelProps {
 export function ResultsPanel({
   result,
   baselineResult,
+  baselineConfig,
   error,
   isLoading,
   stage,
@@ -85,7 +87,7 @@ export function ResultsPanel({
           <>
             {/* Diff Summary Panel */}
             {diffMode && baselineResult && (
-              <DiffSummary result={result} baselineResult={baselineResult} />
+              <DiffSummary result={result} baselineResult={baselineResult} baselineConfig={baselineConfig} />
             )}
 
             {/* Metric Cards */}
@@ -142,6 +144,8 @@ export function ResultsPanel({
 
             <HotLinesPanel
               hotLines={result.hotLines}
+              baselineHotLines={diffMode && baselineResult ? baselineResult.hotLines : undefined}
+              diffMode={diffMode}
               code={code}
               selectedFile={selectedHotLineFile}
               onFileChange={onHotLineFileChange}

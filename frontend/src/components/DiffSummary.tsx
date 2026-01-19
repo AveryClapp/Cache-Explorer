@@ -4,9 +4,11 @@ import type { CacheResult } from '../types'
 interface DiffSummaryProps {
   result: CacheResult
   baselineResult: CacheResult
+  baselineConfig?: string | null
 }
 
-export function DiffSummary({ result, baselineResult }: DiffSummaryProps) {
+export function DiffSummary({ result, baselineResult, baselineConfig }: DiffSummaryProps) {
+  const configMismatch = baselineConfig && result.config && result.config !== baselineConfig
   const l1Cur = (result.levels.l1d || result.levels.l1!).hitRate
   const l1Base = (baselineResult.levels.l1d || baselineResult.levels.l1!)?.hitRate ?? 0
   const l1Diff = l1Cur - l1Base
@@ -21,6 +23,12 @@ export function DiffSummary({ result, baselineResult }: DiffSummaryProps) {
       <div className="panel-header">
         <span className="panel-title">Comparison Summary</span>
       </div>
+      {configMismatch && (
+        <div className="diff-config-warning">
+          <span className="warning-icon">⚠</span>
+          <span>Config changed ({baselineConfig} → {result.config}). Comparison may not be meaningful.</span>
+        </div>
+      )}
       <div className="diff-summary-content">
         <div className={`diff-verdict ${improved ? 'improved' : degraded ? 'degraded' : 'neutral'}`}>
           <span className="diff-verdict-icon">{improved ? '↑' : degraded ? '↓' : '='}</span>

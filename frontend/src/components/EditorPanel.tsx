@@ -100,8 +100,8 @@ export function EditorPanel({
         {diffMode && baselineCode ? (
           <>
             <div className="diff-labels">
-              <span className="diff-label baseline">BASELINE (Original)</span>
-              <span className="diff-label current">CURRENT (Modified)</span>
+              <span className="diff-label baseline">Baseline</span>
+              <span className="diff-label current">Current</span>
             </div>
             <DiffEditor
               height="calc(100% - 28px)"
@@ -111,9 +111,12 @@ export function EditorPanel({
               modified={code}
               onMount={(editor) => {
                 const modifiedEditor = editor.getModifiedEditor()
-                modifiedEditor.onDidChangeModelContent(() => onCodeChange(modifiedEditor.getValue()))
+                modifiedEditor.onDidChangeModelContent(() => {
+                  const newValue = modifiedEditor.getValue()
+                  onCodeChange(newValue)
+                })
               }}
-              options={{ minimap: { enabled: false }, fontSize: 13, renderSideBySide: true, readOnly: isReadOnly }}
+              options={{ minimap: { enabled: false }, fontSize: 13, readOnly: false, originalEditable: false, renderSideBySide: true }}
             />
           </>
         ) : (

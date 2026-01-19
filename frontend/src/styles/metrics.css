@@ -74,21 +74,18 @@
 
 .metric-delta {
   font-family: var(--font-code);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  margin-left: var(--space-2);
-  padding: 2px 6px;
-  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  margin: 6px 0;
+  text-align: center;
 }
 
 .metric-delta.positive {
-  color: var(--signal-good);
-  background: rgba(0, 255, 136, 0.15);
+  color: #34d399;
 }
 
 .metric-delta.negative {
-  color: var(--signal-critical);
-  background: rgba(255, 77, 77, 0.15);
+  color: #f87171;
 }
 
 /* Timing delta badges */

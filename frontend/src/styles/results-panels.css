@@ -97,6 +97,22 @@
   color: var(--text-secondary);
 }
 
+/* ─── Diff Config Warning ─── */
+.diff-config-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(220, 220, 170, 0.1);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--signal-warning);
+}
+
+.diff-config-warning .warning-icon {
+  font-size: 14px;
+}
+
 .diff-details {
   display: flex;
   flex-direction: column;

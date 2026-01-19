@@ -7,10 +7,9 @@ interface HeaderProps {
   result: CacheResult | null;
   isLoading: boolean;
   stage: Stage;
-  code: string;
   onToggleTheme: () => void;
   onSetDiffMode: (mode: boolean) => void;
-  onSetBaseline: (code: string, result: CacheResult) => void;
+  onSetBaseline: (result: CacheResult) => void;
   onClearBaseline: () => void;
   onRun: () => void;
   onCancel: () => void;
@@ -33,7 +32,6 @@ export function Header({
   result,
   isLoading,
   stage,
-  code,
   onToggleTheme,
   onSetDiffMode,
   onSetBaseline,
@@ -84,7 +82,7 @@ export function Header({
           <button
             onClick={() => {
               if (!baselineResult) {
-                onSetBaseline(code, result);
+                onSetBaseline(result);
               } else if (diffMode) {
                 onSetDiffMode(false);
               } else {

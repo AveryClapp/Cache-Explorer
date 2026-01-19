@@ -32,7 +32,7 @@ import type {
 import { DEFAULT_EXAMPLE, API_BASE, WS_URL, PREFETCH_DEFAULTS, defaultCustomConfig } from './constants'
 
 // Hooks
-import { createFileTab, getFileExtension } from './hooks'
+import { createFileTab, getFileExtension, useBaseline } from './hooks'
 
 // Utilities
 import { fuzzyMatch } from './utils/formatting'
@@ -133,13 +133,21 @@ function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [copied, setCopied] = useState(false)
   const [showDetails, setShowDetails] = useState(false)
-  const [diffMode, setDiffMode] = useState(false)
   const [sampleRate, setSampleRate] = useState(1)  // 1 = no sampling
   const [fastMode, setFastMode] = useState(false)  // false = full 3C tracking
   const [eventLimit, setEventLimit] = useState(100000)  // Default 100K events
   const [longRunning, setLongRunning] = useState(false)
+
+  // Use baseline hook for persistent comparison mode
+  const {
+    baselineResult,
+    baselineConfig,
+    diffMode,
+    setDiffMode,
+    setBaseline: setBaselineFromHook,
+    clearBaseline: clearBaselineHook,
+  } = useBaseline(files)
   const [baselineCode, setBaselineCode] = useState<string | null>(null)
-  const [baselineResult, setBaselineResult] = useState<CacheResult | null>(null)
   const [vimMode, setVimMode] = useState(false)  // Vim keybindings toggle
   const [showCommandPalette, setShowCommandPalette] = useState(false)
   const [commandQuery, setCommandQuery] = useState('')
@@ -575,9 +583,9 @@ function App() {
     // Actions (@)
     { id: 'run', icon: '@', label: 'Run analysis', shortcut: '⌘R', action: () => { if (!isLoading) runAnalysis() }, category: 'actions' },
     { id: 'share', icon: '@', label: 'Share / Copy link', shortcut: '⌘S', action: () => { handleShare(); setCopied(true); setTimeout(() => setCopied(false), 2000) }, category: 'actions' },
-    { id: 'diff-baseline', icon: '@', label: 'Set as diff baseline', action: () => { setBaselineCode(code); setBaselineResult(result) }, category: 'actions' },
-    { id: 'diff-toggle', icon: '@', label: diffMode ? 'Exit diff mode' : 'Enter diff mode', action: () => { if (baselineCode) setDiffMode(!diffMode) }, category: 'actions' },
-    { id: 'diff-clear', icon: '@', label: 'Clear diff baseline', action: () => { setBaselineCode(null); setBaselineResult(null); setDiffMode(false) }, category: 'actions' },
+    { id: 'diff-baseline', icon: '@', label: 'Set as diff baseline', action: () => { if (result) { setBaselineFromHook(result, config, files); setBaselineCode(code) } }, category: 'actions' },
+    { id: 'diff-toggle', icon: '@', label: diffMode ? 'Exit diff mode' : 'Enter diff mode', action: () => { if (baselineResult) setDiffMode(!diffMode) }, category: 'actions' },
+    { id: 'diff-clear', icon: '@', label: 'Clear diff baseline', action: () => { clearBaselineHook(); setBaselineCode(null) }, category: 'actions' },
     { id: 'export-json', icon: '@', label: 'Export results as JSON', action: () => result && exportAsJSON(result), category: 'actions' },
     { id: 'export-csv', icon: '@', label: 'Export results as CSV', action: () => result && exportAsCSV(result), category: 'actions' },
     { id: 'batch-analyze', icon: '@', label: 'Compare hardware presets', action: runBatchAnalysis, category: 'actions' },
@@ -592,7 +600,7 @@ function App() {
     { id: 'limit-1m', icon: '*', label: 'Event limit: 1M', action: () => setEventLimit(1000000), category: 'config' },
     { id: 'limit-5m', icon: '*', label: 'Event limit: 5M', action: () => setEventLimit(5000000), category: 'config' },
     { id: 'limit-none', icon: '*', label: 'Event limit: None', action: () => setEventLimit(0), category: 'config' },
-  ], [isLoading, activeFileId, vimMode, diffMode, baselineCode, code, result, handleShare, updateActiveLanguage])
+  ], [isLoading, activeFileId, vimMode, diffMode, baselineResult, config, files, result, code, handleShare, updateActiveLanguage, setBaselineFromHook, clearBaselineHook])
 
   // Command palette handlers
   const handleCommandSelect = useCallback((cmd: CommandItem) => {
@@ -642,11 +650,10 @@ function App() {
           result={result}
           isLoading={isLoading}
           stage={stage}
-          code={code}
           onToggleTheme={toggleTheme}
           onSetDiffMode={setDiffMode}
-          onSetBaseline={(c, r) => { setBaselineCode(c); setBaselineResult(r) }}
-          onClearBaseline={() => { setBaselineCode(null); setBaselineResult(null); setDiffMode(false) }}
+          onSetBaseline={(r) => { setBaselineFromHook(r, config, files); setBaselineCode(code) }}
+          onClearBaseline={() => { clearBaselineHook(); setBaselineCode(null) }}
           onRun={runAnalysis}
           onCancel={cancelAnalysis}
         />
@@ -749,6 +756,7 @@ function App() {
         <ResultsPanel
           result={result}
           baselineResult={baselineResult}
+          baselineConfig={baselineConfig}
           error={error}
           isLoading={isLoading}
           stage={stage}

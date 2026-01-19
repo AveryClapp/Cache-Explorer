@@ -24,14 +24,12 @@ export function MetricCards({ result, baselineResult, diffMode }: MetricCardsPro
     <div className="metric-grid">
       <div className={`metric-card ${l1Rate > 0.95 ? 'excellent' : l1Rate > 0.8 ? 'good' : 'warning'}`}>
         <div className="metric-label">L1 Hit Rate</div>
-        <div className="metric-value">
-          {formatPercent(l1Rate)}
-          {l1Delta && !l1Delta.isNeutral && (
-            <span className={`metric-delta ${l1Delta.isPositive ? 'positive' : 'negative'}`}>
-              {l1Delta.text}
-            </span>
-          )}
-        </div>
+        <div className="metric-value">{formatPercent(l1Rate)}</div>
+        {l1Delta && !l1Delta.isNeutral && (
+          <div className={`metric-delta ${l1Delta.isPositive ? 'positive' : 'negative'}`}>
+            {l1Delta.text}
+          </div>
+        )}
         <div className="metric-detail">
           {(result.levels.l1d || result.levels.l1!).hits.toLocaleString()} hits
         </div>
@@ -39,27 +37,23 @@ export function MetricCards({ result, baselineResult, diffMode }: MetricCardsPro
 
       <div className={`metric-card ${l2Rate > 0.95 ? 'excellent' : l2Rate > 0.8 ? 'good' : 'warning'}`}>
         <div className="metric-label">L2 Hit Rate</div>
-        <div className="metric-value">
-          {formatPercent(l2Rate)}
-          {l2Delta && !l2Delta.isNeutral && (
-            <span className={`metric-delta ${l2Delta.isPositive ? 'positive' : 'negative'}`}>
-              {l2Delta.text}
-            </span>
-          )}
-        </div>
+        <div className="metric-value">{formatPercent(l2Rate)}</div>
+        {l2Delta && !l2Delta.isNeutral && (
+          <div className={`metric-delta ${l2Delta.isPositive ? 'positive' : 'negative'}`}>
+            {l2Delta.text}
+          </div>
+        )}
         <div className="metric-detail">{result.levels.l2.hits.toLocaleString()} hits</div>
       </div>
 
       <div className={`metric-card ${l3Rate > 0.95 ? 'excellent' : l3Rate > 0.8 ? 'good' : 'warning'}`}>
         <div className="metric-label">L3 Hit Rate</div>
-        <div className="metric-value">
-          {formatPercent(l3Rate)}
-          {l3Delta && !l3Delta.isNeutral && (
-            <span className={`metric-delta ${l3Delta.isPositive ? 'positive' : 'negative'}`}>
-              {l3Delta.text}
-            </span>
-          )}
-        </div>
+        <div className="metric-value">{formatPercent(l3Rate)}</div>
+        {l3Delta && !l3Delta.isNeutral && (
+          <div className={`metric-delta ${l3Delta.isPositive ? 'positive' : 'negative'}`}>
+            {l3Delta.text}
+          </div>
+        )}
         <div className="metric-detail">{result.levels.l3.hits.toLocaleString()} hits</div>
       </div>
     </div>
