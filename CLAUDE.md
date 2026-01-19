@@ -18,6 +18,7 @@
 | Fast Mode | ✅ Complete | `--fast` disables 3C classification for ~3x speed |
 | CLI Tool | ✅ Complete | JSON/text output, hardware presets |
 | Web Frontend | ✅ Complete | Multi-file, dark/light modes, styled dropdowns, cancel button |
+| Comparison Mode | ✅ Complete | Before/after diff view, localStorage persistence, delta indicators |
 | Web Backend | ✅ Complete | Docker sandbox, WebSocket streaming |
 | Rust Support | ❌ Not Available | Requires std library linking (backlog) |
 | Testing | ✅ 123 tests | CacheLevel(22) + CacheSystem(25) + MESI(19) + Prefetch(18) + TLB(8) + Advanced(31) |
@@ -135,6 +136,9 @@ Pre-built passes are downloaded from GitHub Releases on first run and cached in 
 **Frontend:**
 - `frontend/src/App.tsx` - Main React component
 - `frontend/src/App.css` - Styling with dark/light themes
+- `frontend/src/hooks/useBaseline.ts` - Comparison mode state with localStorage persistence
+- `frontend/src/components/DiffSummary.tsx` - Comparison verdict and summary
+- `frontend/src/components/MetricCards.tsx` - Hit rate cards with delta indicators
 
 ---
 
@@ -345,6 +349,21 @@ The Docker container includes:
 1. Add enum value to `PrefetchPolicy` in `Prefetcher.hpp`
 2. Implement logic in `Prefetcher::on_access()`
 3. Add test in `MultiCorePrefetchTest.cpp`
+
+### Using Comparison Mode (Web UI)
+1. Run analysis on your code
+2. Click "Set Baseline" in the header (or use command palette: `@` → "Set as diff baseline")
+3. Modify your code to optimize cache behavior
+4. Run analysis again
+5. Click "Compare" to see side-by-side diff and delta indicators
+
+**Features:**
+- Side-by-side code diff (baseline left, current right - current is editable)
+- Delta indicators on metric cards (green ▲ = improvement, red ▼ = regression)
+- Hot line deltas showing which lines improved/regressed
+- "Resolved" section for hot lines that dropped off the list
+- Config mismatch warning if hardware preset changed
+- Baseline persists in localStorage (survives page refresh)
 
 ---
 
