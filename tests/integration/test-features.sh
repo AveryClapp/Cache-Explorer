@@ -44,7 +44,8 @@ test_feature() {
     if [ $EXIT_CODE -ne 0 ]; then
         echo -e "${RED}FAIL${NC}"
         echo "    Error: exited with code $EXIT_CODE"
-        echo "    Output: $OUTPUT" | head -5
+        echo "    Output:"
+        echo "$OUTPUT" | head -10
         FAILED=$((FAILED + 1))
         FAILED_TESTS+=("$name")
         return 1
