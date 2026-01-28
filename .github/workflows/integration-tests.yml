@@ -36,9 +36,9 @@ jobs:
         run: |
           if [ "$RUNNER_OS" == "Linux" ]; then
             sudo apt-get update
-            sudo apt-get install -y ninja-build cmake jq bc
+            sudo apt-get install -y ninja-build cmake jq bc libboost-system-dev
           elif [ "$RUNNER_OS" == "macOS" ]; then
-            brew install ninja cmake jq bc
+            brew install ninja cmake jq bc boost
           fi
 
       - name: Build cache simulator
