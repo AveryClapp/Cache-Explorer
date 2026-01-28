@@ -43,6 +43,7 @@ jobs:
 
       - name: Build cache simulator
         run: |
+          rm -rf backend/cache-simulator/build
           mkdir -p backend/cache-simulator/build
           cd backend/cache-simulator/build
           cmake .. -G Ninja
@@ -50,6 +51,7 @@ jobs:
 
       - name: Build runtime library
         run: |
+          rm -rf backend/runtime/build
           mkdir -p backend/runtime/build
           cd backend/runtime/build
           cmake .. -G Ninja
@@ -57,13 +59,33 @@ jobs:
 
       - name: Build LLVM pass
         run: |
+          # Clean build directory to avoid stale artifacts
+          rm -rf backend/llvm-pass/build
           mkdir -p backend/llvm-pass/build
           cd backend/llvm-pass/build
+
+          # Set environment to use correct LLVM version
           if [ "$RUNNER_OS" == "Linux" ]; then
-            cmake .. -G Ninja -DLLVM_DIR=/usr/lib/llvm-${{ matrix.llvm }}/lib/cmake/llvm
+            export PATH="/usr/lib/llvm-${{ matrix.llvm }}/bin:$PATH"
+            export CC="/usr/lib/llvm-${{ matrix.llvm }}/bin/clang"
+            export CXX="/usr/lib/llvm-${{ matrix.llvm }}/bin/clang++"
+            export LD_LIBRARY_PATH="/usr/lib/llvm-${{ matrix.llvm }}/lib:$LD_LIBRARY_PATH"
+            cmake .. -G Ninja \
+              -DLLVM_DIR=/usr/lib/llvm-${{ matrix.llvm }}/lib/cmake/llvm \
+              -DCMAKE_PREFIX_PATH=/usr/lib/llvm-${{ matrix.llvm }}
           else
-            cmake .. -G Ninja -DLLVM_DIR=/opt/homebrew/opt/llvm@${{ matrix.llvm }}/lib/cmake/llvm
+            export PATH="/opt/homebrew/opt/llvm@${{ matrix.llvm }}/bin:$PATH"
+            export CC="/opt/homebrew/opt/llvm@${{ matrix.llvm }}/bin/clang"
+            export CXX="/opt/homebrew/opt/llvm@${{ matrix.llvm }}/bin/clang++"
+            cmake .. -G Ninja \
+              -DLLVM_DIR=/opt/homebrew/opt/llvm@${{ matrix.llvm }}/lib/cmake/llvm \
+              -DCMAKE_PREFIX_PATH=/opt/homebrew/opt/llvm@${{ matrix.llvm }}
           fi
+
+          # Verify LLVM version
+          echo "Building with:"
+          $CC --version | head -1
+
           ninja
 
       - name: Fix macOS SDK path (if needed)
