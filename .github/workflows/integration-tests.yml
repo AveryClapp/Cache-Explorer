@@ -75,6 +75,16 @@ jobs:
 
       - name: Run integration tests
         run: |
+          # Set environment to use the correct LLVM version
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            export PATH="/usr/lib/llvm-${{ matrix.llvm }}/bin:$PATH"
+            export CACHE_EXPLORER_CC="/usr/lib/llvm-${{ matrix.llvm }}/bin/clang"
+            export CACHE_EXPLORER_CXX="/usr/lib/llvm-${{ matrix.llvm }}/bin/clang++"
+          else
+            export PATH="/opt/homebrew/opt/llvm@${{ matrix.llvm }}/bin:$PATH"
+            export CACHE_EXPLORER_CC="/opt/homebrew/opt/llvm@${{ matrix.llvm }}/bin/clang"
+            export CACHE_EXPLORER_CXX="/opt/homebrew/opt/llvm@${{ matrix.llvm }}/bin/clang++"
+          fi
           cd tests/integration
           ./run-all-tests.sh
 
