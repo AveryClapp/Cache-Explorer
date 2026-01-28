@@ -574,8 +574,8 @@ llvmGetPassPluginInfo() {
 
             // Use OptimizerLastEPCallback for all optimization levels
             // This is the most reliable way to run after IR is generated
-            // LLVM 21+ added ThinOrFullLTOPhase parameter
-#if LLVM_VERSION_MAJOR >= 21
+            // LLVM 20+ added ThinOrFullLTOPhase parameter
+#if LLVM_VERSION_MAJOR >= 20
             PB.registerOptimizerLastEPCallback([](ModulePassManager &MPM,
                                                   OptimizationLevel OL,
                                                   ThinOrFullLTOPhase) {
