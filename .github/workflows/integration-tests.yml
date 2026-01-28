@@ -16,7 +16,7 @@ jobs:
         llvm: [18, 19, 20, 21]
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install LLVM (Ubuntu)
         if: runner.os == 'Linux'
@@ -55,6 +55,17 @@ jobs:
           cmake .. -G Ninja
           ninja
 
+      - name: Build LLVM pass
+        run: |
+          mkdir -p backend/llvm-pass/build
+          cd backend/llvm-pass/build
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            cmake .. -G Ninja -DLLVM_DIR=/usr/lib/llvm-${{ matrix.llvm }}/lib/cmake/llvm
+          else
+            cmake .. -G Ninja -DLLVM_DIR=/opt/homebrew/opt/llvm@${{ matrix.llvm }}/lib/cmake/llvm
+          fi
+          ninja
+
       - name: Fix macOS SDK path (if needed)
         if: runner.os == 'macOS'
         run: |
@@ -69,7 +80,7 @@ jobs:
 
       - name: Upload test results
         if: failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ matrix.os }}-llvm${{ matrix.llvm }}
           path: tests/integration/*.log
