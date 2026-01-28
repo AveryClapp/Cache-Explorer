@@ -1,7 +1,7 @@
 #!/bin/bash
 # Integration test: Verify all hardware presets work correctly
 
-set -e  # Exit on error
+# Don't use set -e because we want to collect all test failures
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
