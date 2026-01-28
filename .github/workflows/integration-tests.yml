@@ -1,0 +1,76 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        llvm: [18, 19, 20, 21]
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install LLVM (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh ${{ matrix.llvm }}
+          sudo apt-get install -y clang-${{ matrix.llvm }} llvm-${{ matrix.llvm }}-dev
+
+      - name: Install LLVM (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install llvm@${{ matrix.llvm }}
+          echo "/opt/homebrew/opt/llvm@${{ matrix.llvm }}/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: |
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            sudo apt-get update
+            sudo apt-get install -y ninja-build cmake jq bc
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+            brew install ninja cmake jq bc
+          fi
+
+      - name: Build cache simulator
+        run: |
+          mkdir -p backend/cache-simulator/build
+          cd backend/cache-simulator/build
+          cmake .. -G Ninja
+          ninja
+
+      - name: Build runtime library
+        run: |
+          mkdir -p backend/runtime/build
+          cd backend/runtime/build
+          cmake .. -G Ninja
+          ninja
+
+      - name: Fix macOS SDK path (if needed)
+        if: runner.os == 'macOS'
+        run: |
+          SDK_PATH=$(xcrun --show-sdk-path)
+          mkdir -p /opt/homebrew/etc/clang
+          echo "-isysroot $SDK_PATH" > /opt/homebrew/etc/clang/$(uname -m)-apple-darwin$(uname -r | cut -d. -f1).cfg || true
+
+      - name: Run integration tests
+        run: |
+          cd tests/integration
+          ./run-all-tests.sh
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results-${{ matrix.os }}-llvm${{ matrix.llvm }}
+          path: tests/integration/*.log
+          if-no-files-found: ignore
