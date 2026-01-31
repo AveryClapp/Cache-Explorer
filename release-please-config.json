@@ -12,13 +12,6 @@
         {"type": "test", "section": "Tests", "hidden": false},
         {"type": "refactor", "section": "Code Refactoring", "hidden": true},
         {"type": "chore", "section": "Miscellaneous", "hidden": true}
-      ],
-      "extra-files": [
-        {
-          "type": "json",
-          "path": "backend/server/package.json",
-          "jsonpath": "$.version"
-        }
       ]
     }
   }

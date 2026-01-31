@@ -20,7 +20,7 @@ jobs:
         id: release
         uses: google-github-actions/release-please-action@v4
         with:
-          release-type: node
+          release-type: simple
           package-name: cache-explorer
 
       - name: Checkout code
