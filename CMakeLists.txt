@@ -17,14 +17,6 @@ llvm_map_components_to_libnames(llvm_libs
     Core Support ExecutionEngine IRReader BitReader AsmParser
 )
 
-# Find Boost (for Beast/Asio in server) - optional for now
-find_package(Boost COMPONENTS system)
-if(Boost_FOUND)
-    message(STATUS "Found Boost ${Boost_VERSION}")
-else()
-    message(STATUS "Boost not found - server will need it later")
-endif()
-
 # Add subdirectories (only those that exist)
 if(EXISTS ${CMAKE_SOURCE_DIR}/backend/llvm-pass/CMakeLists.txt)
     add_subdirectory(backend/llvm-pass)
