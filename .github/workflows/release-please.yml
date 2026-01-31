@@ -21,7 +21,6 @@ jobs:
         uses: google-github-actions/release-please-action@v4
         with:
           release-type: simple
-          package-name: cache-explorer
 
       - name: Checkout code
         if: ${{ steps.release.outputs.release_created }}
