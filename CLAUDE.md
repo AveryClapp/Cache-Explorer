@@ -332,6 +332,97 @@ The Docker container includes:
 
 ---
 
+## Automated Releases & CI/CD
+
+### Conventional Commits
+
+This project uses **conventional commits** for automated versioning and changelog generation. Follow this format:
+
+```
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+```
+
+**Types:**
+- `feat:` - New feature (bumps MINOR version, e.g., 1.0.0 → 1.1.0)
+- `fix:` - Bug fix (bumps PATCH version, e.g., 1.0.0 → 1.0.1)
+- `perf:` - Performance improvement (bumps PATCH)
+- `docs:` - Documentation only
+- `test:` - Adding/updating tests
+- `refactor:` - Code refactoring (no behavior change)
+- `chore:` - Maintenance tasks
+
+**Breaking changes** (bumps MAJOR version, e.g., 1.0.0 → 2.0.0):
+Add `BREAKING CHANGE:` in the footer or `!` after the type:
+```
+feat!: remove deprecated --old-flag option
+
+BREAKING CHANGE: --old-flag has been removed, use --new-flag instead
+```
+
+**Examples:**
+```bash
+# Feature (1.0.0 → 1.1.0)
+git commit -m "feat: add segment caching for 10x speedup on repetitive loops"
+
+# Bug fix (1.0.0 → 1.0.1)
+git commit -m "fix: correct L3 hit rate calculation for MESI protocol"
+
+# Performance (1.0.0 → 1.0.1)
+git commit -m "perf: optimize cache lookup with hash map instead of linear search"
+
+# Breaking change (1.0.0 → 2.0.0)
+git commit -m "feat!: replace --config with --preset for consistency
+
+BREAKING CHANGE: --config flag renamed to --preset"
+```
+
+### Automated Release Process
+
+When you push to `main`:
+
+1. **Release Please** analyzes commits since last release
+2. Creates a PR with:
+   - Updated version number
+   - Generated CHANGELOG.md
+   - Updated package.json
+3. When you merge the PR:
+   - Creates a git tag (e.g., `v1.2.0`)
+   - Creates GitHub release with notes
+4. The git tag triggers:
+   - **LLVM Pass Builds** - Builds CacheProfiler.so for LLVM 17-21
+   - **Docker Images** - Publishes to `ghcr.io/[username]/cache-explorer-*`
+
+**Published Docker Images:**
+```bash
+# Pull pre-built images
+docker pull ghcr.io/[username]/cache-explorer-sandbox:latest
+docker pull ghcr.io/[username]/cache-explorer-backend:latest
+docker pull ghcr.io/[username]/cache-explorer-frontend:latest
+
+# Use in production
+docker run -p 3001:3001 ghcr.io/[username]/cache-explorer-sandbox:latest
+```
+
+**Image tags:**
+- `latest` - Most recent build from main
+- `v1.2.3` - Specific version
+- `v1.2` - Latest patch in v1.2.x series
+- `v1` - Latest minor in v1.x.x series
+
+**Manual Release:**
+If you need to create a release manually:
+```bash
+# Create and push a version tag
+git tag -a v1.2.0 -m "Release v1.2.0"
+git push origin v1.2.0
+```
+
+---
+
 ## Common Tasks
 
 ### Add a New Eviction Policy
