@@ -1,5 +1,9 @@
 # CLAUDE.md - Cache Explorer Project Guide
 
+## Rules
+
+- Do not add `Co-Authored-By` lines to commit messages.
+
 ## Current Status (January 2026)
 
 **Overall Completion: ~98%**

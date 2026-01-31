@@ -38,9 +38,14 @@ EXT="${INPUT_FILE##*.}"
 case "$EXT" in
   c)
     COMPILER="clang"
+    PIPELINE="clang"
     ;;
   cpp|cc|cxx|C)
     COMPILER="clang++"
+    PIPELINE="clang"
+    ;;
+  zig)
+    PIPELINE="zig"
     ;;
   *)
     if [[ -n "$JSON_OUTPUT" ]]; then
@@ -54,31 +59,106 @@ esac
 
 BINARY="/tmp/program-$$"
 
-# Extra flags for -O0
-EXTRA_FLAGS=""
-if [[ "$OPT_LEVEL" == "-O0" ]]; then
-  EXTRA_FLAGS="-Xclang -disable-O0-optnone"
-fi
+if [[ "$PIPELINE" == "zig" ]]; then
+  # Zig compilation via LLVM IR bitcode pipeline:
+  # 1. zig build-exe -> LLVM IR
+  # 2. opt with our pass -> instrumented IR
+  # 3. llc -> object file
+  # 4. clang links object file with runtime
 
-# Compile with instrumentation
-if ! $COMPILER $OPT_LEVEL $EXTRA_FLAGS -g \
-  -fpass-plugin="$PASS_PATH" \
-  -I"$RUNTIME_INC" \
-  "${DEFINES[@]}" \
-  "$INPUT_FILE" \
-  "$RUNTIME_LIB" \
-  -o "$BINARY" 2>/tmp/compile-err-$$; then
+  LL_FILE="/tmp/code-$$.ll"
+  INSTRUMENTED_IR="/tmp/instrumented-$$.ll"
+  OBJ_FILE="/tmp/code-$$.o"
 
-  if [[ -n "$JSON_OUTPUT" ]]; then
-    echo "{\"error\": \"Compilation failed\", \"details\": \"$(cat /tmp/compile-err-$$ | tr '\n' ' ' | sed 's/"/\\"/g')\"}"
-  else
-    echo "Compilation failed:" >&2
-    cat /tmp/compile-err-$$ >&2
+  # Step 1: Compile Zig to LLVM IR
+  if ! zig build-exe \
+    -femit-llvm-ir="$LL_FILE" \
+    -fno-emit-bin \
+    "$INPUT_FILE" 2>/tmp/compile-err-$$; then
+    if [[ -n "$JSON_OUTPUT" ]]; then
+      echo "{\"error\": \"Zig compilation failed\", \"details\": \"$(cat /tmp/compile-err-$$ | tr '\n' ' ' | sed 's/"/\\"/g')\"}"
+    else
+      echo "Zig compilation failed:" >&2
+      cat /tmp/compile-err-$$ >&2
+    fi
+    rm -f /tmp/compile-err-$$
+    exit 1
+  fi
+
+  # Step 2: Apply instrumentation pass
+  if ! opt -load-pass-plugin="$PASS_PATH" \
+    -passes="cache-explorer-module" \
+    -S "$LL_FILE" \
+    -o "$INSTRUMENTED_IR" 2>/tmp/compile-err-$$; then
+    if [[ -n "$JSON_OUTPUT" ]]; then
+      echo "{\"error\": \"Instrumentation failed\", \"details\": \"$(cat /tmp/compile-err-$$ | tr '\n' ' ' | sed 's/"/\\"/g')\"}"
+    else
+      echo "Instrumentation failed:" >&2
+      cat /tmp/compile-err-$$ >&2
+    fi
+    rm -f /tmp/compile-err-$$ "$LL_FILE"
+    exit 1
+  fi
+
+  # Step 3: Compile instrumented IR to object file
+  if ! llc -filetype=obj "$INSTRUMENTED_IR" -o "$OBJ_FILE" 2>/tmp/compile-err-$$; then
+    if [[ -n "$JSON_OUTPUT" ]]; then
+      echo "{\"error\": \"Object compilation failed\", \"details\": \"$(cat /tmp/compile-err-$$ | tr '\n' ' ' | sed 's/"/\\"/g')\"}"
+    else
+      echo "Object compilation failed:" >&2
+      cat /tmp/compile-err-$$ >&2
+    fi
+    rm -f /tmp/compile-err-$$ "$LL_FILE" "$INSTRUMENTED_IR"
+    exit 1
+  fi
+
+  # Step 4: Link with runtime library
+  # -nostartfiles: Zig's IR includes _start from std/start.zig, skip glibc's crt1.o
+  # zig_stubs.o: provides __extendxftf2 (needed by Zig's UBSan on aarch64, not in libgcc)
+  ZIG_STUBS="$(dirname "$RUNTIME_LIB")/zig_stubs.o"
+  if ! clang -nostartfiles "$OBJ_FILE" "$ZIG_STUBS" "$RUNTIME_LIB" \
+    -lc -lm \
+    -o "$BINARY" 2>/tmp/compile-err-$$; then
+    if [[ -n "$JSON_OUTPUT" ]]; then
+      echo "{\"error\": \"Linking failed\", \"details\": \"$(cat /tmp/compile-err-$$ | tr '\n' ' ' | sed 's/"/\\"/g')\"}"
+    else
+      echo "Linking failed:" >&2
+      cat /tmp/compile-err-$$ >&2
+    fi
+    rm -f /tmp/compile-err-$$ "$LL_FILE" "$INSTRUMENTED_IR" "$OBJ_FILE"
+    exit 1
+  fi
+  rm -f /tmp/compile-err-$$ "$LL_FILE" "$INSTRUMENTED_IR" "$OBJ_FILE"
+
+else
+  # C/C++ compilation - use clang with pass plugin directly
+
+  # Extra flags for -O0
+  EXTRA_FLAGS=""
+  if [[ "$OPT_LEVEL" == "-O0" ]]; then
+    EXTRA_FLAGS="-Xclang -disable-O0-optnone"
+  fi
+
+  # Compile with instrumentation
+  if ! $COMPILER $OPT_LEVEL $EXTRA_FLAGS -g \
+    -fpass-plugin="$PASS_PATH" \
+    -I"$RUNTIME_INC" \
+    "${DEFINES[@]}" \
+    "$INPUT_FILE" \
+    "$RUNTIME_LIB" \
+    -o "$BINARY" 2>/tmp/compile-err-$$; then
+
+    if [[ -n "$JSON_OUTPUT" ]]; then
+      echo "{\"error\": \"Compilation failed\", \"details\": \"$(cat /tmp/compile-err-$$ | tr '\n' ' ' | sed 's/"/\\"/g')\"}"
+    else
+      echo "Compilation failed:" >&2
+      cat /tmp/compile-err-$$ >&2
+    fi
+    rm -f /tmp/compile-err-$$
+    exit 1
   fi
   rm -f /tmp/compile-err-$$
-  exit 1
 fi
-rm -f /tmp/compile-err-$$
 
 # Run the instrumented binary with timeout
 # Capture trace output

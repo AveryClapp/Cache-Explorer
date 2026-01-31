@@ -15,13 +15,13 @@ RUN apt-get update && apt-get install -y \
     gnupg \
     && rm -rf /var/lib/apt/lists/*
 
-# Install LLVM 18
-RUN apt-get update && wget -qO- https://apt.llvm.org/llvm.sh | bash -s 18
-RUN apt-get install -y llvm-18-dev clang-18 lld-18
+# Install LLVM 20
+RUN apt-get update && wget -qO- https://apt.llvm.org/llvm.sh | bash -s 20
+RUN apt-get install -y llvm-20-dev clang-20 lld-20
 
 # Set LLVM paths
-ENV PATH="/usr/lib/llvm-18/bin:${PATH}"
-ENV LLVM_DIR="/usr/lib/llvm-18/lib/cmake/llvm"
+ENV PATH="/usr/lib/llvm-20/bin:${PATH}"
+ENV LLVM_DIR="/usr/lib/llvm-20/lib/cmake/llvm"
 
 # Copy source
 WORKDIR /build
@@ -32,20 +32,21 @@ WORKDIR /build/backend/llvm-pass
 RUN mkdir -p build && cd build && \
     cmake .. -G Ninja \
       -DLLVM_DIR=$LLVM_DIR \
-      -DCMAKE_C_COMPILER=clang-18 \
-      -DCMAKE_CXX_COMPILER=clang++-18 && \
+      -DCMAKE_C_COMPILER=clang-20 \
+      -DCMAKE_CXX_COMPILER=clang++-20 && \
     ninja
 
 # Build runtime library
 WORKDIR /build/backend/runtime
 RUN mkdir -p build && cd build && \
-    cmake .. -G Ninja -DCMAKE_C_COMPILER=clang-18 && \
-    ninja
+    cmake .. -G Ninja -DCMAKE_C_COMPILER=clang-20 && \
+    ninja && \
+    clang-20 -c ../zig_stubs.c -o zig_stubs.o
 
 # Build cache simulator
 WORKDIR /build/backend/cache-simulator
 RUN mkdir -p build && cd build && \
-    cmake .. -G Ninja -DCMAKE_CXX_COMPILER=clang++-18 && \
+    cmake .. -G Ninja -DCMAKE_CXX_COMPILER=clang++-20 && \
     ninja
 
 # Runtime image
@@ -65,12 +66,18 @@ RUN apt-get update && apt-get install -y \
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs
 
-# Install LLVM 18 runtime components
-RUN apt-get update && wget -qO- https://apt.llvm.org/llvm.sh | bash -s 18
-RUN apt-get install -y clang-18
+# Install LLVM 20 runtime components
+RUN apt-get update && wget -qO- https://apt.llvm.org/llvm.sh | bash -s 20
+RUN apt-get install -y clang-20
 
 # Set LLVM paths
-ENV PATH="/usr/lib/llvm-18/bin:${PATH}"
+ENV PATH="/usr/lib/llvm-20/bin:${PATH}"
+
+# Install Zig 0.15.2 (uses LLVM 20, matching our toolchain)
+RUN ARCH=$(uname -m) \
+    && curl -fsSL "https://ziglang.org/download/0.15.2/zig-${ARCH}-linux-0.15.2.tar.xz" \
+    | tar xJf - -C /opt \
+    && ln -s "/opt/zig-${ARCH}-linux-0.15.2/zig" /usr/local/bin/zig
 
 # Create non-root user for security
 RUN useradd -m -s /bin/bash cache-explorer
@@ -79,6 +86,7 @@ WORKDIR /app
 # Copy built artifacts
 COPY --from=builder /build/backend/llvm-pass/build/CacheProfiler.so ./backend/llvm-pass/build/
 COPY --from=builder /build/backend/runtime/build/libcache-explorer-rt.a ./backend/runtime/build/
+COPY --from=builder /build/backend/runtime/build/zig_stubs.o ./backend/runtime/build/
 COPY --from=builder /build/backend/cache-simulator/build/cache-sim ./backend/cache-simulator/build/
 
 # Copy runtime source and scripts

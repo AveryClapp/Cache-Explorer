@@ -505,9 +505,19 @@ case "$EXT" in
     COMPILER="rustc"
     BASENAME=$(basename "$INPUT_FILE" .rs)
     ;;
+  zig)
+    # Delegate to cache-explore-zig wrapper with reconstructed args
+    ZIG_ARGS=("$INPUT_FILE")
+    [[ -n "$CONFIG" ]] && ZIG_ARGS+=(--config "$CONFIG")
+    [[ -n "$JSON_OUTPUT" ]] && ZIG_ARGS+=("$JSON_OUTPUT")
+    [[ -n "$STREAM_OUTPUT" ]] && ZIG_ARGS+=("$STREAM_OUTPUT")
+    [[ -n "$VERBOSE" ]] && ZIG_ARGS+=("$VERBOSE")
+    [[ -n "$FAST_MODE" ]] && ZIG_ARGS+=("$FAST_MODE")
+    exec "$SCRIPT_DIR/cache-explore-zig" "${ZIG_ARGS[@]}"
+    ;;
   *)
     echo "Error: Unsupported file extension: .$EXT"
-    echo "Supported: .c, .cpp, .cc, .cxx, .rs"
+    echo "Supported: .c, .cpp, .cc, .cxx, .rs, .zig"
     exit 1
     ;;
 esac

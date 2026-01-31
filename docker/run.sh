@@ -29,8 +29,62 @@ fi
 # Compile with instrumentation
 echo '{"type": "progress", "stage": "compiling"}' >&2
 
+# Handle Zig - requires LLVM IR bitcode pipeline
+if [ "$LANGUAGE" = "zig" ]; then
+    # Zig compilation via LLVM IR:
+    # 1. zig build-exe -> LLVM IR
+    # 2. opt with our pass -> instrumented IR
+    # 3. llc -> object file
+    # 4. clang links object file with runtime
+
+    LL_FILE="/tmp/code.ll"
+    INSTRUMENTED_IR="/tmp/instrumented.ll"
+    OBJ_FILE="/tmp/code.o"
+
+    # Step 1: Compile Zig to LLVM IR
+    COMPILE_OUTPUT=$(zig build-exe \
+        -femit-llvm-ir="$LL_FILE" \
+        -fno-emit-bin \
+        "$CODE_FILE" \
+        2>&1) || {
+        ESCAPED=$(echo "$COMPILE_OUTPUT" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | tr '\n' ' ')
+        echo "{\"error\": \"Zig compilation failed\", \"type\": \"compile_error\", \"raw\": \"$ESCAPED\"}"
+        exit 0
+    }
+
+    # Step 2: Apply instrumentation pass
+    COMPILE_OUTPUT=$(opt -load-pass-plugin="$PASS" \
+        -passes="cache-explorer-module" \
+        -S "$LL_FILE" \
+        -o "$INSTRUMENTED_IR" \
+        2>&1) || {
+        ESCAPED=$(echo "$COMPILE_OUTPUT" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | tr '\n' ' ')
+        echo "{\"error\": \"Instrumentation failed\", \"type\": \"compile_error\", \"raw\": \"$ESCAPED\"}"
+        exit 0
+    }
+
+    # Step 3: Compile instrumented IR to object file
+    COMPILE_OUTPUT=$(llc -filetype=obj "$INSTRUMENTED_IR" -o "$OBJ_FILE" 2>&1) || {
+        ESCAPED=$(echo "$COMPILE_OUTPUT" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | tr '\n' ' ')
+        echo "{\"error\": \"Object compilation failed\", \"type\": \"compile_error\", \"raw\": \"$ESCAPED\"}"
+        exit 0
+    }
+
+    # Step 4: Link with runtime library
+    # -nostartfiles: Zig's IR includes _start from std/start.zig, skip glibc's crt1.o
+    # zig_stubs.o: provides __extendxftf2 (needed by Zig's UBSan on aarch64, not in libgcc)
+    ZIG_STUBS="/opt/cache-explorer/zig_stubs.o"
+    COMPILE_OUTPUT=$(clang -nostartfiles "$OBJ_FILE" "$ZIG_STUBS" "$RT" \
+        -lc -lm \
+        -o "$OUTPUT_BIN" \
+        2>&1) || {
+        ESCAPED=$(echo "$COMPILE_OUTPUT" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g' | tr '\n' ' ')
+        echo "{\"error\": \"Linking failed\", \"type\": \"compile_error\", \"raw\": \"$ESCAPED\"}"
+        exit 0
+    }
+
 # Handle Rust separately - it requires bitcode pipeline
-if [ "$LANGUAGE" = "rust" ] || [ "$LANGUAGE" = "rs" ]; then
+elif [ "$LANGUAGE" = "rust" ] || [ "$LANGUAGE" = "rs" ]; then
     # Rust compilation via LLVM bitcode:
     # 1. rustc -> LLVM bitcode
     # 2. opt with our pass -> instrumented bitcode

@@ -253,7 +253,7 @@ export interface ErrorResult {
 // FILES & EDITOR
 // =============================================================================
 
-export type Language = 'c' | 'cpp'
+export type Language = 'c' | 'cpp' | 'zig'
 
 export interface FileTab {
   id: string

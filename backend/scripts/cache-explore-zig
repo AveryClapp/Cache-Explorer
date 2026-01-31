@@ -1,0 +1,207 @@
+#!/bin/bash
+# Cache Explorer - Zig Language Support
+# Compiles and instruments Zig programs for cache profiling
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# Default paths
+LLVM_PASS="$PROJECT_ROOT/backend/llvm-pass/build/CacheProfiler.so"
+RUNTIME_LIB="$PROJECT_ROOT/backend/runtime/build/libcache-explorer-rt.a"
+CACHE_SIM="$PROJECT_ROOT/backend/cache-simulator/build/cache-sim"
+
+# Configuration
+CONFIG="intel"
+JSON_OUTPUT=false
+VERBOSE=false
+KEEP_TEMPS=false
+
+# Parse arguments
+ZIG_FILE=""
+SIM_ARGS=()
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --config)
+            CONFIG="$2"
+            shift 2
+            ;;
+        --json)
+            JSON_OUTPUT=true
+            SIM_ARGS+=(--json)
+            shift
+            ;;
+        --verbose)
+            VERBOSE=true
+            SIM_ARGS+=(--verbose)
+            shift
+            ;;
+        --keep-temps)
+            KEEP_TEMPS=true
+            shift
+            ;;
+        --help)
+            echo "Usage: cache-explore-zig <file.zig> [options]"
+            echo ""
+            echo "Options:"
+            echo "  --config <name>   Hardware config (intel|amd|apple|educational)"
+            echo "  --json            Output JSON format"
+            echo "  --verbose         Print detailed output"
+            echo "  --keep-temps      Keep temporary files"
+            echo "  --help            Show this help"
+            exit 0
+            ;;
+        *.zig)
+            ZIG_FILE="$1"
+            shift
+            ;;
+        *)
+            # Pass through to simulator
+            SIM_ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+if [ -z "$ZIG_FILE" ]; then
+    echo "Error: No .zig file specified"
+    echo "Usage: cache-explore-zig <file.zig> [options]"
+    exit 1
+fi
+
+if [ ! -f "$ZIG_FILE" ]; then
+    echo "Error: File not found: $ZIG_FILE"
+    exit 1
+fi
+
+# Check dependencies
+if ! command -v zig &> /dev/null; then
+    echo "Error: zig not found in PATH"
+    echo "Install Zig from: https://ziglang.org/download/"
+    exit 1
+fi
+
+if ! command -v opt &> /dev/null; then
+    echo "Error: LLVM opt not found in PATH"
+    echo "Install LLVM tools"
+    exit 1
+fi
+
+if [ ! -f "$LLVM_PASS" ]; then
+    echo "Error: LLVM pass not found: $LLVM_PASS"
+    echo "Build it: cd backend/llvm-pass/build && cmake .. && ninja"
+    exit 1
+fi
+
+if [ ! -f "$RUNTIME_LIB" ]; then
+    echo "Error: Runtime library not found: $RUNTIME_LIB"
+    echo "Build it: cd backend/runtime/build && cmake .. && ninja"
+    exit 1
+fi
+
+if [ ! -f "$CACHE_SIM" ]; then
+    echo "Error: Cache simulator not found: $CACHE_SIM"
+    echo "Build it: cd backend/cache-simulator/build && cmake .. && ninja"
+    exit 1
+fi
+
+# Create temp directory
+TEMP_DIR=$(mktemp -d)
+if [ "$KEEP_TEMPS" = false ]; then
+    trap "rm -rf $TEMP_DIR" EXIT
+fi
+
+BASENAME=$(basename "$ZIG_FILE" .zig)
+LL_FILE="$TEMP_DIR/$BASENAME.ll"
+BC_FILE="$TEMP_DIR/$BASENAME.bc"
+OBJ_FILE="$TEMP_DIR/$BASENAME.o"
+EXE_FILE="$TEMP_DIR/$BASENAME"
+TRACE_FILE="$TEMP_DIR/trace.txt"
+
+if [ "$VERBOSE" = true ]; then
+    echo "Temp directory: $TEMP_DIR"
+    echo "Compiling Zig → LLVM IR..."
+fi
+
+# Step 1: Compile Zig to LLVM IR
+if ! zig build-exe \
+    -femit-llvm-ir="$LL_FILE" \
+    -fno-emit-bin \
+    "$ZIG_FILE" 2>"$TEMP_DIR/stderr.log"; then
+    cat "$TEMP_DIR/stderr.log" >&2
+    echo "Error: Zig compilation failed"
+    exit 1
+fi
+
+if [ "$VERBOSE" = true ]; then
+    echo "Applying LLVM instrumentation pass..."
+fi
+
+# Step 2: Apply instrumentation pass
+if ! opt \
+    -load-pass-plugin="$LLVM_PASS" \
+    -passes="cache-explorer-module" \
+    -S "$LL_FILE" \
+    -o "$BC_FILE" 2>"$TEMP_DIR/stderr.log"; then
+    cat "$TEMP_DIR/stderr.log" >&2
+    echo "Error: LLVM pass failed"
+    exit 1
+fi
+
+if [ "$VERBOSE" = true ]; then
+    echo "Linking with runtime library..."
+fi
+
+# Step 3: Compile instrumented IR to object file
+if ! llc -filetype=obj "$BC_FILE" -o "$OBJ_FILE" 2>"$TEMP_DIR/stderr.log"; then
+    cat "$TEMP_DIR/stderr.log" >&2
+    echo "Error: Failed to compile to object file"
+    exit 1
+fi
+
+# Step 4: Link with runtime library
+# Linux: clang -nostartfiles (Zig's IR has _start, skip glibc's duplicate)
+#   zig_stubs.o: provides __extendxftf2 (needed by Zig's UBSan on aarch64, not in libgcc)
+# macOS: zig cc (no _start conflict, and provides compiler-rt builtins)
+if [[ "$(uname)" == "Linux" ]]; then
+    ZIG_STUBS="$(dirname "$RUNTIME_LIB")/zig_stubs.o"
+    LINK_CMD=(clang -nostartfiles "$OBJ_FILE" "$ZIG_STUBS" "$RUNTIME_LIB" -lc -lm -o "$EXE_FILE")
+else
+    LINK_CMD=(zig cc "$OBJ_FILE" "$RUNTIME_LIB" -lc -o "$EXE_FILE")
+fi
+
+if ! "${LINK_CMD[@]}" 2>"$TEMP_DIR/stderr.log"; then
+    cat "$TEMP_DIR/stderr.log" >&2
+    echo "Error: Linking failed"
+    exit 1
+fi
+
+if [ "$VERBOSE" = true ]; then
+    echo "Running instrumented executable..."
+fi
+
+# Step 5: Run instrumented executable and capture trace
+if ! "$EXE_FILE" > "$TRACE_FILE" 2>&1; then
+    echo "Warning: Executable returned non-zero exit code"
+    # Continue anyway - we may still have captured trace data
+fi
+
+if [ ! -s "$TRACE_FILE" ]; then
+    echo "Error: No trace data captured"
+    exit 1
+fi
+
+if [ "$VERBOSE" = true ]; then
+    echo "Running cache simulator..."
+    TRACE_LINES=$(wc -l < "$TRACE_FILE")
+    echo "Trace events: $TRACE_LINES"
+fi
+
+# Step 6: Run cache simulator
+"$CACHE_SIM" --config "$CONFIG" "${SIM_ARGS[@]}" < "$TRACE_FILE"
+
+if [ "$KEEP_TEMPS" = true ]; then
+    echo "Temporary files kept in: $TEMP_DIR"
+fi

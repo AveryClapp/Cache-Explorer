@@ -83,6 +83,12 @@ static uint32_t intern_filename(const char *file) {
 
 static inline void emit_event_with_src(uint64_t addr_with_flag, uint64_t src_addr,
                                         uint32_t size, const char *file, uint32_t line) {
+  // Lazy initialization: handles runtimes where .init_array constructors
+  // are not processed (e.g., Zig's _start on Linux skips __libc_start_main)
+  if (__builtin_expect(!atomic_load_explicit(&initialized, memory_order_relaxed), 0)) {
+    __cache_explorer_init();
+  }
+
   // Sampling: skip events based on sample rate
   if (sample_rate > 1) {
     sample_counter++;
@@ -105,9 +111,14 @@ static inline void emit_event_with_src(uint64_t addr_with_flag, uint64_t src_add
 
   uint64_t tail = atomic_load_explicit(&ring_buffer.tail, memory_order_acquire);
   if (next == tail) {
+    // Buffer full - must flush
     __cache_explorer_flush();
     head = atomic_load_explicit(&ring_buffer.head, memory_order_relaxed);
     next = (head + 1) & BUFFER_MASK;
+  } else if ((head & 0xFFF) == 0 && head != tail) {
+    // Periodic flush every 4096 events - ensures output even when
+    // destructors don't fire (e.g., Zig's _start calls _exit directly)
+    __cache_explorer_flush();
   }
 
   ring_buffer.events[head] = (CacheEvent){
@@ -321,7 +332,13 @@ void __cache_explorer_flush(void) {
   atomic_store_explicit(&ring_buffer.tail, tail, memory_order_release);
 }
 
+static atomic_int shutdown_done = 0;
+
 void __cache_explorer_shutdown(void) {
+  // Guard against double shutdown (atexit + destructor)
+  if (atomic_exchange(&shutdown_done, 1))
+    return;
+
   __cache_explorer_flush();
   if (output_fd > 2) {
     close(output_fd);

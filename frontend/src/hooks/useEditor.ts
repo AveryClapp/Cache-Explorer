@@ -12,6 +12,7 @@ function generateFileId(): string {
 export function getFileExtension(lang: Language): string {
   switch (lang) {
     case 'cpp': return '.cpp'
+    case 'zig': return '.zig'
     default: return '.c'
   }
 }

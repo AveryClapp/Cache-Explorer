@@ -1139,6 +1139,220 @@ public:
       }
     ]
   },
+
+  // === Zig Examples ===
+  zig_sequential: {
+    name: 'Zig: Sequential Access',
+    description: 'Array access - good cache locality',
+    language: 'zig',
+    code: `const std = @import("std");
+
+pub fn main() void {
+    var arr: [1000]i32 = undefined;
+    var sum: i32 = 0;
+
+    // Initialize array
+    var i: usize = 0;
+    while (i < 1000) : (i += 1) {
+        arr[i] = @as(i32, @intCast(i));
+    }
+
+    // Sequential access - cache friendly
+    i = 0;
+    while (i < 1000) : (i += 1) {
+        sum += arr[i];
+    }
+
+    std.debug.print("Sum: {}\\n", .{sum});
+}
+`
+  },
+
+  zig_matrix_row: {
+    name: 'Zig: Row-Major Matrix',
+    description: 'Good cache behavior - sequential memory',
+    language: 'zig',
+    code: `const std = @import("std");
+
+pub fn main() void {
+    var matrix: [64][64]i32 = undefined;
+    var sum: i32 = 0;
+
+    // Fill matrix - row-major order
+    var i: usize = 0;
+    while (i < 64) : (i += 1) {
+        var j: usize = 0;
+        while (j < 64) : (j += 1) {
+            matrix[i][j] = @as(i32, @intCast(i + j));
+        }
+    }
+
+    // Read matrix - row-major order (cache friendly)
+    i = 0;
+    while (i < 64) : (i += 1) {
+        var j: usize = 0;
+        while (j < 64) : (j += 1) {
+            sum += matrix[i][j];
+        }
+    }
+
+    std.debug.print("Sum: {}\\n", .{sum});
+}
+`
+  },
+
+  zig_matrix_col: {
+    name: 'Zig: Column-Major Matrix',
+    description: 'Poor cache behavior - strided access',
+    language: 'zig',
+    code: `const std = @import("std");
+
+pub fn main() void {
+    var matrix: [64][64]i32 = undefined;
+    var sum: i32 = 0;
+
+    // Fill matrix - column-major order (bad)
+    var j: usize = 0;
+    while (j < 64) : (j += 1) {
+        var i: usize = 0;
+        while (i < 64) : (i += 1) {
+            matrix[i][j] = @as(i32, @intCast(i + j));
+        }
+    }
+
+    // Read matrix - column-major order (cache unfriendly)
+    j = 0;
+    while (j < 64) : (j += 1) {
+        var i: usize = 0;
+        while (i < 64) : (i += 1) {
+            sum += matrix[i][j];
+        }
+    }
+
+    std.debug.print("Sum: {}\\n", .{sum});
+}
+`
+  },
+
+  zig_struct: {
+    name: 'Zig: Struct Access',
+    description: 'Struct field locality',
+    language: 'zig',
+    code: `const std = @import("std");
+
+const Point = struct {
+    x: i32,
+    y: i32,
+    z: i32,
+};
+
+pub fn main() void {
+    var points: [500]Point = undefined;
+    var sum: i32 = 0;
+
+    // Initialize points
+    var i: usize = 0;
+    while (i < 500) : (i += 1) {
+        points[i].x = @as(i32, @intCast(i));
+        points[i].y = @as(i32, @intCast(i * 2));
+        points[i].z = @as(i32, @intCast(i * 3));
+    }
+
+    // Access only x field
+    // AoS layout: loads y and z too (wasted cache)
+    i = 0;
+    while (i < 500) : (i += 1) {
+        sum += points[i].x;
+    }
+
+    std.debug.print("Sum: {}\\n", .{sum});
+}
+`
+  },
+
+  zig_comptime: {
+    name: 'Zig: Comptime Arrays',
+    description: 'Compile-time known sizes for optimization',
+    language: 'zig',
+    code: `const std = @import("std");
+
+// Zig's comptime features can help optimize cache access
+fn sumArray(comptime size: usize, arr: *const [size]i32) i32 {
+    var sum: i32 = 0;
+    // Compiler knows size at compile time
+    // Can optimize loop unrolling
+    for (arr) |val| {
+        sum += val;
+    }
+    return sum;
+}
+
+pub fn main() void {
+    // Array with comptime-known size
+    var data: [1000]i32 = undefined;
+
+    var i: usize = 0;
+    while (i < 1000) : (i += 1) {
+        data[i] = @as(i32, @intCast(i));
+    }
+
+    const result = sumArray(1000, &data);
+    std.debug.print("Sum: {}\\n", .{result});
+}
+`
+  },
+
+  zig_packed_struct: {
+    name: 'Zig: Packed Structs',
+    description: 'Bit-packed data for cache efficiency',
+    language: 'zig',
+    code: `const std = @import("std");
+
+// Regular struct: 12 bytes (3 x i32)
+const RegularFlags = struct {
+    flag_a: bool,
+    flag_b: bool,
+    flag_c: bool,
+};
+
+// Packed struct: 1 byte (compiler packs bits)
+const PackedFlags = packed struct {
+    flag_a: bool,
+    flag_b: bool,
+    flag_c: bool,
+    padding: u5 = 0,
+};
+
+pub fn main() void {
+    var regular_array: [1000]RegularFlags = undefined;
+    var packed_array: [1000]PackedFlags = undefined;
+
+    // Initialize both
+    var i: usize = 0;
+    while (i < 1000) : (i += 1) {
+        regular_array[i] = .{
+            .flag_a = i % 2 == 0,
+            .flag_b = i % 3 == 0,
+            .flag_c = i % 5 == 0,
+        };
+        packed_array[i] = .{
+            .flag_a = i % 2 == 0,
+            .flag_b = i % 3 == 0,
+            .flag_c = i % 5 == 0,
+        };
+    }
+
+    // Packed uses 12x less memory = better cache use
+    var count: usize = 0;
+    i = 0;
+    while (i < 1000) : (i += 1) {
+        if (packed_array[i].flag_a) count += 1;
+    }
+
+    std.debug.print("Count: {}\\n", .{count});
+}
+`
+  },
 }
 
 /** Default example code shown on first load */

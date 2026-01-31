@@ -47,10 +47,9 @@ function sanitizeFilename(filename) {
 
 // Helper to create temp directory with files
 async function createTempProject(files, language = 'c') {
-  const extensions = { c: '.c', cpp: '.cpp', rust: '.rs' };
+  const extensions = { c: '.c', cpp: '.cpp', rust: '.rs', zig: '.zig' };
   const ext = extensions[language] || '.c';
   const tempDir = `/tmp/cache-explorer-${randomUUID()}`;
-
   await mkdir(tempDir, { recursive: true });
 
   // If files is an array, write all files

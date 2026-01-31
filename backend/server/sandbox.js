@@ -58,7 +58,7 @@ export async function checkSandboxAvailable() {
  *
  * @param {Object} options
  * @param {string} options.code - Source code to compile and run
- * @param {string} options.language - 'c' | 'cpp'
+ * @param {string} options.language - 'c' | 'cpp' | 'zig'
  * @param {string} options.config - Cache configuration name
  * @param {string} options.optLevel - Optimization level (-O0, -O2, etc)
  * @param {string} options.prefetch - Prefetch policy (none, stream, stride, etc)
@@ -90,7 +90,7 @@ export async function runInSandbox(options) {
   const tempDir = `/tmp/cache-explorer-${execId}`;
 
   // Determine file extension
-  const extensions = { c: 'c', cpp: 'cpp' };
+  const extensions = { c: 'c', cpp: 'cpp', zig: 'zig' };
   const ext = extensions[language] || 'c';
   const inputFile = join(tempDir, `input.${ext}`);
 

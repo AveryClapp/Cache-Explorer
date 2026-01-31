@@ -3,7 +3,7 @@ import { generateFileId } from '../utils/file'
 import { getFileExtension } from '../hooks'
 import type { Language, FileTab } from '../types'
 
-type ExampleLangFilter = 'all' | 'c' | 'cpp'
+type ExampleLangFilter = 'all' | 'c' | 'cpp' | 'zig'
 
 interface ExamplesSidebarProps {
   collapsed: boolean
@@ -49,6 +49,10 @@ export function ExamplesSidebar({
               className={`language-filter-btn${langFilter === 'cpp' ? ' active' : ''}`}
               onClick={() => onLangFilterChange('cpp')}
             >C++</button>
+            <button
+              className={`language-filter-btn${langFilter === 'zig' ? ' active' : ''}`}
+              onClick={() => onLangFilterChange('zig')}
+            >Zig</button>
           </div>
           <div className="example-list" style={{ flex: 1, overflowY: 'auto' }}>
             {Object.entries(EXAMPLES)
@@ -75,7 +79,9 @@ export function ExamplesSidebar({
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span className="example-name">{ex.name}</span>
-                  <span className={`example-lang ${ex.language}`}>{ex.language === 'cpp' ? 'C++' : 'C'}</span>
+                  <span className={`example-lang ${ex.language}`}>
+                    {ex.language === 'cpp' ? 'C++' : ex.language === 'zig' ? 'Zig' : 'C'}
+                  </span>
                 </div>
                 <span className="example-desc">{ex.description}</span>
               </button>
