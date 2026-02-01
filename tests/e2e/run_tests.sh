@@ -105,7 +105,7 @@ test_basic_compile() {
   if ! should_run "$test_name"; then return; fi
 
   local output
-  if ! output=$("$CACHE_EXPLORE" "$EXAMPLES_DIR/sequential.c" --json 2>&1); then
+  if ! output=$("$CACHE_EXPLORE" "$EXAMPLES_DIR/sequential.c" --json 2>/dev/null); then
     fail "$test_name" "cache-explore command failed"
     log "$output"
     return
@@ -133,13 +133,13 @@ test_row_vs_column_major() {
 
   # Run row-major
   local row_output
-  row_output=$("$CACHE_EXPLORE" "$EXAMPLES_DIR/matrix_row.c" --config educational --json 2>&1)
+  row_output=$("$CACHE_EXPLORE" "$EXAMPLES_DIR/matrix_row.c" --config educational --json 2>/dev/null)
   local row_misses
   row_misses=$(echo "$row_output" | grep -o '"l1d": *{[^}]*}' | grep -o '"misses": *[0-9]*' | grep -o '[0-9]*')
 
   # Run column-major
   local col_output
-  col_output=$("$CACHE_EXPLORE" "$EXAMPLES_DIR/matrix_col.c" --config educational --json 2>&1)
+  col_output=$("$CACHE_EXPLORE" "$EXAMPLES_DIR/matrix_col.c" --config educational --json 2>/dev/null)
   local col_misses
   col_misses=$(echo "$col_output" | grep -o '"l1d": *{[^}]*}' | grep -o '"misses": *[0-9]*' | grep -o '[0-9]*')
 
@@ -167,7 +167,7 @@ test_sequential_access() {
   if ! should_run "$test_name"; then return; fi
 
   local output
-  output=$("$CACHE_EXPLORE" "$EXAMPLES_DIR/sequential.c" --json 2>&1)
+  output=$("$CACHE_EXPLORE" "$EXAMPLES_DIR/sequential.c" --json 2>/dev/null)
 
   local hits misses
   hits=$(echo "$output" | grep -o '"l1d": *{[^}]*}' | grep -o '"hits": *[0-9]*' | grep -o '[0-9]*')
@@ -205,7 +205,7 @@ test_strided_access() {
   if ! should_run "$test_name"; then return; fi
 
   local output
-  output=$("$CACHE_EXPLORE" "$EXAMPLES_DIR/strided.c" --json 2>&1)
+  output=$("$CACHE_EXPLORE" "$EXAMPLES_DIR/strided.c" --json 2>/dev/null)
 
   local hits misses
   hits=$(echo "$output" | grep -o '"l1d": *{[^}]*}' | grep -o '"hits": *[0-9]*' | grep -o '[0-9]*')
@@ -238,8 +238,8 @@ test_cache_configs() {
   if ! should_run "$test_name"; then return; fi
 
   local edu_output intel_output
-  edu_output=$("$CACHE_EXPLORE" "$EXAMPLES_DIR/sequential.c" --config educational --json 2>&1)
-  intel_output=$("$CACHE_EXPLORE" "$EXAMPLES_DIR/sequential.c" --config intel --json 2>&1)
+  edu_output=$("$CACHE_EXPLORE" "$EXAMPLES_DIR/sequential.c" --config educational --json 2>/dev/null)
+  intel_output=$("$CACHE_EXPLORE" "$EXAMPLES_DIR/sequential.c" --config intel --json 2>/dev/null)
 
   local edu_misses intel_misses
   edu_misses=$(echo "$edu_output" | grep -o '"l1d": *{[^}]*}' | grep -o '"misses": *[0-9]*' | grep -o '[0-9]*')
@@ -269,7 +269,7 @@ test_json_output() {
   if ! should_run "$test_name"; then return; fi
 
   local output
-  output=$("$CACHE_EXPLORE" "$EXAMPLES_DIR/sequential.c" --json 2>&1)
+  output=$("$CACHE_EXPLORE" "$EXAMPLES_DIR/sequential.c" --json 2>/dev/null)
 
   # Check for required JSON fields
   if ! echo "$output" | grep -q '"l1d":'; then
@@ -385,13 +385,13 @@ EOF
 
   # Test with small array
   local small_output
-  small_output=$("$CACHE_EXPLORE" "$test_file" -D ARRAY_SIZE=10 --json 2>&1)
+  small_output=$("$CACHE_EXPLORE" "$test_file" -D ARRAY_SIZE=10 --json 2>/dev/null)
   local small_hits
   small_hits=$(echo "$small_output" | grep -o '"l1d": *{[^}]*}' | grep -o '"hits": *[0-9]*' | grep -o '[0-9]*')
 
   # Test with large array
   local large_output
-  large_output=$("$CACHE_EXPLORE" "$test_file" -D ARRAY_SIZE=10000 --json 2>&1)
+  large_output=$("$CACHE_EXPLORE" "$test_file" -D ARRAY_SIZE=10000 --json 2>/dev/null)
   local large_hits
   large_hits=$(echo "$large_output" | grep -o '"l1d": *{[^}]*}' | grep -o '"hits": *[0-9]*' | grep -o '[0-9]*')
 
@@ -439,7 +439,7 @@ int main() {
 EOF
 
   local output
-  if ! output=$("$CACHE_EXPLORE" "$test_file" --json 2>&1); then
+  if ! output=$("$CACHE_EXPLORE" "$test_file" --json 2>/dev/null); then
     fail "$test_name" "C++ compilation failed"
     log "$output"
     rm -f "$test_file"
@@ -465,13 +465,13 @@ test_sampling() {
 
   # Run without sampling
   local full_output
-  full_output=$("$CACHE_EXPLORE" "$EXAMPLES_DIR/sequential.c" --json 2>&1)
+  full_output=$("$CACHE_EXPLORE" "$EXAMPLES_DIR/sequential.c" --json 2>/dev/null)
   local full_total
   full_total=$(echo "$full_output" | grep -o '"total_events":[0-9]*' | cut -d: -f2)
 
   # Run with 10x sampling
   local sampled_output
-  sampled_output=$("$CACHE_EXPLORE" "$EXAMPLES_DIR/sequential.c" --sample 10 --json 2>&1)
+  sampled_output=$("$CACHE_EXPLORE" "$EXAMPLES_DIR/sequential.c" --sample 10 --json 2>/dev/null)
   local sampled_total
   sampled_total=$(echo "$sampled_output" | grep -o '"total_events":[0-9]*' | cut -d: -f2)
 
@@ -500,7 +500,7 @@ test_hot_lines() {
   if ! should_run "$test_name"; then return; fi
 
   local output
-  output=$("$CACHE_EXPLORE" "$EXAMPLES_DIR/sequential.c" --json 2>&1)
+  output=$("$CACHE_EXPLORE" "$EXAMPLES_DIR/sequential.c" --json 2>/dev/null)
 
   if ! echo "$output" | grep -q '"hotLines"'; then
     # Hot lines might be optional, skip
@@ -580,7 +580,7 @@ int main() {
 EOF
 
   local output
-  output=$("$CACHE_EXPLORE" "$test_file" --json 2>&1) || true
+  output=$("$CACHE_EXPLORE" "$test_file" --json 2>/dev/null) || true
 
   rm -f "$test_file"
 
@@ -674,7 +674,7 @@ int main() {
 EOF
 
   local output
-  if ! output=$("$CACHE_EXPLORE" "$test_dir/main.c" "$test_dir/matrix.c" --json 2>&1); then
+  if ! output=$("$CACHE_EXPLORE" "$test_dir/main.c" "$test_dir/matrix.c" --json 2>/dev/null); then
     fail "$test_name" "Multi-file C compilation failed"
     log "$output"
     rm -rf "$test_dir"
@@ -766,7 +766,7 @@ int main() {
 EOF
 
   local output
-  if ! output=$("$CACHE_EXPLORE" "$test_dir/main.cpp" --json 2>&1); then
+  if ! output=$("$CACHE_EXPLORE" "$test_dir/main.cpp" --json 2>/dev/null); then
     fail "$test_name" "Multi-file C++ compilation failed"
     log "$output"
     rm -rf "$test_dir"
@@ -825,7 +825,7 @@ int main() {
 EOF
 
   local output
-  if ! output=$("$CACHE_EXPLORE" "$test_dir/main.c" "$test_dir/hot_loop.c" --json 2>&1); then
+  if ! output=$("$CACHE_EXPLORE" "$test_dir/main.c" "$test_dir/hot_loop.c" --json 2>/dev/null); then
     fail "$test_name" "Multi-file compilation failed"
     log "$output"
     rm -rf "$test_dir"
@@ -879,7 +879,7 @@ int main() {
 EOF
 
   local output
-  if ! output=$("$CACHE_EXPLORE" "$test_file" --json 2>&1); then
+  if ! output=$("$CACHE_EXPLORE" "$test_file" --json 2>/dev/null); then
     fail "$test_name" "Memcpy test compilation failed"
     log "$output"
     rm -f "$test_file"
@@ -929,7 +929,7 @@ int main() {
 EOF
 
   local output
-  if ! output=$("$CACHE_EXPLORE" "$test_file" --json 2>&1); then
+  if ! output=$("$CACHE_EXPLORE" "$test_file" --json 2>/dev/null); then
     fail "$test_name" "Atomic test compilation failed"
     log "$output"
     rm -f "$test_file"
@@ -976,7 +976,7 @@ int main() {
 EOF
 
   local output
-  if ! output=$("$CACHE_EXPLORE" "$test_file" --json 2>&1); then
+  if ! output=$("$CACHE_EXPLORE" "$test_file" --json 2>/dev/null); then
     # Vector operations might not compile on all platforms
     skip "$test_name (vector extensions not supported)"
     rm -f "$test_file"
@@ -1005,7 +1005,7 @@ test_fast_mode() {
   if ! should_run "$test_name"; then return; fi
 
   local output
-  if ! output=$("$CACHE_EXPLORE" "$EXAMPLES_DIR/sequential.c" --fast --json 2>&1); then
+  if ! output=$("$CACHE_EXPLORE" "$EXAMPLES_DIR/sequential.c" --fast --json 2>/dev/null); then
     fail "$test_name" "Fast mode compilation failed"
     log "$output"
     return
@@ -1020,7 +1020,7 @@ test_fast_mode() {
   # Fast mode skips 3C classification - values should be 0
   # Compare with normal mode which should have non-zero 3C values
   local normal_output
-  normal_output=$("$CACHE_EXPLORE" "$EXAMPLES_DIR/matrix_col.c" --config educational --json 2>&1)
+  normal_output=$("$CACHE_EXPLORE" "$EXAMPLES_DIR/matrix_col.c" --config educational --json 2>/dev/null)
   local normal_compulsory
   normal_compulsory=$(echo "$normal_output" | grep -o '"compulsory": *[0-9]*' | head -1 | grep -o '[0-9]*')
 

@@ -172,7 +172,7 @@ app.post('/compile', async (req, res) => {
 
   // Apply sensible defaults for web UI to prevent timeouts
   // 100K events = ~1 second runtime, good balance for web UI responsiveness
-  const eventLimit = limit !== undefined ? limit : 100000;
+  const eventLimit = limit !== undefined ? limit : 1000000;
   const sampleRate = sample !== undefined ? sample : 1;       // No sampling by default
   const fastMode = fast === true;                             // Fast mode disables 3C classification
 
@@ -655,7 +655,7 @@ wss.on('connection', (ws) => {
     }
 
     // Apply sensible defaults for web UI to prevent timeouts
-    const eventLimit = limit !== undefined ? limit : 100000;  // Match HTTP default for responsive web UI
+    const eventLimit = limit !== undefined ? limit : 1000000;  // Match HTTP default for responsive web UI
     const sampleRate = sample !== undefined ? sample : 1;       // No sampling by default
     const fastMode = fast === true;                             // Fast mode disables 3C classification
 
@@ -724,8 +724,8 @@ wss.on('connection', (ws) => {
       ws.send(JSON.stringify({ type: 'status', stage: 'compiling' }));
 
       const result = await new Promise((resolve, reject) => {
-        // Use --stream for real-time updates and --json for structured output
-        const args = [mainFile, '--config', config, optLevel, '--stream', '--json'];
+        // Use batch mode with --json; progress comes via stderr
+        const args = [mainFile, '--config', config, optLevel, '--json'];
 
         // Add include path for multi-file projects
         if (Array.isArray(inputFiles) && inputFiles.length > 1) {
@@ -788,9 +788,6 @@ wss.on('connection', (ws) => {
         let stderr = '';
         let lineBuffer = '';
         let killed = false;
-        let eventBatch = [];
-        let lastBatchSent = Date.now();
-        let lastProgressSent = Date.now();
 
         // Set up timeout with graceful termination
         const timeoutId = setTimeout(() => {
@@ -812,140 +809,73 @@ wss.on('connection', (ws) => {
           }, 2000);
         }, timeout);
 
-        // Function to flush event batch
-        const flushEventBatch = () => {
-          if (eventBatch.length > 0 && ws.readyState === ws.OPEN) {
-            ws.send(JSON.stringify({
-              type: 'events',
-              events: eventBatch,
-              count: eventBatch.length
-            }));
-            eventBatch = [];
-            lastBatchSent = Date.now();
-          }
-        };
-
-        // Batch flush interval
-        const batchInterval = setInterval(() => {
-          flushEventBatch();
-        }, CONFIG.streaming.batchIntervalMs);
-
+        // Batch mode: collect all stdout, parse as final JSON result on close
         proc.stdout.on('data', (chunk) => {
-          console.log(`[WebSocket] stdout received ${chunk.length} bytes`);
           lineBuffer += chunk.toString();
-          const lines = lineBuffer.split('\n');
-          lineBuffer = lines.pop(); // Keep incomplete line in buffer
-
-          for (const line of lines) {
-            if (!line.trim()) continue;
-            try {
-              const event = JSON.parse(line);
-              console.log(`[WebSocket] parsed event type: ${event.type}`);
-              if (event.type === 'start') {
-                console.log(`[WebSocket] sending start event to ws.readyState=${ws.readyState}`);
-                if (ws.readyState === ws.OPEN) {
-                  ws.send(JSON.stringify({
-                    type: 'status',
-                    stage: 'running',
-                    config: event.config,
-                    timeout: timeout / 1000
-                  }));
-                  console.log(`[WebSocket] sent start status`);
-                }
-              } else if (event.type === 'progress') {
-                partialProgress = event;
-                // Send progress updates at intervals, not every event
-                const now = Date.now();
-                if (now - lastProgressSent >= CONFIG.streaming.progressIntervalMs) {
-                  console.log(`[WebSocket] sending progress ${event.events} events`);
-                  if (ws.readyState === ws.OPEN) {
-                    ws.send(JSON.stringify({ type: 'progress', ...event }));
-                    console.log(`[WebSocket] sent progress`);
-                  }
-                  lastProgressSent = now;
-                }
-              } else if (event.type === 'event') {
-                // Batch individual events
-                eventBatch.push(event);
-                if (eventBatch.length >= CONFIG.streaming.batchSize) {
-                  flushEventBatch();
-                }
-              } else if (event.type === 'complete') {
-                // Store final result
-                console.log(`[WebSocket] got complete event`);
-                finalResult = event;
-              } else if (event.error) {
-                // Handle error response from cache-explore script
-                console.log(`[WebSocket] got error event: ${event.error}`);
-                if (ws.readyState === ws.OPEN) {
-                  // Strip temp directory paths from error output for cleaner display
-                  let rawError = event.details || event.error;
-                  rawError = rawError.replace(/\/tmp\/cache-explorer-[a-f0-9-]+\//g, '');
-                  ws.send(JSON.stringify({
-                    type: 'compile_error',
-                    raw: rawError
-                  }));
-                }
-                // Mark as handled error so we don't send generic error later
-                finalResult = { error: event.error, details: event.details };
-              }
-            } catch (e) {
-              // Non-JSON output, log it for debugging
-              console.log(`[WebSocket] JSON parse error: ${e.message}, line: ${line.slice(0, 100)}`);
-            }
-          }
         });
 
         proc.stderr.on('data', (chunk) => {
-          stderr += chunk;
-          // Apply same buffer limit as stdout to prevent OOM
-          if (stderr.length > CONFIG.memory.maxOutputBuffer) {
-            killed = true;
-            proc.kill('SIGKILL');
-            return;
-          }
-          // Stream compilation progress
+          // Stream compilation progress and simulation progress
           const lines = chunk.toString().split('\n');
           for (const line of lines) {
-            if (ws.readyState === ws.OPEN) {
+            // Forward progress JSON to client (don't accumulate in stderr)
+            if (line.startsWith('{"type":"progress"')) {
+              if (ws.readyState !== ws.OPEN) continue;
+              try {
+                const progress = JSON.parse(line);
+                ws.send(JSON.stringify({
+                  type: 'progress',
+                  eventsProcessed: progress.eventsProcessed,
+                  eventsTotal: progress.eventsTotal
+                }));
+              } catch (e) { /* ignore malformed */ }
+            } else if (line.startsWith('[') && (line.includes('Compiling') || line.includes('Running') || line.includes('Simulating'))) {
+              // Stage markers — forward to client but don't accumulate
+              if (ws.readyState !== ws.OPEN) continue;
               if (line.includes('Compiling')) {
                 ws.send(JSON.stringify({ type: 'status', stage: 'compiling', message: line }));
               } else if (line.includes('Running')) {
                 ws.send(JSON.stringify({ type: 'status', stage: 'running' }));
               } else if (line.includes('Simulating')) {
-                ws.send(JSON.stringify({ type: 'status', stage: 'simulating', message: line }));
+                ws.send(JSON.stringify({ type: 'status', stage: 'processing' }));
               }
+            } else if (line.trim()) {
+              // Only accumulate non-progress, non-stage stderr (actual errors/warnings)
+              stderr += line + '\n';
             }
+          }
+          // Apply buffer limit on accumulated stderr to prevent OOM
+          if (stderr.length > CONFIG.memory.maxOutputBuffer) {
+            killed = true;
+            proc.kill('SIGKILL');
+            return;
           }
         });
 
         proc.on('close', (exitCode) => {
           clearTimeout(timeoutId);
-          clearInterval(batchInterval);
-          flushEventBatch(); // Send any remaining events
 
           if (cleanupFn) cleanupFn();
 
-          // Process any remaining buffered output
-          if (lineBuffer.trim()) {
+          // Batch mode: parse full stdout as JSON result
+          const output = lineBuffer.trim();
+          if (output) {
             try {
-              const event = JSON.parse(lineBuffer);
-              if (event.type === 'complete') {
-                finalResult = event;
-              } else if (event.error && !finalResult) {
-                // Handle error from buffered output if not already processed
-                console.log(`[WebSocket] got error in close handler: ${event.error}`);
+              const parsed = JSON.parse(output);
+              if (parsed.error) {
+                console.log(`[WebSocket] got error: ${parsed.error}`);
                 if (ws.readyState === ws.OPEN) {
-                  let rawError = event.details || event.error;
+                  let rawError = parsed.details || parsed.error;
                   rawError = rawError.replace(/\/tmp\/cache-explorer-[a-f0-9-]+\//g, '');
-                  ws.send(JSON.stringify({
-                    type: 'compile_error',
-                    raw: rawError
-                  }));
+                  ws.send(JSON.stringify({ type: 'compile_error', raw: rawError }));
                 }
-                finalResult = { error: event.error, details: event.details };
+                finalResult = parsed;
+              } else {
+                finalResult = parsed;
               }
-            } catch {}
+            } catch (e) {
+              console.log(`[WebSocket] failed to parse stdout as JSON: ${e.message}`);
+            }
           }
 
           if (killed) {
@@ -959,7 +889,6 @@ wss.on('connection', (ws) => {
               partialProgress
             });
           } else if (exitCode !== 0 && finalResult && finalResult.error) {
-            // Error already sent to client via WebSocket, resolve to avoid duplicate
             resolve({ data: finalResult, stderr });
           } else if (exitCode !== 0) {
             reject({ stdout: lineBuffer, stderr, exitCode, mainFile, partialProgress });
@@ -970,7 +899,6 @@ wss.on('connection', (ws) => {
 
         proc.on('error', (err) => {
           clearTimeout(timeoutId);
-          clearInterval(batchInterval);
           if (cleanupFn) cleanupFn();
           reject(err);
         });

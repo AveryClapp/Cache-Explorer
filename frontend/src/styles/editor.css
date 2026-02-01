@@ -97,6 +97,31 @@
   color: var(--signal-info);
 }
 
+/* Progress Bar */
+.progress-bar-container {
+  height: 3px;
+  background: var(--surface);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: var(--phosphor);
+  transition: width 0.3s ease-out;
+}
+
+.progress-bar-fill.indeterminate {
+  width: 30%;
+  animation: indeterminate-slide 1.4s ease-in-out infinite;
+}
+
+@keyframes indeterminate-slide {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(233%); }
+  100% { transform: translateX(233%); }
+}
+
 /* Status Bar */
 .status-bar {
   display: flex;

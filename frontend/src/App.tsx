@@ -135,8 +135,9 @@ function App() {
   const [showDetails, setShowDetails] = useState(false)
   const [sampleRate, setSampleRate] = useState(1)  // 1 = no sampling
   const [fastMode, setFastMode] = useState(false)  // false = full 3C tracking
-  const [eventLimit, setEventLimit] = useState(100000)  // Default 100K events
+  const [eventLimit, setEventLimit] = useState(1000000)  // Default 1M events
   const [longRunning, setLongRunning] = useState(false)
+  const [progress, setProgress] = useState<{ eventsProcessed: number; eventsTotal: number } | null>(null)
 
   // Use baseline hook for persistent comparison mode
   const {
@@ -442,6 +443,7 @@ function App() {
     setError(null)
     setResult(null)
     setLongRunning(false)
+    setProgress(null)
 
     // Set long-running warning after 10 seconds
     const longRunTimeout = setTimeout(() => setLongRunning(true), 10000)
@@ -463,7 +465,7 @@ function App() {
       if (defines.length > 0) payload.defines = defines.filter(d => d.name.trim())
       if (prefetchPolicy !== 'none') payload.prefetch = prefetchPolicy
       if (sampleRate > 1) payload.sample = sampleRate
-      if (eventLimit > 0) payload.limit = eventLimit
+      payload.limit = eventLimit
       if (selectedCompiler) payload.compiler = selectedCompiler
       if (fastMode) payload.fast = true
       ws.send(JSON.stringify(payload))
@@ -472,17 +474,20 @@ function App() {
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data)
       if (msg.type === 'status') setStage(msg.stage as Stage)
-      else if (msg.type === 'result') {
+      else if (msg.type === 'progress' && msg.eventsProcessed !== undefined) {
+        setProgress({ eventsProcessed: msg.eventsProcessed, eventsTotal: msg.eventsTotal || 0 })
+      } else if (msg.type === 'result') {
         clearTimeout(longRunTimeout)
         setLongRunning(false)
+        setProgress(null)
         setResult(msg.data as CacheResult)
         setStage('idle')
         wsRef.current = null
         ws.close()
       } else if (msg.type === 'error' || msg.type?.includes('error') || msg.errors) {
-        // Handle all error types: 'error', 'compile_error', 'linker_error', etc.
         clearTimeout(longRunTimeout)
         setLongRunning(false)
+        setProgress(null)
         setError(msg as ErrorResult)
         setStage('idle')
         wsRef.current = null
@@ -515,7 +520,7 @@ function App() {
         if (defines.length > 0) payload.defines = defines.filter(d => d.name.trim())
         if (prefetchPolicy !== 'none') payload.prefetch = prefetchPolicy
         if (sampleRate > 1) payload.sample = sampleRate
-        if (eventLimit > 0) payload.limit = eventLimit
+        payload.limit = eventLimit
         if (fastMode) payload.fast = true
 
         const response = await fetch(`${API_BASE}/compile`, {
@@ -746,6 +751,7 @@ function App() {
           onEditorMount={handleEditorMount}
           isLoading={isLoading}
           stage={stage}
+          progress={progress}
           config={config}
           vimMode={vimMode}
           vimStatusRef={vimStatusRef}

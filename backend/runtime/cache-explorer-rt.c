@@ -49,6 +49,10 @@ static _Thread_local uint32_t sample_counter = 0;
 static uint64_t max_events = 0;
 static atomic_uint_fast64_t total_events = 0;
 
+// Progress reporting to stderr (for server/UI progress bar)
+static uint64_t progress_interval = 0;
+static atomic_uint_fast64_t progress_next = 0;
+
 static uint32_t intern_filename(const char *file) {
   pthread_mutex_lock(&file_table.mutex);
 
@@ -81,6 +85,14 @@ static uint32_t intern_filename(const char *file) {
   return 0;  // Attribute to first file when overflow
 }
 
+static void emit_runtime_progress(uint64_t count) {
+  char buf[128];
+  int len = snprintf(buf, sizeof(buf),
+    "{\"type\":\"progress\",\"phase\":\"trace\",\"eventsProcessed\":%llu,\"eventsTotal\":%llu}\n",
+    (unsigned long long)count, (unsigned long long)max_events);
+  if (len > 0) write(STDERR_FILENO, buf, len);
+}
+
 static inline void emit_event_with_src(uint64_t addr_with_flag, uint64_t src_addr,
                                         uint32_t size, const char *file, uint32_t line) {
   // Lazy initialization: handles runtimes where .init_array constructors
@@ -98,11 +110,21 @@ static inline void emit_event_with_src(uint64_t addr_with_flag, uint64_t src_add
     sample_counter = 0;  // Reset counter, emit this one
   }
 
+  // Always count events for progress reporting
+  uint64_t count = atomic_fetch_add(&total_events, 1);
+
   // Event limit: stop emitting after max_events
-  if (max_events > 0) {
-    uint64_t count = atomic_fetch_add(&total_events, 1);
-    if (count >= max_events) {
-      return;  // Hit limit, skip remaining events
+  if (max_events > 0 && count >= max_events) {
+    return;  // Hit limit, skip remaining events
+  }
+
+  // Progress reporting (~1% intervals)
+  if (__builtin_expect(progress_interval > 0 &&
+      count >= atomic_load_explicit(&progress_next, memory_order_relaxed), 0)) {
+    uint64_t expected = atomic_load(&progress_next);
+    if (count >= expected &&
+        atomic_compare_exchange_strong(&progress_next, &expected, expected + progress_interval)) {
+      emit_runtime_progress(count);
     }
   }
 
@@ -224,6 +246,16 @@ void __cache_explorer_init(void) {
   if (limit) {
     max_events = (uint64_t)atoll(limit);
   }
+
+  // Set up progress reporting interval
+  if (max_events >= 100) {
+    progress_interval = max_events / 100;
+  } else {
+    progress_interval = 100000;  // Every 100K events when no limit
+  }
+  atomic_store(&progress_next, progress_interval);
+  // Emit initial progress
+  emit_runtime_progress(0);
 }
 
 void __cache_explorer_set_output(const char *path) {
@@ -437,6 +469,12 @@ void __cache_explorer_shutdown(void) {
   // Guard against double shutdown (atexit + destructor)
   if (atomic_exchange(&shutdown_done, 1))
     return;
+
+  // Emit final progress (total events collected)
+  uint64_t final_count = atomic_load(&total_events);
+  if (progress_interval > 0) {
+    emit_runtime_progress(max_events > 0 ? (final_count < max_events ? final_count : max_events) : final_count);
+  }
 
   __cache_explorer_flush();
   if (output_fd > 2) {

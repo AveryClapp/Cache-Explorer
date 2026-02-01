@@ -75,7 +75,7 @@ for preset in "${PRESETS[@]}"; do
     echo -n "  $preset... "
 
     # Run cache-explore with the preset
-    OUTPUT=$("$CACHE_EXPLORE" "$TEST_PROGRAM" --config "$preset" --json 2>&1)
+    OUTPUT=$("$CACHE_EXPLORE" "$TEST_PROGRAM" --config "$preset" --json 2>/dev/null)
     EXIT_CODE=$?
 
     if [ $EXIT_CODE -ne 0 ]; then

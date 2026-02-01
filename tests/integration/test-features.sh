@@ -38,7 +38,7 @@ test_feature() {
 
     echo -n "Test: $name... "
 
-    OUTPUT=$("$CACHE_EXPLORE" "$TEST_PROGRAM" "${args[@]}" --json 2>&1)
+    OUTPUT=$("$CACHE_EXPLORE" "$TEST_PROGRAM" "${args[@]}" --json 2>/dev/null)
     EXIT_CODE=$?
 
     if [ $EXIT_CODE -ne 0 ]; then
@@ -77,7 +77,7 @@ test_feature "Fast mode" --config intel --fast
 
 # Test JSON output format
 echo -n "Test: JSON output structure... "
-OUTPUT=$("$CACHE_EXPLORE" "$TEST_PROGRAM" --config intel --json 2>&1)
+OUTPUT=$("$CACHE_EXPLORE" "$TEST_PROGRAM" --config intel --json 2>/dev/null)
 if echo "$OUTPUT" | jq -e '.config, .events, .levels.l1d.hits, .levels.l1d.misses, .levels.l1d.hitRate' > /dev/null 2>&1; then
     echo -e "${GREEN}PASS${NC}"
     PASSED=$((PASSED + 1))
@@ -90,7 +90,7 @@ fi
 
 # Test TLB stats
 echo -n "Test: TLB simulation... "
-OUTPUT=$("$CACHE_EXPLORE" "$TEST_PROGRAM" --config intel --json 2>&1)
+OUTPUT=$("$CACHE_EXPLORE" "$TEST_PROGRAM" --config intel --json 2>/dev/null)
 if echo "$OUTPUT" | jq -e '.tlb.dtlb' > /dev/null 2>&1; then
     echo -e "${GREEN}PASS${NC}"
     PASSED=$((PASSED + 1))
@@ -103,7 +103,7 @@ fi
 
 # Test timing model
 echo -n "Test: Timing model... "
-OUTPUT=$("$CACHE_EXPLORE" "$TEST_PROGRAM" --config intel --json 2>&1)
+OUTPUT=$("$CACHE_EXPLORE" "$TEST_PROGRAM" --config intel --json 2>/dev/null)
 if echo "$OUTPUT" | jq -e '.timing.totalCycles' > /dev/null 2>&1; then
     echo -e "${GREEN}PASS${NC}"
     PASSED=$((PASSED + 1))

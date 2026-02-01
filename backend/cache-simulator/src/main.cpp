@@ -10,6 +10,41 @@
 #include <unordered_set>
 #include <vector>
 
+// Progress reporting to stderr (parsed by server/CLI for progress bars)
+static size_t progress_total = 0;
+static size_t progress_interval = 0;
+static size_t progress_next = 0;
+
+static void progress_init(size_t total) {
+  progress_total = total;
+  // Emit at ~1% intervals, minimum 500 events
+  if (total < 100) {
+    progress_interval = 0; // Trivial trace, skip progress
+  } else {
+    progress_interval = std::max<size_t>(500, total / 100);
+  }
+  progress_next = progress_interval;
+  // Emit initial progress
+  if (progress_interval > 0) {
+    std::cerr << "{\"type\":\"progress\",\"eventsProcessed\":0,\"eventsTotal\":" << total << "}\n";
+  }
+}
+
+static inline void progress_update(size_t processed) {
+  if (progress_interval > 0 && processed >= progress_next) {
+    std::cerr << "{\"type\":\"progress\",\"eventsProcessed\":" << processed
+              << ",\"eventsTotal\":" << progress_total << "}\n";
+    progress_next = processed + progress_interval;
+  }
+}
+
+static void progress_done() {
+  if (progress_interval > 0) {
+    std::cerr << "{\"type\":\"progress\",\"eventsProcessed\":" << progress_total
+              << ",\"eventsTotal\":" << progress_total << "}\n";
+  }
+}
+
 // Generate SVG flamegraph showing cache miss distribution
 template<typename HotLineType>
 void output_flamegraph_svg(const std::vector<HotLineType>& hot_lines, const std::string& title) {
@@ -483,6 +518,7 @@ int main(int argc, char *argv[]) {
     }
 
     // Process events with optional segment caching
+    progress_init(events.size());
     if (opts.cache_segments) {
       using namespace cache_explorer;
       SegmentCache cache(opts.segment_size, 10000);
@@ -524,6 +560,7 @@ int main(int argc, char *argv[]) {
           cache.store(events, i, cache_state_hash, result);
           i = segment_end;
         }
+        progress_update(i);
       }
 
       if (verbose && !json_output) {
@@ -533,10 +570,12 @@ int main(int argc, char *argv[]) {
                   << (cache.get_hit_rate() * 100.0) << "%\n";
       }
     } else {
-      for (const auto &event : events) {
-        processor.process(event);
+      for (size_t i = 0; i < events.size(); i++) {
+        processor.process(events[i]);
+        progress_update(i);
       }
     }
+    progress_done();
 
     auto stats = processor.get_stats();
     auto hot = processor.get_hot_lines(flamegraph_output ? 20 : 10);  // More lines for flamegraph
@@ -856,6 +895,7 @@ int main(int argc, char *argv[]) {
     }
 
     // Process events with optional segment caching (single-core)
+    progress_init(events.size());
     if (opts.cache_segments) {
       using namespace cache_explorer;
       SegmentCache cache(opts.segment_size, 10000);
@@ -892,6 +932,7 @@ int main(int argc, char *argv[]) {
           cache.store(events, i, cache_state_hash, result);
           i = segment_end;
         }
+        progress_update(i);
       }
 
       if (verbose && !json_output) {
@@ -901,10 +942,12 @@ int main(int argc, char *argv[]) {
                   << (cache.get_hit_rate() * 100.0) << "%\n";
       }
     } else {
-      for (const auto &event : events) {
-        processor.process(event);
+      for (size_t i = 0; i < events.size(); i++) {
+        processor.process(events[i]);
+        progress_update(i);
       }
     }
+    progress_done();
 
     auto stats = processor.get_stats();
     auto hot = processor.get_hot_lines(20);  // Get more for flamegraph

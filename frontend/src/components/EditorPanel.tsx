@@ -33,6 +33,7 @@ interface EditorPanelProps {
   // Status bar
   isLoading: boolean
   stage: Stage
+  progress: { eventsProcessed: number; eventsTotal: number } | null
   config: string
   vimMode: boolean
   vimStatusRef: React.RefObject<HTMLDivElement | null>
@@ -48,8 +49,14 @@ const stageText: Record<Stage, string> = {
   preparing: 'Preparing...',
   compiling: 'Compiling...',
   running: 'Running...',
-  processing: 'Processing...',
+  processing: 'Simulating...',
   done: ''
+}
+
+function formatCount(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K'
+  return String(n)
 }
 
 export function EditorPanel({
@@ -71,13 +78,16 @@ export function EditorPanel({
   onEditorMount,
   isLoading,
   stage,
+  progress,
   config,
   vimMode,
   vimStatusRef,
   isMobile,
   mobilePane,
 }: EditorPanelProps) {
-  const monacoLanguage = language === 'cpp' ? 'cpp' : 'c'
+  const monacoLanguage = language === 'cpp' ? 'cpp' : language === 'zig' ? 'rust' : 'c'
+  const hasTotal = progress && progress.eventsTotal > 0
+  const progressPct = hasTotal ? Math.min(100, (progress.eventsProcessed / progress.eventsTotal) * 100) : 0
 
   return (
     <div className={`editor-area${isMobile && mobilePane !== 'editor' ? ' mobile-hidden' : ''}`}>
@@ -132,13 +142,29 @@ export function EditorPanel({
         )}
       </div>
 
+      {/* Progress Bar */}
+      {isLoading && !isEmbedMode && (
+        <div className="progress-bar-container">
+          <div
+            className={`progress-bar-fill ${hasTotal ? 'determinate' : 'indeterminate'}`}
+            style={hasTotal ? { width: `${progressPct}%` } : undefined}
+          />
+        </div>
+      )}
+
       {/* Status Bar */}
       {!isEmbedMode && (
         <div className="status-bar">
           <div className="status-bar-left">
             <span className="status-item">
               <span className={`status-indicator ${isLoading ? 'running' : 'idle'}`} />
-              {isLoading ? stageText[stage] : 'Ready'}
+              {isLoading
+                ? hasTotal
+                  ? `${stageText[stage] || 'Processing...'} ${formatCount(progress.eventsProcessed)} / ${formatCount(progress.eventsTotal)} events (${Math.round(progressPct)}%)`
+                  : progress
+                    ? `${stageText[stage] || 'Processing...'} ${formatCount(progress.eventsProcessed)} events`
+                    : stageText[stage]
+                : 'Ready'}
             </span>
             <span className="status-item">{language.toUpperCase()}</span>
           </div>

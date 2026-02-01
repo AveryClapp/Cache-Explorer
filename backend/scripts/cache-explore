@@ -530,8 +530,9 @@ if [[ -z "$JSON_OUTPUT" ]]; then
   echo "Language: $LANG" >&2
   echo "Config: $CONFIG" >&2
   echo "" >&2
-  echo "[1/3] Compiling with instrumentation..." >&2
 fi
+# Always emit stage markers to stderr (server parses these for progress)
+echo "[1/3] Compiling with instrumentation..." >&2
 
 EXTRA_FLAGS=""
 if [[ "$OPT_LEVEL" == "-O0" ]]; then
@@ -741,9 +742,8 @@ elif ! $COMPILER $OPT_LEVEL $EXTRA_FLAGS -g -fpass-plugin="$PASS" \
 fi
 rm -f /tmp/cache-explore-compile-err-$$
 
-if [[ -z "$JSON_OUTPUT" ]] && [[ -z "$STREAM_OUTPUT" ]]; then
-  echo "[2/3] Running instrumented binary..." >&2
-fi
+# Always emit stage markers to stderr (server parses these for progress)
+echo "[2/2] Simulating cache behavior..." >&2
 
 # Build environment for runtime options
 RUN_ENV=""
@@ -775,19 +775,14 @@ if [[ -n "$STREAM_OUTPUT" ]]; then
   fi
   EXIT_CODE=${PIPESTATUS[0]}
 else
-  # Batch mode: capture trace then process
+  # Pipe binary stdout directly to cache-sim (avoids storing trace in memory)
+  # Binary stderr passes through to our stderr (server reads progress from it)
   if [[ -n "$RUN_ENV" ]]; then
-    TRACE=$(env $RUN_ENV "$BINARY" 2>&1) || true
+    env $RUN_ENV "$BINARY" | "$CACHE_SIM" --config "$CONFIG" $VERBOSE $JSON_OUTPUT $PREFETCH_ARG $FAST_MODE $CUSTOM_CONFIG_ARGS
   else
-    TRACE=$("$BINARY" 2>&1) || true
+    "$BINARY" | "$CACHE_SIM" --config "$CONFIG" $VERBOSE $JSON_OUTPUT $PREFETCH_ARG $FAST_MODE $CUSTOM_CONFIG_ARGS
   fi
-
-  if [[ -z "$JSON_OUTPUT" ]]; then
-    echo "[3/3] Analyzing cache behavior..." >&2
-    echo ""
-  fi
-
-  echo "$TRACE" | "$CACHE_SIM" --config "$CONFIG" $VERBOSE $JSON_OUTPUT $PREFETCH_ARG $FAST_MODE $CUSTOM_CONFIG_ARGS
+  EXIT_CODE=${PIPESTATUS[0]}
 fi
 
 # Cleanup

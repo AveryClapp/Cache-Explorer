@@ -568,3 +568,27 @@ select:focus {
   background: var(--text-secondary);
 }
 
+/* ─── Custom Limit Input ─── */
+.limit-custom-input {
+  display: inline-flex;
+  align-items: center;
+}
+
+.limit-custom-input .custom-limit {
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  background: var(--surface);
+  color: var(--text-bright);
+  border: 1px solid var(--phosphor-dim);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  width: 100px;
+  box-shadow: 0 0 0 2px var(--phosphor-glow);
+  outline: none;
+}
+
+.limit-custom-input .custom-limit::placeholder {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { StyledSelect } from './StyledSelect'
 import type { DefineEntry, CustomCacheConfig } from '../types'
 import {
@@ -48,6 +48,46 @@ export function SettingsToolbar({
   onFastModeChange,
 }: SettingsToolbarProps) {
   const [showMore, setShowMore] = useState(config === 'custom')
+  const [customLimitMode, setCustomLimitMode] = useState(false)
+  const [customLimitText, setCustomLimitText] = useState('')
+  const customLimitRef = useRef<HTMLInputElement>(null)
+
+  // Check if current eventLimit matches a preset
+  const presetValues = ['10000', '50000', '100000', '500000', '1000000', '5000000', '0']
+  const isCustomLimit = !presetValues.includes(String(eventLimit))
+
+  // Format number for display in input
+  const formatLimit = (n: number): string => {
+    if (n === 0) return '0'
+    if (n >= 1_000_000 && n % 1_000_000 === 0) return (n / 1_000_000) + 'M'
+    if (n >= 1_000 && n % 1_000 === 0) return (n / 1_000) + 'K'
+    return String(n)
+  }
+
+  // Parse shorthand like "10M", "500K", "2.5M", or plain numbers
+  const parseLimit = (input: string): number | null => {
+    const s = input.trim().toUpperCase()
+    if (!s) return null
+    const match = s.match(/^(\d+\.?\d*)\s*(M|K|B)?$/)
+    if (!match) return null
+    const num = parseFloat(match[1])
+    if (isNaN(num) || num < 0) return null
+    const suffix = match[2]
+    if (suffix === 'M') return Math.round(num * 1_000_000)
+    if (suffix === 'K') return Math.round(num * 1_000)
+    if (suffix === 'B') return Math.round(num * 1_000_000_000)
+    return Math.round(num)
+  }
+
+  // Focus the custom input when entering custom mode
+  useEffect(() => {
+    if (customLimitMode && customLimitRef.current) {
+      customLimitRef.current.focus()
+    }
+  }, [customLimitMode])
+
+  // Determine the select value to show
+  const limitSelectValue = isCustomLimit ? 'custom' : String(eventLimit)
 
   useEffect(() => {
     if (config === 'custom') setShowMore(true)
@@ -113,11 +153,55 @@ export function SettingsToolbar({
 
         <div className="toolbar-group">
           <label>Limit</label>
-          <StyledSelect
-            value={String(eventLimit)}
-            options={LIMIT_OPTIONS}
-            onChange={(v) => onEventLimitChange(parseInt(v))}
-          />
+          {customLimitMode ? (
+            <div className="limit-custom-input">
+              <input
+                ref={customLimitRef}
+                type="text"
+                placeholder="e.g. 10M, 500K"
+                value={customLimitText}
+                onChange={(e) => setCustomLimitText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const parsed = parseLimit(customLimitText)
+                    if (parsed !== null && parsed > 0) {
+                      onEventLimitChange(parsed)
+                      setCustomLimitMode(false)
+                      setCustomLimitText('')
+                    }
+                  } else if (e.key === 'Escape') {
+                    setCustomLimitMode(false)
+                    setCustomLimitText('')
+                  }
+                }}
+                onBlur={() => {
+                  const parsed = parseLimit(customLimitText)
+                  if (parsed !== null && parsed > 0) {
+                    onEventLimitChange(parsed)
+                  }
+                  setCustomLimitMode(false)
+                  setCustomLimitText('')
+                }}
+                className="define-input custom-limit"
+              />
+            </div>
+          ) : (
+            <StyledSelect
+              value={limitSelectValue}
+              options={isCustomLimit
+                ? LIMIT_OPTIONS.map(o => o.value === 'custom' ? { ...o, label: formatLimit(eventLimit) } : o)
+                : LIMIT_OPTIONS
+              }
+              onChange={(v) => {
+                if (v === 'custom') {
+                  setCustomLimitMode(true)
+                  setCustomLimitText('')
+                } else {
+                  onEventLimitChange(parseInt(v))
+                }
+              }}
+            />
+          )}
         </div>
 
         <button

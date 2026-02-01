@@ -27,6 +27,11 @@ export interface AnalysisConfig {
   fastMode?: boolean
 }
 
+export interface SimProgress {
+  eventsProcessed: number
+  eventsTotal: number
+}
+
 export interface UseAnalysisReturn {
   // State
   result: CacheResult | null
@@ -35,6 +40,7 @@ export interface UseAnalysisReturn {
   isLoading: boolean
   longRunning: boolean
   stageText: string
+  progress: SimProgress | null
 
   // Actions
   runAnalysis: (files: FileTab[], config: AnalysisConfig) => void
@@ -51,6 +57,7 @@ export function useAnalysis(): UseAnalysisReturn {
   const [error, setError] = useState<ErrorResult | null>(null)
   const [stage, setStage] = useState<Stage>('idle')
   const [longRunning, setLongRunning] = useState(false)
+  const [progress, setProgress] = useState<SimProgress | null>(null)
 
   const wsRef = useRef<WebSocket | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -109,6 +116,7 @@ export function useAnalysis(): UseAnalysisReturn {
     setError(null)
     setResult(null)
     setLongRunning(false)
+    setProgress(null)
 
     // Set long-running warning after 10 seconds
     longRunTimeoutRef.current = setTimeout(() => setLongRunning(true), 10000)
@@ -146,9 +154,13 @@ export function useAnalysis(): UseAnalysisReturn {
       const msg = JSON.parse(event.data)
       if (msg.type === 'status') {
         setStage(msg.stage as Stage)
+      } else if (msg.type === 'progress' && msg.eventsTotal) {
+        setProgress({ eventsProcessed: msg.eventsProcessed, eventsTotal: msg.eventsTotal })
+        setStage('processing')
       } else if (msg.type === 'result') {
         if (longRunTimeoutRef.current) clearTimeout(longRunTimeoutRef.current)
         setLongRunning(false)
+        setProgress(null)
         setResult(msg.data as CacheResult)
         setStage('idle')
         wsRef.current = null
@@ -156,6 +168,7 @@ export function useAnalysis(): UseAnalysisReturn {
       } else if (msg.type === 'error' || msg.type?.includes('error') || msg.errors) {
         if (longRunTimeoutRef.current) clearTimeout(longRunTimeoutRef.current)
         setLongRunning(false)
+        setProgress(null)
         setError(msg as ErrorResult)
         setStage('idle')
         wsRef.current = null
@@ -264,6 +277,7 @@ export function useAnalysis(): UseAnalysisReturn {
     isLoading,
     longRunning,
     stageText: stageTextMap[stage],
+    progress,
     runAnalysis,
     cancelAnalysis,
     clearResults,

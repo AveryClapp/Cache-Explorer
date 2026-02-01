@@ -39,6 +39,9 @@ export const LIMIT_OPTIONS: SelectOption[] = [
   { value: '100000', label: '100K' },
   { value: '500000', label: '500K' },
   { value: '1000000', label: '1M' },
+  { value: '5000000', label: '5M' },
+  { value: 'custom', label: 'Custom' },
+  { value: '0', label: 'None' },
 ]
 
 export const SAMPLE_OPTIONS: SelectOption[] = [
