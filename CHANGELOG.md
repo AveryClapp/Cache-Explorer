@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/AveryClapp/Cache-Explorer/compare/v1.3.0...v1.4.0) (2026-02-01)
+
+
+### Features
+
+* add progress bar with real-time event tracking ([ab2b64c](https://github.com/AveryClapp/Cache-Explorer/commit/ab2b64c80129dbf8cf320bab70e0300e8f1a4227))
+
 ## [1.3.0](https://github.com/AveryClapp/Cache-Explorer/compare/v1.2.0...v1.3.0) (2026-02-01)
 
 
