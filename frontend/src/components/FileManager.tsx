@@ -1,11 +1,12 @@
 import { useState, useCallback } from 'react'
+import type { Language } from '../types'
 import './FileManager.css'
 
 export interface ProjectFile {
   id: string
   name: string
   code: string
-  language: 'c' | 'cpp' | 'zig'
+  language: Language
   isMain?: boolean
 }
 
@@ -13,29 +14,32 @@ interface FileManagerProps {
   files: ProjectFile[]
   activeFileId: string
   onFileSelect: (fileId: string) => void
-  onFileCreate: (name: string, language: 'c' | 'cpp') => void
+  onFileCreate: (name: string, language: Language) => void
   onFileDelete: (fileId: string) => void
   onFileRename: (fileId: string, newName: string) => void
   onSetMainFile: (fileId: string) => void
 }
 
-const FILE_EXTENSIONS: Record<string, 'c' | 'cpp'> = {
+const FILE_EXTENSIONS: Record<string, Language> = {
   '.c': 'c',
   '.h': 'c',
   '.cpp': 'cpp',
   '.hpp': 'cpp',
   '.cc': 'cpp',
   '.cxx': 'cpp',
+  '.zig': 'zig',
 }
 
-const DEFAULT_EXTENSIONS: Record<'c' | 'cpp', string> = {
+const DEFAULT_EXTENSIONS: Record<Language, string> = {
   c: '.c',
   cpp: '.cpp',
+  zig: '.zig',
 }
 
-const LANGUAGE_COLORS: Record<'c' | 'cpp', string> = {
+const LANGUAGE_COLORS: Record<Language, string> = {
   c: '#555eb7',
   cpp: '#f34b7d',
+  zig: '#f7a41d',
 }
 
 export function FileManager({
@@ -57,7 +61,7 @@ export function FileManager({
     if (!newFileName.trim()) return
 
     let name = newFileName.trim()
-    let language: 'c' | 'cpp' = 'c'
+    let language: Language = 'c'
 
     // Detect language from extension
     const ext = Object.keys(FILE_EXTENSIONS).find(e => name.endsWith(e))
@@ -147,7 +151,7 @@ export function FileManager({
                   className="tab-icon"
                   style={{ backgroundColor: LANGUAGE_COLORS[file.language] }}
                 >
-                  {file.language === 'c' ? 'C' : file.language === 'cpp' ? '++' : 'Rs'}
+                  {file.language === 'c' ? 'C' : file.language === 'cpp' ? '++' : file.language === 'zig' ? 'Z' : '?'}
                 </span>
                 <span className="tab-name">{file.name}</span>
                 {file.isMain && <span className="tab-main-indicator" title="Entry point">*</span>}

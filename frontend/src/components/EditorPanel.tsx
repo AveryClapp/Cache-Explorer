@@ -21,7 +21,7 @@ interface EditorPanelProps {
   files: ProjectFile[]
   activeFileId: string
   onFileSelect: (id: string) => void
-  onFileCreate: (name: string, language: 'c' | 'cpp') => void
+  onFileCreate: (name: string, language: Language) => void
   onFileDelete: (id: string) => void
   onFileRename: (id: string, name: string) => void
   onSetMainFile: (id: string) => void

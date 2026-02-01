@@ -94,7 +94,7 @@ function App() {
   }, [])
 
   // FileManager-compatible createFile callback
-  const createFile = useCallback((name: string, language: 'c' | 'cpp') => {
+  const createFile = useCallback((name: string, language: Language) => {
     const newFile = createFileTab(name, '', language)
     setFiles(prev => [...prev, newFile])
     setActiveFileId(newFile.id)
