@@ -239,6 +239,133 @@ void __cache_explorer_set_output(const char *path) {
   }
 }
 
+// Write buffer for batching output (eliminates per-event syscalls)
+#define WRITE_BUF_SIZE (256 * 1024)  // 256KB write buffer
+static char write_buf[WRITE_BUF_SIZE];
+static int write_buf_pos = 0;
+
+static inline void wb_flush(void) {
+  if (write_buf_pos > 0) {
+    const char *p = write_buf;
+    int remaining = write_buf_pos;
+    while (remaining > 0) {
+      ssize_t n = write(output_fd, p, remaining);
+      if (n <= 0) break;
+      p += n;
+      remaining -= n;
+    }
+    write_buf_pos = 0;
+  }
+}
+
+// Fast hex formatting: write "0x" + hex digits for a 64-bit value
+static inline int fmt_hex(char *buf, uint64_t val) {
+  static const char hex_digits[] = "0123456789abcdef";
+  buf[0] = '0';
+  buf[1] = 'x';
+  if (val == 0) {
+    buf[2] = '0';
+    return 3;
+  }
+  // Find highest nibble
+  int bits = 63 - __builtin_clzll(val);
+  int nibbles = (bits >> 2) + 1;
+  for (int i = nibbles - 1; i >= 0; i--) {
+    buf[2 + i] = hex_digits[val & 0xf];
+    val >>= 4;
+  }
+  return 2 + nibbles;
+}
+
+// Fast decimal formatting for uint32_t
+static inline int fmt_dec(char *buf, uint32_t val) {
+  if (val == 0) {
+    buf[0] = '0';
+    return 1;
+  }
+  char tmp[10];
+  int len = 0;
+  while (val > 0) {
+    tmp[len++] = '0' + (val % 10);
+    val /= 10;
+  }
+  for (int i = 0; i < len; i++) {
+    buf[i] = tmp[len - 1 - i];
+  }
+  return len;
+}
+
+// Format one event into write buffer, flushing if needed
+static inline void fmt_event(char type, uint64_t addr, uint32_t size,
+                             const char *file, uint32_t line, uint32_t tid) {
+  // Max line: "X 0x1234567890abcdef 12345 somefile.c:99999 T99\n" ~80 chars
+  if (write_buf_pos + 128 > WRITE_BUF_SIZE)
+    wb_flush();
+  char *p = write_buf + write_buf_pos;
+  *p++ = type;
+  *p++ = ' ';
+  p += fmt_hex(p, addr);
+  *p++ = ' ';
+  p += fmt_dec(p, size);
+  *p++ = ' ';
+  while (*file) *p++ = *file++;
+  *p++ = ':';
+  p += fmt_dec(p, line);
+  *p++ = ' ';
+  *p++ = 'T';
+  p += fmt_dec(p, tid);
+  *p++ = '\n';
+  write_buf_pos = (int)(p - write_buf);
+}
+
+// Format event with two addresses (memcpy/memmove)
+static inline void fmt_event_src(char type, uint64_t addr, uint64_t src_addr,
+                                 uint32_t size, const char *file, uint32_t line,
+                                 uint32_t tid) {
+  if (write_buf_pos + 160 > WRITE_BUF_SIZE)
+    wb_flush();
+  char *p = write_buf + write_buf_pos;
+  *p++ = type;
+  *p++ = ' ';
+  p += fmt_hex(p, addr);
+  *p++ = ' ';
+  p += fmt_hex(p, src_addr);
+  *p++ = ' ';
+  p += fmt_dec(p, size);
+  *p++ = ' ';
+  while (*file) *p++ = *file++;
+  *p++ = ':';
+  p += fmt_dec(p, line);
+  *p++ = ' ';
+  *p++ = 'T';
+  p += fmt_dec(p, tid);
+  *p++ = '\n';
+  write_buf_pos = (int)(p - write_buf);
+}
+
+// Format prefetch with hint level
+static inline void fmt_prefetch(uint8_t hint, uint64_t addr, uint32_t size,
+                                const char *file, uint32_t line, uint32_t tid) {
+  if (write_buf_pos + 128 > WRITE_BUF_SIZE)
+    wb_flush();
+  char *p = write_buf + write_buf_pos;
+  *p++ = 'P';
+  if (hint > 0) *p++ = '0' + hint;
+  *p++ = ' ';
+  p += fmt_hex(p, addr);
+  *p++ = ' ';
+  p += fmt_dec(p, size);
+  *p++ = ' ';
+  while (*file) *p++ = *file++;
+  *p++ = ':';
+  p += fmt_dec(p, line);
+  *p++ = ' ';
+  *p++ = 'T';
+  p += fmt_dec(p, tid);
+  *p++ = '\n';
+  write_buf_pos = (int)(p - write_buf);
+}
+
 void __cache_explorer_flush(void) {
   if (output_fd < 0)
     output_fd = STDOUT_FILENO;
@@ -263,65 +390,37 @@ void __cache_explorer_flush(void) {
       int is_memintr = (e->address & EVENT_MEMINTR_FLAG) != 0;
 
       if (is_memintr) {
-        // Memory intrinsics: M (memcpy), Z (memset), O (memmove)
         uint64_t intrinsic_type = (e->address >> 54) & 0x3;
         if (intrinsic_type == 1) {
-          // memset: Z <addr> <size> <file:line> T<n>
-          dprintf(output_fd, "Z 0x%llx %u %s:%u T%u\n",
-                  (unsigned long long)addr, e->size, file, line, e->thread_id);
+          fmt_event('Z', addr, e->size, file, line, e->thread_id);
         } else if (intrinsic_type == 2) {
-          // memmove: O <dest> <src> <size> <file:line> T<n>
-          dprintf(output_fd, "O 0x%llx 0x%llx %u %s:%u T%u\n",
-                  (unsigned long long)addr, (unsigned long long)e->src_address,
-                  e->size, file, line, e->thread_id);
+          fmt_event_src('O', addr, e->src_address, e->size, file, line, e->thread_id);
         } else {
-          // memcpy: M <dest> <src> <size> <file:line> T<n>
-          dprintf(output_fd, "M 0x%llx 0x%llx %u %s:%u T%u\n",
-                  (unsigned long long)addr, (unsigned long long)e->src_address,
-                  e->size, file, line, e->thread_id);
+          fmt_event_src('M', addr, e->src_address, e->size, file, line, e->thread_id);
         }
       } else if (is_atomic) {
-        // Atomic operations: A (load), X (RMW), C (cmpxchg)
         uint64_t atomic_type = (e->address >> 57) & 0x3;
         char event_type;
-        if (atomic_type == 3) {
-          event_type = 'C';  // cmpxchg
-        } else if (atomic_type == 2) {
-          event_type = 'X';  // RMW
-        } else if (is_store) {
-          event_type = 'X';  // atomic store treated as RMW for simplicity
-        } else {
-          event_type = 'A';  // atomic load
-        }
-        dprintf(output_fd, "%c 0x%llx %u %s:%u T%u\n", event_type,
-                (unsigned long long)addr, e->size, file, line, e->thread_id);
+        if (atomic_type == 3) event_type = 'C';
+        else if (atomic_type == 2) event_type = 'X';
+        else if (is_store) event_type = 'X';
+        else event_type = 'A';
+        fmt_event(event_type, addr, e->size, file, line, e->thread_id);
       } else if (is_vector) {
-        // Vector/SIMD: V (load), U (store)
-        char event_type = is_store ? 'U' : 'V';
-        dprintf(output_fd, "%c 0x%llx %u %s:%u T%u\n", event_type,
-                (unsigned long long)addr, e->size, file, line, e->thread_id);
+        fmt_event(is_store ? 'U' : 'V', addr, e->size, file, line, e->thread_id);
       } else if (is_prefetch) {
-        // Prefetch: P or P0/P1/P2/P3
         uint8_t hint = (e->address >> 54) & 0x3;
-        if (hint == 0) {
-          dprintf(output_fd, "P 0x%llx %u %s:%u T%u\n",
-                  (unsigned long long)addr, e->size, file, line, e->thread_id);
-        } else {
-          dprintf(output_fd, "P%u 0x%llx %u %s:%u T%u\n", hint,
-                  (unsigned long long)addr, e->size, file, line, e->thread_id);
-        }
+        fmt_prefetch(hint, addr, e->size, file, line, e->thread_id);
       } else if (is_icache) {
-        dprintf(output_fd, "I 0x%llx %u %s:%u T%u\n",
-                (unsigned long long)addr, e->size, file, line, e->thread_id);
+        fmt_event('I', addr, e->size, file, line, e->thread_id);
       } else {
-        // Regular load/store
-        char event_type = is_store ? 'S' : 'L';
-        dprintf(output_fd, "%c 0x%llx %u %s:%u T%u\n", event_type,
-                (unsigned long long)addr, e->size, file, line, e->thread_id);
+        fmt_event(is_store ? 'S' : 'L', addr, e->size, file, line, e->thread_id);
       }
 
       tail = (tail + 1) & BUFFER_MASK;
     }
+    // Flush remaining buffered output
+    wb_flush();
   } else {
     while (tail != head) {
       write(output_fd, &ring_buffer.events[tail], sizeof(CacheEvent));

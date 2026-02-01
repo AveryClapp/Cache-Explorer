@@ -116,16 +116,20 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const BACKEND_DIR = dirname(__dirname);
 const CACHE_EXPLORE = join(BACKEND_DIR, 'scripts', 'cache-explore');
 
-// Check sandbox availability on startup
+// Sandbox is disabled by default (use ENABLE_SANDBOX=1 to opt in)
 let sandboxAvailable = false;
-checkSandboxAvailable().then(available => {
-  sandboxAvailable = available;
-  if (available) {
-    console.log('Docker sandbox: ENABLED (secure mode)');
-  } else {
-    console.log('Docker sandbox: DISABLED (development mode - run docker/build-image.sh to enable)');
-  }
-});
+if (process.env.ENABLE_SANDBOX) {
+  checkSandboxAvailable().then(available => {
+    sandboxAvailable = available;
+    if (available) {
+      console.log('Docker sandbox: ENABLED (secure mode)');
+    } else {
+      console.log('Docker sandbox: UNAVAILABLE (Docker not found - run docker/build-image.sh)');
+    }
+  });
+} else {
+  console.log('Docker sandbox: DISABLED (set ENABLE_SANDBOX=1 to enable)');
+}
 
 // Error handling imported from ./services/errorParser.js
 

@@ -14,10 +14,15 @@ add_library(CacheSimulator
   src/MultiCoreTraceProcessor.cpp
   src/OptimizationSuggester.cpp
   src/Prefetcher.cpp
+  src/SegmentCache.cpp
   src/TLB.cpp
   src/TraceProcessor.cpp
 )
 target_include_directories(CacheSimulator PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+# Link pthread for thread pool
+find_package(Threads REQUIRED)
+target_link_libraries(CacheSimulator PUBLIC Threads::Threads)
 
 # CLI tool
 add_executable(cache-sim src/main.cpp)
@@ -50,3 +55,6 @@ target_link_libraries(TraceProcessorTest CacheSimulator)
 
 add_executable(JsonOutputTest tests/JsonOutputTest.cpp)
 target_link_libraries(JsonOutputTest CacheSimulator)
+
+add_executable(SegmentCacheTest tests/SegmentCacheTest.cpp)
+target_link_libraries(SegmentCacheTest CacheSimulator)

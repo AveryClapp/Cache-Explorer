@@ -318,6 +318,7 @@ AccessInfo CacheLevel::install(uint64_t address, bool is_dirty) {
     set[victim].rrip_value = (std::rand() % 32 == 0) ? 2 : 3;
   }
   update_replacement_state(index, victim);
+  set_mru_[index] = victim;  // Update MRU to newly installed line
 
   AccessResult result =
       was_dirty ? AccessResult::MissWithEviction : AccessResult::Miss;
