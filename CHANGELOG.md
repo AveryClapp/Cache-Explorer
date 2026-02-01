@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.0](https://github.com/AveryClapp/Cache-Explorer/compare/v1.1.0...v1.2.0) (2026-02-01)
+
+
+### Features
+
+* add Zig language support ([ab980cb](https://github.com/AveryClapp/Cache-Explorer/commit/ab980cb9857a22b624ad74b6738396023e35676f))
+
+
+### Bug Fixes
+
+* add zig to ProjectFile language type ([b38c60c](https://github.com/AveryClapp/Cache-Explorer/commit/b38c60cd62da49988aee3e312fe73005845b0f4f))
+
 ## [1.1.0](https://github.com/AveryClapp/Cache-Explorer/compare/v1.0.1...v1.1.0) (2026-01-31)
 
 
