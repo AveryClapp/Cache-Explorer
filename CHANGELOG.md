@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/AveryClapp/Cache-Explorer/compare/v1.2.0...v1.3.0) (2026-02-01)
+
+
+### Features
+
+* performance optimizations - segment caching and I/O pipeline (~19x speedup) ([a3d6005](https://github.com/AveryClapp/Cache-Explorer/commit/a3d6005c47db3ab06faaa20bea4fb90836fb0ec2))
+
 ## [1.2.0](https://github.com/AveryClapp/Cache-Explorer/compare/v1.1.0...v1.2.0) (2026-02-01)
 
 
