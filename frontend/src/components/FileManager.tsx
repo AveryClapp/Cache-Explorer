@@ -5,7 +5,7 @@ export interface ProjectFile {
   id: string
   name: string
   code: string
-  language: 'c' | 'cpp'
+  language: 'c' | 'cpp' | 'zig'
   isMain?: boolean
 }
 
