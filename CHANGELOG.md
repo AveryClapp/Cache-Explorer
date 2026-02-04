@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1](https://github.com/AveryClapp/Cache-Explorer/compare/v1.4.0...v1.4.1) (2026-02-04)
+
+
+### Bug Fixes
+
+* remove segment caching ([aecaec2](https://github.com/AveryClapp/Cache-Explorer/commit/aecaec2610d40fbf0d0d3e90940f3c7c8097e1b9))
+
 ## [1.4.0](https://github.com/AveryClapp/Cache-Explorer/compare/v1.3.0...v1.4.0) (2026-02-01)
 
 
