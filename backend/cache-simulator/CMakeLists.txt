@@ -14,7 +14,6 @@ add_library(CacheSimulator
   src/MultiCoreTraceProcessor.cpp
   src/OptimizationSuggester.cpp
   src/Prefetcher.cpp
-  src/SegmentCache.cpp
   src/TLB.cpp
   src/TraceProcessor.cpp
 )
@@ -56,5 +55,3 @@ target_link_libraries(TraceProcessorTest CacheSimulator)
 add_executable(JsonOutputTest tests/JsonOutputTest.cpp)
 target_link_libraries(JsonOutputTest CacheSimulator)
 
-add_executable(SegmentCacheTest tests/SegmentCacheTest.cpp)
-target_link_libraries(SegmentCacheTest CacheSimulator)

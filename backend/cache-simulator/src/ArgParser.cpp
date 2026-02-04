@@ -15,8 +15,6 @@ void ArgParser::print_usage(const char* prog) {
               << "  --flamegraph      Output SVG flamegraph of cache misses\n"
               << "  --fast            Disable 3C miss classification for ~3x faster simulation\n"
               << "  --parallel [n]    Enable parallel trace parsing with n threads (default: auto)\n"
-              << "  --cache-segments  Enable segment caching for repetitive code (10-100x speedup)\n"
-              << "  --segment-size n  Number of events per cached segment (default: 20)\n"
               << "  --help            Show this help\n"
               << "\nCustom cache config (use with --config custom):\n"
               << "  --l1-size <bytes>   L1 cache size (default: 32768)\n"
@@ -157,10 +155,6 @@ SimulatorOptions ArgParser::parse(int argc, char* argv[]) {
             if (i + 1 < argc && argv[i + 1][0] != '-') {
                 opts.parallel_threads = std::stoull(argv[++i]);
             }
-        } else if (arg == "--cache-segments") {
-            opts.cache_segments = true;
-        } else if (arg == "--segment-size" && i + 1 < argc) {
-            opts.segment_size = std::stoull(argv[++i]);
         } else if (arg == "--help") {
             opts.show_help = true;
         }

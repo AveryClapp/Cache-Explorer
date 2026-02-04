@@ -3,7 +3,6 @@
 #include "../include/JsonOutput.hpp"
 #include "../include/MultiCoreTraceProcessor.hpp"
 #include "../include/OptimizationSuggester.hpp"
-#include "../include/SegmentCache.hpp"
 #include "../include/TraceProcessor.hpp"
 #include <iomanip>
 #include <iostream>
@@ -517,63 +516,11 @@ int main(int argc, char *argv[]) {
       });
     }
 
-    // Process events with optional segment caching
+    // Process events
     progress_init(events.size());
-    if (opts.cache_segments) {
-      using namespace cache_explorer;
-      SegmentCache cache(opts.segment_size, 10000);
-
-      size_t i = 0;
-      while (i < events.size()) {
-        // Simple cache state hash (based on position)
-        uint64_t cache_state_hash = i / opts.segment_size;
-
-        auto cached = cache.lookup(events, i, cache_state_hash);
-
-        if (cached.has_value()) {
-          // Cache HIT - skip segment
-          i += cached->segment_length;
-        } else {
-          // Cache MISS - simulate and cache
-          auto stats_before = processor.get_stats();
-
-          size_t segment_end = std::min(i + opts.segment_size, events.size());
-          for (size_t j = i; j < segment_end; j++) {
-            processor.process(events[j]);
-          }
-
-          auto stats_after = processor.get_stats();
-
-          // Compute deltas
-          cache_explorer::CachedSegmentResult result;
-          result.segment_length = segment_end - i;
-          // Aggregate L1 stats across cores
-          for (size_t core = 0; core < stats_before.l1_per_core.size(); core++) {
-            result.l1d_hits += stats_after.l1_per_core[core].hits - stats_before.l1_per_core[core].hits;
-            result.l1d_misses += stats_after.l1_per_core[core].misses - stats_before.l1_per_core[core].misses;
-          }
-          result.l2_hits = stats_after.l2.hits - stats_before.l2.hits;
-          result.l2_misses = stats_after.l2.misses - stats_before.l2.misses;
-          result.l3_hits = stats_after.l3.hits - stats_before.l3.hits;
-          result.l3_misses = stats_after.l3.misses - stats_before.l3.misses;
-
-          cache.store(events, i, cache_state_hash, result);
-          i = segment_end;
-        }
-        progress_update(i);
-      }
-
-      if (verbose && !json_output) {
-        std::cerr << "\n[Segment Cache] Hits: " << cache.get_hits()
-                  << " Misses: " << cache.get_misses()
-                  << " Hit Rate: " << std::fixed << std::setprecision(1)
-                  << (cache.get_hit_rate() * 100.0) << "%\n";
-      }
-    } else {
-      for (size_t i = 0; i < events.size(); i++) {
-        processor.process(events[i]);
-        progress_update(i);
-      }
+    for (size_t i = 0; i < events.size(); i++) {
+      processor.process(events[i]);
+      progress_update(i);
     }
     progress_done();
 
@@ -894,58 +841,11 @@ int main(int argc, char *argv[]) {
       });
     }
 
-    // Process events with optional segment caching (single-core)
+    // Process events
     progress_init(events.size());
-    if (opts.cache_segments) {
-      using namespace cache_explorer;
-      SegmentCache cache(opts.segment_size, 10000);
-
-      size_t i = 0;
-      while (i < events.size()) {
-        uint64_t cache_state_hash = i / opts.segment_size;
-
-        auto cached = cache.lookup(events, i, cache_state_hash);
-
-        if (cached.has_value()) {
-          i += cached->segment_length;
-        } else {
-          auto stats_before = processor.get_stats();
-
-          size_t segment_end = std::min(i + opts.segment_size, events.size());
-          for (size_t j = i; j < segment_end; j++) {
-            processor.process(events[j]);
-          }
-
-          auto stats_after = processor.get_stats();
-
-          cache_explorer::CachedSegmentResult result;
-          result.segment_length = segment_end - i;
-          result.l1d_hits = stats_after.l1d.hits - stats_before.l1d.hits;
-          result.l1d_misses = stats_after.l1d.misses - stats_before.l1d.misses;
-          result.l1i_hits = stats_after.l1i.hits - stats_before.l1i.hits;
-          result.l1i_misses = stats_after.l1i.misses - stats_before.l1i.misses;
-          result.l2_hits = stats_after.l2.hits - stats_before.l2.hits;
-          result.l2_misses = stats_after.l2.misses - stats_before.l2.misses;
-          result.l3_hits = stats_after.l3.hits - stats_before.l3.hits;
-          result.l3_misses = stats_after.l3.misses - stats_before.l3.misses;
-
-          cache.store(events, i, cache_state_hash, result);
-          i = segment_end;
-        }
-        progress_update(i);
-      }
-
-      if (verbose && !json_output) {
-        std::cerr << "\n[Segment Cache] Hits: " << cache.get_hits()
-                  << " Misses: " << cache.get_misses()
-                  << " Hit Rate: " << std::fixed << std::setprecision(1)
-                  << (cache.get_hit_rate() * 100.0) << "%\n";
-      }
-    } else {
-      for (size_t i = 0; i < events.size(); i++) {
-        processor.process(events[i]);
-        progress_update(i);
-      }
+    for (size_t i = 0; i < events.size(); i++) {
+      processor.process(events[i]);
+      progress_update(i);
     }
     progress_done();
 

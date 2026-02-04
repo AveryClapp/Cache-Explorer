@@ -19,8 +19,6 @@ struct SimulatorOptions {
     bool fast_mode = false;  // Disable 3C miss classification for performance
     bool parallel_parsing = false;  // Enable parallel trace parsing
     size_t parallel_threads = 0;  // 0 = auto-detect (hardware_concurrency)
-    bool cache_segments = false;  // Enable segment caching for repetitive code
-    size_t segment_size = 20;  // Number of events per cached segment
     bool show_help = false;
     bool prefetch_policy_set = false;
     bool prefetch_degree_set = false;
