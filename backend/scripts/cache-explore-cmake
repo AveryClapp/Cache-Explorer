@@ -97,9 +97,12 @@ mkdir -p "$BUILD_DIR"
 # Configure with toolchain
 cd "$BUILD_DIR"
 
+# Respect CACHE_EXPLORER_PATH env var if set (e.g. when running from a git worktree)
+EFFECTIVE_BACKEND="${CACHE_EXPLORER_PATH:-$BACKEND_DIR}"
+
 CMAKE_CMD=(cmake
   -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN"
-  -DCACHE_EXPLORER_PATH="$BACKEND_DIR"
+  -DCACHE_EXPLORER_PATH="$EFFECTIVE_BACKEND"
 )
 
 if [[ -n "$INCLUDE_STL" ]]; then

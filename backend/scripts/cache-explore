@@ -21,8 +21,8 @@ fi
 RUNTIME_INC="$BACKEND_DIR/runtime"
 CMAKE_MODULE="$BACKEND_DIR/integration/cmake"
 
-# Export for subcommands
-export CACHE_EXPLORER_PATH="$BACKEND_DIR"
+# Export for subcommands (don't override if already set externally, e.g. from a git worktree)
+export CACHE_EXPLORER_PATH="${CACHE_EXPLORER_PATH:-$BACKEND_DIR}"
 export CACHE_EXPLORER_RUNTIME="$RUNTIME"
 export CACHE_EXPLORER_SIM="$CACHE_SIM"
 

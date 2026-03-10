@@ -50,6 +50,12 @@ else
     TOTAL_FAILED=$((TOTAL_FAILED + 1))
 fi
 
+if run_test_suite "../../cmake-integration/run_tests.sh" "CMake Integration"; then
+    TOTAL_PASSED=$((TOTAL_PASSED + 1))
+else
+    TOTAL_FAILED=$((TOTAL_FAILED + 1))
+fi
+
 # Final summary
 echo -e "${BLUE}========================================"
 echo "  Overall Summary"
