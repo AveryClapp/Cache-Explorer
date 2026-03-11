@@ -76,9 +76,13 @@ RUNTIME_PATH=$(find "$BUILD_ROOT/backend" -name "libcache-explorer-rt.a" 2>/dev/
 if [[ -z "$PASS_PATH" || -z "$RUNTIME_PATH" ]]; then
   fail "CacheProfiler.so or libcache-explorer-rt.a not found — build Cache Explorer first"
 else
-  # find_package requires LLVM Clang (Apple Clang can't load the pass plugin)
-  LLVM_CLANG=$(command -v /opt/homebrew/opt/llvm/bin/clang 2>/dev/null \
-    || command -v /usr/local/opt/llvm/bin/clang 2>/dev/null || echo "")
+  # find_package requires LLVM Clang (Apple Clang can't load the pass plugin).
+  # Prefer CACHE_EXPLORER_CC (set by CI), then clang on PATH, then Homebrew fallbacks.
+  LLVM_CLANG="${CACHE_EXPLORER_CC:-$(command -v clang 2>/dev/null)}"
+  if [[ -z "$LLVM_CLANG" ]]; then
+    LLVM_CLANG=$(command -v /opt/homebrew/opt/llvm/bin/clang 2>/dev/null \
+      || command -v /usr/local/opt/llvm/bin/clang 2>/dev/null || echo "")
+  fi
   FP_COMPILER_ARGS=()
   if [[ -n "$LLVM_CLANG" ]]; then
     FP_COMPILER_ARGS+=("-DCMAKE_C_COMPILER=$LLVM_CLANG")
