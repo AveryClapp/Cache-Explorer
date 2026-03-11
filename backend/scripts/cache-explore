@@ -306,6 +306,7 @@ PREFETCH_DEGREE=""
 COMPILER_PATH=""  # Path to LLVM bin directory (e.g., /opt/homebrew/opt/llvm@20/bin)
 MULTI_FILE=""  # Flag to enable multi-file compilation
 FAST_MODE=""  # Flag to disable 3C miss classification for speed
+CACHE_SEGMENTS=""  # Flag to enable segment caching for repeated loops
 
 usage() {
   echo "Usage: cache-explore [options] <source.c|.cpp|.rs>"
@@ -326,6 +327,8 @@ usage() {
   echo "  --prefetch <type> Enable prefetching: none|next|stream|stride|adaptive|intel"
   echo "  --prefetch-degree <N>  How many lines to prefetch ahead (default: 4)"
   echo "  --compiler <path> Path to LLVM bin directory (e.g., /opt/homebrew/opt/llvm@20/bin)"
+  echo "  --fast            Fast mode: ~3x speedup, skips 3C miss classification"
+  echo "  --cache-segments  Cache repeated loop segments for speedup (experimental)"
   echo "  -O<level>         Optimization level (default: -O0)"
   echo "  -D <name>=<val>   Preprocessor define (can be used multiple times)"
   echo "  --help            Show this help"
@@ -356,6 +359,7 @@ while [[ $# -gt 0 ]]; do
     --prefetch-degree) PREFETCH_DEGREE="$2"; shift 2 ;;
     --compiler) COMPILER_PATH="$2"; shift 2 ;;
     --fast) FAST_MODE="--fast"; shift ;;
+    --cache-segments) CACHE_SEGMENTS="--cache-segments"; shift ;;
     --l1-size) CUSTOM_CONFIG_ARGS="$CUSTOM_CONFIG_ARGS --l1-size $2"; shift 2 ;;
     --l1-assoc) CUSTOM_CONFIG_ARGS="$CUSTOM_CONFIG_ARGS --l1-assoc $2"; shift 2 ;;
     --l1-line) CUSTOM_CONFIG_ARGS="$CUSTOM_CONFIG_ARGS --l1-line $2"; shift 2 ;;
@@ -769,18 +773,18 @@ fi
 # Streaming mode: pipe directly for real-time output
 if [[ -n "$STREAM_OUTPUT" ]]; then
   if [[ -n "$RUN_ENV" ]]; then
-    env $RUN_ENV "$BINARY" 2>&1 | "$CACHE_SIM" --config "$CONFIG" $STREAM_OUTPUT $PREFETCH_ARG $FAST_MODE $CUSTOM_CONFIG_ARGS
+    env $RUN_ENV "$BINARY" 2>&1 | "$CACHE_SIM" --config "$CONFIG" $STREAM_OUTPUT $PREFETCH_ARG $FAST_MODE $CACHE_SEGMENTS $CUSTOM_CONFIG_ARGS
   else
-    "$BINARY" 2>&1 | "$CACHE_SIM" --config "$CONFIG" $STREAM_OUTPUT $PREFETCH_ARG $FAST_MODE $CUSTOM_CONFIG_ARGS
+    "$BINARY" 2>&1 | "$CACHE_SIM" --config "$CONFIG" $STREAM_OUTPUT $PREFETCH_ARG $FAST_MODE $CACHE_SEGMENTS $CUSTOM_CONFIG_ARGS
   fi
   EXIT_CODE=${PIPESTATUS[0]}
 else
   # Pipe binary stdout directly to cache-sim (avoids storing trace in memory)
   # Binary stderr passes through to our stderr (server reads progress from it)
   if [[ -n "$RUN_ENV" ]]; then
-    env $RUN_ENV "$BINARY" | "$CACHE_SIM" --config "$CONFIG" $VERBOSE $JSON_OUTPUT $PREFETCH_ARG $FAST_MODE $CUSTOM_CONFIG_ARGS
+    env $RUN_ENV "$BINARY" | "$CACHE_SIM" --config "$CONFIG" $VERBOSE $JSON_OUTPUT $PREFETCH_ARG $FAST_MODE $CACHE_SEGMENTS $CUSTOM_CONFIG_ARGS
   else
-    "$BINARY" | "$CACHE_SIM" --config "$CONFIG" $VERBOSE $JSON_OUTPUT $PREFETCH_ARG $FAST_MODE $CUSTOM_CONFIG_ARGS
+    "$BINARY" | "$CACHE_SIM" --config "$CONFIG" $VERBOSE $JSON_OUTPUT $PREFETCH_ARG $FAST_MODE $CACHE_SEGMENTS $CUSTOM_CONFIG_ARGS
   fi
   EXIT_CODE=${PIPESTATUS[0]}
 fi
