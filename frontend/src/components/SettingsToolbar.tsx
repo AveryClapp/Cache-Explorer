@@ -19,6 +19,7 @@ interface SettingsToolbarProps {
   eventLimit: number
   sampleRate: number
   fastMode: boolean
+  cacheSegments: boolean
   onConfigChange: (c: string) => void
   onOptLevelChange: (o: string) => void
   onPrefetchChange: (p: string) => void
@@ -27,6 +28,7 @@ interface SettingsToolbarProps {
   onEventLimitChange: (n: number) => void
   onSampleRateChange: (n: number) => void
   onFastModeChange: (f: boolean) => void
+  onCacheSegmentsChange: (v: boolean) => void
 }
 
 export function SettingsToolbar({
@@ -38,6 +40,7 @@ export function SettingsToolbar({
   eventLimit,
   sampleRate,
   fastMode,
+  cacheSegments,
   onConfigChange,
   onOptLevelChange,
   onPrefetchChange,
@@ -46,6 +49,7 @@ export function SettingsToolbar({
   onEventLimitChange,
   onSampleRateChange,
   onFastModeChange,
+  onCacheSegmentsChange,
 }: SettingsToolbarProps) {
   const [showMore, setShowMore] = useState(config === 'custom')
   const [customLimitMode, setCustomLimitMode] = useState(false)
@@ -267,6 +271,17 @@ export function SettingsToolbar({
                 </>
               )}
             </div>
+          </div>
+
+          <div className="toolbar-advanced-section">
+            <label className="toolbar-checkbox-label" title="Cache repeated loop segments for faster simulation (experimental)">
+              <input
+                type="checkbox"
+                checked={cacheSegments}
+                onChange={(e) => onCacheSegmentsChange(e.target.checked)}
+              />
+              Segment caching (experimental, faster on loops)
+            </label>
           </div>
 
           {config === 'custom' && (

@@ -161,6 +161,7 @@ app.post('/compile', async (req, res) => {
     sample,
     limit,
     fast,
+    cacheSegments,
     timeout: requestedTimeout
   } = req.body;
 
@@ -175,6 +176,7 @@ app.post('/compile', async (req, res) => {
   const eventLimit = limit !== undefined ? limit : 1000000;
   const sampleRate = sample !== undefined ? sample : 1;       // No sampling by default
   const fastMode = fast === true;                             // Fast mode disables 3C classification
+  const segmentCaching = cacheSegments === true;              // Segment caching for repeated loops
 
   // Normalize files for cache key
   const normalizedFiles = Array.isArray(inputFiles)
@@ -191,6 +193,7 @@ app.post('/compile', async (req, res) => {
     sampleRate,
     eventLimit,
     fastMode,
+    segmentCaching,
   };
 
   try {
@@ -324,6 +327,10 @@ app.post('/compile', async (req, res) => {
       // Add fast mode flag (disables 3C miss classification for ~3x speedup)
       if (fastMode) {
         args.push('--fast');
+      }
+      // Add segment caching flag (caches repeated loop segments for speedup)
+      if (segmentCaching) {
+        args.push('--cache-segments');
       }
 
       const proc = spawn(CACHE_EXPLORE, args);
@@ -644,6 +651,7 @@ wss.on('connection', (ws) => {
       sample,
       limit,
       fast,
+      cacheSegments,
       timeout: requestedTimeout
     } = data;
 
@@ -658,6 +666,7 @@ wss.on('connection', (ws) => {
     const eventLimit = limit !== undefined ? limit : 1000000;  // Match HTTP default for responsive web UI
     const sampleRate = sample !== undefined ? sample : 1;       // No sampling by default
     const fastMode = fast === true;                             // Fast mode disables 3C classification
+    const segmentCaching = cacheSegments === true;              // Segment caching for repeated loops
 
     // Configurable timeout with bounds
     const timeout = Math.min(
@@ -776,6 +785,10 @@ wss.on('connection', (ws) => {
         // Add fast mode flag (disables 3C miss classification for ~3x speedup)
         if (fastMode) {
           args.push('--fast');
+        }
+        // Add segment caching flag (caches repeated loop segments for speedup)
+        if (segmentCaching) {
+          args.push('--cache-segments');
         }
 
         console.log(`[WebSocket] spawning: ${CACHE_EXPLORE} ${args.join(' ')}`);

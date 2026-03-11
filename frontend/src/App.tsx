@@ -135,6 +135,7 @@ function App() {
   const [showDetails, setShowDetails] = useState(false)
   const [sampleRate, setSampleRate] = useState(1)  // 1 = no sampling
   const [fastMode, setFastMode] = useState(false)  // false = full 3C tracking
+  const [cacheSegments, setCacheSegments] = useState(false)
   const [eventLimit, setEventLimit] = useState(1000000)  // Default 1M events
   const [longRunning, setLongRunning] = useState(false)
   const [progress, setProgress] = useState<{ eventsProcessed: number; eventsTotal: number } | null>(null)
@@ -468,6 +469,7 @@ function App() {
       payload.limit = eventLimit
       if (selectedCompiler) payload.compiler = selectedCompiler
       if (fastMode) payload.fast = true
+      if (cacheSegments) payload.cacheSegments = true
       ws.send(JSON.stringify(payload))
     }
 
@@ -522,6 +524,7 @@ function App() {
         if (sampleRate > 1) payload.sample = sampleRate
         payload.limit = eventLimit
         if (fastMode) payload.fast = true
+        if (cacheSegments) payload.cacheSegments = true
 
         const response = await fetch(`${API_BASE}/compile`, {
           method: 'POST',
@@ -567,6 +570,7 @@ function App() {
           sampleRate,
           eventLimit,
           fastMode,
+          cacheSegments,
         }
         const response = await fetch(`${API_BASE}/compile`, {
           method: 'POST',
@@ -675,6 +679,7 @@ function App() {
           eventLimit={eventLimit}
           sampleRate={sampleRate}
           fastMode={fastMode}
+          cacheSegments={cacheSegments}
           onConfigChange={(c) => {
             setConfig(c)
             setPrefetchPolicy(PREFETCH_DEFAULTS[c] || 'none')
@@ -686,6 +691,7 @@ function App() {
           onEventLimitChange={setEventLimit}
           onSampleRateChange={setSampleRate}
           onFastModeChange={setFastMode}
+          onCacheSegmentsChange={setCacheSegments}
         />
       )}
 
