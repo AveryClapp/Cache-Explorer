@@ -1,48 +1,13 @@
 #include "../include/ArgParser.hpp"
-#include "../include/FastIO.hpp"
 #include "../include/JsonOutput.hpp"
 #include "../include/MultiCoreTraceProcessor.hpp"
 #include "../include/OptimizationSuggester.hpp"
+#include "../include/SegmentCache.hpp"
 #include "../include/TraceProcessor.hpp"
 #include <iomanip>
 #include <iostream>
 #include <unordered_set>
 #include <vector>
-
-// Progress reporting to stderr (parsed by server/CLI for progress bars)
-static size_t progress_total = 0;
-static size_t progress_interval = 0;
-static size_t progress_next = 0;
-
-static void progress_init(size_t total) {
-  progress_total = total;
-  // Emit at ~1% intervals, minimum 500 events
-  if (total < 100) {
-    progress_interval = 0; // Trivial trace, skip progress
-  } else {
-    progress_interval = std::max<size_t>(500, total / 100);
-  }
-  progress_next = progress_interval;
-  // Emit initial progress
-  if (progress_interval > 0) {
-    std::cerr << "{\"type\":\"progress\",\"eventsProcessed\":0,\"eventsTotal\":" << total << "}\n";
-  }
-}
-
-static inline void progress_update(size_t processed) {
-  if (progress_interval > 0 && processed >= progress_next) {
-    std::cerr << "{\"type\":\"progress\",\"eventsProcessed\":" << processed
-              << ",\"eventsTotal\":" << progress_total << "}\n";
-    progress_next = processed + progress_interval;
-  }
-}
-
-static void progress_done() {
-  if (progress_interval > 0) {
-    std::cerr << "{\"type\":\"progress\",\"eventsProcessed\":" << progress_total
-              << ",\"eventsTotal\":" << progress_total << "}\n";
-  }
-}
 
 // Generate SVG flamegraph showing cache miss distribution
 template<typename HotLineType>
@@ -134,10 +99,6 @@ void output_flamegraph_svg(const std::vector<HotLineType>& hot_lines, const std:
 }
 
 int main(int argc, char *argv[]) {
-  // Disable C/C++ stream sync - massive speedup for stdin/stdout
-  std::ios_base::sync_with_stdio(false);
-  std::cin.tie(nullptr);
-
   // Parse command line arguments
   SimulatorOptions opts = ArgParser::parse(argc, argv);
 
@@ -476,22 +437,15 @@ int main(int argc, char *argv[]) {
   std::vector<TraceEvent> events;
   std::unordered_set<uint32_t> threads;
 
-  // Bulk-read stdin (eliminates per-character getc/mutex overhead)
-  auto input_buf = BulkReader::read_all();
-
-  // Parse trace events from buffer
-  events.reserve(input_buf.size() / 40); // ~40 chars per line estimate
-  for_each_line(input_buf, [&](const char *begin, const char *end) {
-    auto event = parse_trace_event_fast(begin, end);
+  // Parse trace events
+  std::string line;
+  while (std::getline(std::cin, line)) {
+    auto event = parse_trace_event(line);
     if (event) {
       threads.insert(event->thread_id);
-      events.push_back(std::move(*event));
+      events.push_back(*event);
     }
-  });
-
-  // Release input buffer - no longer needed
-  input_buf.clear();
-  input_buf.shrink_to_fit();
+  }
 
   bool multicore = threads.size() > 1;
   if (num_cores == 0) {
@@ -516,15 +470,106 @@ int main(int argc, char *argv[]) {
       });
     }
 
-    // Process events
-    progress_init(events.size());
-    for (size_t i = 0; i < events.size(); i++) {
-      processor.process(events[i]);
-      progress_update(i);
+    // Accumulate stats from segments that were served from cache (skipped simulation)
+    cache_explorer::CachedSegmentResult seg_cache_accumulated;
+
+    // Process events with optional segment caching
+    if (opts.cache_segments) {
+      using namespace cache_explorer;
+      SegmentCache cache(opts.segment_size, 10000);
+
+      size_t i = 0;
+      while (i < events.size()) {
+        // Cache state hash: hash of the previous TWO segments' events.
+        // Two segments of history avoids false hits in alternating patterns (ABABAB...)
+        // where a 1-segment history would match B-cold with B-warm contexts.
+        // During warmup (i < 2*seg), use i as a unique sentinel to prevent false matches.
+        size_t history_len = 2 * opts.segment_size;
+        uint64_t cache_state_hash = (i < history_len)
+            ? static_cast<uint64_t>(i)
+            : SegmentCache::hash_pattern(events, i - history_len, history_len);
+
+        auto cached = cache.lookup(events, i, cache_state_hash);
+
+        if (cached.has_value()) {
+          // Cache HIT - accumulate stats instead of re-simulating
+          seg_cache_accumulated.l1d_hits               += cached->l1d_hits;
+          seg_cache_accumulated.l1d_misses             += cached->l1d_misses;
+          seg_cache_accumulated.l2_hits                += cached->l2_hits;
+          seg_cache_accumulated.l2_misses              += cached->l2_misses;
+          seg_cache_accumulated.l3_hits                += cached->l3_hits;
+          seg_cache_accumulated.l3_misses              += cached->l3_misses;
+          seg_cache_accumulated.coherence_invalidations += cached->coherence_invalidations;
+          seg_cache_accumulated.dtlb_hits              += cached->dtlb_hits;
+          seg_cache_accumulated.dtlb_misses            += cached->dtlb_misses;
+          seg_cache_accumulated.itlb_hits              += cached->itlb_hits;
+          seg_cache_accumulated.itlb_misses            += cached->itlb_misses;
+          i += cached->segment_length;
+        } else {
+          // Cache MISS - simulate and cache result
+          auto stats_before    = processor.get_stats();
+          auto tlb_before      = processor.get_cache_system().get_tlb_stats();
+
+          size_t segment_end = std::min(i + opts.segment_size, events.size());
+          for (size_t j = i; j < segment_end; j++) {
+            processor.process(events[j]);
+          }
+
+          auto stats_after = processor.get_stats();
+          auto tlb_after   = processor.get_cache_system().get_tlb_stats();
+
+          // Compute per-segment deltas
+          CachedSegmentResult result;
+          result.segment_length = segment_end - i;
+          for (size_t core = 0; core < stats_before.l1_per_core.size(); core++) {
+            result.l1d_hits   += stats_after.l1_per_core[core].hits   - stats_before.l1_per_core[core].hits;
+            result.l1d_misses += stats_after.l1_per_core[core].misses - stats_before.l1_per_core[core].misses;
+          }
+          result.l2_hits   = stats_after.l2.hits   - stats_before.l2.hits;
+          result.l2_misses = stats_after.l2.misses - stats_before.l2.misses;
+          result.l3_hits   = stats_after.l3.hits   - stats_before.l3.hits;
+          result.l3_misses = stats_after.l3.misses - stats_before.l3.misses;
+          result.coherence_invalidations = stats_after.coherence_invalidations - stats_before.coherence_invalidations;
+          result.dtlb_hits   = tlb_after.dtlb.hits   - tlb_before.dtlb.hits;
+          result.dtlb_misses = tlb_after.dtlb.misses - tlb_before.dtlb.misses;
+          result.itlb_hits   = tlb_after.itlb.hits   - tlb_before.itlb.hits;
+          result.itlb_misses = tlb_after.itlb.misses - tlb_before.itlb.misses;
+
+          cache.store(events, i, cache_state_hash, result);
+          i = segment_end;
+        }
+      }
+
+      if (verbose && !json_output) {
+        std::cerr << "\n[Segment Cache] Hits: " << cache.get_hits()
+                  << " Misses: " << cache.get_misses()
+                  << " Hit Rate: " << std::fixed << std::setprecision(1)
+                  << (cache.get_hit_rate() * 100.0) << "%\n";
+      }
+    } else {
+      for (const auto &event : events) {
+        processor.process(event);
+      }
     }
-    progress_done();
 
     auto stats = processor.get_stats();
+
+    // Apply deltas from cache hits (segments that were skipped during simulation)
+    if (seg_cache_accumulated.l1d_hits || seg_cache_accumulated.l1d_misses ||
+        seg_cache_accumulated.l2_hits  || seg_cache_accumulated.l2_misses) {
+      if (!stats.l1_per_core.empty()) {
+        stats.l1_per_core[0].hits   += seg_cache_accumulated.l1d_hits;
+        stats.l1_per_core[0].misses += seg_cache_accumulated.l1d_misses;
+      }
+      stats.l2.hits   += seg_cache_accumulated.l2_hits;
+      stats.l2.misses += seg_cache_accumulated.l2_misses;
+      stats.l3.hits   += seg_cache_accumulated.l3_hits;
+      stats.l3.misses += seg_cache_accumulated.l3_misses;
+      stats.coherence_invalidations += seg_cache_accumulated.coherence_invalidations;
+    }
+    // TLB stats are fetched separately; carry accumulated hits/misses forward.
+    auto seg_tlb_accumulated_mc = seg_cache_accumulated;  // alias for clarity at output site
+
     auto hot = processor.get_hot_lines(flamegraph_output ? 20 : 10);  // More lines for flamegraph
     auto false_sharing = processor.get_false_sharing_reports();
 
@@ -564,8 +609,12 @@ int main(int argc, char *argv[]) {
       json_level("l3", stats.l3, true);
       std::cout << "  },\n";
 
-      // TLB statistics (aggregated from all cores)
+      // TLB statistics (aggregated from all cores + segment-cache accumulated hits)
       auto tlb_stats = processor.get_cache_system().get_tlb_stats();
+      tlb_stats.dtlb.hits   += seg_tlb_accumulated_mc.dtlb_hits;
+      tlb_stats.dtlb.misses += seg_tlb_accumulated_mc.dtlb_misses;
+      tlb_stats.itlb.hits   += seg_tlb_accumulated_mc.itlb_hits;
+      tlb_stats.itlb.misses += seg_tlb_accumulated_mc.itlb_misses;
       std::cout << "  \"tlb\": {\n";
       std::cout << "    \"dtlb\": {\"hits\": " << tlb_stats.dtlb.hits
                 << ", \"misses\": " << tlb_stats.dtlb.misses
@@ -841,15 +890,96 @@ int main(int argc, char *argv[]) {
       });
     }
 
-    // Process events
-    progress_init(events.size());
-    for (size_t i = 0; i < events.size(); i++) {
-      processor.process(events[i]);
-      progress_update(i);
+    // Accumulate stats from segments served from cache (single-core)
+    cache_explorer::CachedSegmentResult sc_accumulated;
+
+    // Process events with optional segment caching (single-core)
+    if (opts.cache_segments) {
+      using namespace cache_explorer;
+      SegmentCache cache(opts.segment_size, 10000);
+
+      size_t i = 0;
+      while (i < events.size()) {
+        size_t sc_history_len = 2 * opts.segment_size;
+        uint64_t cache_state_hash = (i < sc_history_len)
+            ? static_cast<uint64_t>(i)
+            : SegmentCache::hash_pattern(events, i - sc_history_len, sc_history_len);
+
+        auto cached = cache.lookup(events, i, cache_state_hash);
+
+        if (cached.has_value()) {
+          // Cache HIT - accumulate stats instead of re-simulating
+          sc_accumulated.l1d_hits   += cached->l1d_hits;
+          sc_accumulated.l1d_misses += cached->l1d_misses;
+          sc_accumulated.l1i_hits   += cached->l1i_hits;
+          sc_accumulated.l1i_misses += cached->l1i_misses;
+          sc_accumulated.l2_hits    += cached->l2_hits;
+          sc_accumulated.l2_misses  += cached->l2_misses;
+          sc_accumulated.l3_hits    += cached->l3_hits;
+          sc_accumulated.l3_misses  += cached->l3_misses;
+          sc_accumulated.dtlb_hits  += cached->dtlb_hits;
+          sc_accumulated.dtlb_misses += cached->dtlb_misses;
+          sc_accumulated.itlb_hits  += cached->itlb_hits;
+          sc_accumulated.itlb_misses += cached->itlb_misses;
+          i += cached->segment_length;
+        } else {
+          auto stats_before = processor.get_stats();
+          auto tlb_before   = processor.get_cache_system().get_tlb_stats();
+
+          size_t segment_end = std::min(i + opts.segment_size, events.size());
+          for (size_t j = i; j < segment_end; j++) {
+            processor.process(events[j]);
+          }
+
+          auto stats_after = processor.get_stats();
+          auto tlb_after   = processor.get_cache_system().get_tlb_stats();
+
+          CachedSegmentResult result;
+          result.segment_length = segment_end - i;
+          result.l1d_hits   = stats_after.l1d.hits   - stats_before.l1d.hits;
+          result.l1d_misses = stats_after.l1d.misses - stats_before.l1d.misses;
+          result.l1i_hits   = stats_after.l1i.hits   - stats_before.l1i.hits;
+          result.l1i_misses = stats_after.l1i.misses - stats_before.l1i.misses;
+          result.l2_hits    = stats_after.l2.hits    - stats_before.l2.hits;
+          result.l2_misses  = stats_after.l2.misses  - stats_before.l2.misses;
+          result.l3_hits    = stats_after.l3.hits    - stats_before.l3.hits;
+          result.l3_misses  = stats_after.l3.misses  - stats_before.l3.misses;
+          result.dtlb_hits   = tlb_after.dtlb.hits   - tlb_before.dtlb.hits;
+          result.dtlb_misses = tlb_after.dtlb.misses - tlb_before.dtlb.misses;
+          result.itlb_hits   = tlb_after.itlb.hits   - tlb_before.itlb.hits;
+          result.itlb_misses = tlb_after.itlb.misses - tlb_before.itlb.misses;
+
+          cache.store(events, i, cache_state_hash, result);
+          i = segment_end;
+        }
+      }
+
+      if (verbose && !json_output) {
+        std::cerr << "\n[Segment Cache] Hits: " << cache.get_hits()
+                  << " Misses: " << cache.get_misses()
+                  << " Hit Rate: " << std::fixed << std::setprecision(1)
+                  << (cache.get_hit_rate() * 100.0) << "%\n";
+      }
+    } else {
+      for (const auto &event : events) {
+        processor.process(event);
+      }
     }
-    progress_done();
 
     auto stats = processor.get_stats();
+
+    // Apply deltas from cache hits
+    if (sc_accumulated.l1d_hits || sc_accumulated.l1d_misses ||
+        sc_accumulated.l2_hits  || sc_accumulated.l2_misses) {
+      stats.l1d.hits   += sc_accumulated.l1d_hits;
+      stats.l1d.misses += sc_accumulated.l1d_misses;
+      stats.l1i.hits   += sc_accumulated.l1i_hits;
+      stats.l1i.misses += sc_accumulated.l1i_misses;
+      stats.l2.hits    += sc_accumulated.l2_hits;
+      stats.l2.misses  += sc_accumulated.l2_misses;
+      stats.l3.hits    += sc_accumulated.l3_hits;
+      stats.l3.misses  += sc_accumulated.l3_misses;
+    }
     auto hot = processor.get_hot_lines(20);  // Get more for flamegraph
 
     if (flamegraph_output) {
@@ -903,8 +1033,12 @@ int main(int argc, char *argv[]) {
 
       std::cout << "  },\n";
 
-      // TLB statistics
+      // TLB statistics (+ segment-cache accumulated hits from skipped segments)
       auto tlb_stats = processor.get_cache_system().get_tlb_stats();
+      tlb_stats.dtlb.hits   += sc_accumulated.dtlb_hits;
+      tlb_stats.dtlb.misses += sc_accumulated.dtlb_misses;
+      tlb_stats.itlb.hits   += sc_accumulated.itlb_hits;
+      tlb_stats.itlb.misses += sc_accumulated.itlb_misses;
       std::cout << "  \"tlb\": {\n";
       std::cout << "    \"dtlb\": {\"hits\": " << tlb_stats.dtlb.hits
                 << ", \"misses\": " << tlb_stats.dtlb.misses
