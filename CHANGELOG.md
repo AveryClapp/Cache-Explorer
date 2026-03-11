@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.5.1](https://github.com/AveryClapp/Cache-Explorer/compare/v1.5.0...v1.5.1) (2026-03-11)
+
+
+### Bug Fixes
+
+* use absolute path for cmake integration test in master runner ([59d935f](https://github.com/AveryClapp/Cache-Explorer/commit/59d935f5422f33e3b5c71c365d38c92522a3b350))
+* use CACHE_EXPLORER_CC env var for toolchain compiler on Linux CI ([b837685](https://github.com/AveryClapp/Cache-Explorer/commit/b83768595b372d9831af2438085af1f5addfde7c))
+* use CACHE_EXPLORER_CC for find_package test compiler detection ([be6d081](https://github.com/AveryClapp/Cache-Explorer/commit/be6d081595b2acec0b7fa51c0a18d0cc78255429))
+
 ## [1.5.0](https://github.com/AveryClapp/Cache-Explorer/compare/v1.4.1...v1.5.0) (2026-03-11)
 
 
