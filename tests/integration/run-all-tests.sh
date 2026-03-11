@@ -4,6 +4,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 # Color output
 RED='\033[0;31m'
@@ -26,7 +27,11 @@ run_test_suite() {
     echo -e "${BLUE}Running: $name${NC}"
     echo "----------------------------------------"
 
-    if "$SCRIPT_DIR/$script"; then
+    local full_path="$script"
+    if [[ "$script" != /* ]]; then
+        full_path="$SCRIPT_DIR/$script"
+    fi
+    if "$full_path"; then
         echo -e "${GREEN}✓ $name passed${NC}"
         echo ""
         return 0
@@ -50,7 +55,7 @@ else
     TOTAL_FAILED=$((TOTAL_FAILED + 1))
 fi
 
-if run_test_suite "../../cmake-integration/run_tests.sh" "CMake Integration"; then
+if run_test_suite "$PROJECT_ROOT/tests/cmake-integration/run_tests.sh" "CMake Integration"; then
     TOTAL_PASSED=$((TOTAL_PASSED + 1))
 else
     TOTAL_FAILED=$((TOTAL_FAILED + 1))
