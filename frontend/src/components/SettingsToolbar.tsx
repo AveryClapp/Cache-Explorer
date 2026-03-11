@@ -145,6 +145,18 @@ export function SettingsToolbar({
         <div className="toolbar-divider" />
 
         <div className="toolbar-group">
+          <button
+            className={`toolbar-toggle ${cacheSegments ? 'active' : ''}`}
+            onClick={() => onCacheSegmentsChange(!cacheSegments)}
+            title="Cache repeated loop segments — speeds up programs with tight loops (experimental)"
+          >
+            ↺ Loop cache
+          </button>
+        </div>
+
+        <div className="toolbar-divider" />
+
+        <div className="toolbar-group">
           <label>Sample</label>
           <StyledSelect
             value={String(sampleRate)}
@@ -271,17 +283,6 @@ export function SettingsToolbar({
                 </>
               )}
             </div>
-          </div>
-
-          <div className="toolbar-advanced-section">
-            <label className="toolbar-checkbox-label" title="Cache repeated loop segments for faster simulation (experimental)">
-              <input
-                type="checkbox"
-                checked={cacheSegments}
-                onChange={(e) => onCacheSegmentsChange(e.target.checked)}
-              />
-              Segment caching (experimental, faster on loops)
-            </label>
           </div>
 
           {config === 'custom' && (
