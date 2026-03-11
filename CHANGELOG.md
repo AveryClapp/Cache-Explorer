@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/AveryClapp/Cache-Explorer/compare/v1.4.1...v1.5.0) (2026-03-11)
+
+
+### Features
+
+* add cmake integration tests and documentation ([c95ea2b](https://github.com/AveryClapp/Cache-Explorer/commit/c95ea2bc95b9cb89cd6214c843b6814908a97128))
+
 ## [1.4.1](https://github.com/AveryClapp/Cache-Explorer/compare/v1.4.0...v1.4.1) (2026-02-04)
 
 
