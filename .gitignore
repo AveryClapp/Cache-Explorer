@@ -89,3 +89,4 @@ docs/plans
 # Worktrees
 .worktrees/
 .cache/
+CLAUDE.md

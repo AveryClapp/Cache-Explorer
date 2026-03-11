@@ -69,9 +69,11 @@ set(CACHE_EXPLORER_FLAGS "-fpass-plugin=${CACHE_EXPLORER_PASS} -g")
 set(CMAKE_C_FLAGS_INIT "${CACHE_EXPLORER_FLAGS}")
 set(CMAKE_CXX_FLAGS_INIT "${CACHE_EXPLORER_FLAGS}")
 
-# Link runtime library
-set(CMAKE_EXE_LINKER_FLAGS_INIT "${CACHE_EXPLORER_RUNTIME}")
-set(CMAKE_SHARED_LINKER_FLAGS_INIT "${CACHE_EXPLORER_RUNTIME}")
+# Link runtime library.
+# Use CMAKE_*_STANDARD_LIBRARIES so the archive is appended after object files —
+# Linux's ld requires static libs to come after the objects that reference them.
+set(CMAKE_C_STANDARD_LIBRARIES "${CMAKE_C_STANDARD_LIBRARIES} ${CACHE_EXPLORER_RUNTIME}")
+set(CMAKE_CXX_STANDARD_LIBRARIES "${CMAKE_CXX_STANDARD_LIBRARIES} ${CACHE_EXPLORER_RUNTIME}")
 
 # Include runtime header path
 include_directories(SYSTEM "${CACHE_EXPLORER_INCLUDE}")
