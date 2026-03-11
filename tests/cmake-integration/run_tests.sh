@@ -36,13 +36,17 @@ echo ""
 TEST_NAME="Toolchain: configure and build"
 echo -n "Test: $TEST_NAME... "
 rm -rf "$BUILD_DIR"
-if CACHE_EXPLORER_PATH="$BUILD_ROOT/backend" \
-   "$CACHE_EXPLORE" cmake "$SAMPLE_PROJECT" --build-dir "$BUILD_DIR" > /dev/null 2>&1 \
-   && cmake --build "$BUILD_DIR" > /dev/null 2>&1 \
-   && [[ -f "$BUILD_DIR/cache-matrix" ]]; then
+CMAKE_CONFIGURE_OUT=$(CACHE_EXPLORER_PATH="$BUILD_ROOT/backend" \
+  "$CACHE_EXPLORE" cmake "$SAMPLE_PROJECT" --build-dir "$BUILD_DIR" 2>&1)
+CMAKE_BUILD_OUT=$(cmake --build "$BUILD_DIR" 2>&1)
+if [[ $? -eq 0 ]] && [[ -f "$BUILD_DIR/cache-matrix" ]]; then
   pass
 else
   fail "binary not produced or cmake failed"
+  echo "  --- cmake configure output ---" >&2
+  echo "$CMAKE_CONFIGURE_OUT" | tail -20 >&2
+  echo "  --- cmake build output ---" >&2
+  echo "$CMAKE_BUILD_OUT" | tail -20 >&2
 fi
 
 # Test 2: Instrumented binary produces valid cache-sim JSON
