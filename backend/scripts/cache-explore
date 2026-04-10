@@ -307,6 +307,8 @@ COMPILER_PATH=""  # Path to LLVM bin directory (e.g., /opt/homebrew/opt/llvm@20/
 MULTI_FILE=""  # Flag to enable multi-file compilation
 FAST_MODE=""  # Flag to disable 3C miss classification for speed
 CACHE_SEGMENTS=""  # Flag to enable segment caching for repeated loops
+INSTRUMENT_ONLY=()  # Array of patterns to whitelist
+EXCLUDE_PATTERNS=()  # Array of patterns to blacklist
 
 usage() {
   echo "Usage: cache-explore [options] <source.c|.cpp|.rs>"
@@ -331,6 +333,11 @@ usage() {
   echo "  --cache-segments  Cache repeated loop segments for speedup (experimental)"
   echo "  -O<level>         Optimization level (default: -O0)"
   echo "  -D <name>=<val>   Preprocessor define (can be used multiple times)"
+  echo ""
+  echo "Selective Instrumentation (for large codebases):"
+  echo "  --instrument-only <pattern>  Only instrument functions/files matching pattern"
+  echo "  --exclude <pattern>          Exclude functions/files matching pattern"
+  echo ""
   echo "  --help            Show this help"
   echo ""
   echo "Examples:"
@@ -339,6 +346,10 @@ usage() {
   echo "  cache-explore matrix.c -D N=1000 -D DEBUG"
   echo "  cache-explore bigprogram.c --sample 100 --limit 1000000"
   echo "  cache-explore main.c --multi-file --json   # Compile with all .c files in dir"
+  echo ""
+  echo "Selective instrumentation examples:"
+  echo "  cache-explore large.c --instrument-only hot_function  # Only profile hot_function"
+  echo "  cache-explore main.c --exclude third_party            # Exclude third_party code"
 }
 
 OPT_LEVEL="-O0"
@@ -360,6 +371,8 @@ while [[ $# -gt 0 ]]; do
     --compiler) COMPILER_PATH="$2"; shift 2 ;;
     --fast) FAST_MODE="--fast"; shift ;;
     --cache-segments) CACHE_SEGMENTS="--cache-segments"; shift ;;
+    --instrument-only) INSTRUMENT_ONLY+=("$2"); shift 2 ;;
+    --exclude) EXCLUDE_PATTERNS+=("$2"); shift 2 ;;
     --l1-size) CUSTOM_CONFIG_ARGS="$CUSTOM_CONFIG_ARGS --l1-size $2"; shift 2 ;;
     --l1-assoc) CUSTOM_CONFIG_ARGS="$CUSTOM_CONFIG_ARGS --l1-assoc $2"; shift 2 ;;
     --l1-line) CUSTOM_CONFIG_ARGS="$CUSTOM_CONFIG_ARGS --l1-line $2"; shift 2 ;;
@@ -574,6 +587,18 @@ if [[ ${#SOURCE_FILES[@]} -eq 0 ]]; then
   SOURCE_FILES=("$INPUT_FILE")
 fi
 
+# Build environment variables for selective instrumentation (used by both Rust and C/C++)
+PASS_ENV=""
+if [[ ${#INSTRUMENT_ONLY[@]} -gt 0 ]]; then
+  # Join array with commas
+  PATTERNS=$(IFS=,; echo "${INSTRUMENT_ONLY[*]}")
+  PASS_ENV="CACHE_EXPLORER_INSTRUMENT_ONLY=$PATTERNS $PASS_ENV"
+fi
+if [[ ${#EXCLUDE_PATTERNS[@]} -gt 0 ]]; then
+  PATTERNS=$(IFS=,; echo "${EXCLUDE_PATTERNS[*]}")
+  PASS_ENV="CACHE_EXPLORER_EXCLUDE=$PATTERNS $PASS_ENV"
+fi
+
 # Compile based on language
 if [[ "$LANG" == "rust" ]]; then
   # Check if code uses no_std (simple heuristic)
@@ -681,8 +706,8 @@ BUILD_EOF
       exit 1
     fi
 
-    # Step 2: Run LLVM pass on the IR
-    if ! "$OPT_CMD" -load-pass-plugin="$PASS" -passes="cache-explorer-module" \
+    # Step 2: Run LLVM pass on the IR (with environment variables)
+    if ! env $PASS_ENV "$OPT_CMD" -load-pass-plugin="$PASS" -passes="cache-explorer-module" \
       -S "$RUST_IR" -o "$RUST_INSTRUMENTED" 2>/tmp/cache-explore-compile-err-$$; then
       if [[ -n "$JSON_OUTPUT" ]]; then
         ESCAPED=$(cat /tmp/cache-explore-compile-err-$$ | python3 -c "import sys,json; print(json.dumps(sys.stdin.read())[1:-1])")
@@ -726,7 +751,7 @@ BUILD_EOF
     rm -f "$RUST_IR" "$RUST_INSTRUMENTED" "$RUST_OBJ" /tmp/cache-explore-compile-err-$$
   fi  # End of std/no_std conditional
 
-elif ! $COMPILER $OPT_LEVEL $EXTRA_FLAGS -g -fpass-plugin="$PASS" \
+elif ! env $PASS_ENV $COMPILER $OPT_LEVEL $EXTRA_FLAGS -g -fpass-plugin="$PASS" \
   -I"$RUNTIME_INC" \
   "${INCLUDES[@]}" \
   "${DEFINES[@]}" \

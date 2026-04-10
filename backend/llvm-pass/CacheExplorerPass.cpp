@@ -8,6 +8,10 @@
 
 using namespace llvm;
 
+// Selective instrumentation settings (loaded from environment variables)
+static std::vector<std::string> InstrumentOnly;
+static std::vector<std::string> ExcludePatterns;
+
 // Configuration flags - set via environment variables
 // CACHE_EXPLORER_DEBUG=1 - enable debug output
 // CACHE_EXPLORER_INCLUDE_STL=1 - instrument STL/standard library (disabled by default)
@@ -26,6 +30,42 @@ static void initConfig() {
       if (DebugFiltering && IncludeStdLib)
         errs() << "[CacheExplorer] STL instrumentation ENABLED\n";
     }
+
+    // Parse selective instrumentation options from environment
+    if (const char *env = getenv("CACHE_EXPLORER_INSTRUMENT_ONLY")) {
+      std::string patterns(env);
+      size_t start = 0, end;
+      while ((end = patterns.find(',', start)) != std::string::npos) {
+        InstrumentOnly.push_back(patterns.substr(start, end - start));
+        start = end + 1;
+      }
+      if (start < patterns.length()) {
+        InstrumentOnly.push_back(patterns.substr(start));
+      }
+      if (DebugFiltering) {
+        errs() << "[CacheExplorer] Instrument-only patterns: ";
+        for (const auto &p : InstrumentOnly) errs() << p << " ";
+        errs() << "\n";
+      }
+    }
+
+    if (const char *env = getenv("CACHE_EXPLORER_EXCLUDE")) {
+      std::string patterns(env);
+      size_t start = 0, end;
+      while ((end = patterns.find(',', start)) != std::string::npos) {
+        ExcludePatterns.push_back(patterns.substr(start, end - start));
+        start = end + 1;
+      }
+      if (start < patterns.length()) {
+        ExcludePatterns.push_back(patterns.substr(start));
+      }
+      if (DebugFiltering) {
+        errs() << "[CacheExplorer] Exclude patterns: ";
+        for (const auto &p : ExcludePatterns) errs() << p << " ";
+        errs() << "\n";
+      }
+    }
+
   }
 }
 
@@ -93,6 +133,52 @@ bool isLibraryFunctionName(StringRef Name) {
   return false;
 }
 
+/// Check if function/file matches a pattern (supports wildcards and file paths)
+bool matchesPattern(StringRef str, StringRef pattern) {
+  // Simple wildcard matching (* = any characters)
+  if (pattern == "*") return true;
+
+  // Exact match
+  if (str == pattern) return true;
+
+  // If pattern contains wildcards or path separators, do substring matching
+  // This handles cases like "*.cpp", "/path/to/file", "my_module"
+  if (pattern.contains("*") || pattern.contains("/") || pattern.contains(".")) {
+    return str.contains(pattern.substr(0, pattern.find("*")));
+  }
+
+  // For simple function names (no wildcards, no paths), do smart matching
+  // This prevents "func_1" from matching "func_10"
+  // But allows "func_1" to match mangled names like "_Z6func_1v"
+  if (str.contains(pattern)) {
+    size_t pos = str.find(pattern);
+    if (pos != StringRef::npos) {
+      // Check character before pattern
+      bool start_ok = (pos == 0);
+      if (!start_ok && pos > 0) {
+        char before = str[pos - 1];
+        // Allow match if preceded by _, digit, or other non-letter
+        start_ok = (before == '_' || before == '$' ||
+                    std::isdigit(before) || !std::isalnum(before));
+      }
+
+      // Check character after pattern
+      bool end_ok = (pos + pattern.size() >= str.size());
+      if (!end_ok) {
+        char after = str[pos + pattern.size()];
+        // REJECT if followed by a digit (prevents "func_1" from matching "func_10")
+        // ALLOW if followed by _, $, letter, or other non-alphanumeric
+        // This allows matching "_Z6func_1v" (followed by 'v')
+        end_ok = !std::isdigit(after);
+      }
+
+      if (start_ok && end_ok) return true;
+    }
+  }
+
+  return false;
+}
+
 /// Check if a function should be instrumented
 bool shouldInstrumentFunction(const Function &F) {
   initConfig();
@@ -105,10 +191,55 @@ bool shouldInstrumentFunction(const Function &F) {
   if (F.isIntrinsic())
     return false;
 
-  // Fast path: check function name first (avoids debug info lookup)
   StringRef FuncName = F.getName();
+
+  // Get source file information
+  SmallString<256> FullPath;
+  if (DISubprogram *SP = F.getSubprogram()) {
+    if (SP->getFile()) {
+      StringRef Filename = SP->getFile()->getFilename();
+      StringRef Directory = SP->getFile()->getDirectory();
+
+      // Build full path
+      if (!Directory.empty() && !Filename.starts_with("/")) {
+        FullPath = Directory;
+        FullPath += "/";
+        FullPath += Filename;
+      } else {
+        FullPath = Filename;
+      }
+    }
+  }
+
+  // Phase 2: Check exclusion patterns (blacklist)
+  for (const auto &pattern : ExcludePatterns) {
+    if (matchesPattern(FuncName, pattern) || matchesPattern(FullPath, pattern)) {
+      if (DebugFiltering)
+        errs() << "[EXCLUDED] " << FuncName << " (matches: " << pattern << ")\n";
+      return false;
+    }
+  }
+
+  // Phase 3: Check inclusion patterns (whitelist)
+  // If whitelist exists, only instrument functions that match
+  if (!InstrumentOnly.empty()) {
+    bool matches = false;
+    for (const auto &pattern : InstrumentOnly) {
+      if (matchesPattern(FuncName, pattern) || matchesPattern(FullPath, pattern)) {
+        matches = true;
+        break;
+      }
+    }
+    if (!matches) {
+      if (DebugFiltering)
+        errs() << "[SKIP whitelist] " << FuncName << "\n";
+      return false;
+    }
+  }
+
+  // Phase 4: Existing filters (library functions, system headers)
+  // Fast path: check function name first (avoids debug info lookup)
   if (isLibraryFunctionName(FuncName)) {
-    // Only log in debug mode (expensive string operations)
     if (DebugFiltering)
       errs() << "[SKIP libfunc] " << FuncName << "\n";
     return false;
@@ -122,31 +253,17 @@ bool shouldInstrumentFunction(const Function &F) {
   }
 
   // Check if the function's source file is a system header
-  if (DISubprogram *SP = F.getSubprogram()) {
-    if (SP->getFile()) {
-      StringRef Filename = SP->getFile()->getFilename();
-      StringRef Directory = SP->getFile()->getDirectory();
-
-      // Build full path for checking
-      SmallString<256> FullPath;
-      if (!Directory.empty() && !Filename.starts_with("/")) {
-        FullPath = Directory;
-        FullPath += "/";
-        FullPath += Filename;
-      } else {
-        FullPath = Filename;
-      }
-
-      if (isSystemHeader(FullPath)) {
-        if (DebugFiltering)
-          errs() << "[SKIP sysheader] " << FuncName << " @ " << FullPath << "\n";
-        return false;
-      }
-
-      if (DebugFiltering)
-        errs() << "[INSTRUMENT] " << FuncName << " @ " << FullPath << "\n";
-    }
+  if (!FullPath.empty() && isSystemHeader(FullPath)) {
+    if (DebugFiltering)
+      errs() << "[SKIP sysheader] " << FuncName << " @ " << FullPath << "\n";
+    return false;
   }
+
+  // Passed all filters - instrument this function
+  if (DebugFiltering && !FullPath.empty())
+    errs() << "[INSTRUMENT] " << FuncName << " @ " << FullPath << "\n";
+  else if (DebugFiltering)
+    errs() << "[INSTRUMENT] " << FuncName << "\n";
 
   return true;
 }
@@ -537,6 +654,7 @@ PreservedAnalyses CacheExplorerPass::run(Function &F,
 PreservedAnalyses CacheExplorerModulePass::run(Module &M,
                                                ModuleAnalysisManager &AM) {
   initConfig();
+
   if (DebugFiltering)
     errs() << "[CacheExplorer] ModulePass running on " << M.getName() << "\n";
 
