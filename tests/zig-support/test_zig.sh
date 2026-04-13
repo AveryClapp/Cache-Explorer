@@ -37,7 +37,7 @@ echo ""
 test_simple_array() {
     echo -n "Test 1: Simple array access... "
 
-    if ! "$CACHE_EXPLORE_ZIG" "$SCRIPT_DIR/test-programs/hello.zig" > /tmp/zig_hello_output.json 2>&1; then
+    if ! "$CACHE_EXPLORE_ZIG" "$SCRIPT_DIR/test-programs/hello.zig" --json > /tmp/zig_hello_output.json 2>/dev/null; then
         echo -e "${RED}FAIL${NC} (compilation failed)"
         cat /tmp/zig_hello_output.json
         FAILED=$((FAILED + 1))
@@ -68,7 +68,7 @@ test_simple_array() {
 test_nested_loops() {
     echo -n "Test 2: Nested loops (matrix access)... "
 
-    if ! "$CACHE_EXPLORE_ZIG" "$SCRIPT_DIR/test-programs/array.zig" > /tmp/zig_array_output.json 2>&1; then
+    if ! "$CACHE_EXPLORE_ZIG" "$SCRIPT_DIR/test-programs/array.zig" --json > /tmp/zig_array_output.json 2>/dev/null; then
         echo -e "${RED}FAIL${NC} (compilation failed)"
         FAILED=$((FAILED + 1))
         return
@@ -93,7 +93,7 @@ test_nested_loops() {
 test_struct_access() {
     echo -n "Test 3: Struct access patterns... "
 
-    if ! "$CACHE_EXPLORE_ZIG" "$SCRIPT_DIR/test-programs/struct.zig" > /tmp/zig_struct_output.json 2>&1; then
+    if ! "$CACHE_EXPLORE_ZIG" "$SCRIPT_DIR/test-programs/struct.zig" --json > /tmp/zig_struct_output.json 2>/dev/null; then
         echo -e "${RED}FAIL${NC} (compilation failed)"
         FAILED=$((FAILED + 1))
         return
@@ -117,7 +117,7 @@ test_struct_access() {
 test_source_attribution() {
     echo -n "Test 4: Source file attribution... "
 
-    if ! "$CACHE_EXPLORE_ZIG" "$SCRIPT_DIR/test-programs/hello.zig" --json > /tmp/zig_attr_output.json 2>&1; then
+    if ! "$CACHE_EXPLORE_ZIG" "$SCRIPT_DIR/test-programs/hello.zig" --json > /tmp/zig_attr_output.json 2>/dev/null; then
         echo -e "${RED}FAIL${NC} (compilation failed)"
         FAILED=$((FAILED + 1))
         return

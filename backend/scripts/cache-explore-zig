@@ -164,12 +164,12 @@ fi
 # Step 4: Link with runtime library
 # Linux: clang -nostartfiles (Zig's IR has _start, skip glibc's duplicate)
 #   zig_stubs.o: provides __extendxftf2 (needed by Zig's UBSan on aarch64, not in libgcc)
-# macOS: zig cc (no _start conflict, and provides compiler-rt builtins)
+# macOS: clang (no _start conflict, and zig_stubs.o provides compiler-rt builtins)
+ZIG_STUBS="$(dirname "$RUNTIME_LIB")/zig_stubs.o"
 if [[ "$(uname)" == "Linux" ]]; then
-    ZIG_STUBS="$(dirname "$RUNTIME_LIB")/zig_stubs.o"
     LINK_CMD=(clang -nostartfiles "$OBJ_FILE" "$ZIG_STUBS" "$RUNTIME_LIB" -lc -lm -o "$EXE_FILE")
 else
-    LINK_CMD=(zig cc "$OBJ_FILE" "$RUNTIME_LIB" -lc -o "$EXE_FILE")
+    LINK_CMD=(clang "$OBJ_FILE" "$ZIG_STUBS" "$RUNTIME_LIB" -lc -lm -o "$EXE_FILE")
 fi
 
 if ! "${LINK_CMD[@]}" 2>"$TEMP_DIR/stderr.log"; then
