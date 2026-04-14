@@ -256,6 +256,87 @@ void test_tlb_simulation() {
   std::cout << "[PASS] test_tlb_simulation\n";
 }
 
+// =====================================================================
+// Pin tool trace format compatibility tests
+// These verify that output produced by cache_profiler.cpp is parseable.
+// =====================================================================
+
+void test_pin_load_format_no_source() {
+  // Pin emits unknown:0 when no debug info available
+  auto event = parse_trace_event("L 0x7fff5fbff8e0 4 unknown:0 T0");
+  assert(event.has_value());
+  assert(event->address == 0x7fff5fbff8e0ULL);
+  assert(event->size == 4);
+  assert(!event->is_write);
+  assert(event->thread_id == 0);
+  assert(event->file == "unknown");
+  assert(event->line == 0);
+  std::cout << "[PASS] test_pin_load_format_no_source\n";
+}
+
+void test_pin_store_format_no_source() {
+  // Pin store with no debug info
+  auto event = parse_trace_event("S 0xdeadbeef00 8 unknown:0 T1");
+  assert(event.has_value());
+  assert(event->address == 0xdeadbeef00ULL);
+  assert(event->size == 8);
+  assert(event->is_write);
+  assert(event->thread_id == 1);
+  std::cout << "[PASS] test_pin_store_format_no_source\n";
+}
+
+void test_pin_load_path_qualified_source() {
+  // Pin often records absolute paths for system library accesses
+  auto event = parse_trace_event("L 0x400100 4 /usr/lib/libc.so.6:0 T0");
+  assert(event.has_value());
+  assert(event->address == 0x400100ULL);
+  assert(event->size == 4);
+  assert(!event->is_write);
+  assert(event->file == "/usr/lib/libc.so.6");
+  assert(event->line == 0);
+  assert(event->thread_id == 0);
+  std::cout << "[PASS] test_pin_load_path_qualified_source\n";
+}
+
+void test_pin_store_format_with_source() {
+  // Pin store with debug info
+  auto event = parse_trace_event("S 0x600200 8 foo.cpp:99 T2");
+  assert(event.has_value());
+  assert(event->address == 0x600200ULL);
+  assert(event->size == 8);
+  assert(event->is_write);
+  assert(event->file == "foo.cpp");
+  assert(event->line == 99);
+  assert(event->thread_id == 2);
+  std::cout << "[PASS] test_pin_store_format_with_source\n";
+}
+
+void test_pin_multibyte_access() {
+  // 16-byte access (e.g. XMM register load)
+  auto event = parse_trace_event("L 0x1000 16 memops.c:7 T0");
+  assert(event.has_value());
+  assert(event->address == 0x1000ULL);
+  assert(event->size == 16);
+  assert(!event->is_write);
+  assert(event->file == "memops.c");
+  assert(event->line == 7);
+  assert(event->thread_id == 0);
+  std::cout << "[PASS] test_pin_multibyte_access\n";
+}
+
+void test_pin_high_thread_id() {
+  // Multi-threaded workload with thread 15
+  auto event = parse_trace_event("L 0x1000 4 thread.c:1 T15");
+  assert(event.has_value());
+  assert(event->address == 0x1000ULL);
+  assert(event->size == 4);
+  assert(!event->is_write);
+  assert(event->file == "thread.c");
+  assert(event->line == 1);
+  assert(event->thread_id == 15);
+  std::cout << "[PASS] test_pin_high_thread_id\n";
+}
+
 int main() {
   std::cout << "Running TraceProcessor tests...\n\n";
 
@@ -280,6 +361,14 @@ int main() {
   test_stats_timing();
   test_tlb_simulation();
 
-  std::cout << "\n=== All 15 TraceProcessor tests passed! ===\n";
+  // Pin tool trace format compatibility
+  test_pin_load_format_no_source();
+  test_pin_store_format_no_source();
+  test_pin_load_path_qualified_source();
+  test_pin_store_format_with_source();
+  test_pin_multibyte_access();
+  test_pin_high_thread_id();
+
+  std::cout << "\n=== All 21 TraceProcessor tests passed! ===\n";
   return 0;
 }
