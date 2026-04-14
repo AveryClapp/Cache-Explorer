@@ -142,16 +142,6 @@ export function EditorPanel({
         )}
       </div>
 
-      {/* Progress Bar */}
-      {isLoading && !isEmbedMode && (
-        <div className="progress-bar-container">
-          <div
-            className={`progress-bar-fill ${hasTotal ? 'determinate' : 'indeterminate'}`}
-            style={hasTotal ? { width: `${progressPct}%` } : undefined}
-          />
-        </div>
-      )}
-
       {/* Status Bar */}
       {!isEmbedMode && (
         <div className="status-bar">
