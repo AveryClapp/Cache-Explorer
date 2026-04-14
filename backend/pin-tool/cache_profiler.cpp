@@ -104,20 +104,21 @@ static VOID RecordMemAccess(THREADID tid, VOID* addr, UINT32 size, BOOL is_write
         line = it->second.line;
     }
 
-    // Format: R/W address size thread_id file line
-    // Example: R 0x7fff5fbff8e0 4 0 main.c 42
+    // Format: L/S 0xaddress size file:line Tthread_id
+    // Example: L 0x7fff5fbff8e0 4 main.c:42 T0
     PIN_GetLock(&output_lock, tid + 1);
 
-    trace_file << (is_write ? "W" : "R") << " "
-               << reinterpret_cast<UINT64>(addr) << " "
-               << size << " "
-               << tdata->thread_id;
+    trace_file << (is_write ? "S" : "L") << " "
+               << "0x" << std::hex << reinterpret_cast<UINT64>(addr) << std::dec << " "
+               << size << " ";
 
     if (!file.empty()) {
-        trace_file << " " << file << " " << line;
+        trace_file << file << ":" << line;
+    } else {
+        trace_file << "unknown:0";
     }
 
-    trace_file << "\n";
+    trace_file << " T" << tdata->thread_id << "\n";
 
     traced_events++;
     tdata->event_count++;
