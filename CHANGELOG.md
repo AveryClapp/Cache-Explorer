@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.6.0](https://github.com/AveryClapp/Cache-Explorer/compare/v1.5.1...v1.6.0) (2026-04-14)
+
+
+### Features
+
+* fix Zig language support (macOS linking, test infrastructure) ([f8767a2](https://github.com/AveryClapp/Cache-Explorer/commit/f8767a26a5e1e5674a3d860570840a4c950e879b))
+* move loop cache to main toolbar as styled toggle button ([9f2f2ca](https://github.com/AveryClapp/Cache-Explorer/commit/9f2f2caef797e2c7ba5b7d8cc15b1443d26c8a20))
+* segment caching for repeated loop patterns (--cache-segments) ([5529314](https://github.com/AveryClapp/Cache-Explorer/commit/552931412a4faf90086c0b115e580a208dd843a3))
+* selective instrumentation (--instrument-only, --exclude) ([3c21098](https://github.com/AveryClapp/Cache-Explorer/commit/3c210985f333ccf782a8e7ffeccd1cc92bb10016))
+* wire --cache-segments flag to web frontend and server ([9644590](https://github.com/AveryClapp/Cache-Explorer/commit/96445901f695b48d95152d55737649519baf1bc8))
+
+
+### Bug Fixes
+
+* add --cache-segments flag to cache-explore script ([b7d7519](https://github.com/AveryClapp/Cache-Explorer/commit/b7d75190b99a385a55341cac0a70c86140bf1237))
+* correct glob matching in selective instrumentation ([0c15f52](https://github.com/AveryClapp/Cache-Explorer/commit/0c15f52ec53fad96dee4c0acbaa045c7c9ae6aa3))
+
 ## [1.5.1](https://github.com/AveryClapp/Cache-Explorer/compare/v1.5.0...v1.5.1) (2026-03-11)
 
 
