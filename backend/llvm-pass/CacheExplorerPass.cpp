@@ -133,18 +133,44 @@ bool isLibraryFunctionName(StringRef Name) {
   return false;
 }
 
+/// Simple glob match: supports * as "match any sequence of characters".
+/// Handles patterns like "*.cpp", "hot_*", "src/*/utils.cpp", "*_test".
+static bool globMatch(StringRef str, StringRef pattern) {
+  size_t si = 0, pi = 0;
+  size_t star_pi = StringRef::npos, star_si = 0;
+
+  while (si < str.size()) {
+    if (pi < pattern.size() && pattern[pi] == '*') {
+      star_pi = pi++;
+      star_si = si;
+    } else if (pi < pattern.size() &&
+               (pattern[pi] == str[si] || pattern[pi] == '?')) {
+      pi++;
+      si++;
+    } else if (star_pi != StringRef::npos) {
+      pi = star_pi + 1;
+      si = ++star_si;
+    } else {
+      return false;
+    }
+  }
+  while (pi < pattern.size() && pattern[pi] == '*') pi++;
+  return pi == pattern.size();
+}
+
 /// Check if function/file matches a pattern (supports wildcards and file paths)
 bool matchesPattern(StringRef str, StringRef pattern) {
-  // Simple wildcard matching (* = any characters)
   if (pattern == "*") return true;
-
-  // Exact match
   if (str == pattern) return true;
 
-  // If pattern contains wildcards or path separators, do substring matching
-  // This handles cases like "*.cpp", "/path/to/file", "my_module"
-  if (pattern.contains("*") || pattern.contains("/") || pattern.contains(".")) {
-    return str.contains(pattern.substr(0, pattern.find("*")));
+  // If pattern contains a glob wildcard, use glob matching
+  if (pattern.contains("*")) {
+    return globMatch(str, pattern);
+  }
+
+  // If pattern looks like a file path or extension, do substring match
+  if (pattern.contains("/") || pattern.contains(".")) {
+    return str.contains(pattern);
   }
 
   // For simple function names (no wildcards, no paths), do smart matching
@@ -157,7 +183,6 @@ bool matchesPattern(StringRef str, StringRef pattern) {
       bool start_ok = (pos == 0);
       if (!start_ok && pos > 0) {
         char before = str[pos - 1];
-        // Allow match if preceded by _, digit, or other non-letter
         start_ok = (before == '_' || before == '$' ||
                     std::isdigit(before) || !std::isalnum(before));
       }
@@ -167,8 +192,6 @@ bool matchesPattern(StringRef str, StringRef pattern) {
       if (!end_ok) {
         char after = str[pos + pattern.size()];
         // REJECT if followed by a digit (prevents "func_1" from matching "func_10")
-        // ALLOW if followed by _, $, letter, or other non-alphanumeric
-        // This allows matching "_Z6func_1v" (followed by 'v')
         end_ok = !std::isdigit(after);
       }
 
