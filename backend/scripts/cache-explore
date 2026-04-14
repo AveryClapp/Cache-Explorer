@@ -231,6 +231,7 @@ main_usage() {
   echo "  cc/c++            Compiler wrapper for build system integration"
   echo "  build-pass        Build the LLVM pass locally for your clang version"
   echo "  cache             Manage cached passes (list, clear, size)"
+  echo "  pin <binary>      Profile a pre-compiled binary via Intel Pin"
   echo ""
   echo "Examples:"
   echo "  cache-explore matrix.c --config educational"
@@ -283,6 +284,10 @@ case "$1" in
   cache)
     shift
     exec "$SCRIPT_DIR/cache-explore-cache" "$@"
+    ;;
+  pin)
+    shift
+    exec "$SCRIPT_DIR/cache-explore-pin" "$@"
     ;;
   --help|-h)
     main_usage
