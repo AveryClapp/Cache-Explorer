@@ -1302,6 +1302,137 @@ pub fn main() void {
 `
   },
 
+  // === Rust Examples ===
+  rust_sequential: {
+    name: 'Rust: Sequential Access',
+    description: 'Array access - good cache locality',
+    language: 'rust',
+    code: `// Sequential array access - good cache behavior
+fn main() {
+    const N: usize = 1000;
+    let mut arr = [0i32; N];
+    let mut sum = 0i32;
+
+    for i in 0..N { arr[i] = i as i32; }
+    for i in 0..N { sum = sum.wrapping_add(arr[i]); }
+
+    println!("Sum: {}", sum);
+}
+`
+  },
+
+  rust_strided: {
+    name: 'Rust: Strided Access',
+    description: 'Skips cache lines - poor locality',
+    language: 'rust',
+    code: `// Strided access - poor cache behavior
+fn main() {
+    const N: usize = 1000;
+    const STRIDE: usize = 16; // 64 bytes = 1 cache line
+
+    let mut arr = vec![0i32; N * STRIDE];
+    for i in 0..N * STRIDE { arr[i] = i as i32; }
+
+    let mut sum = 0i32;
+    for i in 0..N {
+        sum = sum.wrapping_add(arr[i * STRIDE]); // Miss every access
+    }
+
+    println!("Sum: {}", sum);
+}
+`
+  },
+
+  rust_matrix_row: {
+    name: 'Rust: Row-Major Matrix',
+    description: 'Sequential memory access - cache friendly',
+    language: 'rust',
+    code: `// Row-major matrix traversal - cache friendly
+fn main() {
+    const N: usize = 64;
+    let mut matrix = [[0i32; N]; N];
+
+    for i in 0..N {
+        for j in 0..N { matrix[i][j] = (i + j) as i32; }
+    }
+
+    let mut sum = 0i32;
+    for i in 0..N {
+        for j in 0..N {
+            sum = sum.wrapping_add(matrix[i][j]); // Row-major: cache friendly
+        }
+    }
+
+    println!("Sum: {}", sum);
+}
+`
+  },
+
+  rust_matrix_col: {
+    name: 'Rust: Column-Major Matrix',
+    description: 'Column access on row-major array - cache unfriendly',
+    language: 'rust',
+    code: `// Column-major traversal of row-major matrix - cache unfriendly
+fn main() {
+    const N: usize = 64;
+    let mut matrix = [[0i32; N]; N];
+
+    for i in 0..N {
+        for j in 0..N { matrix[i][j] = (i + j) as i32; }
+    }
+
+    let mut sum = 0i32;
+    for j in 0..N {
+        for i in 0..N {
+            sum = sum.wrapping_add(matrix[i][j]); // Column-major: cache unfriendly
+        }
+    }
+
+    println!("Sum: {}", sum);
+}
+`
+  },
+
+  rust_false_sharing: {
+    name: 'Rust: False Sharing',
+    description: 'Threads write adjacent atomics on the same cache line',
+    language: 'rust',
+    code: `// False sharing: threads write different atomics packed into one cache line
+use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::Arc;
+use std::thread;
+
+// 4 counters = 32 bytes, fits in one 64-byte cache line
+struct Counters {
+    data: [AtomicI64; 4],
+}
+
+fn main() {
+    let counters = Arc::new(Counters {
+        data: [AtomicI64::new(0), AtomicI64::new(0),
+               AtomicI64::new(0), AtomicI64::new(0)],
+    });
+
+    let mut handles = vec![];
+    for t in 0..4 {
+        let c = Arc::clone(&counters);
+        handles.push(thread::spawn(move || {
+            for _ in 0..10_000 {
+                // Each thread writes a different slot, but they share a cache line
+                c.data[t].fetch_add(1, Ordering::Relaxed);
+            }
+        }));
+    }
+
+    for h in handles { h.join().unwrap(); }
+
+    for (i, c) in counters.data.iter().enumerate() {
+        println!("Thread {}: {}", i, c.load(Ordering::Relaxed));
+    }
+}
+`
+  },
+
   zig_packed_struct: {
     name: 'Zig: Packed Structs',
     description: 'Bit-packed data for cache efficiency',

@@ -40,6 +40,7 @@ const LANGUAGE_COLORS: Record<Language, string> = {
   c: '#555eb7',
   cpp: '#f34b7d',
   zig: '#f7a41d',
+  rust: '#dea584',
 }
 
 export function FileManager({
@@ -151,7 +152,7 @@ export function FileManager({
                   className="tab-icon"
                   style={{ backgroundColor: LANGUAGE_COLORS[file.language] }}
                 >
-                  {file.language === 'c' ? 'C' : file.language === 'cpp' ? '++' : file.language === 'zig' ? 'Z' : '?'}
+                  {file.language === 'c' ? 'C' : file.language === 'cpp' ? '++' : file.language === 'zig' ? 'Z' : file.language === 'rust' ? 'Rs' : '?'}
                 </span>
                 <span className="tab-name">{file.name}</span>
                 {file.isMain && <span className="tab-main-indicator" title="Entry point">*</span>}

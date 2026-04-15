@@ -85,7 +85,7 @@ export function EditorPanel({
   isMobile,
   mobilePane,
 }: EditorPanelProps) {
-  const monacoLanguage = language === 'cpp' ? 'cpp' : language === 'zig' ? 'rust' : 'c'
+  const monacoLanguage = language === 'cpp' ? 'cpp' : language === 'rust' ? 'rust' : language === 'zig' ? 'rust' : 'c'
   const hasTotal = progress && progress.eventsTotal > 0
   const progressPct = hasTotal ? Math.min(100, (progress.eventsProcessed / progress.eventsTotal) * 100) : 0
 
