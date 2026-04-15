@@ -636,59 +636,88 @@ if [[ "$LANG" == "rust" ]]; then
   fi
 
   if [[ "$RUST_MODE" == "std" ]]; then
-    # === STD RUST: Use cargo with LLVM pass plugin ===
-    CARGO_PROJECT="/tmp/cache-explore-cargo-$$"
-    mkdir -p "$CARGO_PROJECT/src"
+    # === STD RUST: IR pipeline (same as no_std and Zig) ===
+    # rustc --emit=llvm-ir emits just the user crate's IR with external std refs.
+    # We apply our pass with system opt (not rustc's bundled LLVM — avoids ABI mismatch).
+    # @main is renamed to @__ce_user_main to avoid symbol conflict with the stub.
+    # rustc compiles the stub + links our .o, handling all sysroot/std paths automatically.
+    RUST_IR="/tmp/cache-explore-rust-$$.ll"
+    RUST_INSTRUMENTED="/tmp/cache-explore-rust-instrumented-$$.ll"
+    RUST_RENAMED="/tmp/cache-explore-rust-renamed-$$.ll"
+    RUST_OBJ="/tmp/cache-explore-rust-$$.o"
+    RUST_STUB="/tmp/cache-explore-rust-stub-$$.rs"
 
-    # Copy source file
-    cp "$INPUT_FILE" "$CARGO_PROJECT/src/main.rs"
-
-    # Create Cargo.toml
-    cat > "$CARGO_PROJECT/Cargo.toml" << 'CARGO_EOF'
-[package]
-name = "cache_explore_temp"
-version = "0.1.0"
-edition = "2021"
-
-[profile.dev]
-opt-level = 0
-debug = true
-panic = "abort"
-
-[profile.release]
-opt-level = 0
-debug = true
-panic = "abort"
-CARGO_EOF
-
-    # Create build.rs to link our runtime
-    cat > "$CARGO_PROJECT/build.rs" << BUILD_EOF
-fn main() {
-    println!("cargo:rustc-link-search=native=$(dirname "$RUNTIME")");
-    println!("cargo:rustc-link-lib=static=cache-explorer-rt");
-}
-BUILD_EOF
-
-    # Build with cargo, injecting our LLVM pass
-    # The pass plugin is loaded via RUSTFLAGS
-    export RUSTFLAGS="-C llvm-args=-load-pass-plugin=$PASS -C llvm-args=-passes=cache-explorer-module -C link-arg=$RUNTIME"
-
-    if ! cargo build --manifest-path "$CARGO_PROJECT/Cargo.toml" --release \
-      2>/tmp/cache-explore-compile-err-$$; then
+    # Step 1: Compile Rust to LLVM IR
+    if ! rustc --edition 2021 -C opt-level=0 -C panic=abort -g --emit=llvm-ir \
+      -o "$RUST_IR" "$INPUT_FILE" 2>/tmp/cache-explore-compile-err-$$; then
       if [[ -n "$JSON_OUTPUT" ]]; then
         ESCAPED=$(cat /tmp/cache-explore-compile-err-$$ | python3 -c "import sys,json; print(json.dumps(sys.stdin.read())[1:-1])")
-        echo "{\"error\": \"Cargo build failed\", \"details\": \"$ESCAPED\"}"
+        echo "{\"error\": \"Rust compilation failed\", \"details\": \"$ESCAPED\"}"
       else
-        echo "Cargo build failed:" >&2
+        echo "Rust compilation to IR failed:" >&2
         cat /tmp/cache-explore-compile-err-$$ >&2
       fi
-      rm -rf "$CARGO_PROJECT" /tmp/cache-explore-compile-err-$$
+      rm -f /tmp/cache-explore-compile-err-$$ "$RUST_IR"
       exit 1
     fi
 
-    # Copy the built binary
-    cp "$CARGO_PROJECT/target/release/cache_explore_temp" "$BINARY"
-    rm -rf "$CARGO_PROJECT"
+    # Step 2: Run LLVM pass on the IR (with environment variables)
+    if ! env $PASS_ENV "$OPT_CMD" -load-pass-plugin="$PASS" -passes="cache-explorer-module" \
+      -S "$RUST_IR" -o "$RUST_INSTRUMENTED" 2>/tmp/cache-explore-compile-err-$$; then
+      if [[ -n "$JSON_OUTPUT" ]]; then
+        ESCAPED=$(cat /tmp/cache-explore-compile-err-$$ | python3 -c "import sys,json; print(json.dumps(sys.stdin.read())[1:-1])")
+        echo "{\"error\": \"LLVM pass failed\", \"details\": \"$ESCAPED\"}"
+      else
+        echo "LLVM instrumentation pass failed:" >&2
+        cat /tmp/cache-explore-compile-err-$$ >&2
+      fi
+      rm -f /tmp/cache-explore-compile-err-$$ "$RUST_IR" "$RUST_INSTRUMENTED"
+      exit 1
+    fi
+
+    # Step 3: Rename @main -> @__ce_user_main to avoid symbol conflict with the stub
+    sed 's/^\(define[^@]*\)@main(/\1@__ce_user_main(/g' "$RUST_INSTRUMENTED" > "$RUST_RENAMED"
+
+    # Step 4: Compile instrumented IR to object file
+    if ! "$LLC_CMD" -filetype=obj -o "$RUST_OBJ" "$RUST_RENAMED" 2>/tmp/cache-explore-compile-err-$$; then
+      if [[ -n "$JSON_OUTPUT" ]]; then
+        ESCAPED=$(cat /tmp/cache-explore-compile-err-$$ | python3 -c "import sys,json; print(json.dumps(sys.stdin.read())[1:-1])")
+        echo "{\"error\": \"LLVM compilation failed\", \"details\": \"$ESCAPED\"}"
+      else
+        echo "LLVM IR to object compilation failed:" >&2
+        cat /tmp/cache-explore-compile-err-$$ >&2
+      fi
+      rm -f /tmp/cache-explore-compile-err-$$ "$RUST_IR" "$RUST_INSTRUMENTED" "$RUST_RENAMED" "$RUST_OBJ"
+      exit 1
+    fi
+
+    # Step 5: Write stub that calls into our instrumented entry point
+    # rustc compiles this and handles all std/sysroot linking automatically.
+    # Works for both fn main() and fn main(i32, ptr) signatures since we
+    # always call with (0, null) and extra C args are safely ignored.
+    cat > "$RUST_STUB" << 'STUB_EOF'
+extern "C" { fn __ce_user_main(argc: i32, argv: *const *const u8) -> i32; }
+fn main() { unsafe { std::process::exit(__ce_user_main(0, std::ptr::null())); } }
+STUB_EOF
+
+    # Step 6: Compile stub and link with our instrumented object + runtime
+    if ! rustc --edition 2021 -C panic=abort "$RUST_STUB" \
+      -C link-arg="$RUST_OBJ" \
+      -C link-arg="$RUNTIME" \
+      -o "$BINARY" 2>/tmp/cache-explore-compile-err-$$; then
+      if [[ -n "$JSON_OUTPUT" ]]; then
+        ESCAPED=$(cat /tmp/cache-explore-compile-err-$$ | python3 -c "import sys,json; print(json.dumps(sys.stdin.read())[1:-1])")
+        echo "{\"error\": \"Linking failed\", \"details\": \"$ESCAPED\"}"
+      else
+        echo "Linking failed:" >&2
+        cat /tmp/cache-explore-compile-err-$$ >&2
+      fi
+      rm -f /tmp/cache-explore-compile-err-$$ "$RUST_IR" "$RUST_INSTRUMENTED" "$RUST_RENAMED" "$RUST_OBJ" "$RUST_STUB"
+      exit 1
+    fi
+
+    # Cleanup intermediate files
+    rm -f "$RUST_IR" "$RUST_INSTRUMENTED" "$RUST_RENAMED" "$RUST_OBJ" "$RUST_STUB" /tmp/cache-explore-compile-err-$$
 
   else
     # === NO_STD RUST: Direct compilation pipeline ===
