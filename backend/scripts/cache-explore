@@ -676,7 +676,7 @@ if [[ "$LANG" == "rust" ]]; then
     fi
 
     # Step 3: Rename @main -> @__ce_user_main to avoid symbol conflict with the stub
-    sed 's/^\(define[^@]*\)@main(/\1@__ce_user_main(/g' "$RUST_INSTRUMENTED" > "$RUST_RENAMED"
+    sed 's/@main(/@__ce_user_main(/g' "$RUST_INSTRUMENTED" > "$RUST_RENAMED"
 
     # Step 4: Compile instrumented IR to object file
     if ! "$LLC_CMD" -filetype=obj -o "$RUST_OBJ" "$RUST_RENAMED" 2>/tmp/cache-explore-compile-err-$$; then
