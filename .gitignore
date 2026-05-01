@@ -84,7 +84,7 @@ Thumbs.db
 # Third-party
 third_party/
 
-docs/plans
+docs/
 
 # Worktrees
 .worktrees/

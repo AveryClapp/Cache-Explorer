@@ -36,7 +36,7 @@ import { createFileTab, getFileExtension, useBaseline } from './hooks'
 
 // Utilities
 import { fuzzyMatch } from './utils/formatting'
-import { encodeState, decodeState } from './utils/urlState'
+import { encodeState, decodeState } from './utils/state'
 import { exportAsJSON, exportAsCSV } from './utils/export'
 
 

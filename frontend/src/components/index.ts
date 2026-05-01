@@ -5,10 +5,6 @@ export type { CommandItem } from './CommandPalette'
 export { StyledSelect } from './StyledSelect'
 export { SettingsToolbar } from './SettingsToolbar'
 
-// Config Components
-export { QuickConfigPanel } from './QuickConfigPanel'
-export { AdvancedOptionsModal } from './AdvancedOptionsModal'
-
 // Cache Detail Components
 export { LevelDetail, TLBDetail } from './CacheDetailComponents'
 export { TimingDisplay } from './TimingDisplay'
@@ -20,7 +16,7 @@ export { MemoryLayout } from './MemoryLayout'
 export type { MemoryRegion, MemoryAccess } from './MemoryLayout'
 
 // Results Display Components
-export { CacheHierarchyDisplay, CacheHierarchyLevel } from './CacheHierarchyDisplay'
+export { CacheHierarchyLevel } from './CacheHierarchyDisplay'
 export { AdvancedStatsPanel } from './AdvancedStatsPanel'
 export { PrefetchStatsPanel } from './PrefetchStatsPanel'
 export { MetricCards } from './MetricCards'

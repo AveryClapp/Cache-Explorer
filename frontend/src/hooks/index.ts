@@ -7,5 +7,5 @@ export { useBaseline } from './useBaseline'
 
 // Extracted domain hooks
 export { useAnalysis, type AnalysisConfig, type UseAnalysisReturn } from './useAnalysis'
-export { useSettings, defaultCustomConfig, type UseSettingsReturn } from './useSettings'
+export { useSettings, type UseSettingsReturn } from './useSettings'
 export { useEditor, createFileTab, getFileExtension, type UseEditorReturn } from './useEditor'

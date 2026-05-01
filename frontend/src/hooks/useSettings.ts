@@ -1,17 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { Theme, PrefetchPolicy, CustomCacheConfig, DefineEntry } from '../types'
 
-const API_BASE = import.meta.env.PROD ? '' : 'http://localhost:3001'
-
-export const defaultCustomConfig: CustomCacheConfig = {
-  l1Size: 32,
-  l1Assoc: 8,
-  lineSize: 64,
-  l2Size: 256,
-  l2Assoc: 8,
-  l3Size: 8192,
-  l3Assoc: 16,
-}
+import { API_BASE, defaultCustomConfig } from '../constants'
 
 export interface UseSettingsReturn {
   // Theme

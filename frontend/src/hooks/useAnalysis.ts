@@ -9,11 +9,7 @@ import type {
   PrefetchPolicy
 } from '../types'
 
-// API configuration
-const API_BASE = import.meta.env.PROD ? '' : 'http://localhost:3001'
-const WS_URL = import.meta.env.PROD
-  ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`
-  : 'ws://localhost:3001/ws'
+import { API_BASE, WS_URL } from '../constants'
 
 export interface AnalysisConfig {
   config: string
