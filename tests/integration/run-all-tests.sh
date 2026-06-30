@@ -55,6 +55,12 @@ else
     TOTAL_FAILED=$((TOTAL_FAILED + 1))
 fi
 
+if run_test_suite "test-server-health.sh" "Server Health"; then
+    TOTAL_PASSED=$((TOTAL_PASSED + 1))
+else
+    TOTAL_FAILED=$((TOTAL_FAILED + 1))
+fi
+
 if run_test_suite "$PROJECT_ROOT/tests/cmake-integration/run_tests.sh" "CMake Integration"; then
     TOTAL_PASSED=$((TOTAL_PASSED + 1))
 else
