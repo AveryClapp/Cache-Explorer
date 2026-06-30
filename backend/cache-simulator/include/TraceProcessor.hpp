@@ -36,8 +36,40 @@ struct SourceStats {
   uint32_t line;
   uint64_t hits = 0;
   uint64_t misses = 0;
+  uint64_t instructions = 0;
+  uint64_t memory_stall_cycles = 0;
+  uint64_t frontend_stall_cycles = 0;
+  uint64_t branch_stall_cycles = 0;
+  uint64_t branches = 0;
+  uint64_t branch_mispredictions = 0;
   [[nodiscard]] uint64_t total() const { return hits + misses; }
   [[nodiscard]] double miss_rate() const { return total() ? (double)misses / total() : 0; }
+  [[nodiscard]] uint64_t total_stall_cycles() const {
+    return memory_stall_cycles + frontend_stall_cycles + branch_stall_cycles;
+  }
+};
+
+struct SourceAnnotation {
+  std::string subsystem;
+  std::string severity;
+  std::string file;
+  uint32_t line = 0;
+  std::string label;
+  std::string detail;
+  uint64_t cycles = 0;
+  uint64_t misses = 0;
+  uint64_t branch_mispredictions = 0;
+  double share = 0.0;
+};
+
+struct BottleneckSummary {
+  std::string primary_bottleneck = "balanced";
+  uint64_t estimated_cycles = 0;
+  double bottleneck_share = 0.0;
+  std::string confidence = "low";
+  std::string reason;
+  SourceAnnotation top_source;
+  bool has_top_source = false;
 };
 
 class TraceProcessor {
@@ -61,6 +93,8 @@ private:
   void process_line_access(uint64_t line_addr, bool is_write, bool is_icache,
                            std::string_view file, uint32_t line,
                            uint32_t event_size);
+  SourceStats *find_or_create_source_stats(std::string_view file,
+                                           uint32_t line);
 
 public:
   explicit TraceProcessor(const CacheHierarchyConfig &cfg);
@@ -98,4 +132,7 @@ public:
   [[nodiscard]] std::vector<BranchSiteStats>
   get_branch_hot_mispredicts(size_t limit = 10) const;
   [[nodiscard]] PipelineStats get_pipeline_stats() const;
+  [[nodiscard]] BottleneckSummary get_bottleneck_summary() const;
+  [[nodiscard]] std::vector<SourceAnnotation>
+  get_source_annotations(size_t limit = 12) const;
 };

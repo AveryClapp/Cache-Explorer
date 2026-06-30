@@ -257,6 +257,107 @@ void JsonOutput::write_execution_unavailable(std::ostream& out,
     out << "  }";
 }
 
+void JsonOutput::write_execution_subsystem_stats(
+    std::ostream& out, const BranchPredictionStats& branch,
+    const std::vector<BranchSiteStats>& hot_branches,
+    const PipelineStats& pipeline) {
+    out << "  \"subsystems\": {\n";
+    out << "    \"execution\": {\n";
+    out << "      \"available\": true,\n";
+    out << "      \"model\": \"estimated\",\n";
+    out << "      \"pipeline\": {\n";
+    out << "        \"instructions\": " << pipeline.instructions << ",\n";
+    out << "        \"cycles\": " << pipeline.total_cycles() << ",\n";
+    out << "        \"ipc\": " << std::fixed << std::setprecision(3) << pipeline.ipc() << ",\n";
+    out << "        \"cpi\": " << std::fixed << std::setprecision(3) << pipeline.cpi() << ",\n";
+    out << "        \"breakdown\": {\n";
+    out << "          \"baseCycles\": " << pipeline.base_cycles << ",\n";
+    out << "          \"frontendStallCycles\": " << pipeline.frontend_stall_cycles << ",\n";
+    out << "          \"l2StallCycles\": " << pipeline.l2_stall_cycles << ",\n";
+    out << "          \"l3StallCycles\": " << pipeline.l3_stall_cycles << ",\n";
+    out << "          \"dramStallCycles\": " << pipeline.dram_stall_cycles << ",\n";
+    out << "          \"branchStallCycles\": " << pipeline.branch_stall_cycles << ",\n";
+    out << "          \"memoryStallCycles\": " << pipeline.memory_stall_cycles() << "\n";
+    out << "        }\n";
+    out << "      },\n";
+    out << "      \"branchPrediction\": {\n";
+    out << "        \"total\": " << branch.total << ",\n";
+    out << "        \"correct\": " << branch.correct() << ",\n";
+    out << "        \"mispredictions\": " << branch.mispredictions << ",\n";
+    out << "        \"accuracy\": " << std::fixed << std::setprecision(3) << branch.accuracy() << ",\n";
+    out << "        \"mispredictionRate\": " << std::fixed << std::setprecision(3)
+        << branch.misprediction_rate() << ",\n";
+    out << "        \"hotBranches\": [\n";
+    for (size_t i = 0; i < hot_branches.size(); i++) {
+        const auto& site = hot_branches[i];
+        out << "          {\"file\": \"" << escape(site.file) << "\", "
+            << "\"line\": " << site.line << ", "
+            << "\"total\": " << site.total << ", "
+            << "\"mispredictions\": " << site.mispredictions << ", "
+            << "\"mispredictionRate\": " << std::fixed << std::setprecision(3)
+            << site.misprediction_rate() << "}"
+            << (i + 1 < hot_branches.size() ? ",\n" : "\n");
+    }
+    out << "        ]\n";
+    out << "      }\n";
+    out << "    }\n";
+    out << "  }";
+}
+
+void JsonOutput::write_execution_subsystem_unavailable(std::ostream& out,
+                                                       std::string_view reason) {
+    out << "  \"subsystems\": {\n";
+    out << "    \"execution\": {\n";
+    out << "      \"available\": false,\n";
+    out << "      \"reason\": \"" << escape(reason) << "\"\n";
+    out << "    }\n";
+    out << "  }";
+}
+
+void JsonOutput::write_bottleneck_summary(std::ostream& out,
+                                          const BottleneckSummary& summary) {
+    out << "  \"summary\": {\n";
+    out << "    \"primaryBottleneck\": \"" << escape(summary.primary_bottleneck) << "\",\n";
+    out << "    \"estimatedCycles\": " << summary.estimated_cycles << ",\n";
+    out << "    \"bottleneckShare\": " << std::fixed << std::setprecision(3)
+        << summary.bottleneck_share << ",\n";
+    out << "    \"confidence\": \"" << escape(summary.confidence) << "\",\n";
+    out << "    \"reason\": \"" << escape(summary.reason) << "\",\n";
+    out << "    \"topSource\": ";
+    if (summary.has_top_source) {
+        out << "{\"file\": \"" << escape(summary.top_source.file)
+            << "\", \"line\": " << summary.top_source.line
+            << ", \"subsystem\": \"" << escape(summary.top_source.subsystem)
+            << "\", \"cycles\": " << summary.top_source.cycles << "}\n";
+    } else {
+        out << "null\n";
+    }
+    out << "  }";
+}
+
+void JsonOutput::write_source_annotations(
+    std::ostream& out, const std::vector<SourceAnnotation>& annotations) {
+    out << "  \"sourceAnnotations\": [\n";
+    for (size_t i = 0; i < annotations.size(); i++) {
+        const auto& annotation = annotations[i];
+        out << "    {\"subsystem\": \"" << escape(annotation.subsystem) << "\", "
+            << "\"severity\": \"" << escape(annotation.severity) << "\", "
+            << "\"file\": \"" << escape(annotation.file) << "\", "
+            << "\"line\": " << annotation.line << ", "
+            << "\"label\": \"" << escape(annotation.label) << "\", "
+            << "\"detail\": \"" << escape(annotation.detail) << "\", "
+            << "\"metrics\": {"
+            << "\"cycles\": " << annotation.cycles << ", "
+            << "\"share\": " << std::fixed << std::setprecision(3)
+            << annotation.share << ", "
+            << "\"misses\": " << annotation.misses << ", "
+            << "\"branchMispredictions\": "
+            << annotation.branch_mispredictions << "}}"
+            << (i + 1 < annotations.size() ? ",\n" : "\n");
+    }
+    out << "  ]";
+}
+
 // ========== Hot Lines ==========
 
 void JsonOutput::write_hot_lines(std::ostream& out, const std::vector<SourceStats>& hot) {

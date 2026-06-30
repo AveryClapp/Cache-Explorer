@@ -79,7 +79,7 @@ test_feature "Fast mode" --config intel --fast
 # Test JSON output format
 echo -n "Test: JSON output structure... "
 OUTPUT=$("$CACHE_EXPLORE" "$TEST_PROGRAM" --config intel --json 2>/dev/null)
-if echo "$OUTPUT" | jq -e '.config, .profile.displayName, .profile.modelConfidence, .profile.details.executionCore.issueWidth, .profile.details.prefetch.activePolicy, .events, .levels.l1d.hits, .levels.l1d.misses, .levels.l1d.hitRate' > /dev/null 2>&1; then
+if echo "$OUTPUT" | jq -e '.config, .profile.displayName, .profile.modelConfidence, .profile.details.executionCore.issueWidth, .profile.details.prefetch.activePolicy, .summary.estimatedCycles, .subsystems.execution.available, .events, .levels.l1d.hits, .levels.l1d.misses, .levels.l1d.hitRate' > /dev/null 2>&1; then
     echo -e "${GREEN}PASS${NC}"
     PASSED=$((PASSED + 1))
 else
@@ -139,9 +139,12 @@ else
     OUTPUT=$(printf 'I 0x1000 16 branch.c:1 T1\nB 0x1 1 branch.c:2 T1\nB 0x1 0 branch.c:2 T1\nB 0x1 1 branch.c:2 T1\n' \
         | "$CACHE_SIM" --config educational --json 2>/dev/null)
     if echo "$OUTPUT" | jq -e '.execution.available == true
+        and .subsystems.execution.available == true
         and .execution.pipeline.cycles > 0
+        and .summary.estimatedCycles > 0
         and .execution.branchPrediction.total == 3
-        and .execution.branchPrediction.hotBranches[0].mispredictions == 3' > /dev/null 2>&1; then
+        and .execution.branchPrediction.hotBranches[0].mispredictions == 3
+        and any(.sourceAnnotations[]; .subsystem == "branch" and .metrics.branchMispredictions == 3)' > /dev/null 2>&1; then
         echo -e "${GREEN}PASS${NC}"
         PASSED=$((PASSED + 1))
     else

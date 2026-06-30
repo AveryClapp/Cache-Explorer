@@ -146,6 +146,68 @@ void test_write_execution_unavailable() {
   std::cout << "[PASS] test_write_execution_unavailable\n";
 }
 
+void test_write_execution_subsystem_stats() {
+  std::ostringstream out;
+  BranchPredictionStats branch;
+  branch.total = 4;
+  branch.mispredictions = 1;
+
+  PipelineStats pipeline;
+  pipeline.instructions = 40;
+  pipeline.base_cycles = 10;
+  pipeline.branch_stall_cycles = 14;
+
+  JsonOutput::write_execution_subsystem_stats(out, branch, {}, pipeline);
+
+  std::string json = out.str();
+  assert(json.find("\"subsystems\"") != std::string::npos);
+  assert(json.find("\"execution\"") != std::string::npos);
+  assert(json.find("\"available\": true") != std::string::npos);
+  assert(json.find("\"branchPrediction\"") != std::string::npos);
+  std::cout << "[PASS] test_write_execution_subsystem_stats\n";
+}
+
+void test_write_bottleneck_summary_and_annotations() {
+  std::ostringstream summary_out;
+  BottleneckSummary summary;
+  summary.primary_bottleneck = "memory";
+  summary.estimated_cycles = 1000;
+  summary.bottleneck_share = 0.5;
+  summary.confidence = "high";
+  summary.reason = "Memory stalls dominate.";
+  summary.has_top_source = true;
+  summary.top_source.file = "pointer.c";
+  summary.top_source.line = 27;
+  summary.top_source.subsystem = "memory";
+  summary.top_source.cycles = 500;
+
+  JsonOutput::write_bottleneck_summary(summary_out, summary);
+  std::string summary_json = summary_out.str();
+  assert(summary_json.find("\"summary\"") != std::string::npos);
+  assert(summary_json.find("\"primaryBottleneck\": \"memory\"") != std::string::npos);
+  assert(summary_json.find("\"topSource\"") != std::string::npos);
+  assert(summary_json.find("\"pointer.c\"") != std::string::npos);
+
+  std::ostringstream annotations_out;
+  SourceAnnotation annotation;
+  annotation.subsystem = "memory";
+  annotation.severity = "high";
+  annotation.file = "pointer.c";
+  annotation.line = 27;
+  annotation.label = "Memory stall source";
+  annotation.detail = "Memory stalls account for 50% of cycles.";
+  annotation.cycles = 500;
+  annotation.misses = 10;
+  annotation.share = 0.5;
+
+  JsonOutput::write_source_annotations(annotations_out, {annotation});
+  std::string annotations_json = annotations_out.str();
+  assert(annotations_json.find("\"sourceAnnotations\"") != std::string::npos);
+  assert(annotations_json.find("\"metrics\"") != std::string::npos);
+  assert(annotations_json.find("\"cycles\": 500") != std::string::npos);
+  std::cout << "[PASS] test_write_bottleneck_summary_and_annotations\n";
+}
+
 void test_write_hot_lines() {
   std::ostringstream out;
   std::vector<SourceStats> hot;
@@ -335,6 +397,8 @@ int main() {
   test_write_timing_stats();
   test_write_execution_stats();
   test_write_execution_unavailable();
+  test_write_execution_subsystem_stats();
+  test_write_bottleneck_summary_and_annotations();
   test_write_hot_lines();
   test_write_suggestions();
   test_write_coherence_stats();
@@ -346,6 +410,6 @@ int main() {
   test_write_stream_start();
   test_write_stream_progress();
 
-  std::cout << "\n=== All 21 JsonOutput tests passed! ===\n";
+  std::cout << "\n=== All 23 JsonOutput tests passed! ===\n";
   return 0;
 }

@@ -379,6 +379,10 @@ int main(int argc, char *argv[]) {
     JsonOutput::write_execution_unavailable(
         std::cout,
         "Execution-engine estimates are not available in streaming multi-core mode yet.");
+    std::cout << ",";
+    JsonOutput::write_execution_subsystem_unavailable(
+        std::cout,
+        "Execution-engine estimates are not available in streaming multi-core mode yet.");
 
     // Prefetch stats (if enabled)
     if (prefetch_policy != PrefetchPolicy::NONE) {
@@ -735,6 +739,10 @@ int main(int argc, char *argv[]) {
       JsonOutput::write_execution_unavailable(
           std::cout,
           "Execution-engine estimates are not available in multi-core mode yet.");
+      std::cout << ",\n";
+      JsonOutput::write_execution_subsystem_unavailable(
+          std::cout,
+          "Execution-engine estimates are not available in multi-core mode yet.");
 
       // Prefetch stats (if enabled)
       if (prefetch_policy != PrefetchPolicy::NONE) {
@@ -1015,6 +1023,11 @@ int main(int argc, char *argv[]) {
                                          prefetch_degree, num_cores);
       std::cout << ",\n";
       std::cout << "  \"events\": " << events.size() << ",\n";
+      if (!opts.cache_segments) {
+        JsonOutput::write_bottleneck_summary(
+            std::cout, processor.get_bottleneck_summary());
+        std::cout << ",\n";
+      }
 
       // Output cache configuration for visualization
       std::cout << "  \"cacheConfig\": {\n";
@@ -1107,6 +1120,11 @@ int main(int argc, char *argv[]) {
       }
 
       std::cout << "  ],\n";
+      if (!opts.cache_segments) {
+        JsonOutput::write_source_annotations(
+            std::cout, processor.get_source_annotations(12));
+        std::cout << ",\n";
+      }
 
       // Generate optimization suggestions for single-core
       auto suggestions =
@@ -1189,11 +1207,19 @@ int main(int argc, char *argv[]) {
         JsonOutput::write_execution_unavailable(
             std::cout,
             "Execution-engine estimates are disabled when segment caching is enabled.");
+        std::cout << ",\n";
+        JsonOutput::write_execution_subsystem_unavailable(
+            std::cout,
+            "Execution-engine estimates are disabled when segment caching is enabled.");
       } else {
+        const auto branch_stats = processor.get_branch_prediction_stats();
+        const auto hot_branches = processor.get_branch_hot_mispredicts(10);
+        const auto pipeline_stats = processor.get_pipeline_stats();
         JsonOutput::write_execution_stats(
-            std::cout, processor.get_branch_prediction_stats(),
-            processor.get_branch_hot_mispredicts(10),
-            processor.get_pipeline_stats());
+            std::cout, branch_stats, hot_branches, pipeline_stats);
+        std::cout << ",\n";
+        JsonOutput::write_execution_subsystem_stats(
+            std::cout, branch_stats, hot_branches, pipeline_stats);
       }
 
       // Output L1 cache state for visualization (single core = core 0)

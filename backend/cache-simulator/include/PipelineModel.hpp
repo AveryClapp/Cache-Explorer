@@ -63,14 +63,15 @@ public:
 
   // A demand data access that hit at the given level (booleans are cumulative:
   // an L2 hit has l1_hit=false, l2_hit=true).
-  void on_data_access(bool l1_hit, bool l2_hit, bool l3_hit);
+  uint64_t on_data_access(bool l1_hit, bool l2_hit, bool l3_hit);
 
   // An instruction fetch for a basic block of `instr_count` instructions,
   // hitting the instruction caches at the given level.
-  void on_inst_fetch(bool l1_hit, bool l2_hit, bool l3_hit, uint32_t instr_count);
+  uint64_t on_inst_fetch(bool l1_hit, bool l2_hit, bool l3_hit,
+                         uint32_t instr_count);
 
   // A conditional branch; `mispredicted` from the branch predictor.
-  void on_branch(bool mispredicted);
+  uint64_t on_branch(bool mispredicted);
 
   [[nodiscard]] PipelineStats finish() const;
 

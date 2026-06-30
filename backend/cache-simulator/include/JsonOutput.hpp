@@ -128,6 +128,32 @@ public:
     static void write_execution_unavailable(std::ostream& out,
                                             std::string_view reason);
 
+    /**
+     * Write additive Hardware Explorer subsystem output for execution stats.
+     */
+    static void write_execution_subsystem_stats(std::ostream& out,
+                                                const BranchPredictionStats& branch,
+                                                const std::vector<BranchSiteStats>& hot_branches,
+                                                const PipelineStats& pipeline);
+
+    /**
+     * Write unavailable execution subsystem output.
+     */
+    static void write_execution_subsystem_unavailable(std::ostream& out,
+                                                      std::string_view reason);
+
+    /**
+     * Write top-level bottleneck summary.
+     */
+    static void write_bottleneck_summary(std::ostream& out,
+                                         const BottleneckSummary& summary);
+
+    /**
+     * Write source-level hardware annotations.
+     */
+    static void write_source_annotations(std::ostream& out,
+                                         const std::vector<SourceAnnotation>& annotations);
+
     // ========== Hot Lines ==========
 
     /**
