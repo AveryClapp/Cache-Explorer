@@ -61,6 +61,7 @@
   .btn-compare,
   .btn-export,
   .btn-hardware-compare,
+  .btn-explore,
   .btn-experiment,
   .btn-primary,
   .btn-cancel {
@@ -214,6 +215,7 @@
 
   .btn-compare,
   .btn-hardware-compare,
+  .btn-explore,
   .btn-experiment,
   .btn-export {
     display: none;
@@ -447,6 +449,104 @@
   color: var(--text-secondary);
 }
 
+.hardware-explorer-modal {
+  max-width: 1120px;
+}
+
+.hardware-explorer-modal .batch-modal-content {
+  max-height: min(78vh, 760px);
+}
+
+.hardware-explorer-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.hardware-explorer-actions .btn {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-xs);
+}
+
+.hardware-explorer-content {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: var(--space-4);
+  min-height: 480px;
+}
+
+.hardware-profile-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  max-height: 100%;
+  overflow-y: auto;
+  padding-right: var(--space-2);
+  border-right: 1px solid var(--border);
+}
+
+.hardware-profile-row {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  min-height: 72px;
+  padding: var(--space-3);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.hardware-profile-row:hover {
+  background: var(--surface);
+  border-color: var(--border-glow);
+}
+
+.hardware-profile-row.active {
+  background: var(--phosphor-subtle);
+  border-color: var(--phosphor-dim);
+}
+
+.hardware-profile-row-name {
+  color: var(--text-bright);
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.hardware-profile-row-meta,
+.hardware-profile-row-cache {
+  min-width: 0;
+  color: var(--text-secondary);
+  font-family: var(--font-code);
+  font-size: var(--text-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hardware-explorer-detail {
+  min-width: 0;
+  overflow-y: auto;
+}
+
+.hardware-explorer-detail .hardware-profile-panel {
+  margin: 0;
+}
+
+.hardware-profile-note {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
 @media (max-width: 768px) {
   .experiment-controls {
     grid-template-columns: 1fr;
@@ -454,5 +554,18 @@
 
   .experiment-run {
     width: 100%;
+  }
+
+  .hardware-explorer-content {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+
+  .hardware-profile-list {
+    max-height: 260px;
+    padding-right: 0;
+    padding-bottom: var(--space-3);
+    border-right: none;
+    border-bottom: 1px solid var(--border);
   }
 }

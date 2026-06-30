@@ -12,6 +12,7 @@ interface HeaderProps {
   onSetBaseline: (result: CacheResult) => void;
   onClearBaseline: () => void;
   onCompareHardware: () => void;
+  onExploreHardware: () => void;
   onRunExperiment: () => void;
   onRun: () => void;
   onCancel: () => void;
@@ -39,6 +40,7 @@ export function Header({
   onSetBaseline,
   onClearBaseline,
   onCompareHardware,
+  onExploreHardware,
   onRunExperiment,
   onRun,
   onCancel,
@@ -88,6 +90,16 @@ export function Header({
             title="Compare hardware presets"
           >
             Hardware
+          </button>
+        )}
+
+        {!isLoading && (
+          <button
+            onClick={onExploreHardware}
+            className="btn-explore"
+            title="Open hardware explorer"
+          >
+            Explore
           </button>
         )}
 

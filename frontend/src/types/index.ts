@@ -87,11 +87,13 @@ export interface AdvancedStats {
 
 export interface HardwareProfile {
   id: string
+  aliases?: string[]
   displayName: string
   vendor: string
   architecture: string
   class: string
   modelConfidence: string
+  notes?: string
   details?: HardwareProfileDetails
 }
 

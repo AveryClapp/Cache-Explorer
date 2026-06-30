@@ -12,6 +12,7 @@ import {
   ExamplesSidebar,
   BatchResultsModal,
   ExperimentResultsModal,
+  HardwareExplorerModal,
   ResultsPanel,
   EditorPanel,
 } from './components'
@@ -22,6 +23,7 @@ import type {
   CacheResult,
   ErrorResult,
   HardwareExperimentResult,
+  HardwareProfile,
   Language,
   FileTab,
   Stage,
@@ -188,6 +190,11 @@ function App() {
   const [experimentRunning, setExperimentRunning] = useState(false)
   const [experimentError, setExperimentError] = useState<string | null>(null)
   const [experimentVariants, setExperimentVariants] = useState('direct\ntiled:RUN_TILED=1')
+  const [hardwareProfiles, setHardwareProfiles] = useState<HardwareProfile[]>([])
+  const [showHardwareExplorer, setShowHardwareExplorer] = useState(false)
+  const [hardwareProfilesLoading, setHardwareProfilesLoading] = useState(false)
+  const [hardwareProfilesError, setHardwareProfilesError] = useState<string | null>(null)
+  const [selectedHardwareProfileId, setSelectedHardwareProfileId] = useState('')
   const commandInputRef = useRef<HTMLInputElement>(null)
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const monacoRef = useRef<Monaco | null>(null)
@@ -706,6 +713,38 @@ function App() {
     setShowExperimentModal(true)
   }, [])
 
+  const loadHardwareProfiles = useCallback(async () => {
+    setHardwareProfilesLoading(true)
+    setHardwareProfilesError(null)
+
+    try {
+      const response = await fetch(`${API_BASE}/profiles`)
+      const data = await response.json()
+      if (!response.ok || !Array.isArray(data.profiles)) {
+        setHardwareProfilesError(data.message || data.error || 'Failed to load profiles')
+        return
+      }
+
+      const profiles = data.profiles as HardwareProfile[]
+      setHardwareProfiles(profiles)
+      setSelectedHardwareProfileId(prev => {
+        if (profiles.some(profile => profile.id === prev)) return prev
+        return profiles.find(profile => profile.id === config)?.id || profiles[0]?.id || ''
+      })
+    } catch (err) {
+      setHardwareProfilesError(err instanceof Error ? err.message : 'Failed to load profiles')
+    } finally {
+      setHardwareProfilesLoading(false)
+    }
+  }, [config])
+
+  const openHardwareExplorer = useCallback(() => {
+    setShowHardwareExplorer(true)
+    if (hardwareProfiles.length === 0 && !hardwareProfilesLoading) {
+      void loadHardwareProfiles()
+    }
+  }, [hardwareProfiles.length, hardwareProfilesLoading, loadHardwareProfiles])
+
   const runExperimentAnalysis = useCallback(async () => {
     const variants = parseExperimentVariants(experimentVariants)
     if (variants.length === 0) {
@@ -753,6 +792,7 @@ function App() {
     { id: 'export-csv', icon: '@', label: 'Export results as CSV', action: () => result && exportAsCSV(result), category: 'actions' },
     { id: 'batch-analyze', icon: '@', label: 'Compare hardware presets', action: runBatchAnalysis, category: 'actions' },
     { id: 'hardware-experiment', icon: '@', label: 'Open hardware experiment', action: openExperimentModal, category: 'actions' },
+    { id: 'hardware-explorer', icon: '@', label: 'Open hardware explorer', action: openHardwareExplorer, category: 'actions' },
     // Settings (:)
     { id: 'vim', icon: ':', label: vimMode ? 'Disable Vim mode' : 'Enable Vim mode', action: () => setVimMode(!vimMode), category: 'settings' },
     { id: 'lang-c', icon: ':', label: 'Language: C', action: () => updateActiveLanguage('c'), category: 'settings' },
@@ -765,7 +805,7 @@ function App() {
     { id: 'limit-1m', icon: '*', label: 'Event limit: 1M', action: () => setEventLimit(1000000), category: 'config' },
     { id: 'limit-5m', icon: '*', label: 'Event limit: 5M', action: () => setEventLimit(5000000), category: 'config' },
     { id: 'limit-none', icon: '*', label: 'Event limit: None', action: () => setEventLimit(0), category: 'config' },
-  ], [isLoading, activeFileId, vimMode, diffMode, baselineResult, config, files, result, code, handleShare, updateActiveLanguage, setBaselineFromHook, clearBaselineHook, runBatchAnalysis, openExperimentModal])
+  ], [isLoading, activeFileId, vimMode, diffMode, baselineResult, config, files, result, code, handleShare, updateActiveLanguage, setBaselineFromHook, clearBaselineHook, runBatchAnalysis, openExperimentModal, openHardwareExplorer])
 
   // Command palette handlers
   const handleCommandSelect = useCallback((cmd: CommandItem) => {
@@ -820,6 +860,19 @@ function App() {
         />
       )}
 
+      {/* Hardware Explorer Modal */}
+      {showHardwareExplorer && (
+        <HardwareExplorerModal
+          profiles={hardwareProfiles}
+          selectedId={selectedHardwareProfileId}
+          loading={hardwareProfilesLoading}
+          error={hardwareProfilesError}
+          onSelect={setSelectedHardwareProfileId}
+          onRefresh={loadHardwareProfiles}
+          onClose={() => setShowHardwareExplorer(false)}
+        />
+      )}
+
       {/* Header - hidden in embed mode */}
       {!isEmbedMode && (
         <Header
@@ -834,6 +887,7 @@ function App() {
           onSetBaseline={(r) => { setBaselineFromHook(r, config, files); setBaselineCode(code) }}
           onClearBaseline={() => { clearBaselineHook(); setBaselineCode(null) }}
           onCompareHardware={runBatchAnalysis}
+          onExploreHardware={openHardwareExplorer}
           onRunExperiment={openExperimentModal}
           onRun={runAnalysis}
           onCancel={cancelAnalysis}
