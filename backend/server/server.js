@@ -84,8 +84,59 @@ function stripCacheState(result) {
   return result;
 }
 
+function mergeHardwareProfileDetails(catalogDetails, emittedDetails) {
+  if (!catalogDetails && !emittedDetails) return undefined;
+  return {
+    ...catalogDetails,
+    ...emittedDetails,
+    cache: {
+      ...catalogDetails?.cache,
+      ...emittedDetails?.cache,
+      levels: {
+        ...catalogDetails?.cache?.levels,
+        ...emittedDetails?.cache?.levels,
+      },
+    },
+    tlb: {
+      ...catalogDetails?.tlb,
+      ...emittedDetails?.tlb,
+    },
+    prefetch: {
+      ...catalogDetails?.prefetch,
+      ...emittedDetails?.prefetch,
+    },
+    executionCore: {
+      ...catalogDetails?.executionCore,
+      ...emittedDetails?.executionCore,
+    },
+    memory: {
+      ...catalogDetails?.memory,
+      ...emittedDetails?.memory,
+    },
+    topology: {
+      ...catalogDetails?.topology,
+      ...emittedDetails?.topology,
+    },
+  };
+}
+
+function attachHardwareProfile(result, config) {
+  if (!result || typeof result !== 'object') return result;
+  const catalogProfile = getHardwareProfile(config);
+  if (!catalogProfile) return result;
+
+  const emittedProfile = result.profile || {};
+  result.profile = {
+    ...emittedProfile,
+    ...catalogProfile,
+    details: mergeHardwareProfileDetails(catalogProfile.details, emittedProfile.details),
+  };
+  return result;
+}
+
 function attachResultProvenance(result, options) {
   if (!result || typeof result !== 'object') return result;
+  attachHardwareProfile(result, options.config);
   result.provenance = resultProvenance(options);
   return result;
 }
