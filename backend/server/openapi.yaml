@@ -120,6 +120,60 @@ paths:
                     message: "Execution timed out after 60s"
                     suggestion: "Check for infinite loops, reduce input size, or increase timeout"
 
+  /compare:
+    post:
+      tags:
+        - profiling
+      summary: Compare hardware profiles
+      description: |
+        Compiles and traces a single-file C/C++ program once, then replays the captured trace
+        across multiple hardware profiles. This endpoint is available in direct development mode;
+        sandbox deployments should use `/compile` per profile.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompareRequest'
+            example:
+              code: |
+                #include <stdio.h>
+                int main() {
+                    int a[1024];
+                    for (int i = 0; i < 1024; i++) a[i] = i;
+                    printf("%d\n", a[1023]);
+                    return 0;
+                }
+              language: c
+              optLevel: "-O2"
+              configs: [educational, intel14, amd, apple]
+              limit: 200000
+      responses:
+        '200':
+          description: Successful hardware profile comparison
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompareResult'
+        '400':
+          description: Compilation, execution, or validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompileError'
+        '422':
+          description: Unsupported input for comparison mode
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompileError'
+        '501':
+          description: Comparison endpoint unavailable in sandbox mode
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompileError'
+
   /health:
     get:
       tags:
@@ -435,6 +489,57 @@ components:
           items:
             $ref: '#/components/schemas/PreprocessorDefine'
 
+    CompareRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Single-file C/C++ source code to compile and compare
+        configs:
+          type: array
+          description: Hardware profile ids to compare
+          items:
+            type: string
+          default: [educational, intel, amd, apple]
+          example: [educational, intel14, amd, apple]
+        optLevel:
+          type: string
+          description: Compiler optimization level
+          enum: ["-O0", "-O1", "-O2", "-O3", "-Os"]
+          default: "-O0"
+        language:
+          type: string
+          description: Programming language
+          enum: [c, cpp]
+          default: c
+        sample:
+          type: integer
+          description: Sample rate (1 = every access, 10 = every 10th access)
+          minimum: 1
+          default: 1
+        limit:
+          type: integer
+          description: Maximum number of events to capture
+          default: 1000000
+        prefetch:
+          type: string
+          description: Prefetch policy to simulate
+          enum: [none, next, next-line, stride, stream, adaptive, intel]
+          default: none
+        fast:
+          type: boolean
+          description: Disable 3C miss classification for faster simulation
+          default: false
+        cacheSegments:
+          type: boolean
+          description: Cache repeated loop segments during simulation
+          default: false
+        defines:
+          type: array
+          description: Preprocessor definitions
+          items:
+            $ref: '#/components/schemas/PreprocessorDefine'
+
     SourceFile:
       type: object
       required:
@@ -517,6 +622,62 @@ components:
           description: Optimization suggestions
           items:
             type: string
+
+    CompareResult:
+      type: object
+      properties:
+        source:
+          type: string
+          description: Source file used for the comparison
+        summary:
+          type: array
+          description: Compact per-profile hardware comparison summary
+          items:
+            $ref: '#/components/schemas/HardwareCompareSummary'
+        configs:
+          type: object
+          description: Full per-profile analysis results keyed by hardware config id
+          additionalProperties:
+            $ref: '#/components/schemas/CompileResult'
+
+    HardwareCompareSummary:
+      type: object
+      properties:
+        config:
+          type: string
+          example: intel14
+        primaryBottleneck:
+          type: string
+          example: memory
+        estimatedCycles:
+          type: integer
+          example: 651742
+        confidence:
+          type: string
+          example: medium
+        bottleneckShare:
+          type: number
+          format: float
+          example: 0.151
+        topSource:
+          type: object
+          nullable: true
+          properties:
+            file:
+              type: string
+              example: main.c
+            line:
+              type: integer
+              example: 12
+            subsystem:
+              type: string
+              example: memory
+            cycles:
+              type: integer
+              example: 58803
+        events:
+          type: integer
+          example: 200000
 
     CacheSummary:
       type: object
