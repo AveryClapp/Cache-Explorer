@@ -4,9 +4,11 @@ import { HardwareProfilePanel } from './HardwareProfilePanel'
 interface HardwareExplorerModalProps {
   profiles: HardwareProfile[]
   selectedId: string
+  activeId: string
   loading: boolean
   error: string | null
   onSelect: (id: string) => void
+  onApply: (id: string) => void
   onRefresh: () => void
   onClose: () => void
 }
@@ -25,9 +27,11 @@ function cacheSummary(profile: HardwareProfile) {
 export function HardwareExplorerModal({
   profiles,
   selectedId,
+  activeId,
   loading,
   error,
   onSelect,
+  onApply,
   onRefresh,
   onClose,
 }: HardwareExplorerModalProps) {
@@ -39,6 +43,13 @@ export function HardwareExplorerModal({
         <div className="batch-modal-header">
           <span className="batch-modal-title">Hardware Explorer</span>
           <div className="hardware-explorer-actions">
+            <button
+              className="btn"
+              onClick={() => selected && onApply(selected.id)}
+              disabled={loading || !selected || selected.id === activeId}
+            >
+              Use Profile
+            </button>
             <button className="btn" onClick={onRefresh} disabled={loading}>Refresh</button>
             <button className="batch-modal-close" onClick={onClose}>×</button>
           </div>
@@ -51,7 +62,10 @@ export function HardwareExplorerModal({
                 className={`hardware-profile-row ${profile.id === selected?.id ? 'active' : ''}`}
                 onClick={() => onSelect(profile.id)}
               >
-                <span className="hardware-profile-row-name">{profile.displayName}</span>
+                <span className="hardware-profile-row-heading">
+                  <span className="hardware-profile-row-name">{profile.displayName}</span>
+                  {profile.id === activeId && <span className="hardware-profile-current">Current</span>}
+                </span>
                 <span className="hardware-profile-row-meta">{profile.vendor} / {profile.class}</span>
                 <span className="hardware-profile-row-cache">{cacheSummary(profile)}</span>
               </button>

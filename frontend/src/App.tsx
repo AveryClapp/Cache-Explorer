@@ -745,6 +745,12 @@ function App() {
     }
   }, [hardwareProfiles.length, hardwareProfilesLoading, loadHardwareProfiles])
 
+  const applyHardwareProfile = useCallback((profileId: string) => {
+    setConfig(profileId)
+    setPrefetchPolicy(PREFETCH_DEFAULTS[profileId] || 'none')
+    setSelectedHardwareProfileId(profileId)
+  }, [])
+
   const runExperimentAnalysis = useCallback(async () => {
     const variants = parseExperimentVariants(experimentVariants)
     if (variants.length === 0) {
@@ -865,9 +871,11 @@ function App() {
         <HardwareExplorerModal
           profiles={hardwareProfiles}
           selectedId={selectedHardwareProfileId}
+          activeId={config}
           loading={hardwareProfilesLoading}
           error={hardwareProfilesError}
           onSelect={setSelectedHardwareProfileId}
+          onApply={applyHardwareProfile}
           onRefresh={loadHardwareProfiles}
           onClose={() => setShowHardwareExplorer(false)}
         />

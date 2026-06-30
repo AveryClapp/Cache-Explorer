@@ -468,6 +468,11 @@
   font-size: var(--text-xs);
 }
 
+.hardware-explorer-actions .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .hardware-explorer-content {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
@@ -509,11 +514,34 @@
   border-color: var(--phosphor-dim);
 }
 
+.hardware-profile-row-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  gap: var(--space-2);
+}
+
 .hardware-profile-row-name {
+  min-width: 0;
   color: var(--text-bright);
   font-family: var(--font-display);
   font-size: var(--text-sm);
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hardware-profile-current {
+  flex: 0 0 auto;
+  padding: 1px var(--space-2);
+  border: 1px solid var(--signal-good);
+  border-radius: var(--radius-sm);
+  color: var(--signal-good);
+  font-family: var(--font-code);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
 }
 
 .hardware-profile-row-meta,
