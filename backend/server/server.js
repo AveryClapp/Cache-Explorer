@@ -624,6 +624,22 @@ app.get('/api/compilers', (req, res) => {
 // Link Shortener (SQLite-backed)
 // ============================================================================
 
+function dbUnavailableResponse(res) {
+  return res.status(503).json({
+    error: 'Persistence unavailable',
+    message: 'Database-backed sharing is unavailable in this server process'
+  });
+}
+
+function logShareError(action, err) {
+  if (err.code === 'DB_UNAVAILABLE') {
+    console.warn(`${action}: database unavailable`);
+    return;
+  }
+
+  console.error(`${action}:`, err);
+}
+
 // Create short link
 app.post('/shorten', (req, res) => {
   incCounter('requests', { type: 'share' });
@@ -636,8 +652,11 @@ app.post('/shorten', (req, res) => {
     const code = createShortUrl(state);
     res.json({ id: code, url: `/s/${code}` });
   } catch (err) {
-    console.error('Failed to create short URL:', err);
+    logShareError('Failed to create short URL', err);
     incCounter('errors', { type: 'share' });
+    if (err.code === 'DB_UNAVAILABLE') {
+      return dbUnavailableResponse(res);
+    }
     res.status(500).json({ error: 'Failed to create short URL' });
   }
 });
@@ -653,7 +672,10 @@ app.get('/s/:id', (req, res) => {
     }
     res.json({ state: data });
   } catch (err) {
-    console.error('Failed to retrieve short URL:', err);
+    logShareError('Failed to retrieve short URL', err);
+    if (err.code === 'DB_UNAVAILABLE') {
+      return dbUnavailableResponse(res);
+    }
     res.status(500).json({ error: 'Failed to retrieve link' });
   }
 });
@@ -670,8 +692,11 @@ app.post('/api/share', (req, res) => {
     const code = createShortUrl(data);
     res.json({ code, url: `/s/${code}` });
   } catch (err) {
-    console.error('Failed to create short URL:', err);
+    logShareError('Failed to create short URL', err);
     incCounter('errors', { type: 'share' });
+    if (err.code === 'DB_UNAVAILABLE') {
+      return dbUnavailableResponse(res);
+    }
     res.status(500).json({ error: 'Failed to create short URL' });
   }
 });
@@ -686,7 +711,10 @@ app.get('/api/s/:code', (req, res) => {
     }
     res.json({ data });
   } catch (err) {
-    console.error('Failed to retrieve short URL:', err);
+    logShareError('Failed to retrieve short URL', err);
+    if (err.code === 'DB_UNAVAILABLE') {
+      return dbUnavailableResponse(res);
+    }
     res.status(500).json({ error: 'Failed to retrieve' });
   }
 });
