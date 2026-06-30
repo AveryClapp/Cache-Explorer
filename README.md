@@ -167,6 +167,9 @@ cache-explore mycode.c --json
 # Custom optimization level
 cache-explore mycode.c -O3 --config apple
 
+# List modeled hardware profile IDs
+./backend/scripts/cache-explore profiles --ids
+
 # Real-kernel hardware experiment
 ./backend/scripts/cache-explore examples/conv2d_kernel.c -O2 --hardware intel14 --json
 ./backend/scripts/cache-explore examples/conv2d_kernel.c -O2 -D RUN_TILED=1 --hardware intel14 --json

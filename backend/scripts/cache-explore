@@ -246,6 +246,7 @@ main_usage() {
   echo "  make <target>     Build and analyze a Makefile target"
   echo "  compare           Compare cache behavior across configs"
   echo "  experiment        Compare named source variants across configs"
+  echo "  profiles          List modeled hardware profiles"
   echo "  report            Generate HTML report from analysis"
   echo "  cc/c++            Compiler wrapper for build system integration"
   echo "  build-pass        Build the LLVM pass locally for your clang version"
@@ -258,6 +259,7 @@ main_usage() {
   echo "  cache-explore cmake /path/to/project -DCMAKE_BUILD_TYPE=Release"
   echo "  cache-explore compare matrix.c --configs intel,amd,apple"
   echo "  cache-explore experiment conv2d.c -O2 --variant direct --variant tiled:RUN_TILED=1"
+  echo "  cache-explore profiles --ids"
   echo ""
   echo "Run 'cache-explore <command> --help' for command-specific help."
 }
@@ -288,6 +290,10 @@ case "$1" in
   experiment)
     shift
     exec "$SCRIPT_DIR/cache-explore-experiment" "$@"
+    ;;
+  profiles)
+    shift
+    exec "$SCRIPT_DIR/cache-explore-profiles" "$@"
     ;;
   report)
     shift

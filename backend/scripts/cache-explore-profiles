@@ -1,0 +1,97 @@
+#!/usr/bin/env node
+
+function usage() {
+  console.log(`Usage: cache-explore profiles [options] [profile-id]
+
+List hardware profiles modeled by Cache Explorer.
+
+Options:
+  --json       Output JSON
+  --ids        Output only canonical profile ids
+  --help       Show this help
+
+Examples:
+  cache-explore profiles
+  cache-explore profiles --ids
+  cache-explore profiles intel14 --json`)
+}
+
+function formatSize(sizeKB) {
+  if (!sizeKB) return 'none'
+  if (sizeKB >= 1024 && sizeKB % 1024 === 0) return `${sizeKB / 1024}MB`
+  return `${sizeKB}KB`
+}
+
+function profileRow(profile) {
+  const levels = profile.details.cache.levels
+  return [
+    profile.id,
+    profile.displayName,
+    profile.vendor,
+    profile.class,
+    formatSize(levels.l1d.sizeKB),
+    formatSize(levels.l2.sizeKB),
+    formatSize(levels.l3.sizeKB),
+    profile.details.prefetch.activePolicy,
+  ]
+}
+
+function printTable(profiles) {
+  const headers = ['ID', 'Name', 'Vendor', 'Class', 'L1D', 'L2', 'L3', 'Prefetch']
+  const rows = profiles.map(profileRow)
+  const widths = headers.map((header, index) => (
+    Math.max(header.length, ...rows.map(row => row[index].length))
+  ))
+  const formatRow = row => row.map((cell, index) => cell.padEnd(widths[index])).join('  ')
+
+  console.log(formatRow(headers))
+  console.log(formatRow(widths.map(width => '-'.repeat(width))))
+  for (const row of rows) {
+    console.log(formatRow(row))
+  }
+}
+
+async function main() {
+  const { listHardwareProfiles, getHardwareProfile } = await import('../server/hardwareProfiles.js')
+  const args = process.argv.slice(2)
+  const json = args.includes('--json')
+  const ids = args.includes('--ids')
+  const help = args.includes('--help') || args.includes('-h')
+  const profileId = args.find(arg => !arg.startsWith('-'))
+
+  if (help) {
+    usage()
+    return
+  }
+
+  if (profileId) {
+    const profile = getHardwareProfile(profileId)
+    if (!profile) {
+      console.error(`Unknown hardware profile: ${profileId}`)
+      process.exitCode = 1
+      return
+    }
+    if (json) {
+      console.log(JSON.stringify(profile, null, 2))
+    } else if (ids) {
+      console.log(profile.id)
+    } else {
+      printTable([profile])
+    }
+    return
+  }
+
+  const profiles = listHardwareProfiles()
+  if (json) {
+    console.log(JSON.stringify({ profiles }, null, 2))
+  } else if (ids) {
+    console.log(profiles.map(profile => profile.id).join('\n'))
+  } else {
+    printTable(profiles)
+  }
+}
+
+main().catch(error => {
+  console.error(error instanceof Error ? error.message : String(error))
+  process.exitCode = 1
+})
