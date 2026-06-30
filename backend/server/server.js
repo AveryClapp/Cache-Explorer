@@ -1,6 +1,5 @@
 import express from 'express';
 import cors from 'cors';
-import { spawn } from 'child_process';
 import { readFile } from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -19,7 +18,7 @@ import { listHardwareProfiles, getHardwareProfile } from './hardwareProfiles.js'
 import { CONFIG } from './config.js';
 import { healthRoutes, shareRoutes, compilerRoutes } from './routes/index.js';
 import { parseCompileErrors, createErrorResponse } from './services/errorParser.js';
-import { runProcess } from './services/processRunner.js';
+import { runManagedProcess, runProcess } from './services/processRunner.js';
 import { createTempProject, cleanupTempProject, cleanupOrphanedTempDirs } from './services/tempProject.js';
 import { ConnectionResourceTracker, connectionResources, getOrCreateTracker, removeTracker } from './middleware/resourceTracker.js';
 
@@ -89,6 +88,49 @@ function attachResultProvenance(result, options) {
   if (!result || typeof result !== 'object') return result;
   result.provenance = resultProvenance(options);
   return result;
+}
+
+function createCacheExploreStderrTransformer(ws, progressState) {
+  let pending = '';
+
+  return (chunk) => {
+    const lines = `${pending}${chunk}`.split('\n');
+    pending = lines.pop() ?? '';
+    let stderr = '';
+
+    for (const line of lines) {
+      if (line.startsWith('{"type":"progress"')) {
+        if (ws.readyState !== ws.OPEN) continue;
+        try {
+          const progress = JSON.parse(line);
+          progressState.partialProgress = {
+            eventsProcessed: progress.eventsProcessed,
+            eventsTotal: progress.eventsTotal,
+          };
+          ws.send(JSON.stringify({
+            type: 'progress',
+            eventsProcessed: progress.eventsProcessed,
+            eventsTotal: progress.eventsTotal,
+          }));
+        } catch {
+          // Ignore malformed progress records.
+        }
+      } else if (line.startsWith('[') && (line.includes('Compiling') || line.includes('Running') || line.includes('Simulating'))) {
+        if (ws.readyState !== ws.OPEN) continue;
+        if (line.includes('Compiling')) {
+          ws.send(JSON.stringify({ type: 'status', stage: 'compiling', message: line }));
+        } else if (line.includes('Running')) {
+          ws.send(JSON.stringify({ type: 'status', stage: 'running' }));
+        } else if (line.includes('Simulating')) {
+          ws.send(JSON.stringify({ type: 'status', stage: 'processing' }));
+        }
+      } else if (line.trim()) {
+        stderr += `${line}\n`;
+      }
+    }
+
+    return stderr;
+  };
 }
 
 // Start periodic cleanup
@@ -1060,7 +1102,6 @@ wss.on('connection', (ws) => {
 
     // Fallback: Direct execution (development mode) with real-time streaming
     let tempDir, mainFile;
-    let proc = null;
     let cleanupFn = null;
 
     try {
@@ -1074,200 +1115,151 @@ wss.on('connection', (ws) => {
       // Status: compiling
       ws.send(JSON.stringify({ type: 'status', stage: 'compiling' }));
 
-      const result = await new Promise((resolve, reject) => {
-        // Use batch mode with --json; progress comes via stderr
-        const args = [mainFile, '--config', config, optLevel, '--json'];
+      // Use batch mode with --json; progress comes via stderr
+      const args = [mainFile, '--config', config, optLevel, '--json'];
 
-        // Add include path for multi-file projects
-        if (Array.isArray(inputFiles) && inputFiles.length > 1) {
-          args.push('-I', tempDir);
-        }
+      // Add include path for multi-file projects
+      if (Array.isArray(inputFiles) && inputFiles.length > 1) {
+        args.push('-I', tempDir);
+      }
 
-        // Add custom cache config args if provided
-        if (customConfig) {
-          if (customConfig.l1Size) args.push('--l1-size', String(customConfig.l1Size));
-          if (customConfig.l1Assoc) args.push('--l1-assoc', String(customConfig.l1Assoc));
-          if (customConfig.lineSize) args.push('--l1-line', String(customConfig.lineSize));
-          if (customConfig.l2Size) args.push('--l2-size', String(customConfig.l2Size));
-          if (customConfig.l2Assoc) args.push('--l2-assoc', String(customConfig.l2Assoc));
-          if (customConfig.l3Size) args.push('--l3-size', String(customConfig.l3Size));
-          if (customConfig.l3Assoc) args.push('--l3-assoc', String(customConfig.l3Assoc));
-        }
+      // Add custom cache config args if provided
+      if (customConfig) {
+        if (customConfig.l1Size) args.push('--l1-size', String(customConfig.l1Size));
+        if (customConfig.l1Assoc) args.push('--l1-assoc', String(customConfig.l1Assoc));
+        if (customConfig.lineSize) args.push('--l1-line', String(customConfig.lineSize));
+        if (customConfig.l2Size) args.push('--l2-size', String(customConfig.l2Size));
+        if (customConfig.l2Assoc) args.push('--l2-assoc', String(customConfig.l2Assoc));
+        if (customConfig.l3Size) args.push('--l3-size', String(customConfig.l3Size));
+        if (customConfig.l3Assoc) args.push('--l3-assoc', String(customConfig.l3Assoc));
+      }
 
-        // Add preprocessor defines
-        if (defines && Array.isArray(defines)) {
-          for (const def of defines) {
-            if (def.name && def.name.trim()) {
-              const defineStr = def.value ? `${def.name}=${def.value}` : def.name;
-              args.push('-D', defineStr);
-            }
+      // Add preprocessor defines
+      if (defines && Array.isArray(defines)) {
+        for (const def of defines) {
+          if (def.name && def.name.trim()) {
+            const defineStr = def.value ? `${def.name}=${def.value}` : def.name;
+            args.push('-D', defineStr);
           }
         }
+      }
 
-        // Always pass prefetch policy explicitly (whitelist valid policies)
-        const VALID_PREFETCH_POLICIES = ['none', 'next-line', 'stream', 'stride', 'adaptive', 'intel'];
-        const prefetchToUse = prefetch && VALID_PREFETCH_POLICIES.includes(prefetch) ? prefetch : 'none';
-        args.push('--prefetch', prefetchToUse);
+      // Always pass prefetch policy explicitly (whitelist valid policies)
+      const VALID_PREFETCH_POLICIES = ['none', 'next-line', 'stream', 'stride', 'adaptive', 'intel'];
+      const prefetchToUse = prefetch && VALID_PREFETCH_POLICIES.includes(prefetch) ? prefetch : 'none';
+      args.push('--prefetch', prefetchToUse);
 
-        // Add compiler selection if specified
-        if (data.compiler) {
-          const selectedCompiler = getCompiler(data.compiler);
-          if (selectedCompiler && selectedCompiler.path) {
-            args.push('--compiler', selectedCompiler.path);
-          }
+      // Add compiler selection if specified
+      if (data.compiler) {
+        const selectedCompiler = getCompiler(data.compiler);
+        if (selectedCompiler && selectedCompiler.path) {
+          args.push('--compiler', selectedCompiler.path);
         }
+      }
 
-        // Add sampling and limit for performance
-        if (sampleRate > 1) {
-          args.push('--sample', String(sampleRate));
-        }
-        if (eventLimit > 0) {
-          args.push('--limit', String(eventLimit));
-        }
-        // Add fast mode flag (disables 3C miss classification for ~3x speedup)
-        if (fastMode) {
-          args.push('--fast');
-        }
-        // Add segment caching flag (caches repeated loop segments for speedup)
-        if (segmentCaching) {
-          args.push('--cache-segments');
-        }
+      // Add sampling and limit for performance
+      if (sampleRate > 1) {
+        args.push('--sample', String(sampleRate));
+      }
+      if (eventLimit > 0) {
+        args.push('--limit', String(eventLimit));
+      }
+      // Add fast mode flag (disables 3C miss classification for ~3x speedup)
+      if (fastMode) {
+        args.push('--fast');
+      }
+      // Add segment caching flag (caches repeated loop segments for speedup)
+      if (segmentCaching) {
+        args.push('--cache-segments');
+      }
 
-        console.log(`[WebSocket] spawning: ${CACHE_EXPLORE} ${args.join(' ')}`);
-        proc = spawn(CACHE_EXPLORE, args);
-        cleanupFn = tracker.addProcess(proc, tempDir);
-        console.log(`[WebSocket] process spawned with PID ${proc.pid}`);
+      const progressState = { partialProgress: null };
 
-        let finalResult = null;
-        let partialProgress = null;
-        let stderr = '';
-        let lineBuffer = '';
-        let killed = false;
-
-        // Set up timeout with graceful termination
-        const timeoutId = setTimeout(() => {
-          killed = true;
-          // Send partial results before killing
-          if (partialProgress && ws.readyState === ws.OPEN) {
+      console.log(`[WebSocket] spawning: ${CACHE_EXPLORE} ${args.join(' ')}`);
+      const processResult = await runManagedProcess(CACHE_EXPLORE, args, {
+        timeout,
+        maxOutputBuffer: CONFIG.memory.maxOutputBuffer,
+        mainFile,
+        gracefulKillDelayMs: 2000,
+        rejectOnNonZero: false,
+        onProcess: (child) => {
+          cleanupFn = tracker.addProcess(child, tempDir);
+          console.log(`[WebSocket] process spawned with PID ${child.pid}`);
+        },
+        onTimeout: () => {
+          if (progressState.partialProgress && ws.readyState === ws.OPEN) {
             ws.send(JSON.stringify({
               type: 'warning',
               message: 'Execution timeout - sending partial results',
-              partialProgress
+              partialProgress: progressState.partialProgress,
             }));
           }
-          // Graceful termination
-          proc.kill('SIGTERM');
-          setTimeout(() => {
-            if (!proc.killed) {
-              proc.kill('SIGKILL');
-            }
-          }, 2000);
-        }, timeout);
-
-        // Batch mode: collect all stdout, parse as final JSON result on close
-        proc.stdout.on('data', (chunk) => {
-          lineBuffer += chunk.toString();
-        });
-
-        proc.stderr.on('data', (chunk) => {
-          // Stream compilation progress and simulation progress
-          const lines = chunk.toString().split('\n');
-          for (const line of lines) {
-            // Forward progress JSON to client (don't accumulate in stderr)
-            if (line.startsWith('{"type":"progress"')) {
-              if (ws.readyState !== ws.OPEN) continue;
-              try {
-                const progress = JSON.parse(line);
-                ws.send(JSON.stringify({
-                  type: 'progress',
-                  eventsProcessed: progress.eventsProcessed,
-                  eventsTotal: progress.eventsTotal
-                }));
-              } catch (e) { /* ignore malformed */ }
-            } else if (line.startsWith('[') && (line.includes('Compiling') || line.includes('Running') || line.includes('Simulating'))) {
-              // Stage markers — forward to client but don't accumulate
-              if (ws.readyState !== ws.OPEN) continue;
-              if (line.includes('Compiling')) {
-                ws.send(JSON.stringify({ type: 'status', stage: 'compiling', message: line }));
-              } else if (line.includes('Running')) {
-                ws.send(JSON.stringify({ type: 'status', stage: 'running' }));
-              } else if (line.includes('Simulating')) {
-                ws.send(JSON.stringify({ type: 'status', stage: 'processing' }));
-              }
-            } else if (line.trim()) {
-              // Only accumulate non-progress, non-stage stderr (actual errors/warnings)
-              stderr += line + '\n';
-            }
-          }
-          // Apply buffer limit on accumulated stderr to prevent OOM
-          if (stderr.length > CONFIG.memory.maxOutputBuffer) {
-            killed = true;
-            proc.kill('SIGKILL');
-            return;
-          }
-        });
-
-        proc.on('close', (exitCode) => {
-          clearTimeout(timeoutId);
-
-          if (cleanupFn) cleanupFn();
-
-          // Batch mode: parse full stdout as JSON result
-          const output = lineBuffer.trim();
-          if (output) {
-            try {
-              const parsed = JSON.parse(output);
-              if (parsed.error) {
-                console.log(`[WebSocket] got error: ${parsed.error}`);
-                if (ws.readyState === ws.OPEN) {
-                  let rawError = parsed.details || parsed.error;
-                  rawError = rawError.replace(/\/tmp\/cache-explorer-[a-f0-9-]+\//g, '');
-                  ws.send(JSON.stringify({ type: 'compile_error', raw: rawError }));
-                }
-                finalResult = parsed;
-              } else {
-                stripCacheState(parsed);
-                attachResultProvenance(parsed, {
-                  config,
-                  sampleRate,
-                  eventLimit,
-                  fastMode,
-                  segmentCaching,
-                  prefetch: prefetch || 'none',
-                  sandbox: false,
-                });
-                finalResult = parsed;
-              }
-            } catch (e) {
-              console.log(`[WebSocket] failed to parse stdout as JSON: ${e.message}`);
-            }
-          }
-
-          if (killed) {
-            reject({
-              stdout: lineBuffer,
-              stderr,
-              exitCode,
-              mainFile,
-              timeout: true,
-              timeoutMs: timeout,
-              partialProgress
-            });
-          } else if (exitCode !== 0 && finalResult && finalResult.error) {
-            resolve({ data: finalResult, stderr });
-          } else if (exitCode !== 0) {
-            reject({ stdout: lineBuffer, stderr, exitCode, mainFile, partialProgress });
-          } else {
-            resolve({ data: finalResult, stderr });
-          }
-        });
-
-        proc.on('error', (err) => {
-          clearTimeout(timeoutId);
-          if (cleanupFn) cleanupFn();
-          reject(err);
-        });
+        },
+        transformStderr: createCacheExploreStderrTransformer(ws, progressState),
       });
+
+      if (cleanupFn) {
+        cleanupFn();
+        cleanupFn = null;
+      }
+
+      let finalResult = null;
+      const output = processResult.stdout.trim();
+      if (output) {
+        try {
+          const parsed = JSON.parse(output);
+          if (parsed.error) {
+            console.log(`[WebSocket] got error: ${parsed.error}`);
+            if (ws.readyState === ws.OPEN) {
+              let rawError = parsed.details || parsed.error;
+              rawError = rawError.replace(/\/tmp\/cache-explorer-[a-f0-9-]+\//g, '');
+              ws.send(JSON.stringify({ type: 'compile_error', raw: rawError }));
+            }
+            finalResult = parsed;
+          } else {
+            stripCacheState(parsed);
+            attachResultProvenance(parsed, {
+              config,
+              sampleRate,
+              eventLimit,
+              fastMode,
+              segmentCaching,
+              prefetch: prefetch || 'none',
+              sandbox: false,
+            });
+            finalResult = parsed;
+          }
+        } catch (err) {
+          console.log(`[WebSocket] failed to parse stdout as JSON: ${err.message}`);
+        }
+      }
+
+      const result = (() => {
+        if (processResult.timeout) {
+          throw {
+            stdout: processResult.stdout,
+            stderr: processResult.stderr,
+            exitCode: processResult.exitCode,
+            mainFile,
+            timeout: true,
+            timeoutMs: timeout,
+            partialProgress: progressState.partialProgress,
+          };
+        }
+        if (processResult.exitCode !== 0 && finalResult && finalResult.error) {
+          return { data: finalResult, stderr: processResult.stderr };
+        }
+        if (processResult.exitCode !== 0) {
+          throw {
+            stdout: processResult.stdout,
+            stderr: processResult.stderr,
+            exitCode: processResult.exitCode,
+            mainFile,
+            partialProgress: progressState.partialProgress,
+          };
+        }
+        return { data: finalResult, stderr: processResult.stderr };
+      })();
 
       // Status: done
       if (ws.readyState === ws.OPEN) {
@@ -1290,6 +1282,9 @@ wss.on('connection', (ws) => {
         ws.send(JSON.stringify({ type: 'error', ...parsed }));
       }
     } finally {
+      if (cleanupFn) {
+        cleanupFn();
+      }
       if (tempDir) {
         tracker.tempDirs.delete(tempDir);
         await cleanupTempProject(tempDir);
