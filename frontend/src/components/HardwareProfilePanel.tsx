@@ -27,6 +27,10 @@ function formatBool(value: boolean) {
   return value ? 'on' : 'off'
 }
 
+function formatOptional(value: string | number | undefined, suffix = '') {
+  return value === undefined ? 'Unknown' : `${value}${suffix}`
+}
+
 function DetailSection({ title, rows }: { title: string; rows: DetailRow[] }) {
   return (
     <div className="profile-detail-section">
@@ -78,6 +82,9 @@ export function HardwareProfilePanel({ profile, cacheConfig }: HardwareProfilePa
         ['Core', `${details.executionCore.issueWidth}-wide, ROB ${details.executionCore.robSize}`],
         ['Overlap', `${details.executionCore.hideableCycles} cycles hidden`],
         ['Branch', `${formatToken(details.executionCore.branchPredictor)}, ${details.executionCore.branchMispredictPenalty} cycles`],
+        ['Vector', `${formatOptional(details.executionCore.vectorBits, '-bit')} ${formatToken(details.executionCore.vectorIsa)}`],
+        ['Ports', `${formatOptional(details.executionCore.loadPorts)} load, ${formatOptional(details.executionCore.storePorts)} store`],
+        ['Pipes', `${formatOptional(details.executionCore.integerPipelines)} int, ${formatOptional(details.executionCore.fpPipelines)} fp`],
       ]
     : []
 
@@ -86,6 +93,9 @@ export function HardwareProfilePanel({ profile, cacheConfig }: HardwareProfilePa
         ['Latency', `L1 ${details.memory.l1HitCycles}, L2 ${details.memory.l2HitCycles}, L3 ${details.memory.l3HitCycles}`],
         ['DRAM', `${details.memory.dramCycles} cycles`],
         ['TLB miss', `${details.memory.tlbMissPenaltyCycles} cycles`],
+        ['L1/L2 BW', `${formatOptional(details.memory.l1BandwidthBytesPerCycle, ' B/cyc')} / ${formatOptional(details.memory.l2BandwidthBytesPerCycle, ' B/cyc')}`],
+        ['DRAM BW', formatOptional(details.memory.dramBandwidthGBs, ' GB/s')],
+        ['MLP', `${formatOptional(details.memory.maxMemoryLevelParallelism)} misses`],
       ]
     : []
 
@@ -103,6 +113,18 @@ export function HardwareProfilePanel({ profile, cacheConfig }: HardwareProfilePa
         ['DTLB', `${details.tlb.dtlb.entries} entries, ${details.tlb.dtlb.associativity}-way`],
         ['ITLB', `${details.tlb.itlb.entries} entries, ${details.tlb.itlb.associativity}-way`],
         ['Page', `${details.tlb.dtlb.pageSize / 1024} KB`],
+      ]
+    : []
+
+  const coverageRows: DetailRow[] = profile.modelCoverage
+    ? Object.entries(profile.modelCoverage).map(([label, value]) => [formatToken(label), formatToken(value)] as DetailRow)
+    : []
+
+  const validationRows: DetailRow[] = profile.validation
+    ? [
+        ['Source', profile.validation.source],
+        ['Confidence', formatToken(profile.validation.confidence)],
+        ['Caveats', profile.validation.caveats.length ? `${profile.validation.caveats.length}` : 'none'],
       ]
     : []
 
@@ -132,6 +154,8 @@ export function HardwareProfilePanel({ profile, cacheConfig }: HardwareProfilePa
             <DetailSection title="Execution" rows={executionRows} />
             <DetailSection title="Memory" rows={memoryRows} />
             <DetailSection title="Topology" rows={topologyRows} />
+            {coverageRows.length > 0 && <DetailSection title="Coverage" rows={coverageRows} />}
+            {validationRows.length > 0 && <DetailSection title="Validation" rows={validationRows} />}
           </div>
         )}
       </div>

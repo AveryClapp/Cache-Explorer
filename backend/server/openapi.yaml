@@ -559,6 +559,16 @@ components:
         modelConfidence:
           type: string
           example: directional
+        modelCoverage:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            cacheHierarchy: modeled
+            executionCore: estimated
+            simd: metadata-only
+        validation:
+          $ref: '#/components/schemas/HardwareProfileValidation'
         notes:
           type: string
           nullable: true
@@ -692,6 +702,24 @@ components:
         branchPredictorEntries:
           type: integer
           example: 1024
+        vectorBits:
+          type: integer
+          example: 256
+        vectorIsa:
+          type: string
+          example: avx2-class
+        loadPorts:
+          type: integer
+          example: 2
+        storePorts:
+          type: integer
+          example: 1
+        integerPipelines:
+          type: integer
+          example: 4
+        fpPipelines:
+          type: integer
+          example: 2
 
     HardwareProfileMemory:
       type: object
@@ -711,6 +739,21 @@ components:
         tlbMissPenaltyCycles:
           type: integer
           example: 7
+        l1BandwidthBytesPerCycle:
+          type: integer
+          example: 96
+        l2BandwidthBytesPerCycle:
+          type: integer
+          example: 64
+        l3BandwidthBytesPerCycle:
+          type: integer
+          example: 32
+        dramBandwidthGBs:
+          type: integer
+          example: 90
+        maxMemoryLevelParallelism:
+          type: integer
+          example: 10
 
     HardwareProfileTopology:
       type: object
@@ -730,6 +773,22 @@ components:
         coherence:
           type: string
           example: not-applicable
+
+    HardwareProfileValidation:
+      type: object
+      properties:
+        source:
+          type: string
+          example: architecture references and simulator presets
+        confidence:
+          type: string
+          example: directional
+        caveats:
+          type: array
+          items:
+            type: string
+          example:
+            - Execution, SIMD, bandwidth, and dependency behavior are modeled as estimates unless marked calibrated.
 
     CompileRequest:
       type: object

@@ -11,6 +11,107 @@ const DEFAULT_EXECUTION_CORE = {
   branchMispredictPenalty: 14,
   branchPredictor: 'bimodal-2bit',
   branchPredictorEntries: 1024,
+  vectorBits: 256,
+  vectorIsa: 'generic-vector',
+  loadPorts: 2,
+  storePorts: 1,
+  integerPipelines: 4,
+  fpPipelines: 2,
+};
+
+const EXECUTION_CORES = {
+  educational: {
+    ...DEFAULT_EXECUTION_CORE,
+    issueWidth: 2,
+    robSize: 64,
+    hideableCycles: 32,
+    vectorBits: 128,
+    vectorIsa: 'teaching-model',
+    loadPorts: 1,
+    storePorts: 1,
+    integerPipelines: 2,
+    fpPipelines: 1,
+  },
+  intelClient: {
+    ...DEFAULT_EXECUTION_CORE,
+    vectorBits: 256,
+    vectorIsa: 'avx2-class',
+    loadPorts: 2,
+    storePorts: 1,
+    integerPipelines: 5,
+    fpPipelines: 2,
+  },
+  intelServer: {
+    ...DEFAULT_EXECUTION_CORE,
+    issueWidth: 6,
+    robSize: 320,
+    hideableCycles: 53,
+    vectorBits: 512,
+    vectorIsa: 'avx-512-class',
+    loadPorts: 3,
+    storePorts: 2,
+    integerPipelines: 5,
+    fpPipelines: 2,
+  },
+  amdClient: {
+    ...DEFAULT_EXECUTION_CORE,
+    vectorBits: 256,
+    vectorIsa: 'avx2-class',
+    loadPorts: 3,
+    storePorts: 2,
+    integerPipelines: 4,
+    fpPipelines: 2,
+  },
+  apple: {
+    ...DEFAULT_EXECUTION_CORE,
+    issueWidth: 8,
+    robSize: 256,
+    hideableCycles: 32,
+    branchMispredictPenalty: 11,
+    vectorBits: 128,
+    vectorIsa: 'asimd/neon',
+    loadPorts: 3,
+    storePorts: 2,
+    integerPipelines: 6,
+    fpPipelines: 4,
+  },
+  armServer: {
+    ...DEFAULT_EXECUTION_CORE,
+    issueWidth: 5,
+    robSize: 160,
+    hideableCycles: 32,
+    vectorBits: 128,
+    vectorIsa: 'sve/neon-class',
+    loadPorts: 2,
+    storePorts: 1,
+    integerPipelines: 4,
+    fpPipelines: 2,
+  },
+  embedded: {
+    ...DEFAULT_EXECUTION_CORE,
+    issueWidth: 2,
+    robSize: 48,
+    hideableCycles: 24,
+    branchMispredictPenalty: 8,
+    vectorBits: 128,
+    vectorIsa: 'neon-class',
+    loadPorts: 1,
+    storePorts: 1,
+    integerPipelines: 2,
+    fpPipelines: 1,
+  },
+};
+
+const DEFAULT_MODEL_COVERAGE = {
+  cacheHierarchy: 'modeled',
+  tlb: 'modeled',
+  prefetch: 'modeled',
+  branchPrediction: 'estimated',
+  executionCore: 'estimated',
+  simd: 'metadata-only',
+  bandwidth: 'metadata-only',
+  coherence: 'modeled-for-multicore-traces',
+  dependencyModel: 'not-modeled',
 };
 
 const LATENCIES = {
@@ -20,6 +121,11 @@ const LATENCIES = {
     l3HitCycles: 40,
     dramCycles: 200,
     tlbMissPenaltyCycles: 7,
+    l1BandwidthBytesPerCycle: 64,
+    l2BandwidthBytesPerCycle: 32,
+    l3BandwidthBytesPerCycle: 16,
+    dramBandwidthGBs: 80,
+    maxMemoryLevelParallelism: 8,
   },
   intel: {
     l1HitCycles: 5,
@@ -27,6 +133,11 @@ const LATENCIES = {
     l3HitCycles: 50,
     dramCycles: 200,
     tlbMissPenaltyCycles: 7,
+    l1BandwidthBytesPerCycle: 96,
+    l2BandwidthBytesPerCycle: 64,
+    l3BandwidthBytesPerCycle: 32,
+    dramBandwidthGBs: 90,
+    maxMemoryLevelParallelism: 10,
   },
   amd: {
     l1HitCycles: 4,
@@ -34,6 +145,11 @@ const LATENCIES = {
     l3HitCycles: 46,
     dramCycles: 190,
     tlbMissPenaltyCycles: 8,
+    l1BandwidthBytesPerCycle: 96,
+    l2BandwidthBytesPerCycle: 64,
+    l3BandwidthBytesPerCycle: 32,
+    dramBandwidthGBs: 95,
+    maxMemoryLevelParallelism: 10,
   },
   apple: {
     l1HitCycles: 3,
@@ -41,6 +157,11 @@ const LATENCIES = {
     l3HitCycles: 0,
     dramCycles: 100,
     tlbMissPenaltyCycles: 5,
+    l1BandwidthBytesPerCycle: 128,
+    l2BandwidthBytesPerCycle: 64,
+    l3BandwidthBytesPerCycle: 32,
+    dramBandwidthGBs: 200,
+    maxMemoryLevelParallelism: 12,
   },
   educational: {
     l1HitCycles: 1,
@@ -48,6 +169,11 @@ const LATENCIES = {
     l3HitCycles: 30,
     dramCycles: 100,
     tlbMissPenaltyCycles: 10,
+    l1BandwidthBytesPerCycle: 16,
+    l2BandwidthBytesPerCycle: 8,
+    l3BandwidthBytesPerCycle: 4,
+    dramBandwidthGBs: 20,
+    maxMemoryLevelParallelism: 2,
   },
 };
 
@@ -156,6 +282,9 @@ function profile({
   levels,
   prefetch,
   latency,
+  executionCore = DEFAULT_EXECUTION_CORE,
+  modelCoverage = DEFAULT_MODEL_COVERAGE,
+  validation,
   notes,
 }) {
   return {
@@ -166,6 +295,12 @@ function profile({
     architecture,
     class: profileClass,
     modelConfidence,
+    modelCoverage,
+    validation: validation || {
+      source: 'architecture references and simulator presets',
+      confidence: modelConfidence,
+      caveats: ['Execution, SIMD, bandwidth, and dependency behavior are modeled as estimates unless marked calibrated.'],
+    },
     notes,
     details: {
       cache: {
@@ -174,7 +309,7 @@ function profile({
       },
       tlb: DEFAULT_TLB,
       prefetch,
-      executionCore: DEFAULT_EXECUTION_CORE,
+      executionCore,
       memory: latency,
       topology: topology(levels),
     },
@@ -198,6 +333,14 @@ export const HARDWARE_PROFILES = [
     },
     prefetch: PREFETCH.none,
     latency: LATENCIES.educational,
+    executionCore: EXECUTION_CORES.educational,
+    modelCoverage: {
+      ...DEFAULT_MODEL_COVERAGE,
+      branchPrediction: 'teaching-estimate',
+      executionCore: 'teaching-estimate',
+      simd: 'metadata-only',
+      bandwidth: 'teaching-estimate',
+    },
     notes: 'Tiny caches and no prefetching for easy-to-see misses.',
   }),
   profile({
@@ -217,6 +360,7 @@ export const HARDWARE_PROFILES = [
     },
     prefetch: PREFETCH.intel,
     latency: LATENCIES.intel,
+    executionCore: EXECUTION_CORES.intelClient,
   }),
   profile({
     id: 'intel14',
@@ -234,6 +378,7 @@ export const HARDWARE_PROFILES = [
     },
     prefetch: PREFETCH.intel,
     latency: LATENCIES.default,
+    executionCore: EXECUTION_CORES.intelClient,
   }),
   profile({
     id: 'xeon',
@@ -251,6 +396,7 @@ export const HARDWARE_PROFILES = [
     },
     prefetch: PREFETCH.intel,
     latency: LATENCIES.default,
+    executionCore: EXECUTION_CORES.intelServer,
   }),
   profile({
     id: 'xeon8488c',
@@ -269,6 +415,12 @@ export const HARDWARE_PROFILES = [
     },
     prefetch: PREFETCH.intel,
     latency: LATENCIES.default,
+    executionCore: EXECUTION_CORES.intelServer,
+    validation: {
+      source: 'measured cache topology with simulator-normalized LLC geometry',
+      confidence: 'calibrated',
+      caveats: ['LLC associativity is adjusted to keep simulator set counts power-of-two.'],
+    },
     notes: 'L3 is adjusted from the real 105 MB / 15-way shape to simulator-compatible power-of-two sets.',
   }),
   profile({
@@ -288,6 +440,7 @@ export const HARDWARE_PROFILES = [
     },
     prefetch: PREFETCH.amd,
     latency: LATENCIES.amd,
+    executionCore: EXECUTION_CORES.amdClient,
   }),
   profile({
     id: 'zen3',
@@ -305,6 +458,7 @@ export const HARDWARE_PROFILES = [
     },
     prefetch: PREFETCH.amd,
     latency: LATENCIES.default,
+    executionCore: EXECUTION_CORES.amdClient,
   }),
   profile({
     id: 'epyc',
@@ -322,6 +476,12 @@ export const HARDWARE_PROFILES = [
     },
     prefetch: PREFETCH.amd,
     latency: LATENCIES.default,
+    executionCore: {
+      ...EXECUTION_CORES.amdClient,
+      issueWidth: 6,
+      robSize: 320,
+      hideableCycles: 53,
+    },
   }),
   profile({
     id: 'apple',
@@ -340,6 +500,7 @@ export const HARDWARE_PROFILES = [
     },
     prefetch: PREFETCH.apple,
     latency: LATENCIES.apple,
+    executionCore: EXECUTION_CORES.apple,
   }),
   profile({
     id: 'm2',
@@ -357,6 +518,7 @@ export const HARDWARE_PROFILES = [
     },
     prefetch: PREFETCH.apple,
     latency: LATENCIES.default,
+    executionCore: EXECUTION_CORES.apple,
   }),
   profile({
     id: 'm3',
@@ -374,6 +536,7 @@ export const HARDWARE_PROFILES = [
     },
     prefetch: PREFETCH.apple,
     latency: LATENCIES.default,
+    executionCore: EXECUTION_CORES.apple,
   }),
   profile({
     id: 'graviton',
@@ -392,6 +555,7 @@ export const HARDWARE_PROFILES = [
     },
     prefetch: PREFETCH.arm,
     latency: LATENCIES.default,
+    executionCore: EXECUTION_CORES.armServer,
   }),
   profile({
     id: 'embedded',
@@ -409,6 +573,7 @@ export const HARDWARE_PROFILES = [
     },
     prefetch: PREFETCH.none,
     latency: LATENCIES.default,
+    executionCore: EXECUTION_CORES.embedded,
   }),
   profile({
     id: 'rpi4',
@@ -427,6 +592,7 @@ export const HARDWARE_PROFILES = [
     },
     prefetch: PREFETCH.arm,
     latency: LATENCIES.default,
+    executionCore: EXECUTION_CORES.embedded,
   }),
 ];
 

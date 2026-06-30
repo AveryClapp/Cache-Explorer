@@ -93,6 +93,12 @@ export interface HardwareProfile {
   architecture: string
   class: string
   modelConfidence: string
+  modelCoverage?: Record<string, string>
+  validation?: {
+    source: string
+    confidence: string
+    caveats: string[]
+  }
   notes?: string
   details?: HardwareProfileDetails
 }
@@ -143,6 +149,12 @@ export interface HardwareProfileDetails {
     branchMispredictPenalty: number
     branchPredictor: string
     branchPredictorEntries: number
+    vectorBits?: number
+    vectorIsa?: string
+    loadPorts?: number
+    storePorts?: number
+    integerPipelines?: number
+    fpPipelines?: number
   }
   memory: {
     l1HitCycles: number
@@ -150,6 +162,11 @@ export interface HardwareProfileDetails {
     l3HitCycles: number
     dramCycles: number
     tlbMissPenaltyCycles: number
+    l1BandwidthBytesPerCycle?: number
+    l2BandwidthBytesPerCycle?: number
+    l3BandwidthBytesPerCycle?: number
+    dramBandwidthGBs?: number
+    maxMemoryLevelParallelism?: number
   }
   topology: {
     activeCores: number
