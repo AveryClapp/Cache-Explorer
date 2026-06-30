@@ -30,6 +30,10 @@ import { ConnectionResourceTracker, connectionResources, getOrCreateTracker, rem
 // Helper Functions
 // ============================================================================
 
+function uniqueCaveats(caveats) {
+  return [...new Set(caveats.filter(Boolean))];
+}
+
 function resultProvenance({
   config,
   sampleRate,
@@ -39,7 +43,7 @@ function resultProvenance({
   prefetch,
   sandbox,
   cached = false,
-}) {
+}, existing = {}) {
   const profile = getHardwareProfile(config);
   const caveats = [
     'Cycles and bottlenecks are simulator estimates, not wall-clock measurements.',
@@ -56,6 +60,7 @@ function resultProvenance({
   }
 
   return {
+    ...existing,
     resultKind: 'simulated',
     executor: sandbox ? 'sandbox' : 'direct-dev',
     cached,
@@ -66,6 +71,7 @@ function resultProvenance({
       validationConfidence: profile?.validation?.confidence || profile?.modelConfidence || 'unknown',
     },
     fidelity: {
+      ...existing.fidelity,
       trace: sampleRate > 1 ? 'sampled' : 'full',
       sampleRate,
       eventLimit,
@@ -73,7 +79,7 @@ function resultProvenance({
       cacheSegments: segmentCaching,
       prefetch: prefetch || 'none',
     },
-    caveats,
+    caveats: uniqueCaveats([...(existing.caveats || []), ...caveats]),
   };
 }
 
@@ -137,8 +143,22 @@ function attachHardwareProfile(result, config) {
 function attachResultProvenance(result, options) {
   if (!result || typeof result !== 'object') return result;
   attachHardwareProfile(result, options.config);
-  result.provenance = resultProvenance(options);
+  result.provenance = resultProvenance(options, result.provenance || {});
   return result;
+}
+
+function aggregateProvenance(existing = {}, next) {
+  return {
+    ...existing,
+    ...next,
+    source: existing.source || next.source,
+    toolchain: existing.toolchain || next.toolchain,
+    fidelity: {
+      ...existing.fidelity,
+      ...next.fidelity,
+    },
+    caveats: uniqueCaveats([...(existing.caveats || []), ...(next.caveats || [])]),
+  };
 }
 
 function createCacheExploreStderrTransformer(ws, progressState) {
@@ -612,7 +632,7 @@ app.post('/compare', async (req, res) => {
         });
       }
     }
-    json.provenance = {
+    json.provenance = aggregateProvenance(json.provenance, {
       resultKind: 'hardware-comparison',
       executor: 'direct-dev',
       configs: Object.keys(json.configs || {}),
@@ -625,7 +645,7 @@ app.post('/compare', async (req, res) => {
         prefetch: prefetch || 'none',
       },
       caveats: ['Each profile replays the same traced program through simulator models.'],
-    };
+    });
 
     recordDuration('compilation_duration', (Date.now() - startTime) / 1000);
     res.json(json);
@@ -785,7 +805,7 @@ app.post('/experiment', async (req, res) => {
         }
       }
     }
-    json.provenance = {
+    json.provenance = aggregateProvenance(json.provenance, {
       resultKind: 'hardware-experiment',
       executor: 'direct-dev',
       configs: configList.split(','),
@@ -799,7 +819,7 @@ app.post('/experiment', async (req, res) => {
         prefetch: prefetch || 'none',
       },
       caveats: ['Variant deltas compare simulator estimates relative to the first variant for each hardware profile.'],
-    };
+    });
 
     recordDuration('compilation_duration', (Date.now() - startTime) / 1000);
     res.json(json);

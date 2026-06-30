@@ -589,6 +589,40 @@ esac
 
 BINARY="/tmp/cache-explore-$$-$BASENAME"
 
+enrich_json_output() {
+  local defines_list=""
+  local includes_list=""
+
+  if [[ ${#DEFINES[@]} -gt 0 ]]; then
+    defines_list="$(printf '%s\n' "${DEFINES[@]}")"
+  fi
+  if [[ ${#INCLUDES[@]} -gt 0 ]]; then
+    includes_list="$(printf '%s\n' "${INCLUDES[@]}")"
+  fi
+
+  CACHE_EXPLORER_RESULT_KIND="simulated" \
+  CACHE_EXPLORER_EXECUTOR="cli" \
+  CACHE_EXPLORER_SOURCE="$INPUT_FILE" \
+  CACHE_EXPLORER_LANGUAGE="$LANG" \
+  CACHE_EXPLORER_CONFIG="$CONFIG" \
+  CACHE_EXPLORER_OPT_LEVEL="$OPT_LEVEL" \
+  CACHE_EXPLORER_DEFINES="$defines_list" \
+  CACHE_EXPLORER_INCLUDES="$includes_list" \
+  CACHE_EXPLORER_SAMPLE_RATE="${SAMPLE_RATE:-1}" \
+  CACHE_EXPLORER_EVENT_LIMIT="${EVENT_LIMIT:-0}" \
+  CACHE_EXPLORER_PREFETCH="${PREFETCH:-none}" \
+  CACHE_EXPLORER_PREFETCH_DEGREE="${PREFETCH_DEGREE:-0}" \
+  CACHE_EXPLORER_FAST_MODE="$FAST_MODE" \
+  CACHE_EXPLORER_CACHE_SEGMENTS="$CACHE_SEGMENTS" \
+  CACHE_EXPLORER_COMPILER="$COMPILER" \
+  CACHE_EXPLORER_PASS="$PASS" \
+  CACHE_EXPLORER_RUNTIME="$RUNTIME" \
+  CACHE_EXPLORER_SIM="$CACHE_SIM" \
+  CACHE_EXPLORER_CLI="$SCRIPT_DIR/cache-explore" \
+  CACHE_EXPLORER_PROJECT_ROOT="$PROJECT_ROOT" \
+  "$SCRIPT_DIR/cache-explore-enrich-json"
+}
+
 if [[ -z "$JSON_OUTPUT" ]]; then
   echo "=== Cache Explorer ===" >&2
   echo "Input: $INPUT_FILE" >&2
@@ -878,6 +912,13 @@ if [[ -n "$STREAM_OUTPUT" ]]; then
     env $RUN_ENV "$BINARY" 2>&1 | "$CACHE_SIM" --config "$CONFIG" $STREAM_OUTPUT $PREFETCH_ARG $FAST_MODE $CACHE_SEGMENTS $CUSTOM_CONFIG_ARGS
   else
     "$BINARY" 2>&1 | "$CACHE_SIM" --config "$CONFIG" $STREAM_OUTPUT $PREFETCH_ARG $FAST_MODE $CACHE_SEGMENTS $CUSTOM_CONFIG_ARGS
+  fi
+  EXIT_CODE=${PIPESTATUS[0]}
+elif [[ -n "$JSON_OUTPUT" ]]; then
+  if [[ -n "$RUN_ENV" ]]; then
+    env $RUN_ENV "$BINARY" | "$CACHE_SIM" --config "$CONFIG" $VERBOSE $JSON_OUTPUT $PREFETCH_ARG $FAST_MODE $CACHE_SEGMENTS $CUSTOM_CONFIG_ARGS | enrich_json_output
+  else
+    "$BINARY" | "$CACHE_SIM" --config "$CONFIG" $VERBOSE $JSON_OUTPUT $PREFETCH_ARG $FAST_MODE $CACHE_SEGMENTS $CUSTOM_CONFIG_ARGS | enrich_json_output
   fi
   EXIT_CODE=${PIPESTATUS[0]}
 else

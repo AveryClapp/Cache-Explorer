@@ -89,6 +89,28 @@ else
     FAILED_TESTS+=("JSON structure")
 fi
 
+# Test provenance metadata
+echo -n "Test: Result provenance metadata... "
+OUTPUT=$("$CACHE_EXPLORE" "$TEST_PROGRAM" --config intel --json 2>/dev/null)
+if echo "$OUTPUT" | jq -e '.provenance.executor == "cli"
+    and .provenance.resultKind == "simulated"
+    and .provenance.source.path
+    and .provenance.source.optLevel
+    and .provenance.fidelity.trace == "full"
+    and .provenance.toolchain.compiler.command
+    and .provenance.toolchain.compiler.version
+    and .provenance.toolchain.instrumentationPass.sha256
+    and .provenance.toolchain.runtime.sha256
+    and .provenance.toolchain.simulator.sha256' > /dev/null 2>&1; then
+    echo -e "${GREEN}PASS${NC}"
+    PASSED=$((PASSED + 1))
+else
+    echo -e "${RED}FAIL${NC}"
+    echo "    Error: Missing result provenance fields"
+    FAILED=$((FAILED + 1))
+    FAILED_TESTS+=("Result provenance metadata")
+fi
+
 # Test TLB stats
 echo -n "Test: TLB simulation... "
 OUTPUT=$("$CACHE_EXPLORE" "$TEST_PROGRAM" --config intel --json 2>/dev/null)

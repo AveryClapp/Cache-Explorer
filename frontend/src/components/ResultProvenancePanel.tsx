@@ -1,9 +1,12 @@
 import type { CacheResult } from '../types'
 import {
   formatConfidence,
+  formatCompilerLabel,
   formatExecutor,
   formatFidelity,
   formatHardwareLabel,
+  formatSimulatorLabel,
+  formatSourceLabel,
   formatTrustLabel,
   provenanceClass,
 } from '../utils/provenance'
@@ -46,6 +49,18 @@ export function ResultProvenancePanel({ result }: ResultProvenancePanelProps) {
               {formatExecutor(provenance)}
               {provenance.cached ? ' / cached' : ''}
             </span>
+          </div>
+          <div className="provenance-item">
+            <span className="provenance-label">Source</span>
+            <span className="provenance-value">{formatSourceLabel(provenance)}</span>
+          </div>
+          <div className="provenance-item">
+            <span className="provenance-label">Compiler</span>
+            <span className="provenance-value">{formatCompilerLabel(provenance)}</span>
+          </div>
+          <div className="provenance-item">
+            <span className="provenance-label">Simulator</span>
+            <span className="provenance-value">{formatSimulatorLabel(provenance)}</span>
           </div>
         </div>
         {caveats.length > 0 && (

@@ -393,6 +393,47 @@ export interface CacheState {
   l1d: CoreCacheState[]
 }
 
+export interface ResultToolchainBinary {
+  path?: string
+  exists?: boolean
+  sizeBytes?: number
+  mtimeMs?: number
+  sha256?: string
+}
+
+export interface ResultToolchain {
+  cacheExplorer?: {
+    cli?: string
+    projectRoot?: string
+    git?: {
+      commit?: string
+      dirty?: boolean
+    }
+  }
+  compiler?: {
+    command?: string
+    path?: string
+    version?: string
+    optLevel?: string
+    defines?: string[]
+    includes?: string[]
+  }
+  instrumentationPass?: ResultToolchainBinary
+  runtime?: ResultToolchainBinary
+  simulator?: ResultToolchainBinary
+}
+
+export interface ResultSourceProvenance {
+  path?: string
+  language?: string
+  config?: string
+  configs?: string[]
+  variants?: string[]
+  optLevel?: string
+  defines?: string[]
+  includes?: string[]
+}
+
 export interface ResultProvenance {
   resultKind: string
   executor: 'sandbox' | 'direct-dev' | string
@@ -412,7 +453,10 @@ export interface ResultProvenance {
     fastMode: boolean
     cacheSegments: boolean
     prefetch: string
+    prefetchDegree?: number
   }
+  source?: ResultSourceProvenance
+  toolchain?: ResultToolchain
   caveats: string[]
 }
 

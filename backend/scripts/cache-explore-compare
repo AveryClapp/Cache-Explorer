@@ -120,8 +120,8 @@ fi
 # Detect compiler
 EXT="${INPUT_FILE##*.}"
 case "$EXT" in
-  c) COMPILER="clang"; BASENAME=$(basename "$INPUT_FILE" .c) ;;
-  cpp|cc|cxx|C) COMPILER="clang++"; BASENAME=$(basename "$INPUT_FILE" ."$EXT") ;;
+  c) COMPILER="clang"; LANG="c"; BASENAME=$(basename "$INPUT_FILE" .c) ;;
+  cpp|cc|cxx|C) COMPILER="clang++"; LANG="c++"; BASENAME=$(basename "$INPUT_FILE" ."$EXT") ;;
   *) echo "Error: Unsupported extension: .$EXT"; exit 1 ;;
 esac
 
@@ -138,6 +138,40 @@ fi
 
 BINARY="/tmp/cache-explore-compare-$$-$BASENAME"
 RESULT_DIR=""
+
+enrich_json_output() {
+  local defines_list=""
+  local includes_list=""
+
+  if [[ ${#DEFINES[@]} -gt 0 ]]; then
+    defines_list="$(printf '%s\n' "${DEFINES[@]}")"
+  fi
+  if [[ ${#INCLUDES[@]} -gt 0 ]]; then
+    includes_list="$(printf '%s\n' "${INCLUDES[@]}")"
+  fi
+
+  CACHE_EXPLORER_RESULT_KIND="hardware-comparison" \
+  CACHE_EXPLORER_EXECUTOR="cli" \
+  CACHE_EXPLORER_SOURCE="$INPUT_FILE" \
+  CACHE_EXPLORER_LANGUAGE="$LANG" \
+  CACHE_EXPLORER_CONFIGS="$CONFIGS" \
+  CACHE_EXPLORER_OPT_LEVEL="$OPT_LEVEL" \
+  CACHE_EXPLORER_DEFINES="$defines_list" \
+  CACHE_EXPLORER_INCLUDES="$includes_list" \
+  CACHE_EXPLORER_SAMPLE_RATE="${SAMPLE_RATE:-1}" \
+  CACHE_EXPLORER_EVENT_LIMIT="${EVENT_LIMIT:-0}" \
+  CACHE_EXPLORER_PREFETCH="${PREFETCH:-none}" \
+  CACHE_EXPLORER_PREFETCH_DEGREE="${PREFETCH_DEGREE:-0}" \
+  CACHE_EXPLORER_FAST_MODE="$FAST_MODE" \
+  CACHE_EXPLORER_CACHE_SEGMENTS="$CACHE_SEGMENTS" \
+  CACHE_EXPLORER_COMPILER="$COMPILER" \
+  CACHE_EXPLORER_PASS="$PASS" \
+  CACHE_EXPLORER_RUNTIME="$RUNTIME" \
+  CACHE_EXPLORER_SIM="$CACHE_SIM" \
+  CACHE_EXPLORER_CLI="$SCRIPT_DIR/cache-explore-compare" \
+  CACHE_EXPLORER_PROJECT_ROOT="$PROJECT_ROOT" \
+  "$SCRIPT_DIR/cache-explore-enrich-json"
+}
 
 cleanup() {
   rm -f "$BINARY"
@@ -226,7 +260,7 @@ for i in "${!CONFIG_ARRAY[@]}"; do
 done
 
 if [[ -n "$JSON_OUTPUT" ]]; then
-  python3 - "$INPUT_FILE" "${RESULT_ARGS[@]}" <<'PY'
+  python3 - "$INPUT_FILE" "${RESULT_ARGS[@]}" <<'PY' | enrich_json_output
 import json
 import sys
 

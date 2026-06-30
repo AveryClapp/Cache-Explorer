@@ -24,6 +24,7 @@ Tests key functionality:
 - **Prefetching**: All 6 policies (none, next, stream, stride, adaptive, intel)
 - **Fast mode**: --fast flag
 - **JSON structure**: All required output fields
+- **Result provenance**: Toolchain, source, fidelity, and binary hashes
 - **TLB simulation**: DTLB stats
 - **Timing model**: Cycle counts
 - **Execution engine**: Branch trace JSON stats
@@ -144,7 +145,7 @@ All tests passed!
 
 Individual test counts:
 - Hardware Presets: 12 tests
-- Core Features: 12 tests
+- Core Features: 13 tests
 - Golden Kernels: 3 tests
 - Workload Snapshots: 2 tests
-- **Total: 29 integration tests**
+- **Total: 30 integration tests**

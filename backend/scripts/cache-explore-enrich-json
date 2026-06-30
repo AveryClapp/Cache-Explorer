@@ -1,0 +1,314 @@
+#!/usr/bin/env node
+
+const { existsSync, readFileSync, statSync } = require('fs')
+const { createHash } = require('crypto')
+const { spawnSync } = require('child_process')
+
+function readStdin() {
+  return new Promise((resolve, reject) => {
+    let input = ''
+    process.stdin.setEncoding('utf8')
+    process.stdin.on('data', chunk => {
+      input += chunk
+    })
+    process.stdin.on('end', () => resolve(input))
+    process.stdin.on('error', reject)
+  })
+}
+
+function env(name, fallback = '') {
+  return process.env[name] || fallback
+}
+
+function optionalEnv(name) {
+  const value = env(name)
+  return value === '' ? undefined : value
+}
+
+function boolEnv(name) {
+  const value = env(name).toLowerCase()
+  return value === '1' || value === 'true' || value === 'yes' || value === '--fast' || value === '--cache-segments'
+}
+
+function intEnv(name, fallback) {
+  const value = Number.parseInt(env(name), 10)
+  return Number.isFinite(value) ? value : fallback
+}
+
+function listEnv(name) {
+  return env(name)
+    .split('\n')
+    .map(item => item.trim())
+    .filter(Boolean)
+}
+
+function run(command, args, options = {}) {
+  if (!command) return undefined
+  const result = spawnSync(command, args, {
+    cwd: options.cwd,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  })
+  if (result.status !== 0) return undefined
+  return result.stdout.trim()
+}
+
+function commandPath(command) {
+  if (!command) return undefined
+  if (command.includes('/')) return command
+  return run('sh', ['-c', 'command -v "$1"', 'sh', command])
+}
+
+function fileInfo(path) {
+  if (!path) return undefined
+  if (!existsSync(path)) {
+    return { path, exists: false }
+  }
+
+  const stat = statSync(path)
+  const hash = createHash('sha256')
+  hash.update(readFileSync(path))
+  return {
+    path,
+    exists: true,
+    sizeBytes: stat.size,
+    mtimeMs: Math.trunc(stat.mtimeMs),
+    sha256: hash.digest('hex'),
+  }
+}
+
+function compilerInfo() {
+  const command = optionalEnv('CACHE_EXPLORER_COMPILER')
+  if (!command) return undefined
+  return {
+    command,
+    path: commandPath(command),
+    version: run(command, ['--version'])?.split('\n')[0],
+    optLevel: env('CACHE_EXPLORER_OPT_LEVEL', '-O0'),
+    defines: listEnv('CACHE_EXPLORER_DEFINES'),
+    includes: listEnv('CACHE_EXPLORER_INCLUDES'),
+  }
+}
+
+function gitInfo(projectRoot) {
+  if (!projectRoot) return undefined
+  const commit = run('git', ['rev-parse', '--short=12', 'HEAD'], { cwd: projectRoot })
+  if (!commit) return undefined
+  const dirty = Boolean(run('git', ['status', '--short'], { cwd: projectRoot }))
+  return { commit, dirty }
+}
+
+function toolchainFromEnv() {
+  const projectRoot = optionalEnv('CACHE_EXPLORER_PROJECT_ROOT')
+  return {
+    cacheExplorer: {
+      cli: optionalEnv('CACHE_EXPLORER_CLI'),
+      projectRoot,
+      git: gitInfo(projectRoot),
+    },
+    compiler: compilerInfo(),
+    instrumentationPass: fileInfo(optionalEnv('CACHE_EXPLORER_PASS')),
+    runtime: fileInfo(optionalEnv('CACHE_EXPLORER_RUNTIME')),
+    simulator: fileInfo(optionalEnv('CACHE_EXPLORER_SIM')),
+  }
+}
+
+let cachedToolchain
+
+function cachedToolchainFromEnv() {
+  if (!cachedToolchain) {
+    cachedToolchain = compactObject(toolchainFromEnv())
+  }
+  return cachedToolchain
+}
+
+function sourceFromEnv(configOverride) {
+  return {
+    path: optionalEnv('CACHE_EXPLORER_SOURCE'),
+    language: optionalEnv('CACHE_EXPLORER_LANGUAGE'),
+    config: configOverride || optionalEnv('CACHE_EXPLORER_CONFIG'),
+    configs: optionalEnv('CACHE_EXPLORER_CONFIGS')?.split(',').filter(Boolean),
+    variants: optionalEnv('CACHE_EXPLORER_VARIANTS')?.split('\n').filter(Boolean),
+    optLevel: env('CACHE_EXPLORER_OPT_LEVEL', '-O0'),
+    defines: listEnv('CACHE_EXPLORER_DEFINES'),
+    includes: listEnv('CACHE_EXPLORER_INCLUDES'),
+  }
+}
+
+function fidelityFromEnv(existing = {}) {
+  const sampleRate = intEnv('CACHE_EXPLORER_SAMPLE_RATE', existing.sampleRate || 1)
+  const eventLimit = intEnv('CACHE_EXPLORER_EVENT_LIMIT', existing.eventLimit || 0)
+  const prefetch = env('CACHE_EXPLORER_PREFETCH', existing.prefetch || 'none') || 'none'
+
+  return {
+    trace: sampleRate > 1 ? 'sampled' : 'full',
+    sampleRate,
+    eventLimit,
+    fastMode: boolEnv('CACHE_EXPLORER_FAST_MODE') || Boolean(existing.fastMode),
+    cacheSegments: boolEnv('CACHE_EXPLORER_CACHE_SEGMENTS') || Boolean(existing.cacheSegments),
+    prefetch,
+    prefetchDegree: intEnv('CACHE_EXPLORER_PREFETCH_DEGREE', existing.prefetchDegree || 0),
+  }
+}
+
+function compactObject(value) {
+  if (!value || typeof value !== 'object') return value
+  if (Array.isArray(value)) return value.map(compactObject)
+
+  const compacted = {}
+  for (const [key, child] of Object.entries(value)) {
+    if (child === undefined) continue
+    if (Array.isArray(child) && child.length === 0) continue
+    if (child && typeof child === 'object' && !Array.isArray(child)) {
+      const nested = compactObject(child)
+      if (Object.keys(nested).length === 0) continue
+      compacted[key] = nested
+    } else {
+      compacted[key] = child
+    }
+  }
+  return compacted
+}
+
+function dedupe(values) {
+  return [...new Set(values.filter(Boolean))]
+}
+
+function defaultCaveats(fidelity) {
+  const caveats = [
+    'Cycles and bottlenecks are simulator estimates, not wall-clock measurements.',
+  ]
+  if (fidelity.sampleRate > 1) {
+    caveats.push(`Trace events were sampled at 1:${fidelity.sampleRate}.`)
+  }
+  if (fidelity.fastMode) {
+    caveats.push('Fast mode disables detailed 3C miss classification.')
+  }
+  if (fidelity.cacheSegments) {
+    caveats.push('Segment caching may reuse repeated loop traces.')
+  }
+  return caveats
+}
+
+function hardwareProfileFromResult(result, config) {
+  const profile = result.profile || {}
+  return {
+    id: profile.id || config,
+    displayName: profile.displayName || config,
+    modelConfidence: profile.modelConfidence || 'unknown',
+    validationConfidence: profile.validation?.confidence || profile.modelConfidence || 'unknown',
+  }
+}
+
+function firstNestedToolchain(payload) {
+  if (!payload || typeof payload !== 'object') return undefined
+  if (payload.provenance?.toolchain) return payload.provenance.toolchain
+
+  for (const result of Object.values(payload.configs || {})) {
+    if (result?.provenance?.toolchain) return result.provenance.toolchain
+  }
+  for (const variant of Object.values(payload.variants || {})) {
+    const found = firstNestedToolchain(variant)
+    if (found) return found
+  }
+  return undefined
+}
+
+function mergeToolchain(envToolchain, nestedToolchain) {
+  if (!nestedToolchain) return envToolchain
+  if (!envToolchain) return nestedToolchain
+  return compactObject({
+    ...nestedToolchain,
+    ...envToolchain,
+    cacheExplorer: {
+      ...nestedToolchain.cacheExplorer,
+      ...envToolchain.cacheExplorer,
+    },
+    compiler: envToolchain.compiler || nestedToolchain.compiler,
+    instrumentationPass: envToolchain.instrumentationPass || nestedToolchain.instrumentationPass,
+    runtime: envToolchain.runtime || nestedToolchain.runtime,
+    simulator: envToolchain.simulator || nestedToolchain.simulator,
+  })
+}
+
+function mergeRunProvenance(result, config, resultKind = 'simulated') {
+  if (!result || typeof result !== 'object' || result.error) return result
+
+  const existing = result.provenance || {}
+  const fidelity = fidelityFromEnv(existing.fidelity)
+  const toolchain = cachedToolchainFromEnv()
+  const source = compactObject(sourceFromEnv(config))
+
+  result.provenance = compactObject({
+    ...existing,
+    resultKind,
+    executor: env('CACHE_EXPLORER_EXECUTOR', existing.executor || 'cli'),
+    hardwareProfile: existing.hardwareProfile || hardwareProfileFromResult(result, config),
+    source: existing.source || source,
+    fidelity,
+    toolchain: existing.toolchain || toolchain,
+    caveats: dedupe([...(existing.caveats || []), ...defaultCaveats(fidelity)]),
+  })
+  return result
+}
+
+function mergeAggregateProvenance(payload, resultKind) {
+  const existing = payload.provenance || {}
+  const fidelity = fidelityFromEnv(existing.fidelity)
+  const envToolchain = cachedToolchainFromEnv()
+  const nestedToolchain = firstNestedToolchain(payload)
+
+  payload.provenance = compactObject({
+    ...existing,
+    resultKind,
+    executor: env('CACHE_EXPLORER_EXECUTOR', existing.executor || 'cli'),
+    source: existing.source || compactObject(sourceFromEnv()),
+    configs: existing.configs || optionalEnv('CACHE_EXPLORER_CONFIGS')?.split(',').filter(Boolean),
+    variants: existing.variants || optionalEnv('CACHE_EXPLORER_VARIANTS')?.split('\n').filter(Boolean),
+    fidelity,
+    toolchain: existing.toolchain || mergeToolchain(envToolchain, nestedToolchain),
+    caveats: dedupe([...(existing.caveats || []), ...defaultCaveats(fidelity)]),
+  })
+}
+
+function enrichPayload(payload) {
+  const resultKind = env('CACHE_EXPLORER_RESULT_KIND', 'simulated')
+
+  if (payload && typeof payload === 'object' && payload.levels) {
+    return mergeRunProvenance(payload, env('CACHE_EXPLORER_CONFIG', payload.config), resultKind)
+  }
+
+  if (payload?.configs && typeof payload.configs === 'object') {
+    for (const [config, result] of Object.entries(payload.configs)) {
+      mergeRunProvenance(result, config)
+    }
+  }
+
+  if (payload?.variants && typeof payload.variants === 'object') {
+    for (const variant of Object.values(payload.variants)) {
+      if (!variant?.configs || typeof variant.configs !== 'object') continue
+      for (const [config, result] of Object.entries(variant.configs)) {
+        mergeRunProvenance(result, config)
+      }
+    }
+  }
+
+  mergeAggregateProvenance(payload, resultKind)
+  return payload
+}
+
+readStdin()
+  .then(input => {
+    const trimmed = input.trim()
+    if (!trimmed) {
+      process.exitCode = 0
+      return
+    }
+
+    const payload = JSON.parse(trimmed)
+    process.stdout.write(`${JSON.stringify(enrichPayload(payload))}\n`)
+  })
+  .catch(error => {
+    console.error(error instanceof Error ? error.message : String(error))
+    process.exitCode = 1
+  })
