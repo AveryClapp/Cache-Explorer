@@ -51,6 +51,18 @@ function winnerRows(result: HardwareExperimentResult | null) {
   return Array.from(winners.values())
 }
 
+function overallWinner(result: HardwareExperimentResult | null) {
+  if (!result) return null
+  const totals = new Map<string, { variant: string; cycles: number; rows: number }>()
+  for (const row of result.summary) {
+    const current = totals.get(row.variant) || { variant: row.variant, cycles: 0, rows: 0 }
+    current.cycles += row.estimatedCycles
+    current.rows += 1
+    totals.set(row.variant, current)
+  }
+  return Array.from(totals.values()).sort((a, b) => a.cycles - b.cycles)[0] || null
+}
+
 export function ExperimentResultsModal({
   result,
   running,
@@ -62,6 +74,7 @@ export function ExperimentResultsModal({
   onClose,
 }: ExperimentResultsModalProps) {
   const winners = winnerRows(result)
+  const overall = overallWinner(result)
 
   return (
     <div className="batch-modal-overlay" onClick={() => !running && onClose()}>
@@ -100,6 +113,14 @@ export function ExperimentResultsModal({
             <div className="batch-loading">
               <span className="loading-spinner" />
               Running experiment...
+            </div>
+          )}
+
+          {overall && (
+            <div className="experiment-overall-winner">
+              <span className="experiment-overall-label">Overall</span>
+              <span className="experiment-overall-variant">{overall.variant}</span>
+              <span className="experiment-overall-cycles">{formatCycles(overall.cycles)} cycles</span>
             </div>
           )}
 

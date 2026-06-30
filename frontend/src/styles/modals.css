@@ -478,6 +478,38 @@
   color: var(--text-secondary);
 }
 
+.experiment-overall-winner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--phosphor-dim);
+  border-radius: var(--radius-sm);
+  background: var(--phosphor-subtle);
+  font-family: var(--font-display);
+}
+
+.experiment-overall-label {
+  color: var(--text-secondary);
+  font-family: var(--font-code);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+}
+
+.experiment-overall-variant {
+  color: var(--text-bright);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.experiment-overall-cycles {
+  margin-left: auto;
+  color: var(--text-primary);
+  font-family: var(--font-code);
+  font-size: var(--text-xs);
+}
+
 .experiment-winners {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
