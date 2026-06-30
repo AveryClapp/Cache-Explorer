@@ -389,7 +389,7 @@
 
 .experiment-controls {
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) auto;
+  grid-template-columns: minmax(240px, 1fr) minmax(220px, 0.6fr) auto;
   gap: var(--space-3);
   align-items: end;
   margin-bottom: var(--space-4);
@@ -424,6 +424,35 @@
 .experiment-field textarea:focus {
   outline: none;
   border-color: var(--signal-info);
+}
+
+.experiment-hardware-field {
+  align-self: stretch;
+}
+
+.experiment-config-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: var(--space-2);
+  min-height: 72px;
+  padding: var(--space-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.experiment-config-chip {
+  height: 22px;
+  padding: 3px var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  background: var(--elevated);
+  font-family: var(--font-code);
+  font-size: var(--text-2xs);
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .experiment-run {
@@ -473,6 +502,12 @@
   cursor: not-allowed;
 }
 
+.hardware-run-set-count {
+  color: var(--text-secondary);
+  font-family: var(--font-code);
+  font-size: var(--text-xs);
+}
+
 .hardware-explorer-content {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
@@ -493,15 +528,16 @@
 
 .hardware-profile-row {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
   gap: 2px;
   width: 100%;
   min-height: 72px;
-  padding: var(--space-3);
   background: transparent;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   color: var(--text-primary);
-  text-align: left;
+  overflow: hidden;
 }
 
 .hardware-profile-row:hover {
@@ -512,6 +548,20 @@
 .hardware-profile-row.active {
   background: var(--phosphor-subtle);
   border-color: var(--phosphor-dim);
+}
+
+.hardware-profile-row-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--space-3);
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.hardware-profile-row-main:hover {
+  color: var(--text-primary);
 }
 
 .hardware-profile-row-heading {
@@ -542,6 +592,32 @@
   font-family: var(--font-code);
   font-size: var(--text-2xs);
   text-transform: uppercase;
+}
+
+.hardware-profile-run-toggle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 52px;
+  border-left: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-family: var(--font-code);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.hardware-profile-run-toggle input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--phosphor);
+}
+
+.hardware-profile-run-toggle:hover {
+  color: var(--text-primary);
+  background: var(--surface);
 }
 
 .hardware-profile-row-meta,

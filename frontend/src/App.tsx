@@ -58,6 +58,10 @@ function annotationBadge(annotation: SourceAnnotation) {
 
 const BATCH_HARDWARE_CONFIGS = ['educational', 'intel', 'amd', 'apple']
 
+function hardwareConfigsOrDefault(configs: string[]) {
+  return configs.length > 0 ? configs : BATCH_HARDWARE_CONFIGS
+}
+
 function parseExperimentVariants(value: string) {
   return value
     .split(/\r?\n/)
@@ -195,6 +199,8 @@ function App() {
   const [hardwareProfilesLoading, setHardwareProfilesLoading] = useState(false)
   const [hardwareProfilesError, setHardwareProfilesError] = useState<string | null>(null)
   const [selectedHardwareProfileId, setSelectedHardwareProfileId] = useState('')
+  const [runHardwareConfigIds, setRunHardwareConfigIds] = useState<string[]>(BATCH_HARDWARE_CONFIGS)
+  const [batchTotal, setBatchTotal] = useState(BATCH_HARDWARE_CONFIGS.length)
   const commandInputRef = useRef<HTMLInputElement>(null)
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const monacoRef = useRef<Monaco | null>(null)
@@ -653,8 +659,10 @@ function App() {
 
   // Batch analysis - compare same code across multiple hardware presets
   const runBatchAnalysis = useCallback(async () => {
+    const configsToRun = hardwareConfigsOrDefault(runHardwareConfigIds)
     setBatchResults([])
     setBatchRunning(true)
+    setBatchTotal(configsToRun.length)
     setShowBatchModal(true)
 
     const canUseCompareEndpoint =
@@ -667,14 +675,14 @@ function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             ...makeHardwarePayload(),
-            configs: BATCH_HARDWARE_CONFIGS,
+            configs: configsToRun,
           }),
         })
         const data = await response.json()
 
         if (response.ok && data.configs) {
           setBatchResults(
-            BATCH_HARDWARE_CONFIGS
+            configsToRun
               .filter(cfg => data.configs[cfg])
               .map(cfg => ({ config: cfg, result: data.configs[cfg] as CacheResult }))
           )
@@ -686,7 +694,7 @@ function App() {
       }
     }
 
-    for (const cfg of BATCH_HARDWARE_CONFIGS) {
+    for (const cfg of configsToRun) {
       try {
         const payload = {
           ...makeHardwarePayload(),
@@ -707,7 +715,7 @@ function App() {
       }
     }
     setBatchRunning(false)
-  }, [files, makeHardwarePayload])
+  }, [files, makeHardwarePayload, runHardwareConfigIds])
 
   const openExperimentModal = useCallback(() => {
     setShowExperimentModal(true)
@@ -749,6 +757,15 @@ function App() {
     setConfig(profileId)
     setPrefetchPolicy(PREFETCH_DEFAULTS[profileId] || 'none')
     setSelectedHardwareProfileId(profileId)
+    setRunHardwareConfigIds(prev => prev.includes(profileId) ? prev : [...prev, profileId])
+  }, [])
+
+  const toggleRunHardwareConfig = useCallback((profileId: string) => {
+    setRunHardwareConfigIds(prev => {
+      if (!prev.includes(profileId)) return [...prev, profileId]
+      if (prev.length === 1) return prev
+      return prev.filter(id => id !== profileId)
+    })
   }, [])
 
   const runExperimentAnalysis = useCallback(async () => {
@@ -770,7 +787,7 @@ function App() {
         body: JSON.stringify({
           ...makeHardwarePayload(),
           variants,
-          configs: BATCH_HARDWARE_CONFIGS,
+          configs: hardwareConfigsOrDefault(runHardwareConfigIds),
         }),
       })
       const data = await response.json()
@@ -785,7 +802,7 @@ function App() {
     } finally {
       setExperimentRunning(false)
     }
-  }, [experimentVariants, makeHardwarePayload])
+  }, [experimentVariants, makeHardwarePayload, runHardwareConfigIds])
 
   const commands: CommandItem[] = useMemo(() => [
     // Actions (@)
@@ -848,7 +865,7 @@ function App() {
         <BatchResultsModal
           results={batchResults}
           running={batchRunning}
-          total={BATCH_HARDWARE_CONFIGS.length}
+          total={batchTotal}
           onClose={() => setShowBatchModal(false)}
         />
       )}
@@ -860,6 +877,7 @@ function App() {
           running={experimentRunning}
           error={experimentError}
           variantsText={experimentVariants}
+          hardwareConfigIds={hardwareConfigsOrDefault(runHardwareConfigIds)}
           onVariantsTextChange={setExperimentVariants}
           onRun={runExperimentAnalysis}
           onClose={() => setShowExperimentModal(false)}
@@ -872,10 +890,12 @@ function App() {
           profiles={hardwareProfiles}
           selectedId={selectedHardwareProfileId}
           activeId={config}
+          runConfigIds={runHardwareConfigIds}
           loading={hardwareProfilesLoading}
           error={hardwareProfilesError}
           onSelect={setSelectedHardwareProfileId}
           onApply={applyHardwareProfile}
+          onToggleRunConfig={toggleRunHardwareConfig}
           onRefresh={loadHardwareProfiles}
           onClose={() => setShowHardwareExplorer(false)}
         />

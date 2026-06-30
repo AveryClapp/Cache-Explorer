@@ -5,10 +5,12 @@ interface HardwareExplorerModalProps {
   profiles: HardwareProfile[]
   selectedId: string
   activeId: string
+  runConfigIds: string[]
   loading: boolean
   error: string | null
   onSelect: (id: string) => void
   onApply: (id: string) => void
+  onToggleRunConfig: (id: string) => void
   onRefresh: () => void
   onClose: () => void
 }
@@ -28,10 +30,12 @@ export function HardwareExplorerModal({
   profiles,
   selectedId,
   activeId,
+  runConfigIds,
   loading,
   error,
   onSelect,
   onApply,
+  onToggleRunConfig,
   onRefresh,
   onClose,
 }: HardwareExplorerModalProps) {
@@ -43,6 +47,7 @@ export function HardwareExplorerModal({
         <div className="batch-modal-header">
           <span className="batch-modal-title">Hardware Explorer</span>
           <div className="hardware-explorer-actions">
+            <span className="hardware-run-set-count">{runConfigIds.length} selected</span>
             <button
               className="btn"
               onClick={() => selected && onApply(selected.id)}
@@ -57,18 +62,27 @@ export function HardwareExplorerModal({
         <div className="batch-modal-content hardware-explorer-content">
           <div className="hardware-profile-list">
             {profiles.map(profile => (
-              <button
+              <div
                 key={profile.id}
                 className={`hardware-profile-row ${profile.id === selected?.id ? 'active' : ''}`}
-                onClick={() => onSelect(profile.id)}
               >
-                <span className="hardware-profile-row-heading">
-                  <span className="hardware-profile-row-name">{profile.displayName}</span>
-                  {profile.id === activeId && <span className="hardware-profile-current">Current</span>}
-                </span>
-                <span className="hardware-profile-row-meta">{profile.vendor} / {profile.class}</span>
-                <span className="hardware-profile-row-cache">{cacheSummary(profile)}</span>
-              </button>
+                <button className="hardware-profile-row-main" onClick={() => onSelect(profile.id)}>
+                  <span className="hardware-profile-row-heading">
+                    <span className="hardware-profile-row-name">{profile.displayName}</span>
+                    {profile.id === activeId && <span className="hardware-profile-current">Current</span>}
+                  </span>
+                  <span className="hardware-profile-row-meta">{profile.vendor} / {profile.class}</span>
+                  <span className="hardware-profile-row-cache">{cacheSummary(profile)}</span>
+                </button>
+                <label className="hardware-profile-run-toggle" title="Include in compare and experiment runs">
+                  <input
+                    type="checkbox"
+                    checked={runConfigIds.includes(profile.id)}
+                    onChange={() => onToggleRunConfig(profile.id)}
+                  />
+                  <span>Run</span>
+                </label>
+              </div>
             ))}
           </div>
 

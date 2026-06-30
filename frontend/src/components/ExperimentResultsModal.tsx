@@ -6,6 +6,7 @@ interface ExperimentResultsModalProps {
   running: boolean
   error: string | null
   variantsText: string
+  hardwareConfigIds: string[]
   onVariantsTextChange: (value: string) => void
   onRun: () => void
   onClose: () => void
@@ -43,6 +44,7 @@ export function ExperimentResultsModal({
   running,
   error,
   variantsText,
+  hardwareConfigIds,
   onVariantsTextChange,
   onRun,
   onClose,
@@ -65,6 +67,14 @@ export function ExperimentResultsModal({
                 rows={3}
               />
             </label>
+            <div className="experiment-field experiment-hardware-field">
+              <span>Hardware</span>
+              <div className="experiment-config-chips">
+                {hardwareConfigIds.map(configId => (
+                  <span className="experiment-config-chip" key={configId}>{configId}</span>
+                ))}
+              </div>
+            </div>
             <button className="btn-primary experiment-run" onClick={onRun} disabled={running}>
               {running ? 'Running...' : 'Run'}
             </button>
