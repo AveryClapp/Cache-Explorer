@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { spawn } from 'child_process';
-import { writeFile, unlink, mkdir, rm, readdir, readFile } from 'fs/promises';
+import { readFile } from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
@@ -19,6 +19,7 @@ import { listHardwareProfiles, getHardwareProfile } from './hardwareProfiles.js'
 import { CONFIG } from './config.js';
 import { healthRoutes, shareRoutes, compilerRoutes } from './routes/index.js';
 import { parseCompileErrors, createErrorResponse } from './services/errorParser.js';
+import { createTempProject, cleanupTempProject, cleanupOrphanedTempDirs } from './services/tempProject.js';
 import { ConnectionResourceTracker, connectionResources, getOrCreateTracker, removeTracker } from './middleware/resourceTracker.js';
 
 // CONFIG is now imported from ./config.js
@@ -28,60 +29,6 @@ import { ConnectionResourceTracker, connectionResources, getOrCreateTracker, rem
 // ============================================================================
 // Helper Functions
 // ============================================================================
-
-// Sanitize filename to prevent path traversal attacks
-function sanitizeFilename(filename) {
-  if (!filename || typeof filename !== 'string') {
-    return 'unnamed.c';
-  }
-  // Extract just the basename, removing any path components
-  const basename = filename.split(/[/\\]/).pop() || 'unnamed.c';
-  // Remove any null bytes
-  const noNulls = basename.replace(/\0/g, '');
-  // Only allow alphanumeric, dots, underscores, hyphens
-  const sanitized = noNulls.replace(/[^a-zA-Z0-9._-]/g, '_');
-  // Prevent hidden files and ensure non-empty
-  const final = sanitized.replace(/^\.+/, '') || 'unnamed.c';
-  // Limit length
-  return final.slice(0, 255);
-}
-
-// Helper to create temp directory with files
-async function createTempProject(files, language = 'c') {
-  const extensions = { c: '.c', cpp: '.cpp', rust: '.rs', zig: '.zig' };
-  const ext = extensions[language] || '.c';
-  const tempDir = `/tmp/cache-explorer-${randomUUID()}`;
-  await mkdir(tempDir, { recursive: true });
-
-  // If files is an array, write all files
-  if (Array.isArray(files)) {
-    // Create a map from original name to sanitized name for lookup
-    const nameMap = new Map();
-    for (const file of files) {
-      const safeName = sanitizeFilename(file.name);
-      nameMap.set(file.name, safeName);
-      const filePath = join(tempDir, safeName);
-      await writeFile(filePath, file.code);
-    }
-    // Return the first file as the main file (or one containing main())
-    const mainFile = files.find(f => f.code.includes('int main') || f.code.includes('fn main')) || files[0];
-    return { tempDir, mainFile: join(tempDir, nameMap.get(mainFile.name)) };
-  }
-
-  // Backward compatibility: single code string
-  const mainFile = join(tempDir, `main${ext}`);
-  await writeFile(mainFile, files);
-  return { tempDir, mainFile };
-}
-
-// Helper to cleanup temp directory
-async function cleanupTempProject(tempDir) {
-  try {
-    await rm(tempDir, { recursive: true, force: true });
-  } catch {
-    // Ignore cleanup errors
-  }
-}
 
 function resultProvenance({
   config,
@@ -143,35 +90,10 @@ function attachResultProvenance(result, options) {
   return result;
 }
 
-// Cleanup orphaned temp directories periodically
-async function cleanupOrphanedTempDirs() {
-  try {
-    const tmpDir = '/tmp';
-    const entries = await readdir(tmpDir);
-    const now = Date.now();
-
-    for (const entry of entries) {
-      if (entry.startsWith('cache-explorer-')) {
-        const fullPath = join(tmpDir, entry);
-        try {
-          const { mtime } = await import('fs').then(fs =>
-            fs.promises.stat(fullPath)
-          );
-          if (now - mtime.getTime() > CONFIG.cleanup.tempDirMaxAgeMs) {
-            await rm(fullPath, { recursive: true, force: true });
-          }
-        } catch {
-          // Ignore stat/cleanup errors
-        }
-      }
-    }
-  } catch {
-    // Ignore cleanup errors
-  }
-}
-
 // Start periodic cleanup
-setInterval(cleanupOrphanedTempDirs, CONFIG.cleanup.orphanCheckIntervalMs);
+setInterval(() => {
+  cleanupOrphanedTempDirs({ maxAgeMs: CONFIG.cleanup.tempDirMaxAgeMs });
+}, CONFIG.cleanup.orphanCheckIntervalMs);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const BACKEND_DIR = dirname(__dirname);

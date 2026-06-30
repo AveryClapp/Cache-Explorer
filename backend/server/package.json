@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "test": "node --test services/*.test.js"
   },
   "dependencies": {
     "better-sqlite3": "^12.5.0",
