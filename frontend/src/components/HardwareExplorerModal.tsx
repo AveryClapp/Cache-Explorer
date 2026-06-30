@@ -17,15 +17,22 @@ interface HardwareExplorerModalProps {
   onClose: () => void
 }
 
+function formatSize(sizeKB: number) {
+  if (!sizeKB) return 'none'
+  if (sizeKB >= 1024 && sizeKB % 1024 === 0) return `${sizeKB / 1024} MB`
+  return `${sizeKB} KB`
+}
+
 function cacheSummary(profile: HardwareProfile) {
   const levels = profile.details?.cache.levels
   if (!levels) return profile.class
-  const l1 = levels.l1d.sizeKB
-  const l2 = levels.l2.sizeKB >= 1024 ? `${levels.l2.sizeKB / 1024} MB` : `${levels.l2.sizeKB} KB`
-  const l3 = levels.l3.sizeKB > 0
-    ? levels.l3.sizeKB >= 1024 ? `${levels.l3.sizeKB / 1024} MB` : `${levels.l3.sizeKB} KB`
-    : 'no L3'
-  return `L1D ${l1} KB / L2 ${l2} / ${l3}`
+  return `L1D ${formatSize(levels.l1d.sizeKB)} / L2 ${formatSize(levels.l2.sizeKB)} / ${formatSize(levels.l3.sizeKB)}`
+}
+
+function latencySummary(profile: HardwareProfile) {
+  const memory = profile.details?.memory
+  if (!memory) return '-'
+  return `L1 ${memory.l1HitCycles} / L2 ${memory.l2HitCycles} / DRAM ${memory.dramCycles}`
 }
 
 export function HardwareExplorerModal({
@@ -44,6 +51,9 @@ export function HardwareExplorerModal({
   onClose,
 }: HardwareExplorerModalProps) {
   const selected = profiles.find(profile => profile.id === selectedId) || profiles[0]
+  const runProfiles = runConfigIds
+    .map(profileId => profiles.find(profile => profile.id === profileId))
+    .filter((profile): profile is HardwareProfile => Boolean(profile))
 
   return (
     <div className="batch-modal-overlay" onClick={() => !loading && onClose()}>
@@ -116,6 +126,38 @@ export function HardwareExplorerModal({
               <>
                 <HardwareProfilePanel profile={selected} />
                 {selected.notes && <div className="hardware-profile-note">{selected.notes}</div>}
+                {runProfiles.length > 0 && (
+                  <div className="hardware-run-set-matrix">
+                    <div className="profile-detail-title">Run Set</div>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Profile</th>
+                          <th>L1D</th>
+                          <th>L2</th>
+                          <th>L3</th>
+                          <th>Latency</th>
+                          <th>Prefetch</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {runProfiles.map(profile => {
+                          const levels = profile.details?.cache.levels
+                          return (
+                            <tr key={profile.id}>
+                              <td>{profile.displayName}</td>
+                              <td>{levels ? formatSize(levels.l1d.sizeKB) : '-'}</td>
+                              <td>{levels ? formatSize(levels.l2.sizeKB) : '-'}</td>
+                              <td>{levels ? formatSize(levels.l3.sizeKB) : '-'}</td>
+                              <td>{latencySummary(profile)}</td>
+                              <td>{profile.details?.prefetch.activePolicy || '-'}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </>
             )}
           </div>

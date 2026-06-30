@@ -710,6 +710,42 @@
   line-height: 1.5;
 }
 
+.hardware-run-set-matrix {
+  margin-top: var(--space-4);
+  overflow-x: auto;
+}
+
+.hardware-run-set-matrix table {
+  width: 100%;
+  min-width: 680px;
+  border-collapse: collapse;
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+}
+
+.hardware-run-set-matrix th,
+.hardware-run-set-matrix td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.hardware-run-set-matrix th {
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.hardware-run-set-matrix td {
+  color: var(--text-primary);
+}
+
+.hardware-run-set-matrix td:first-child {
+  color: var(--text-bright);
+  font-weight: 600;
+}
+
 @media (max-width: 768px) {
   .experiment-controls {
     grid-template-columns: 1fr;
