@@ -11,12 +11,14 @@ List benchmark workload snapshots modeled by Cache Explorer.
 Options:
   --json       Output JSON
   --ids        Output only workload ids
+  --commands   Print cache-explore commands for each variant
   --help       Show this help
 
 Examples:
   cache-explore workloads
   cache-explore workloads --ids
-  cache-explore workloads conv2d-intel14 --json`)
+  cache-explore workloads conv2d-intel14 --json
+  cache-explore workloads conv2d-intel14 --commands`)
 }
 
 function projectRoot() {
@@ -52,6 +54,38 @@ function variantSummary(workload) {
     .join(', ')
 }
 
+function shellQuote(value) {
+  const text = String(value)
+  if (/^[A-Za-z0-9_./:=,@+-]+$/.test(text)) return text
+  return `'${text.replace(/'/g, `'\\''`)}'`
+}
+
+function commandForVariant(workload, variant) {
+  const args = ['cache-explore', workload.example]
+  if (workload.optLevel) args.push(workload.optLevel)
+
+  for (const define of variant.defines || []) {
+    args.push('-D', define)
+  }
+
+  args.push('--config', workload.config)
+  if (workload.limit) args.push('--limit', String(workload.limit))
+  args.push('--json')
+
+  return args.map(shellQuote).join(' ')
+}
+
+function printCommands(workloads) {
+  for (const workload of workloads) {
+    console.log(`# ${workload.id}: ${workload.description}`)
+    for (const variant of workload.variants || []) {
+      console.log(`# variant: ${variant.id}`)
+      console.log(commandForVariant(workload, variant))
+    }
+    console.log('')
+  }
+}
+
 function printTable(workloads) {
   const headers = ['ID', 'Example', 'Config', 'Limit', 'Variants', 'Relationships']
   const rows = workloads.map(workload => [
@@ -78,6 +112,7 @@ async function main() {
   const args = process.argv.slice(2)
   const json = args.includes('--json')
   const ids = args.includes('--ids')
+  const commands = args.includes('--commands')
   const help = args.includes('--help') || args.includes('-h')
   const workloadId = args.find(arg => !arg.startsWith('-'))
 
@@ -101,6 +136,8 @@ async function main() {
     console.log(JSON.stringify(workloadId ? selected[0] : { workloads: selected }, null, 2))
   } else if (ids) {
     console.log(selected.map(workload => workload.id).join('\n'))
+  } else if (commands) {
+    printCommands(selected)
   } else {
     printTable(selected)
   }
