@@ -418,6 +418,175 @@ app.post('/compile', async (req, res) => {
   }
 });
 
+app.post('/compare', async (req, res) => {
+  const startTime = Date.now();
+  incCounter('requests', { type: 'compare' });
+
+  if (sandboxAvailable) {
+    return res.status(501).json({
+      type: 'unsupported',
+      message: 'Hardware comparison endpoint is not available in sandbox mode'
+    });
+  }
+
+  const {
+    code,
+    files,
+    configs = ['educational', 'intel', 'amd', 'apple'],
+    optLevel = '-O0',
+    language = 'c',
+    defines,
+    prefetch,
+    sample,
+    limit,
+    fast,
+    cacheSegments,
+    timeout: requestedTimeout
+  } = req.body;
+
+  const inputFiles = files || (code ? code : null);
+  if (!inputFiles) {
+    return res.status(400).json({ error: 'No code provided', type: 'validation_error' });
+  }
+
+  if (Array.isArray(inputFiles) && inputFiles.length > 1) {
+    return res.status(422).json({
+      type: 'unsupported',
+      message: 'Hardware comparison endpoint currently supports single-file C/C++ inputs'
+    });
+  }
+
+  if (language !== 'c' && language !== 'cpp') {
+    return res.status(422).json({
+      type: 'unsupported',
+      message: 'Hardware comparison endpoint currently supports C and C++ inputs'
+    });
+  }
+
+  const configList = Array.isArray(configs) ? configs.join(',') : String(configs);
+  if (!/^[A-Za-z0-9_,.-]+$/.test(configList)) {
+    return res.status(400).json({ error: 'Invalid config list', type: 'validation_error' });
+  }
+
+  const eventLimit = limit !== undefined ? limit : 1000000;
+  const sampleRate = sample !== undefined ? sample : 1;
+  const fastMode = fast === true;
+  const segmentCaching = cacheSegments === true;
+  const timeout = Math.min(
+    Math.max(requestedTimeout || CONFIG.timeouts.default, CONFIG.timeouts.min),
+    CONFIG.timeouts.max
+  );
+
+  let tempDir, mainFile;
+
+  try {
+    const project = await createTempProject(inputFiles, language);
+    tempDir = project.tempDir;
+    mainFile = project.mainFile;
+
+    const result = await new Promise((resolve, reject) => {
+      const args = ['compare', mainFile, '--configs', configList, optLevel, '--json'];
+
+      if (defines && Array.isArray(defines)) {
+        for (const def of defines) {
+          if (def.name && def.name.trim()) {
+            const defineStr = def.value ? `${def.name}=${def.value}` : def.name;
+            args.push('-D', defineStr);
+          }
+        }
+      }
+
+      const VALID_PREFETCH_POLICIES = ['none', 'next', 'next-line', 'stream', 'stride', 'adaptive', 'intel'];
+      const prefetchToUse = prefetch && VALID_PREFETCH_POLICIES.includes(prefetch) ? prefetch : 'none';
+      args.push('--prefetch', prefetchToUse);
+
+      if (sampleRate > 1) {
+        args.push('--sample', String(sampleRate));
+      }
+      if (eventLimit > 0) {
+        args.push('--limit', String(eventLimit));
+      }
+      if (fastMode) {
+        args.push('--fast');
+      }
+      if (segmentCaching) {
+        args.push('--cache-segments');
+      }
+      if (req.body.compiler) {
+        const compiler = getCompiler(req.body.compiler);
+        if (compiler && compiler.path) {
+          args.push('--compiler', compiler.path);
+        }
+      }
+
+      const proc = spawn(CACHE_EXPLORE, args);
+
+      let stdout = '';
+      let stderr = '';
+      let killed = false;
+
+      const timeoutId = setTimeout(() => {
+        killed = true;
+        proc.kill('SIGTERM');
+        setTimeout(() => proc.kill('SIGKILL'), 1000);
+      }, timeout);
+
+      proc.stdout.on('data', (data) => {
+        stdout += data;
+        if (stdout.length > CONFIG.memory.maxOutputBuffer) {
+          killed = true;
+          proc.kill('SIGKILL');
+        }
+      });
+
+      proc.stderr.on('data', (data) => {
+        stderr += data;
+        if (stderr.length > CONFIG.memory.maxOutputBuffer) {
+          killed = true;
+          proc.kill('SIGKILL');
+        }
+      });
+
+      proc.on('close', (exitCode) => {
+        clearTimeout(timeoutId);
+        if (killed && exitCode !== 0) {
+          reject({ stdout, stderr, exitCode, mainFile, timeout: true, timeoutMs: timeout });
+        } else if (exitCode !== 0) {
+          reject({ stdout, stderr, exitCode, mainFile });
+        } else {
+          resolve({ stdout, stderr });
+        }
+      });
+
+      proc.on('error', (err) => {
+        clearTimeout(timeoutId);
+        reject(err);
+      });
+    });
+
+    const json = JSON.parse(result.stdout.trim());
+    if (json.configs && typeof json.configs === 'object') {
+      for (const configResult of Object.values(json.configs)) {
+        if (configResult && typeof configResult === 'object' && configResult.cacheState) {
+          delete configResult.cacheState;
+        }
+      }
+    }
+
+    recordDuration('compilation_duration', (Date.now() - startTime) / 1000);
+    res.json(json);
+  } catch (err) {
+    incCounter('errors', { type: 'compare' });
+    console.error('HTTP compare error:', err);
+    const parsed = createErrorResponse(err, mainFile);
+    res.status(400).json(parsed);
+  } finally {
+    if (tempDir) {
+      await cleanupTempProject(tempDir);
+    }
+  }
+});
+
 app.get('/health', (req, res) => {
   const health = getHealthStatus();
   res.json({

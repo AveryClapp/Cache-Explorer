@@ -612,28 +612,65 @@ function App() {
     setBatchRunning(true)
     setShowBatchModal(true)
 
+    const makeBasePayload = () => {
+      const payload: Record<string, unknown> = {
+        optLevel,
+      }
+
+      if (files.length === 1) {
+        payload.code = files[0].code
+        payload.language = files[0].language
+      } else {
+        payload.files = files.map(f => ({ name: f.name, code: f.code, language: f.language }))
+        payload.language = files[0].language
+      }
+
+      if (defines.length > 0) payload.defines = defines.filter(d => d.name.trim())
+      if (prefetchPolicy !== 'none') payload.prefetch = prefetchPolicy
+      if (sampleRate > 1) payload.sample = sampleRate
+      payload.limit = eventLimit
+      if (selectedCompiler) payload.compiler = selectedCompiler
+      if (fastMode) payload.fast = true
+      if (cacheSegments) payload.cacheSegments = true
+
+      return payload
+    }
+
+    const canUseCompareEndpoint =
+      files.length === 1 && (files[0].language === 'c' || files[0].language === 'cpp')
+
+    if (canUseCompareEndpoint) {
+      try {
+        const response = await fetch(`${API_BASE}/compare`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...makeBasePayload(),
+            configs: BATCH_HARDWARE_CONFIGS,
+          }),
+        })
+        const data = await response.json()
+
+        if (response.ok && data.configs) {
+          setBatchResults(
+            BATCH_HARDWARE_CONFIGS
+              .filter(cfg => data.configs[cfg])
+              .map(cfg => ({ config: cfg, result: data.configs[cfg] as CacheResult }))
+          )
+          setBatchRunning(false)
+          return
+        }
+      } catch {
+        // Fall back to per-config analysis below.
+      }
+    }
+
     for (const cfg of BATCH_HARDWARE_CONFIGS) {
       try {
-        const payload: Record<string, unknown> = {
+        const payload = {
+          ...makeBasePayload(),
           config: cfg,
-          optLevel,
         }
-
-        if (files.length === 1) {
-          payload.code = files[0].code
-          payload.language = files[0].language
-        } else {
-          payload.files = files.map(f => ({ name: f.name, code: f.code, language: f.language }))
-          payload.language = files[0].language
-        }
-
-        if (defines.length > 0) payload.defines = defines.filter(d => d.name.trim())
-        if (prefetchPolicy !== 'none') payload.prefetch = prefetchPolicy
-        if (sampleRate > 1) payload.sample = sampleRate
-        payload.limit = eventLimit
-        if (selectedCompiler) payload.compiler = selectedCompiler
-        if (fastMode) payload.fast = true
-        if (cacheSegments) payload.cacheSegments = true
 
         const response = await fetch(`${API_BASE}/compile`, {
           method: 'POST',
