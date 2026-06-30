@@ -66,6 +66,8 @@ export function ResultsPanel({
   isMobile,
   mobilePane,
 }: ResultsPanelProps) {
+  const execution = result?.subsystems?.execution ?? result?.execution
+
   return (
     <div className={`results-panel${isMobile && mobilePane !== 'results' ? ' mobile-hidden' : ''}`}>
       <div className="results-header">
@@ -113,7 +115,7 @@ export function ResultsPanel({
             {result.advancedStats && <AdvancedStatsPanel stats={result.advancedStats} />}
 
             {/* Execution Engine */}
-            {result.execution && <ExecutionEnginePanel execution={result.execution} />}
+            {execution && <ExecutionEnginePanel execution={execution} />}
 
             {/* Source Annotations */}
             {result.sourceAnnotations && <SourceAnnotationsPanel annotations={result.sourceAnnotations} />}
