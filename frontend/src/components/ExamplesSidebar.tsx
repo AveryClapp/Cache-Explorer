@@ -1,7 +1,4 @@
 import { EXAMPLES } from '../constants'
-import { generateFileId } from '../utils/file'
-import { getFileExtension } from '../hooks'
-import type { Language, FileTab } from '../types'
 
 type ExampleLangFilter = 'all' | 'c' | 'cpp' | 'zig' | 'rust'
 
@@ -11,8 +8,7 @@ interface ExamplesSidebarProps {
   langFilter: ExampleLangFilter
   onLangFilterChange: (filter: ExampleLangFilter) => void
   currentCode: string
-  onLoadExample: (files: FileTab[], mainFileId: string) => void
-  onUpdateFile: (code: string, language: Language, name: string) => void
+  onLoadExample: (exampleKey: string) => void
 }
 
 export function ExamplesSidebar({
@@ -22,7 +18,6 @@ export function ExamplesSidebar({
   onLangFilterChange,
   currentCode,
   onLoadExample,
-  onUpdateFile,
 }: ExamplesSidebarProps) {
   return (
     <aside className={`sidebar${collapsed ? ' collapsed' : ''}`}>
@@ -65,21 +60,7 @@ export function ExamplesSidebar({
               <button
                 key={key}
                 className={`example-item${currentCode === ex.code ? ' active' : ''}`}
-                onClick={() => {
-                  if (ex.files && ex.files.length > 0) {
-                    const newFiles = ex.files.map((f) => ({
-                      id: generateFileId(),
-                      name: f.name,
-                      code: f.code,
-                      language: f.language,
-                      isMain: f.isMain
-                    }))
-                    const mainFile = newFiles.find(f => f.isMain) || newFiles[0]
-                    onLoadExample(newFiles, mainFile.id)
-                  } else {
-                    onUpdateFile(ex.code, ex.language, 'main' + getFileExtension(ex.language))
-                  }
-                }}
+                onClick={() => onLoadExample(key)}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span className="example-name">{ex.name}</span>

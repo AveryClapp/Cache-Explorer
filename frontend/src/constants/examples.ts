@@ -257,30 +257,35 @@ int main() {
     description: 'Predictable vs alternating branches',
     language: 'c',
     code: `// Branch prediction patterns
-// Predictable loop branches warm up; alternating data branches mispredict often
+// Set RUN_ALTERNATING=1 to isolate alternating data branches
 #include <stdio.h>
+
+#ifndef RUN_ALTERNATING
+#define RUN_ALTERNATING 0
+#endif
 
 #define N 100000
 
 int main() {
-    volatile int predictable = 0;
-    volatile int alternating = 0;
+    volatile int total = 0;
 
-    for (int i = 0; i < N; i++) {
-        if (i < N - 1) {
-            predictable += i & 7;
-        }
-    }
-
+#if RUN_ALTERNATING
     for (int i = 0; i < N; i++) {
         if (i & 1) {
-            alternating += 3;
+            total += 3;
         } else {
-            alternating -= 1;
+            total -= 1;
         }
     }
+#else
+    for (int i = 0; i < N; i++) {
+        if (i < N - 1) {
+            total += i & 7;
+        }
+    }
+#endif
 
-    printf("%d %d\\n", predictable, alternating);
+    printf("%d\\n", total);
     return 0;
 }
 `
@@ -426,21 +431,38 @@ int main(void) {
     description: 'Tiled matrix multiply',
     language: 'c',
     code: `// Cache Blocking - Matrix Multiply Optimization
+// Set RUN_BLOCKED=1 to compare the blocked traversal
 #include <stdio.h>
+
+#ifndef RUN_BLOCKED
+#define RUN_BLOCKED 0
+#endif
+
 #define N 256
 #define BLOCK 32
 
 float A[N][N], B[N][N], C[N][N];
 
-int main() {
+static void init_data(void) {
     for (int i = 0; i < N; i++)
         for (int j = 0; j < N; j++) {
             A[i][j] = i + j;
             B[i][j] = i - j;
             C[i][j] = 0;
         }
+}
 
-    // Blocked multiply - better cache reuse
+static void matmul_direct(void) {
+    for (int i = 0; i < N; i++)
+        for (int j = 0; j < N; j++) {
+            float sum = 0.0f;
+            for (int k = 0; k < N; k++)
+                sum += A[i][k] * B[k][j];
+            C[i][j] = sum;
+        }
+}
+
+static void matmul_blocked(void) {
     for (int i = 0; i < N; i += BLOCK)
         for (int j = 0; j < N; j += BLOCK)
             for (int k = 0; k < N; k += BLOCK)
@@ -451,6 +473,16 @@ int main() {
                             sum += A[ii][kk] * B[kk][jj];
                         C[ii][jj] = sum;
                     }
+}
+
+int main() {
+    init_data();
+
+#if RUN_BLOCKED
+    matmul_blocked();
+#else
+    matmul_direct();
+#endif
 
     float sum = 0;
     for (int i = 0; i < N; i++)

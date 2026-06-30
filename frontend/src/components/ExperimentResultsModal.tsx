@@ -1,4 +1,5 @@
 import { formatPercent } from '../utils/formatting'
+import type { ExperimentTemplate } from '../constants'
 import type { HardwareExperimentResult } from '../types'
 
 interface ExperimentResultsModalProps {
@@ -7,7 +8,11 @@ interface ExperimentResultsModalProps {
   error: string | null
   variantsText: string
   hardwareConfigIds: string[]
+  templates: ExperimentTemplate[]
+  selectedTemplateId: string
   onVariantsTextChange: (value: string) => void
+  onTemplateChange: (value: string) => void
+  onApplyTemplate: () => void
   onRun: () => void
   onExportCSV?: () => void
   onExportJSON?: () => void
@@ -71,7 +76,11 @@ export function ExperimentResultsModal({
   error,
   variantsText,
   hardwareConfigIds,
+  templates,
+  selectedTemplateId,
   onVariantsTextChange,
+  onTemplateChange,
+  onApplyTemplate,
   onRun,
   onExportCSV,
   onExportJSON,
@@ -79,6 +88,7 @@ export function ExperimentResultsModal({
 }: ExperimentResultsModalProps) {
   const winners = winnerRows(result)
   const overall = overallWinner(result)
+  const selectedTemplate = templates.find(template => template.id === selectedTemplateId)
 
   return (
     <div className="batch-modal-overlay" onClick={() => !running && onClose()}>
@@ -100,6 +110,25 @@ export function ExperimentResultsModal({
           </div>
         </div>
         <div className="batch-modal-content">
+          {templates.length > 0 && (
+            <div className="experiment-template-bar">
+              <label className="experiment-field experiment-template-field">
+                <span>Template</span>
+                <select value={selectedTemplateId} onChange={event => onTemplateChange(event.target.value)}>
+                  {templates.map(template => (
+                    <option value={template.id} key={template.id}>{template.name}</option>
+                  ))}
+                </select>
+              </label>
+              <div className="experiment-template-desc">
+                {selectedTemplate?.description || ''}
+              </div>
+              <button className="btn experiment-template-apply" onClick={onApplyTemplate} disabled={running || !selectedTemplate}>
+                Apply
+              </button>
+            </div>
+          )}
+
           <div className="experiment-controls">
             <label className="experiment-field">
               <span>Variants</span>

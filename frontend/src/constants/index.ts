@@ -1,6 +1,8 @@
 // Examples
 export { EXAMPLES, DEFAULT_EXAMPLE } from './examples'
 export type { Example, ExampleFile } from './examples'
+export { EXPERIMENT_TEMPLATES } from './experimentTemplates'
+export type { ExperimentTemplate } from './experimentTemplates'
 
 // Config
 export {

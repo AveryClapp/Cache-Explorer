@@ -34,7 +34,15 @@ import type {
 } from './types'
 
 // Constants
-import { DEFAULT_EXAMPLE, API_BASE, WS_URL, PREFETCH_DEFAULTS, defaultCustomConfig } from './constants'
+import {
+  DEFAULT_EXAMPLE,
+  EXAMPLES,
+  EXPERIMENT_TEMPLATES,
+  API_BASE,
+  WS_URL,
+  PREFETCH_DEFAULTS,
+  defaultCustomConfig,
+} from './constants'
 
 // Hooks
 import { createFileTab, getFileExtension, useBaseline } from './hooks'
@@ -150,6 +158,29 @@ function App() {
     setActiveFileId(newFile.id)
   }, [])
 
+  const loadExampleByKey = useCallback((exampleKey: string) => {
+    const example = EXAMPLES[exampleKey]
+    if (!example) return
+
+    if (example.files && example.files.length > 0) {
+      const newFiles = example.files.map(file => ({
+        ...createFileTab(file.name, file.code, file.language),
+        isMain: file.isMain,
+      }))
+      const mainFile = newFiles.find(file => file.isMain) || newFiles[0]
+      if (!mainFile) return
+      setFiles(newFiles)
+      setActiveFileId(mainFile.id)
+      setMainFileId(mainFile.id)
+      return
+    }
+
+    const newFile = createFileTab(`main${getFileExtension(example.language)}`, example.code, example.language)
+    setFiles([newFile])
+    setActiveFileId(newFile.id)
+    setMainFileId(newFile.id)
+  }, [])
+
   // Convert files to ProjectFile format for FileManager
   const projectFiles: ProjectFile[] = useMemo(() =>
     files.map(f => ({
@@ -215,6 +246,7 @@ function App() {
   const [experimentRunning, setExperimentRunning] = useState(false)
   const [experimentError, setExperimentError] = useState<string | null>(null)
   const [experimentVariants, setExperimentVariants] = useState('direct\ntiled:RUN_TILED=1')
+  const [selectedExperimentTemplateId, setSelectedExperimentTemplateId] = useState(EXPERIMENT_TEMPLATES[0]?.id || '')
   const [hardwareProfiles, setHardwareProfiles] = useState<HardwareProfile[]>([])
   const [showHardwareExplorer, setShowHardwareExplorer] = useState(false)
   const [hardwareProfilesLoading, setHardwareProfilesLoading] = useState(false)
@@ -746,6 +778,19 @@ function App() {
     setShowExperimentModal(true)
   }, [])
 
+  const applyExperimentTemplate = useCallback(() => {
+    const template = EXPERIMENT_TEMPLATES.find(item => item.id === selectedExperimentTemplateId)
+    if (!template) return
+
+    setExperimentVariants(template.variants.join('\n'))
+    if (template.exampleKey) loadExampleByKey(template.exampleKey)
+    if (template.optLevel) setOptLevel(template.optLevel)
+    if (template.prefetchPolicy) setPrefetchPolicy(template.prefetchPolicy)
+    if (typeof template.eventLimit === 'number') setEventLimit(template.eventLimit)
+    if (typeof template.fastMode === 'boolean') setFastMode(template.fastMode)
+    if (typeof template.cacheSegments === 'boolean') setCacheSegments(template.cacheSegments)
+  }, [loadExampleByKey, selectedExperimentTemplateId])
+
   const loadHardwareProfiles = useCallback(async () => {
     setHardwareProfilesLoading(true)
     setHardwareProfilesError(null)
@@ -932,7 +977,11 @@ function App() {
           error={experimentError}
           variantsText={experimentVariants}
           hardwareConfigIds={hardwareConfigsOrDefault(runHardwareConfigIds)}
+          templates={EXPERIMENT_TEMPLATES}
+          selectedTemplateId={selectedExperimentTemplateId}
           onVariantsTextChange={setExperimentVariants}
+          onTemplateChange={setSelectedExperimentTemplateId}
+          onApplyTemplate={applyExperimentTemplate}
           onRun={runExperimentAnalysis}
           onExportCSV={() => experimentResult && exportExperimentAsCSV(experimentResult)}
           onExportJSON={() => experimentResult && exportExperimentAsJSON(experimentResult)}
@@ -1039,14 +1088,7 @@ function App() {
             langFilter={exampleLangFilter}
             onLangFilterChange={setExampleLangFilter}
             currentCode={files[0]?.code || ''}
-            onLoadExample={(newFiles, mainId) => {
-              setFiles(newFiles)
-              setActiveFileId(mainId)
-              setMainFileId(mainId)
-            }}
-            onUpdateFile={(code, language, name) => {
-              setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, code, language, name } : f))
-            }}
+            onLoadExample={loadExampleByKey}
           />
         )}
 
