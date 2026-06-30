@@ -3,8 +3,10 @@
  * Provides Prometheus-compatible metrics and health checks
  */
 
-import { existsSync } from 'fs';
+import { existsSync, writeFileSync, unlinkSync } from 'fs';
 import { execSync } from 'child_process';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { isHealthy as isDbHealthy, getDbStats } from './db.js';
 
 const VERSION = '1.0.0';
@@ -152,9 +154,9 @@ function checkClang() {
  */
 function checkTempDir() {
   try {
-    const testFile = `/tmp/cache-explorer-health-${Date.now()}`;
-    require('fs').writeFileSync(testFile, 'test');
-    require('fs').unlinkSync(testFile);
+    const testFile = join(tmpdir(), `cache-explorer-health-${Date.now()}`);
+    writeFileSync(testFile, 'test');
+    unlinkSync(testFile);
     return true;
   } catch {
     return false;
