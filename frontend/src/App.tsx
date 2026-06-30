@@ -11,6 +11,7 @@ import {
   SettingsToolbar,
   ExamplesSidebar,
   BatchResultsModal,
+  ExperimentResultsModal,
   ResultsPanel,
   EditorPanel,
 } from './components'
@@ -20,6 +21,7 @@ import type { ProjectFile, CommandItem, ExampleLangFilter } from './components'
 import type {
   CacheResult,
   ErrorResult,
+  HardwareExperimentResult,
   Language,
   FileTab,
   Stage,
@@ -53,6 +55,13 @@ function annotationBadge(annotation: SourceAnnotation) {
 }
 
 const BATCH_HARDWARE_CONFIGS = ['educational', 'intel', 'amd', 'apple']
+
+function parseExperimentVariants(value: string) {
+  return value
+    .split(/\r?\n/)
+    .map(variant => variant.trim())
+    .filter(Boolean)
+}
 
 function App() {
   // Embed mode detection from URL params
@@ -174,6 +183,11 @@ function App() {
   const [batchResults, setBatchResults] = useState<{config: string; result: CacheResult}[]>([])
   const [showBatchModal, setShowBatchModal] = useState(false)
   const [batchRunning, setBatchRunning] = useState(false)
+  const [experimentResult, setExperimentResult] = useState<HardwareExperimentResult | null>(null)
+  const [showExperimentModal, setShowExperimentModal] = useState(false)
+  const [experimentRunning, setExperimentRunning] = useState(false)
+  const [experimentError, setExperimentError] = useState<string | null>(null)
+  const [experimentVariants, setExperimentVariants] = useState('direct\ntiled:RUN_TILED=1')
   const commandInputRef = useRef<HTMLInputElement>(null)
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const monacoRef = useRef<Monaco | null>(null)
@@ -606,35 +620,35 @@ function App() {
 
   const isLoading = stage !== 'idle'
 
+  const makeHardwarePayload = useCallback(() => {
+    const payload: Record<string, unknown> = {
+      optLevel,
+    }
+
+    if (files.length === 1) {
+      payload.code = files[0].code
+      payload.language = files[0].language
+    } else {
+      payload.files = files.map(f => ({ name: f.name, code: f.code, language: f.language }))
+      payload.language = files[0].language
+    }
+
+    if (defines.length > 0) payload.defines = defines.filter(d => d.name.trim())
+    if (prefetchPolicy !== 'none') payload.prefetch = prefetchPolicy
+    if (sampleRate > 1) payload.sample = sampleRate
+    payload.limit = eventLimit
+    if (selectedCompiler) payload.compiler = selectedCompiler
+    if (fastMode) payload.fast = true
+    if (cacheSegments) payload.cacheSegments = true
+
+    return payload
+  }, [cacheSegments, defines, eventLimit, fastMode, files, optLevel, prefetchPolicy, sampleRate, selectedCompiler])
+
   // Batch analysis - compare same code across multiple hardware presets
   const runBatchAnalysis = useCallback(async () => {
     setBatchResults([])
     setBatchRunning(true)
     setShowBatchModal(true)
-
-    const makeBasePayload = () => {
-      const payload: Record<string, unknown> = {
-        optLevel,
-      }
-
-      if (files.length === 1) {
-        payload.code = files[0].code
-        payload.language = files[0].language
-      } else {
-        payload.files = files.map(f => ({ name: f.name, code: f.code, language: f.language }))
-        payload.language = files[0].language
-      }
-
-      if (defines.length > 0) payload.defines = defines.filter(d => d.name.trim())
-      if (prefetchPolicy !== 'none') payload.prefetch = prefetchPolicy
-      if (sampleRate > 1) payload.sample = sampleRate
-      payload.limit = eventLimit
-      if (selectedCompiler) payload.compiler = selectedCompiler
-      if (fastMode) payload.fast = true
-      if (cacheSegments) payload.cacheSegments = true
-
-      return payload
-    }
 
     const canUseCompareEndpoint =
       files.length === 1 && (files[0].language === 'c' || files[0].language === 'cpp')
@@ -645,7 +659,7 @@ function App() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            ...makeBasePayload(),
+            ...makeHardwarePayload(),
             configs: BATCH_HARDWARE_CONFIGS,
           }),
         })
@@ -668,7 +682,7 @@ function App() {
     for (const cfg of BATCH_HARDWARE_CONFIGS) {
       try {
         const payload = {
-          ...makeBasePayload(),
+          ...makeHardwarePayload(),
           config: cfg,
         }
 
@@ -686,7 +700,47 @@ function App() {
       }
     }
     setBatchRunning(false)
-  }, [cacheSegments, defines, eventLimit, fastMode, files, optLevel, prefetchPolicy, sampleRate, selectedCompiler])
+  }, [files, makeHardwarePayload])
+
+  const openExperimentModal = useCallback(() => {
+    setShowExperimentModal(true)
+  }, [])
+
+  const runExperimentAnalysis = useCallback(async () => {
+    const variants = parseExperimentVariants(experimentVariants)
+    if (variants.length === 0) {
+      setExperimentError('Add at least one variant')
+      return
+    }
+
+    setExperimentResult(null)
+    setExperimentError(null)
+    setExperimentRunning(true)
+    setShowExperimentModal(true)
+
+    try {
+      const response = await fetch(`${API_BASE}/experiment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...makeHardwarePayload(),
+          variants,
+          configs: BATCH_HARDWARE_CONFIGS,
+        }),
+      })
+      const data = await response.json()
+
+      if (response.ok && data.summary && data.variants) {
+        setExperimentResult(data as HardwareExperimentResult)
+      } else {
+        setExperimentError(data.message || data.error || 'Experiment failed')
+      }
+    } catch (err) {
+      setExperimentError(err instanceof Error ? err.message : 'Experiment failed')
+    } finally {
+      setExperimentRunning(false)
+    }
+  }, [experimentVariants, makeHardwarePayload])
 
   const commands: CommandItem[] = useMemo(() => [
     // Actions (@)
@@ -698,6 +752,7 @@ function App() {
     { id: 'export-json', icon: '@', label: 'Export results as JSON', action: () => result && exportAsJSON(result), category: 'actions' },
     { id: 'export-csv', icon: '@', label: 'Export results as CSV', action: () => result && exportAsCSV(result), category: 'actions' },
     { id: 'batch-analyze', icon: '@', label: 'Compare hardware presets', action: runBatchAnalysis, category: 'actions' },
+    { id: 'hardware-experiment', icon: '@', label: 'Open hardware experiment', action: openExperimentModal, category: 'actions' },
     // Settings (:)
     { id: 'vim', icon: ':', label: vimMode ? 'Disable Vim mode' : 'Enable Vim mode', action: () => setVimMode(!vimMode), category: 'settings' },
     { id: 'lang-c', icon: ':', label: 'Language: C', action: () => updateActiveLanguage('c'), category: 'settings' },
@@ -710,7 +765,7 @@ function App() {
     { id: 'limit-1m', icon: '*', label: 'Event limit: 1M', action: () => setEventLimit(1000000), category: 'config' },
     { id: 'limit-5m', icon: '*', label: 'Event limit: 5M', action: () => setEventLimit(5000000), category: 'config' },
     { id: 'limit-none', icon: '*', label: 'Event limit: None', action: () => setEventLimit(0), category: 'config' },
-  ], [isLoading, activeFileId, vimMode, diffMode, baselineResult, config, files, result, code, handleShare, updateActiveLanguage, setBaselineFromHook, clearBaselineHook, runBatchAnalysis])
+  ], [isLoading, activeFileId, vimMode, diffMode, baselineResult, config, files, result, code, handleShare, updateActiveLanguage, setBaselineFromHook, clearBaselineHook, runBatchAnalysis, openExperimentModal])
 
   // Command palette handlers
   const handleCommandSelect = useCallback((cmd: CommandItem) => {
@@ -752,6 +807,19 @@ function App() {
         />
       )}
 
+      {/* Hardware Experiment Modal */}
+      {showExperimentModal && (
+        <ExperimentResultsModal
+          result={experimentResult}
+          running={experimentRunning}
+          error={experimentError}
+          variantsText={experimentVariants}
+          onVariantsTextChange={setExperimentVariants}
+          onRun={runExperimentAnalysis}
+          onClose={() => setShowExperimentModal(false)}
+        />
+      )}
+
       {/* Header - hidden in embed mode */}
       {!isEmbedMode && (
         <Header
@@ -766,6 +834,7 @@ function App() {
           onSetBaseline={(r) => { setBaselineFromHook(r, config, files); setBaselineCode(code) }}
           onClearBaseline={() => { clearBaselineHook(); setBaselineCode(null) }}
           onCompareHardware={runBatchAnalysis}
+          onRunExperiment={openExperimentModal}
           onRun={runAnalysis}
           onCancel={cancelAnalysis}
         />

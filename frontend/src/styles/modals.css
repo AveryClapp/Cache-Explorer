@@ -60,6 +60,8 @@
 
   .btn-compare,
   .btn-export,
+  .btn-hardware-compare,
+  .btn-experiment,
   .btn-primary,
   .btn-cancel {
     padding: var(--space-2);
@@ -211,6 +213,8 @@
   }
 
   .btn-compare,
+  .btn-hardware-compare,
+  .btn-experiment,
   .btn-export {
     display: none;
   }
@@ -371,4 +375,84 @@
 .batch-results-table .bottleneck-chip.balanced {
   color: var(--signal-success);
   border-color: color-mix(in srgb, var(--signal-success) 45%, var(--border));
+}
+
+.experiment-modal {
+  max-width: 1040px;
+}
+
+.experiment-modal .batch-modal-content {
+  max-height: min(70vh, 640px);
+}
+
+.experiment-controls {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) auto;
+  gap: var(--space-3);
+  align-items: end;
+  margin-bottom: var(--space-4);
+}
+
+.experiment-field {
+  display: grid;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.experiment-field textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: var(--space-2) var(--space-3);
+  resize: vertical;
+  background: var(--surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-code);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.experiment-field textarea:focus {
+  outline: none;
+  border-color: var(--signal-info);
+}
+
+.experiment-run {
+  min-width: 96px;
+  min-height: 36px;
+}
+
+.experiment-error {
+  margin-bottom: var(--space-3);
+  padding: var(--space-3);
+  background: color-mix(in srgb, var(--signal-critical) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--signal-critical) 45%, var(--border));
+  color: var(--signal-critical);
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+}
+
+.experiment-results-table {
+  min-width: 920px;
+}
+
+.experiment-results-table td.neutral {
+  color: var(--text-secondary);
+}
+
+@media (max-width: 768px) {
+  .experiment-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .experiment-run {
+    width: 100%;
+  }
 }

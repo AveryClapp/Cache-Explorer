@@ -378,6 +378,43 @@ export interface CacheResult {
   execution?: ExecutionStats
 }
 
+export interface ExperimentHitRates {
+  l1d?: number | null
+  l2?: number | null
+  l3?: number | null
+}
+
+export interface ExperimentSummaryRow {
+  variant: string
+  variantSpec: string
+  config: string
+  profile?: HardwareProfile
+  primaryBottleneck: string
+  estimatedCycles: number
+  cycleDelta: number | null
+  cycleDeltaPercent: number | null
+  confidence?: string
+  bottleneckShare?: number | null
+  topSource?: {
+    file: string
+    line: number
+    subsystem?: string
+  } | null
+  hitRates?: ExperimentHitRates
+  events?: number
+}
+
+export interface HardwareExperimentResult {
+  source: string
+  baselineVariant: string
+  summary: ExperimentSummaryRow[]
+  variants: Record<string, {
+    source: string
+    summary: unknown[]
+    configs: Record<string, CacheResult>
+  }>
+}
+
 export interface OptimizationSuggestion {
   type: string
   severity: 'high' | 'medium' | 'low'
