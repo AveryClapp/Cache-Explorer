@@ -33,11 +33,14 @@ Tests key functionality:
 Tests directional workload relationships that should stay true:
 - Row-major matrix traversal has fewer L1D misses and modeled cycles than column-major traversal
 - Sequential scan has lower average latency than pointer chasing
+
+### 4. Workload Snapshots (`test-workload-snapshots.sh`)
+Runs benchmark snapshots from `workload-snapshots/` and validates their expected relationships:
 - Tiled Conv2D improves modeled Intel 14th Gen L2 locality versus direct Conv2D
 
-Workload snapshots live in `workload-snapshots/` for benchmark provenance and expected relationships.
+These snapshots are executable benchmark metadata: example path, config, optimization level, variants, and metric relationships live together.
 
-### 4. Master Runner (`run-all-tests.sh`)
+### 5. Master Runner (`run-all-tests.sh`)
 Runs all test suites and provides overall pass/fail summary.
 
 ## Running Tests
@@ -53,6 +56,7 @@ cd tests/integration
 ./test-all-presets.sh  # Hardware presets
 ./test-features.sh     # Core features
 ./test-golden-kernels.sh  # Directional workload relationships
+./test-workload-snapshots.sh  # Snapshot-driven benchmark relationships
 ```
 
 ### From Project Root
@@ -132,7 +136,7 @@ All tests should pass:
 ========================================
   Overall Summary
 ========================================
-Test Suites Passed: 5
+Test Suites Passed: 6
 Test Suites Failed: 0
 
 All tests passed!
@@ -141,5 +145,6 @@ All tests passed!
 Individual test counts:
 - Hardware Presets: 12 tests
 - Core Features: 12 tests
-- Golden Kernels: 5 tests
+- Golden Kernels: 3 tests
+- Workload Snapshots: 2 tests
 - **Total: 29 integration tests**
