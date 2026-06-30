@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "../profiles/CacheConfig.hpp"
+#include "ArgParser.hpp"
 #include "CacheLevel.hpp"
 #include "CacheStats.hpp"
 #include "MultiCoreCacheSystem.hpp"
@@ -109,6 +110,50 @@ public:
                                               const CacheStats& l3,
                                               const LatencyConfig& latency);
 
+    // ========== Execution Engine Statistics ==========
+
+    /**
+     * Write estimated execution-engine statistics as JSON.
+     * Includes branch prediction and analytical OoO pipeline estimates.
+     */
+    static void write_execution_stats(std::ostream& out,
+                                      const BranchPredictionStats& branch,
+                                      const std::vector<BranchSiteStats>& hot_branches,
+                                      const PipelineStats& pipeline);
+
+    /**
+     * Write an execution-engine object when the model is unavailable for the
+     * current processing mode.
+     */
+    static void write_execution_unavailable(std::ostream& out,
+                                            std::string_view reason);
+
+    /**
+     * Write additive Hardware Explorer subsystem output for execution stats.
+     */
+    static void write_execution_subsystem_stats(std::ostream& out,
+                                                const BranchPredictionStats& branch,
+                                                const std::vector<BranchSiteStats>& hot_branches,
+                                                const PipelineStats& pipeline);
+
+    /**
+     * Write unavailable execution subsystem output.
+     */
+    static void write_execution_subsystem_unavailable(std::ostream& out,
+                                                      std::string_view reason);
+
+    /**
+     * Write top-level bottleneck summary.
+     */
+    static void write_bottleneck_summary(std::ostream& out,
+                                         const BottleneckSummary& summary);
+
+    /**
+     * Write source-level hardware annotations.
+     */
+    static void write_source_annotations(std::ostream& out,
+                                         const std::vector<SourceAnnotation>& annotations);
+
     // ========== Hot Lines ==========
 
     /**
@@ -165,6 +210,22 @@ public:
      * Write cache configuration as JSON object.
      */
     static void write_cache_config(std::ostream& out, const CacheHierarchyConfig& cfg);
+
+    /**
+     * Write hardware profile metadata as JSON.
+     */
+    static void write_profile_metadata(std::ostream& out,
+                                       const HardwareProfileMetadata& profile);
+
+    /**
+     * Write hardware profile metadata plus modeled hardware parameters as JSON.
+     */
+    static void write_profile_metadata(std::ostream& out,
+                                       const HardwareProfileMetadata& profile,
+                                       const CacheHierarchyConfig& cfg,
+                                       std::string_view prefetch_policy_name,
+                                       int prefetch_degree,
+                                       int active_cores);
 
     // ========== Coherence Statistics ==========
 

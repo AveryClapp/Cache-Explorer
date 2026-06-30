@@ -13,6 +13,7 @@ export const PREFETCH_DEFAULTS: Record<string, PrefetchPolicy> = {
   intel: 'stream',
   intel14: 'stream',
   xeon: 'stream',
+  xeon8488c: 'stream',
   // AMD Zen uses stride + stream detection
   amd: 'adaptive',
   zen3: 'adaptive',
@@ -26,8 +27,8 @@ export const PREFETCH_DEFAULTS: Record<string, PrefetchPolicy> = {
   // ARM uses stream prefetching
   graviton: 'stream',
   rpi4: 'next',
-  // Embedded often has simple or no prefetching
-  embedded: 'next',
+  // Embedded preset keeps prefetching disabled for simple cores
+  embedded: 'none',
   // Educational - no prefetch to show raw behavior
   educational: 'none',
   // Custom - user decides
@@ -42,6 +43,7 @@ export const CONFIG_NAMES: Record<string, string> = {
   intel: 'Intel 12th Gen',
   intel14: 'Intel 14th Gen',
   xeon: 'Intel Xeon',
+  xeon8488c: 'Intel Xeon Platinum 8488C',
   zen3: 'AMD Zen 3',
   amd: 'AMD Zen 4',
   epyc: 'AMD EPYC',

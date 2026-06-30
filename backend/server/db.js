@@ -14,58 +14,101 @@ const DATA_DIR = join(__dirname, 'data');
 const DB_PATH = join(DATA_DIR, 'cache-explorer.db');
 
 let db = null;
+let dbUnavailableError = null;
+
+function emptyStats(available = false) {
+  return {
+    available,
+    cache: {
+      entries: 0,
+      sizeBytes: 0,
+      totalHits: 0,
+    },
+    urls: {
+      count: 0,
+      totalAccesses: 0,
+    },
+  };
+}
+
+function ensureDb() {
+  if (db) return true;
+  if (dbUnavailableError) return false;
+
+  try {
+    initDb();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function unavailableError() {
+  const err = new Error(
+    `Database unavailable${dbUnavailableError ? `: ${dbUnavailableError.message}` : ''}`
+  );
+  err.code = 'DB_UNAVAILABLE';
+  return err;
+}
 
 /**
  * Initialize database and create tables
  */
 export function initDb() {
   if (db) return db;
+  if (dbUnavailableError) throw dbUnavailableError;
 
-  // Create data directory if needed
-  if (!existsSync(DATA_DIR)) {
-    mkdirSync(DATA_DIR, { recursive: true });
+  try {
+    // Create data directory if needed
+    if (!existsSync(DATA_DIR)) {
+      mkdirSync(DATA_DIR, { recursive: true });
+    }
+
+    db = new Database(DB_PATH);
+    db.pragma('journal_mode = WAL');
+
+    // Compilation cache table
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS compilation_cache (
+        hash TEXT PRIMARY KEY,
+        result TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        last_accessed INTEGER,
+        hits INTEGER DEFAULT 0,
+        size_bytes INTEGER
+      )
+    `);
+
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_cache_accessed
+      ON compilation_cache(last_accessed)
+    `);
+
+    // URL shortener table
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS short_urls (
+        code TEXT PRIMARY KEY,
+        data TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        access_count INTEGER DEFAULT 0,
+        last_accessed INTEGER
+      )
+    `);
+
+    console.log('Database initialized at', DB_PATH);
+    return db;
+  } catch (err) {
+    db = null;
+    dbUnavailableError = err;
+    throw err;
   }
-
-  db = new Database(DB_PATH);
-  db.pragma('journal_mode = WAL');
-
-  // Compilation cache table
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS compilation_cache (
-      hash TEXT PRIMARY KEY,
-      result TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      last_accessed INTEGER,
-      hits INTEGER DEFAULT 0,
-      size_bytes INTEGER
-    )
-  `);
-
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_cache_accessed
-    ON compilation_cache(last_accessed)
-  `);
-
-  // URL shortener table
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS short_urls (
-      code TEXT PRIMARY KEY,
-      data TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      access_count INTEGER DEFAULT 0,
-      last_accessed INTEGER
-    )
-  `);
-
-  console.log('Database initialized at', DB_PATH);
-  return db;
 }
 
 /**
  * Get cached compilation result
  */
 export function getCache(hash) {
-  if (!db) initDb();
+  if (!ensureDb()) return null;
 
   const stmt = db.prepare(`
     SELECT result FROM compilation_cache WHERE hash = ?
@@ -90,7 +133,7 @@ export function getCache(hash) {
  * Store compilation result in cache
  */
 export function setCache(hash, result) {
-  if (!db) initDb();
+  if (!ensureDb()) return 0;
 
   const sizeBytes = Buffer.byteLength(result, 'utf8');
   const now = Date.now();
@@ -109,7 +152,12 @@ export function setCache(hash, result) {
  * Prune old/excess cache entries
  */
 export function pruneCache(maxSizeBytes = 1024 * 1024 * 1024, maxAgeDays = 7) {
-  if (!db) initDb();
+  if (!ensureDb()) {
+    return {
+      deleted: 0,
+      freedBytes: 0,
+    };
+  }
 
   const maxAgeMs = maxAgeDays * 24 * 60 * 60 * 1000;
   const cutoffTime = Date.now() - maxAgeMs;
@@ -182,7 +230,7 @@ function generateCode() {
  * Create a short URL
  */
 export function createShortUrl(data) {
-  if (!db) initDb();
+  if (!ensureDb()) throw unavailableError();
 
   const code = generateCode();
   const now = Date.now();
@@ -209,7 +257,7 @@ export function createShortUrl(data) {
  * Get data for short URL
  */
 export function getShortUrl(code) {
-  if (!db) initDb();
+  if (!ensureDb()) throw unavailableError();
 
   const stmt = db.prepare(`
     SELECT data FROM short_urls WHERE code = ?
@@ -239,7 +287,7 @@ export function getShortUrl(code) {
  * Get database stats
  */
 export function getDbStats() {
-  if (!db) initDb();
+  if (!ensureDb()) return emptyStats(false);
 
   const cacheStats = db.prepare(`
     SELECT COUNT(*) as count, SUM(size_bytes) as size, SUM(hits) as hits
@@ -252,6 +300,7 @@ export function getDbStats() {
   `).get();
 
   return {
+    available: true,
     cache: {
       entries: cacheStats?.count || 0,
       sizeBytes: cacheStats?.size || 0,
@@ -269,7 +318,7 @@ export function getDbStats() {
  */
 export function isHealthy() {
   try {
-    if (!db) initDb();
+    if (!ensureDb()) return false;
     db.prepare('SELECT 1').get();
     return true;
   } catch {

@@ -7,6 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 TEST_PROGRAM="$SCRIPT_DIR/simple-programs/matrix.c"
 CACHE_EXPLORE="$PROJECT_ROOT/backend/scripts/cache-explore"
+CACHE_SIM="$PROJECT_ROOT/backend/cache-simulator/build/cache-sim"
 
 # Color output
 RED='\033[0;31m'
@@ -78,7 +79,7 @@ test_feature "Fast mode" --config intel --fast
 # Test JSON output format
 echo -n "Test: JSON output structure... "
 OUTPUT=$("$CACHE_EXPLORE" "$TEST_PROGRAM" --config intel --json 2>/dev/null)
-if echo "$OUTPUT" | jq -e '.config, .events, .levels.l1d.hits, .levels.l1d.misses, .levels.l1d.hitRate' > /dev/null 2>&1; then
+if echo "$OUTPUT" | jq -e '.config, .profile.displayName, .profile.modelConfidence, .profile.details.executionCore.issueWidth, .profile.details.prefetch.activePolicy, .summary.estimatedCycles, .subsystems.execution.available, .events, .levels.l1d.hits, .levels.l1d.misses, .levels.l1d.hitRate' > /dev/null 2>&1; then
     echo -e "${GREEN}PASS${NC}"
     PASSED=$((PASSED + 1))
 else
@@ -112,6 +113,47 @@ else
     echo "    Error: Timing stats missing"
     FAILED=$((FAILED + 1))
     FAILED_TESTS+=("Timing model")
+fi
+
+# Test --hardware alias
+echo -n "Test: Hardware alias... "
+OUTPUT=$("$CACHE_EXPLORE" "$TEST_PROGRAM" --hardware educational --json 2>/dev/null)
+if echo "$OUTPUT" | jq -e '.config == "educational" and .profile.id == "educational"' > /dev/null 2>&1; then
+    echo -e "${GREEN}PASS${NC}"
+    PASSED=$((PASSED + 1))
+else
+    echo -e "${RED}FAIL${NC}"
+    echo "    Error: --hardware alias did not select expected profile"
+    FAILED=$((FAILED + 1))
+    FAILED_TESTS+=("Hardware alias")
+fi
+
+# Test execution-engine JSON from branch trace events
+echo -n "Test: Execution engine branch trace... "
+if [ ! -x "$CACHE_SIM" ]; then
+    echo -e "${RED}FAIL${NC}"
+    echo "    Error: cache-sim binary not found at $CACHE_SIM"
+    FAILED=$((FAILED + 1))
+    FAILED_TESTS+=("Execution engine branch trace")
+else
+    OUTPUT=$(printf 'I 0x1000 16 branch.c:1 T1\nB 0x1 1 branch.c:2 T1\nB 0x1 0 branch.c:2 T1\nB 0x1 1 branch.c:2 T1\n' \
+        | "$CACHE_SIM" --config educational --json 2>/dev/null)
+    if echo "$OUTPUT" | jq -e '.execution.available == true
+        and .subsystems.execution.available == true
+        and .execution.pipeline.cycles > 0
+        and .summary.estimatedCycles > 0
+        and .execution.branchPrediction.total == 3
+        and .execution.branchPrediction.hotBranches[0].mispredictions == 3
+        and any(.sourceAnnotations[]; .subsystem == "branch" and .metrics.branchMispredictions == 3)' > /dev/null 2>&1; then
+        echo -e "${GREEN}PASS${NC}"
+        PASSED=$((PASSED + 1))
+    else
+        echo -e "${RED}FAIL${NC}"
+        echo "    Error: Execution stats missing or invalid"
+        echo "$OUTPUT" | head -20
+        FAILED=$((FAILED + 1))
+        FAILED_TESTS+=("Execution engine branch trace")
+    fi
 fi
 
 echo ""

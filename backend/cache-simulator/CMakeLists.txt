@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_library(CacheSimulator
   src/ArgParser.cpp
+  src/BranchPredictor.cpp
   src/CacheLevel.cpp
   src/CacheSystem.cpp
   src/CoherenceController.cpp
@@ -13,6 +14,7 @@ add_library(CacheSimulator
   src/MultiCoreCacheSystem.cpp
   src/MultiCoreTraceProcessor.cpp
   src/OptimizationSuggester.cpp
+  src/PipelineModel.cpp
   src/Prefetcher.cpp
   src/SegmentCache.cpp
   src/TLB.cpp
@@ -58,3 +60,9 @@ target_link_libraries(JsonOutputTest CacheSimulator)
 
 add_executable(SegmentCacheTest tests/SegmentCacheTest.cpp)
 target_link_libraries(SegmentCacheTest CacheSimulator)
+
+add_executable(BranchPredictorTest tests/BranchPredictorTest.cpp)
+target_link_libraries(BranchPredictorTest CacheSimulator)
+
+add_executable(PipelineModelTest tests/PipelineModelTest.cpp)
+target_link_libraries(PipelineModelTest CacheSimulator)

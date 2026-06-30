@@ -118,6 +118,7 @@ int main(int argc, char *argv[]) {
   PrefetchPolicy prefetch_policy = opts.prefetch_policy;
   int prefetch_degree = opts.prefetch_degree;
   CacheHierarchyConfig cfg = opts.cache_config;
+  HardwareProfileMetadata profile = ArgParser::get_profile_metadata(config_name);
 
   // Streaming mode: process events as they arrive and output JSON for each
   // Uses MultiCoreTraceProcessor to handle both single and multi-threaded code
@@ -292,6 +293,11 @@ int main(int argc, char *argv[]) {
               << ",\"conflict\":" << stats.l3.conflict_misses << "}";
     std::cout << "}";
 
+    std::cout << ",";
+    JsonOutput::write_profile_metadata(std::cout, profile, cfg,
+                                       ArgParser::prefetch_policy_name(prefetch_policy),
+                                       prefetch_degree, processor.get_num_cores());
+
     // Coherence stats
     std::cout << ",\"coherence\":{\"invalidations\":" << stats.coherence_invalidations
               << ",\"falseSharingEvents\":" << stats.false_sharing_events << "}";
@@ -368,6 +374,15 @@ int main(int argc, char *argv[]) {
               << "\"memory\":" << cfg.latency.memory << ","
               << "\"tlbMissPenalty\":" << cfg.latency.tlb_miss_penalty
               << "}}";
+
+    std::cout << ",";
+    JsonOutput::write_execution_unavailable(
+        std::cout,
+        "Execution-engine estimates are not available in streaming multi-core mode yet.");
+    std::cout << ",";
+    JsonOutput::write_execution_subsystem_unavailable(
+        std::cout,
+        "Execution-engine estimates are not available in streaming multi-core mode yet.");
 
     // Prefetch stats (if enabled)
     if (prefetch_policy != PrefetchPolicy::NONE) {
@@ -581,6 +596,10 @@ int main(int argc, char *argv[]) {
     if (json_output) {
       std::cout << "{\n";
       std::cout << "  \"config\": \"" << config_name << "\",\n";
+      JsonOutput::write_profile_metadata(std::cout, profile, cfg,
+                                         ArgParser::prefetch_policy_name(prefetch_policy),
+                                         prefetch_degree, num_cores);
+      std::cout << ",\n";
       std::cout << "  \"multicore\": true,\n";
       std::cout << "  \"cores\": " << num_cores << ",\n";
       std::cout << "  \"threads\": " << threads.size() << ",\n";
@@ -715,6 +734,15 @@ int main(int argc, char *argv[]) {
                 << "      \"memory\": " << cfg.latency.memory << "\n"
                 << "    }\n"
                 << "  }";
+
+      std::cout << ",\n";
+      JsonOutput::write_execution_unavailable(
+          std::cout,
+          "Execution-engine estimates are not available in multi-core mode yet.");
+      std::cout << ",\n";
+      JsonOutput::write_execution_subsystem_unavailable(
+          std::cout,
+          "Execution-engine estimates are not available in multi-core mode yet.");
 
       // Prefetch stats (if enabled)
       if (prefetch_policy != PrefetchPolicy::NONE) {
@@ -990,7 +1018,16 @@ int main(int argc, char *argv[]) {
     if (json_output) {
       std::cout << "{\n";
       std::cout << "  \"config\": \"" << config_name << "\",\n";
+      JsonOutput::write_profile_metadata(std::cout, profile, cfg,
+                                         ArgParser::prefetch_policy_name(prefetch_policy),
+                                         prefetch_degree, num_cores);
+      std::cout << ",\n";
       std::cout << "  \"events\": " << events.size() << ",\n";
+      if (!opts.cache_segments) {
+        JsonOutput::write_bottleneck_summary(
+            std::cout, processor.get_bottleneck_summary());
+        std::cout << ",\n";
+      }
 
       // Output cache configuration for visualization
       std::cout << "  \"cacheConfig\": {\n";
@@ -1083,6 +1120,11 @@ int main(int argc, char *argv[]) {
       }
 
       std::cout << "  ],\n";
+      if (!opts.cache_segments) {
+        JsonOutput::write_source_annotations(
+            std::cout, processor.get_source_annotations(12));
+        std::cout << ",\n";
+      }
 
       // Generate optimization suggestions for single-core
       auto suggestions =
@@ -1160,6 +1202,26 @@ int main(int argc, char *argv[]) {
         }
       }
 
+      std::cout << ",\n";
+      if (opts.cache_segments) {
+        JsonOutput::write_execution_unavailable(
+            std::cout,
+            "Execution-engine estimates are disabled when segment caching is enabled.");
+        std::cout << ",\n";
+        JsonOutput::write_execution_subsystem_unavailable(
+            std::cout,
+            "Execution-engine estimates are disabled when segment caching is enabled.");
+      } else {
+        const auto branch_stats = processor.get_branch_prediction_stats();
+        const auto hot_branches = processor.get_branch_hot_mispredicts(10);
+        const auto pipeline_stats = processor.get_pipeline_stats();
+        JsonOutput::write_execution_stats(
+            std::cout, branch_stats, hot_branches, pipeline_stats);
+        std::cout << ",\n";
+        JsonOutput::write_execution_subsystem_stats(
+            std::cout, branch_stats, hot_branches, pipeline_stats);
+      }
+
       // Output L1 cache state for visualization (single core = core 0)
       std::cout << ",\n  \"cacheState\": {\"l1d\": [";
       const auto& cache_sys = processor.get_cache_system();
@@ -1194,6 +1256,51 @@ int main(int argc, char *argv[]) {
         for (const auto &s : hot) {
           std::cout << s.file << ":" << s.line << " - "
                     << s.misses << " misses\n";
+        }
+      }
+
+      // Execution-engine model: branch prediction + estimated OoO pipeline.
+      if (opts.cache_segments) {
+        std::cout << "\n=== Execution Engine (estimated) ===\n";
+        std::cout << "Unavailable when segment caching is enabled.\n";
+      } else {
+        auto bp = processor.get_branch_prediction_stats();
+        auto pipe = processor.get_pipeline_stats();
+        if (bp.total > 0 || pipe.instructions > 0) {
+          std::cout << "\n=== Execution Engine (estimated) ===\n";
+          if (pipe.instructions > 0) {
+            std::cout << "Instructions: " << pipe.instructions
+                      << "   Cycles: " << pipe.total_cycles()
+                      << std::fixed << std::setprecision(2)
+                      << "   IPC: " << pipe.ipc()
+                      << "   CPI: " << pipe.cpi() << "\n";
+            std::cout << "Stall cycles  base=" << pipe.base_cycles
+                      << "  frontend=" << pipe.frontend_stall_cycles
+                      << "  L2=" << pipe.l2_stall_cycles
+                      << "  L3=" << pipe.l3_stall_cycles
+                      << "  DRAM=" << pipe.dram_stall_cycles
+                      << "  branch=" << pipe.branch_stall_cycles << "\n";
+          }
+          if (bp.total > 0) {
+            std::cout << "Branches: " << bp.total
+                      << "   Mispredicts: " << bp.mispredictions
+                      << std::fixed << std::setprecision(2)
+                      << "   Accuracy: " << (bp.accuracy() * 100) << "%\n";
+            auto hot_br = processor.get_branch_hot_mispredicts(5);
+            bool printed = false;
+            for (const auto &s : hot_br) {
+              if (s.mispredictions == 0)
+                continue;
+              if (!printed) {
+                std::cout << "Most-mispredicted branches:\n";
+                printed = true;
+              }
+              std::cout << "  " << s.file << ":" << s.line << " - "
+                        << s.mispredictions << "/" << s.total << " ("
+                        << std::fixed << std::setprecision(1)
+                        << (s.misprediction_rate() * 100) << "%)\n";
+            }
+          }
         }
       }
     }

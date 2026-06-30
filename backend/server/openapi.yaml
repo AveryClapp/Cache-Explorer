@@ -18,12 +18,58 @@ servers:
 tags:
   - name: profiling
     description: Code compilation and cache profiling endpoints
+  - name: hardware
+    description: Hardware profile catalog and model details
   - name: sharing
     description: URL shortening and code sharing endpoints
   - name: monitoring
     description: Health checks and metrics endpoints
 
 paths:
+  /profiles:
+    get:
+      tags:
+        - hardware
+      summary: List hardware profiles
+      description: |
+        Returns the hardware profiles supported by the simulator, including cache geometry,
+        TLB defaults, prefetch capabilities, execution-core assumptions, memory latency,
+        and topology details.
+      responses:
+        '200':
+          description: Supported hardware profiles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HardwareProfilesResponse'
+
+  /profiles/{id}:
+    get:
+      tags:
+        - hardware
+      summary: Get one hardware profile
+      description: Returns a single hardware profile by canonical id or supported alias.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: intel14
+      responses:
+        '200':
+          description: Hardware profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HardwareProfile'
+        '404':
+          description: Unknown hardware profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompileError'
+
   /compile:
     post:
       tags:
@@ -119,6 +165,114 @@ paths:
                     type: timeout
                     message: "Execution timed out after 60s"
                     suggestion: "Check for infinite loops, reduce input size, or increase timeout"
+
+  /compare:
+    post:
+      tags:
+        - profiling
+      summary: Compare hardware profiles
+      description: |
+        Compiles and traces a single-file C/C++ program once, then replays the captured trace
+        across multiple hardware profiles. This endpoint is available in direct development mode;
+        sandbox deployments should use `/compile` per profile.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompareRequest'
+            example:
+              code: |
+                #include <stdio.h>
+                int main() {
+                    int a[1024];
+                    for (int i = 0; i < 1024; i++) a[i] = i;
+                    printf("%d\n", a[1023]);
+                    return 0;
+                }
+              language: c
+              optLevel: "-O2"
+              configs: [educational, intel14, amd, apple]
+              limit: 200000
+      responses:
+        '200':
+          description: Successful hardware profile comparison
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompareResult'
+        '400':
+          description: Compilation, execution, or validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompileError'
+        '422':
+          description: Unsupported input for comparison mode
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompileError'
+        '501':
+          description: Comparison endpoint unavailable in sandbox mode
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompileError'
+
+  /experiment:
+    post:
+      tags:
+        - profiling
+      summary: Run a hardware experiment
+      description: |
+        Runs named source variants of a single-file C/C++ program and compares each variant
+        across multiple hardware profiles. Each variant is compiled and traced once, then
+        replayed across all requested profiles. The summary includes cycle deltas relative
+        to the first variant for each hardware profile.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExperimentRequest'
+            example:
+              code: |
+                #include <stdio.h>
+                #ifndef RUN_TILED
+                #define RUN_TILED 0
+                #endif
+                int main() { printf("%d\n", RUN_TILED); return 0; }
+              language: c
+              optLevel: "-O2"
+              variants: [direct, "tiled:RUN_TILED=1"]
+              configs: [educational, intel14]
+              limit: 200000
+      responses:
+        '200':
+          description: Successful hardware experiment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExperimentResult'
+        '400':
+          description: Compilation, execution, or validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompileError'
+        '422':
+          description: Unsupported input for experiment mode
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompileError'
+        '501':
+          description: Experiment endpoint unavailable in sandbox mode
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompileError'
 
   /health:
     get:
@@ -371,6 +525,271 @@ paths:
 
 components:
   schemas:
+    HardwareProfilesResponse:
+      type: object
+      properties:
+        profiles:
+          type: array
+          items:
+            $ref: '#/components/schemas/HardwareProfile'
+
+    HardwareProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          example: intel14
+        aliases:
+          type: array
+          items:
+            type: string
+          example: [intel14]
+        displayName:
+          type: string
+          example: Intel 14th Gen
+        vendor:
+          type: string
+          example: Intel
+        architecture:
+          type: string
+          example: x86_64
+        class:
+          type: string
+          example: client
+        modelConfidence:
+          type: string
+          example: directional
+        modelCoverage:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            cacheHierarchy: modeled
+            executionCore: estimated
+            simd: metadata-only
+        validation:
+          $ref: '#/components/schemas/HardwareProfileValidation'
+        notes:
+          type: string
+          nullable: true
+        details:
+          $ref: '#/components/schemas/HardwareProfileDetails'
+
+    HardwareProfileDetails:
+      type: object
+      properties:
+        cache:
+          type: object
+          properties:
+            inclusion:
+              type: string
+              example: non-inclusive-non-exclusive
+            levels:
+              type: object
+              properties:
+                l1d:
+                  $ref: '#/components/schemas/HardwareProfileCacheLevel'
+                l1i:
+                  $ref: '#/components/schemas/HardwareProfileCacheLevel'
+                l2:
+                  $ref: '#/components/schemas/HardwareProfileCacheLevel'
+                l3:
+                  $ref: '#/components/schemas/HardwareProfileCacheLevel'
+        tlb:
+          type: object
+          properties:
+            dtlb:
+              $ref: '#/components/schemas/HardwareProfileTlb'
+            itlb:
+              $ref: '#/components/schemas/HardwareProfileTlb'
+        prefetch:
+          $ref: '#/components/schemas/HardwareProfilePrefetch'
+        executionCore:
+          $ref: '#/components/schemas/HardwareProfileExecutionCore'
+        memory:
+          $ref: '#/components/schemas/HardwareProfileMemory'
+        topology:
+          $ref: '#/components/schemas/HardwareProfileTopology'
+
+    HardwareProfileCacheLevel:
+      type: object
+      properties:
+        sizeKB:
+          type: integer
+          example: 48
+        associativity:
+          type: integer
+          example: 12
+        lineSize:
+          type: integer
+          example: 64
+        sets:
+          type: integer
+          example: 64
+        replacement:
+          type: string
+          example: pseudo-lru
+        writePolicy:
+          type: string
+          example: write-back
+
+    HardwareProfileTlb:
+      type: object
+      properties:
+        entries:
+          type: integer
+          example: 64
+        associativity:
+          type: integer
+          example: 4
+        pageSize:
+          type: integer
+          example: 4096
+
+    HardwareProfilePrefetch:
+      type: object
+      properties:
+        activePolicy:
+          type: string
+          example: adaptive
+        activeDegree:
+          type: integer
+          example: 4
+        l1Stream:
+          type: boolean
+        l1Stride:
+          type: boolean
+        l1Degree:
+          type: integer
+        l2Stream:
+          type: boolean
+        l2Adjacent:
+          type: boolean
+        l2Degree:
+          type: integer
+        l2Streams:
+          type: integer
+        l2MaxDistance:
+          type: integer
+        l3Prefetch:
+          type: boolean
+        pointerPrefetch:
+          type: boolean
+        dynamicDegree:
+          type: boolean
+
+    HardwareProfileExecutionCore:
+      type: object
+      properties:
+        model:
+          type: string
+          example: analytical-ooo
+        issueWidth:
+          type: integer
+          example: 4
+        robSize:
+          type: integer
+          example: 192
+        hideableCycles:
+          type: integer
+          example: 48
+        branchMispredictPenalty:
+          type: integer
+          example: 14
+        branchPredictor:
+          type: string
+          example: bimodal-2bit
+        branchPredictorEntries:
+          type: integer
+          example: 1024
+        vectorBits:
+          type: integer
+          example: 256
+        vectorIsa:
+          type: string
+          example: avx2-class
+        loadPorts:
+          type: integer
+          example: 2
+        storePorts:
+          type: integer
+          example: 1
+        integerPipelines:
+          type: integer
+          example: 4
+        fpPipelines:
+          type: integer
+          example: 2
+
+    HardwareProfileMemory:
+      type: object
+      properties:
+        l1HitCycles:
+          type: integer
+          example: 4
+        l2HitCycles:
+          type: integer
+          example: 12
+        l3HitCycles:
+          type: integer
+          example: 40
+        dramCycles:
+          type: integer
+          example: 200
+        tlbMissPenaltyCycles:
+          type: integer
+          example: 7
+        l1BandwidthBytesPerCycle:
+          type: integer
+          example: 96
+        l2BandwidthBytesPerCycle:
+          type: integer
+          example: 64
+        l3BandwidthBytesPerCycle:
+          type: integer
+          example: 32
+        dramBandwidthGBs:
+          type: integer
+          example: 90
+        maxMemoryLevelParallelism:
+          type: integer
+          example: 10
+
+    HardwareProfileTopology:
+      type: object
+      properties:
+        activeCores:
+          type: integer
+          example: 1
+        l1Scope:
+          type: string
+          example: private-per-core
+        l2Scope:
+          type: string
+          example: private-to-modeled-core
+        l3Scope:
+          type: string
+          example: shared-last-level
+        coherence:
+          type: string
+          example: not-applicable
+
+    HardwareProfileValidation:
+      type: object
+      properties:
+        source:
+          type: string
+          example: architecture references and simulator presets
+        confidence:
+          type: string
+          example: directional
+        caveats:
+          type: array
+          items:
+            type: string
+          example:
+            - Execution, SIMD, bandwidth, and dependency behavior are modeled as estimates unless marked calibrated.
+
     CompileRequest:
       type: object
       properties:
@@ -434,6 +853,70 @@ components:
           description: Preprocessor definitions
           items:
             $ref: '#/components/schemas/PreprocessorDefine'
+
+    CompareRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Single-file C/C++ source code to compile and compare
+        configs:
+          type: array
+          description: Hardware profile ids to compare
+          items:
+            type: string
+          default: [educational, intel, amd, apple]
+          example: [educational, intel14, amd, apple]
+        optLevel:
+          type: string
+          description: Compiler optimization level
+          enum: ["-O0", "-O1", "-O2", "-O3", "-Os"]
+          default: "-O0"
+        language:
+          type: string
+          description: Programming language
+          enum: [c, cpp]
+          default: c
+        sample:
+          type: integer
+          description: Sample rate (1 = every access, 10 = every 10th access)
+          minimum: 1
+          default: 1
+        limit:
+          type: integer
+          description: Maximum number of events to capture
+          default: 1000000
+        prefetch:
+          type: string
+          description: Prefetch policy to simulate
+          enum: [none, next, next-line, stride, stream, adaptive, intel]
+          default: none
+        fast:
+          type: boolean
+          description: Disable 3C miss classification for faster simulation
+          default: false
+        cacheSegments:
+          type: boolean
+          description: Cache repeated loop segments during simulation
+          default: false
+        defines:
+          type: array
+          description: Preprocessor definitions
+          items:
+            $ref: '#/components/schemas/PreprocessorDefine'
+
+    ExperimentRequest:
+      allOf:
+        - $ref: '#/components/schemas/CompareRequest'
+        - type: object
+          properties:
+            variants:
+              type: array
+              description: Variant specs in the form name or name:DEFINE=value,DEFINE2
+              items:
+                type: string
+              default: [baseline]
+              example: [direct, "tiled:RUN_TILED=1"]
 
     SourceFile:
       type: object
@@ -517,6 +1000,104 @@ components:
           description: Optimization suggestions
           items:
             type: string
+
+    CompareResult:
+      type: object
+      properties:
+        source:
+          type: string
+          description: Source file used for the comparison
+        summary:
+          type: array
+          description: Compact per-profile hardware comparison summary
+          items:
+            $ref: '#/components/schemas/HardwareCompareSummary'
+        configs:
+          type: object
+          description: Full per-profile analysis results keyed by hardware config id
+          additionalProperties:
+            $ref: '#/components/schemas/CompileResult'
+
+    HardwareCompareSummary:
+      type: object
+      properties:
+        config:
+          type: string
+          example: intel14
+        primaryBottleneck:
+          type: string
+          example: memory
+        estimatedCycles:
+          type: integer
+          example: 651742
+        confidence:
+          type: string
+          example: medium
+        bottleneckShare:
+          type: number
+          format: float
+          example: 0.151
+        topSource:
+          type: object
+          nullable: true
+          properties:
+            file:
+              type: string
+              example: main.c
+            line:
+              type: integer
+              example: 12
+            subsystem:
+              type: string
+              example: memory
+            cycles:
+              type: integer
+              example: 58803
+        events:
+          type: integer
+          example: 200000
+
+    ExperimentResult:
+      type: object
+      properties:
+        source:
+          type: string
+          description: Source file used for the experiment
+        baselineVariant:
+          type: string
+          description: First variant, used as the per-profile delta baseline
+          example: direct
+        summary:
+          type: array
+          description: Flattened variant/profile experiment summary
+          items:
+            $ref: '#/components/schemas/HardwareExperimentSummary'
+        variants:
+          type: object
+          description: Full comparison result per variant
+          additionalProperties:
+            $ref: '#/components/schemas/CompareResult'
+
+    HardwareExperimentSummary:
+      allOf:
+        - $ref: '#/components/schemas/HardwareCompareSummary'
+        - type: object
+          properties:
+            variant:
+              type: string
+              example: tiled
+            variantSpec:
+              type: string
+              example: "tiled:RUN_TILED=1"
+            cycleDelta:
+              type: integer
+              description: Estimated-cycle delta from the baseline variant on the same hardware profile
+              example: -1875
+            cycleDeltaPercent:
+              type: number
+              format: float
+              description: Fractional cycle delta from baseline; -0.01 means 1% fewer cycles
+              example: -0.003
 
     CacheSummary:
       type: object

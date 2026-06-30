@@ -61,6 +61,7 @@ cd frontend && npm install && npm run dev
 - **False sharing detection** - Find hidden performance killers in threaded code
 - **6 prefetch policies** - None, Next-line, Stream, Stride, Adaptive, Intel DCU
 - **14 hardware presets** - Intel, AMD, Apple Silicon, ARM, Educational
+- **Hardware bottleneck summaries** - Estimated memory, branch, and front-end stalls
 - **Real-time visualization** - WebSocket streaming to interactive UI
 - **Works offline** - No cloud, no rate limits, your code stays local
 
@@ -165,6 +166,21 @@ cache-explore mycode.c --json
 
 # Custom optimization level
 cache-explore mycode.c -O3 --config apple
+
+# List modeled hardware profile IDs
+./backend/scripts/cache-explore profiles --ids
+
+# Real-kernel hardware experiment
+./backend/scripts/cache-explore examples/conv2d_kernel.c -O2 --hardware intel14 --json
+./backend/scripts/cache-explore examples/conv2d_kernel.c -O2 -D RUN_TILED=1 --hardware intel14 --json
+./backend/scripts/cache-explore compare examples/conv2d_kernel.c -O2 --configs educational,intel14,zen4,m3
+
+# Compare named kernel variants across hardware profiles
+./backend/scripts/cache-explore experiment examples/conv2d_kernel.c -O2 \
+  --variant direct \
+  --variant tiled:RUN_TILED=1 \
+  --configs educational,intel14,zen4,m3 \
+  --limit 200000
 ```
 
 ## Running Tests

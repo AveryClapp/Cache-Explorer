@@ -275,6 +275,66 @@ button {
   color: var(--void);
 }
 
+.btn-hardware-compare {
+  background: var(--elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  font-weight: 500;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.btn-hardware-compare:hover {
+  border-color: var(--signal-warning);
+  color: var(--signal-warning);
+}
+
+.btn-explore {
+  background: var(--elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  font-weight: 500;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.btn-explore:hover {
+  border-color: var(--signal-good);
+  color: var(--signal-good);
+}
+
+.btn-experiment {
+  background: var(--elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  font-weight: 500;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.btn-experiment:hover {
+  border-color: var(--signal-info);
+  color: var(--signal-info);
+}
+
 .btn-clear-baseline {
   color: var(--text-dim);
   font-size: var(--text-lg);
@@ -591,4 +651,3 @@ select:focus {
   color: var(--text-secondary);
   font-size: var(--text-xs);
 }
-

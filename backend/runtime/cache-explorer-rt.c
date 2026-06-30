@@ -174,6 +174,12 @@ void __tag_bb_entry(uint64_t bb_id, uint32_t instr_count, const char *file, uint
   emit_event(bb_id | EVENT_ICACHE_FLAG, fetch_size, file, line);
 }
 
+// Conditional branch direction: branch_id identifies the static branch site,
+// taken (0|1) is the runtime direction. Carried in the size field.
+void __tag_branch(uint64_t branch_id, uint32_t taken, const char *file, uint32_t line) {
+  emit_event(branch_id | EVENT_BRANCH_FLAG, taken ? 1u : 0u, file, line);
+}
+
 // Software prefetch hints (__builtin_prefetch)
 void __tag_prefetch(void *addr, uint32_t size, uint8_t hint, const char *file, uint32_t line) {
   // Encode hint level in upper bits (P0, P1, P2, P3)
@@ -420,8 +426,12 @@ void __cache_explorer_flush(void) {
       int is_vector = (e->address & EVENT_VECTOR_FLAG) != 0;
       int is_atomic = (e->address & EVENT_ATOMIC_FLAG) != 0;
       int is_memintr = (e->address & EVENT_MEMINTR_FLAG) != 0;
+      int is_branch = (e->address & EVENT_BRANCH_FLAG) != 0;
 
-      if (is_memintr) {
+      if (is_branch) {
+        // addr holds the branch-site id (flag bit cleared); size holds taken.
+        fmt_event('B', addr & ~EVENT_BRANCH_FLAG, e->size, file, line, e->thread_id);
+      } else if (is_memintr) {
         uint64_t intrinsic_type = (e->address >> 54) & 0x3;
         if (intrinsic_type == 1) {
           fmt_event('Z', addr, e->size, file, line, e->thread_id);

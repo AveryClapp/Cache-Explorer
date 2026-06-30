@@ -32,6 +32,15 @@ struct TraceEvent {
   bool is_memset = false;
   bool is_memmove = false;
   uint64_t src_address = 0;  // Source address for memcpy/memmove
+
+  // Control flow: conditional branch direction (for branch prediction)
+  // For branch events, `branch_id` is the static branch-site id and
+  // `branch_taken` is the runtime direction. `address` is also populated from
+  // the trace for backwards compatibility, but branch events are not memory
+  // accesses.
+  bool is_branch = false;
+  uint64_t branch_id = 0;
+  bool branch_taken = false;
 };
 
 struct EventResult {
@@ -161,6 +170,13 @@ inline std::optional<TraceEvent> parse_trace_event(const std::string &line) {
       // memset
       event.is_memset = true;
       event.is_write = true;
+      break;
+
+    case 'B':
+      // Conditional branch: addr = branch-site id, size = taken (0|1)
+      event.is_branch = true;
+      event.branch_id = event.address;
+      event.branch_taken = (event.size != 0);
       break;
 
     default:

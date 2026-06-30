@@ -102,6 +102,33 @@ void test_hot_lines_tracking() {
   std::cout << "[PASS] test_hot_lines_tracking\n";
 }
 
+void test_bottleneck_summary_and_source_annotations() {
+  TraceProcessor processor(make_test_hierarchy());
+
+  TraceEvent event;
+  event.address = 0x100000;
+  event.size = 4;
+  event.is_write = false;
+  event.file = "pointer.c";
+  event.line = 27;
+
+  processor.process(event);
+
+  auto summary = processor.get_bottleneck_summary();
+  assert(summary.primary_bottleneck == "memory");
+  assert(summary.estimated_cycles > 0);
+  assert(summary.has_top_source);
+  assert(summary.top_source.file == "pointer.c");
+  assert(summary.top_source.line == 27);
+
+  auto annotations = processor.get_source_annotations(4);
+  assert(!annotations.empty());
+  assert(annotations[0].subsystem == "memory");
+  assert(annotations[0].file == "pointer.c");
+  assert(annotations[0].cycles > 0);
+  std::cout << "[PASS] test_bottleneck_summary_and_source_annotations\n";
+}
+
 void test_event_callback() {
   TraceProcessor processor(make_test_hierarchy());
 
@@ -345,6 +372,7 @@ int main() {
   test_basic_write_event();
   test_repeated_access_hits();
   test_hot_lines_tracking();
+  test_bottleneck_summary_and_source_annotations();
   test_event_callback();
   test_prefetching_enabled();
 
@@ -369,6 +397,6 @@ int main() {
   test_pin_multibyte_access();
   test_pin_high_thread_id();
 
-  std::cout << "\n=== All 21 TraceProcessor tests passed! ===\n";
+  std::cout << "\n=== All 22 TraceProcessor tests passed! ===\n";
   return 0;
 }

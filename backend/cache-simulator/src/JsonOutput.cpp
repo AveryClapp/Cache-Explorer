@@ -1,6 +1,57 @@
 #include "../include/JsonOutput.hpp"
+#include "../include/PipelineModel.hpp"
 #include <iomanip>
 #include <unordered_map>
+
+namespace {
+
+const char* inclusion_policy_name(InclusionPolicy policy) {
+    switch (policy) {
+        case InclusionPolicy::Inclusive: return "inclusive";
+        case InclusionPolicy::Exclusive: return "exclusive";
+        case InclusionPolicy::NINE: return "non-inclusive-non-exclusive";
+    }
+    return "unknown";
+}
+
+const char* eviction_policy_name(EvictionPolicy policy) {
+    switch (policy) {
+        case EvictionPolicy::LRU: return "lru";
+        case EvictionPolicy::PLRU: return "pseudo-lru";
+        case EvictionPolicy::RANDOM: return "random";
+        case EvictionPolicy::SRRIP: return "srrip";
+        case EvictionPolicy::BRRIP: return "brrip";
+    }
+    return "unknown";
+}
+
+const char* write_policy_name(WritePolicy policy) {
+    switch (policy) {
+        case WritePolicy::Through: return "write-through";
+        case WritePolicy::Back: return "write-back";
+        case WritePolicy::ReadOnly: return "read-only";
+    }
+    return "unknown";
+}
+
+void write_cache_level_detail(std::ostream& out, const char* name,
+                              const CacheConfig& cfg, bool last) {
+    out << "        \"" << name << "\": {"
+        << "\"sizeKB\": " << cfg.kb_size
+        << ", \"associativity\": " << cfg.associativity
+        << ", \"lineSize\": " << cfg.line_size
+        << ", \"sets\": " << cfg.num_sets()
+        << ", \"replacement\": \"" << eviction_policy_name(cfg.policy) << "\""
+        << ", \"writePolicy\": \"" << write_policy_name(cfg.write_policy) << "\""
+        << "}" << (last ? "\n" : ",\n");
+}
+
+void write_bool_field(std::ostream& out, const char* name, bool value, bool last) {
+    out << "      \"" << name << "\": " << (value ? "true" : "false")
+        << (last ? "\n" : ",\n");
+}
+
+} // namespace
 
 // ========== Utility Functions ==========
 
@@ -151,6 +202,162 @@ void JsonOutput::write_timing_stats_multicore(std::ostream& out,
         << "}}";
 }
 
+// ========== Execution Engine Statistics ==========
+
+void JsonOutput::write_execution_stats(
+    std::ostream& out, const BranchPredictionStats& branch,
+    const std::vector<BranchSiteStats>& hot_branches,
+    const PipelineStats& pipeline) {
+    out << "  \"execution\": {\n";
+    out << "    \"available\": true,\n";
+    out << "    \"model\": \"estimated\",\n";
+    out << "    \"pipeline\": {\n";
+    out << "      \"instructions\": " << pipeline.instructions << ",\n";
+    out << "      \"cycles\": " << pipeline.total_cycles() << ",\n";
+    out << "      \"ipc\": " << std::fixed << std::setprecision(3) << pipeline.ipc() << ",\n";
+    out << "      \"cpi\": " << std::fixed << std::setprecision(3) << pipeline.cpi() << ",\n";
+    out << "      \"breakdown\": {\n";
+    out << "        \"baseCycles\": " << pipeline.base_cycles << ",\n";
+    out << "        \"frontendStallCycles\": " << pipeline.frontend_stall_cycles << ",\n";
+    out << "        \"l2StallCycles\": " << pipeline.l2_stall_cycles << ",\n";
+    out << "        \"l3StallCycles\": " << pipeline.l3_stall_cycles << ",\n";
+    out << "        \"dramStallCycles\": " << pipeline.dram_stall_cycles << ",\n";
+    out << "        \"branchStallCycles\": " << pipeline.branch_stall_cycles << ",\n";
+    out << "        \"memoryStallCycles\": " << pipeline.memory_stall_cycles() << "\n";
+    out << "      }\n";
+    out << "    },\n";
+    out << "    \"branchPrediction\": {\n";
+    out << "      \"total\": " << branch.total << ",\n";
+    out << "      \"correct\": " << branch.correct() << ",\n";
+    out << "      \"mispredictions\": " << branch.mispredictions << ",\n";
+    out << "      \"accuracy\": " << std::fixed << std::setprecision(3) << branch.accuracy() << ",\n";
+    out << "      \"mispredictionRate\": " << std::fixed << std::setprecision(3)
+        << branch.misprediction_rate() << ",\n";
+    out << "      \"hotBranches\": [\n";
+    for (size_t i = 0; i < hot_branches.size(); i++) {
+        const auto& site = hot_branches[i];
+        out << "        {\"file\": \"" << escape(site.file) << "\", "
+            << "\"line\": " << site.line << ", "
+            << "\"total\": " << site.total << ", "
+            << "\"mispredictions\": " << site.mispredictions << ", "
+            << "\"mispredictionRate\": " << std::fixed << std::setprecision(3)
+            << site.misprediction_rate() << "}"
+            << (i + 1 < hot_branches.size() ? ",\n" : "\n");
+    }
+    out << "      ]\n";
+    out << "    }\n";
+    out << "  }";
+}
+
+void JsonOutput::write_execution_unavailable(std::ostream& out,
+                                             std::string_view reason) {
+    out << "  \"execution\": {\n";
+    out << "    \"available\": false,\n";
+    out << "    \"reason\": \"" << escape(reason) << "\"\n";
+    out << "  }";
+}
+
+void JsonOutput::write_execution_subsystem_stats(
+    std::ostream& out, const BranchPredictionStats& branch,
+    const std::vector<BranchSiteStats>& hot_branches,
+    const PipelineStats& pipeline) {
+    out << "  \"subsystems\": {\n";
+    out << "    \"execution\": {\n";
+    out << "      \"available\": true,\n";
+    out << "      \"model\": \"estimated\",\n";
+    out << "      \"pipeline\": {\n";
+    out << "        \"instructions\": " << pipeline.instructions << ",\n";
+    out << "        \"cycles\": " << pipeline.total_cycles() << ",\n";
+    out << "        \"ipc\": " << std::fixed << std::setprecision(3) << pipeline.ipc() << ",\n";
+    out << "        \"cpi\": " << std::fixed << std::setprecision(3) << pipeline.cpi() << ",\n";
+    out << "        \"breakdown\": {\n";
+    out << "          \"baseCycles\": " << pipeline.base_cycles << ",\n";
+    out << "          \"frontendStallCycles\": " << pipeline.frontend_stall_cycles << ",\n";
+    out << "          \"l2StallCycles\": " << pipeline.l2_stall_cycles << ",\n";
+    out << "          \"l3StallCycles\": " << pipeline.l3_stall_cycles << ",\n";
+    out << "          \"dramStallCycles\": " << pipeline.dram_stall_cycles << ",\n";
+    out << "          \"branchStallCycles\": " << pipeline.branch_stall_cycles << ",\n";
+    out << "          \"memoryStallCycles\": " << pipeline.memory_stall_cycles() << "\n";
+    out << "        }\n";
+    out << "      },\n";
+    out << "      \"branchPrediction\": {\n";
+    out << "        \"total\": " << branch.total << ",\n";
+    out << "        \"correct\": " << branch.correct() << ",\n";
+    out << "        \"mispredictions\": " << branch.mispredictions << ",\n";
+    out << "        \"accuracy\": " << std::fixed << std::setprecision(3) << branch.accuracy() << ",\n";
+    out << "        \"mispredictionRate\": " << std::fixed << std::setprecision(3)
+        << branch.misprediction_rate() << ",\n";
+    out << "        \"hotBranches\": [\n";
+    for (size_t i = 0; i < hot_branches.size(); i++) {
+        const auto& site = hot_branches[i];
+        out << "          {\"file\": \"" << escape(site.file) << "\", "
+            << "\"line\": " << site.line << ", "
+            << "\"total\": " << site.total << ", "
+            << "\"mispredictions\": " << site.mispredictions << ", "
+            << "\"mispredictionRate\": " << std::fixed << std::setprecision(3)
+            << site.misprediction_rate() << "}"
+            << (i + 1 < hot_branches.size() ? ",\n" : "\n");
+    }
+    out << "        ]\n";
+    out << "      }\n";
+    out << "    }\n";
+    out << "  }";
+}
+
+void JsonOutput::write_execution_subsystem_unavailable(std::ostream& out,
+                                                       std::string_view reason) {
+    out << "  \"subsystems\": {\n";
+    out << "    \"execution\": {\n";
+    out << "      \"available\": false,\n";
+    out << "      \"reason\": \"" << escape(reason) << "\"\n";
+    out << "    }\n";
+    out << "  }";
+}
+
+void JsonOutput::write_bottleneck_summary(std::ostream& out,
+                                          const BottleneckSummary& summary) {
+    out << "  \"summary\": {\n";
+    out << "    \"primaryBottleneck\": \"" << escape(summary.primary_bottleneck) << "\",\n";
+    out << "    \"estimatedCycles\": " << summary.estimated_cycles << ",\n";
+    out << "    \"bottleneckShare\": " << std::fixed << std::setprecision(3)
+        << summary.bottleneck_share << ",\n";
+    out << "    \"confidence\": \"" << escape(summary.confidence) << "\",\n";
+    out << "    \"reason\": \"" << escape(summary.reason) << "\",\n";
+    out << "    \"topSource\": ";
+    if (summary.has_top_source) {
+        out << "{\"file\": \"" << escape(summary.top_source.file)
+            << "\", \"line\": " << summary.top_source.line
+            << ", \"subsystem\": \"" << escape(summary.top_source.subsystem)
+            << "\", \"cycles\": " << summary.top_source.cycles << "}\n";
+    } else {
+        out << "null\n";
+    }
+    out << "  }";
+}
+
+void JsonOutput::write_source_annotations(
+    std::ostream& out, const std::vector<SourceAnnotation>& annotations) {
+    out << "  \"sourceAnnotations\": [\n";
+    for (size_t i = 0; i < annotations.size(); i++) {
+        const auto& annotation = annotations[i];
+        out << "    {\"subsystem\": \"" << escape(annotation.subsystem) << "\", "
+            << "\"severity\": \"" << escape(annotation.severity) << "\", "
+            << "\"file\": \"" << escape(annotation.file) << "\", "
+            << "\"line\": " << annotation.line << ", "
+            << "\"label\": \"" << escape(annotation.label) << "\", "
+            << "\"detail\": \"" << escape(annotation.detail) << "\", "
+            << "\"metrics\": {"
+            << "\"cycles\": " << annotation.cycles << ", "
+            << "\"share\": " << std::fixed << std::setprecision(3)
+            << annotation.share << ", "
+            << "\"misses\": " << annotation.misses << ", "
+            << "\"branchMispredictions\": "
+            << annotation.branch_mispredictions << "}}"
+            << (i + 1 < annotations.size() ? ",\n" : "\n");
+    }
+    out << "  ]";
+}
+
 // ========== Hot Lines ==========
 
 void JsonOutput::write_hot_lines(std::ostream& out, const std::vector<SourceStats>& hot) {
@@ -283,6 +490,97 @@ void JsonOutput::write_cache_config(std::ostream& out, const CacheHierarchyConfi
         << ", \"lineSize\": " << cfg.l3.line_size
         << ", \"sets\": " << cfg.l3.num_sets() << "}\n";
     out << "  },\n";
+}
+
+void JsonOutput::write_profile_metadata(std::ostream& out,
+                                        const HardwareProfileMetadata& profile) {
+    out << "  \"profile\": {\n";
+    out << "    \"id\": \"" << escape(profile.id) << "\",\n";
+    out << "    \"displayName\": \"" << escape(profile.display_name) << "\",\n";
+    out << "    \"vendor\": \"" << escape(profile.vendor) << "\",\n";
+    out << "    \"architecture\": \"" << escape(profile.architecture) << "\",\n";
+    out << "    \"class\": \"" << escape(profile.profile_class) << "\",\n";
+    out << "    \"modelConfidence\": \"" << escape(profile.model_confidence) << "\"\n";
+    out << "  }";
+}
+
+void JsonOutput::write_profile_metadata(std::ostream& out,
+                                        const HardwareProfileMetadata& profile,
+                                        const CacheHierarchyConfig& cfg,
+                                        std::string_view prefetch_policy_name,
+                                        int prefetch_degree,
+                                        int active_cores) {
+    const auto& pf = cfg.prefetch;
+    const auto& latency = cfg.latency;
+    const PipelineConfig pipeline_cfg{.latency = latency};
+    const int cores = active_cores > 0 ? active_cores : 1;
+    const char* l2_scope = cores > 1 ? "shared-across-modeled-cores"
+                                     : "private-to-modeled-core";
+    const char* l3_scope = cfg.l3.kb_size > 0 ? "shared-last-level" : "none";
+    const char* coherence = cores > 1 ? "mesi" : "not-applicable";
+
+    out << "  \"profile\": {\n";
+    out << "    \"id\": \"" << escape(profile.id) << "\",\n";
+    out << "    \"displayName\": \"" << escape(profile.display_name) << "\",\n";
+    out << "    \"vendor\": \"" << escape(profile.vendor) << "\",\n";
+    out << "    \"architecture\": \"" << escape(profile.architecture) << "\",\n";
+    out << "    \"class\": \"" << escape(profile.profile_class) << "\",\n";
+    out << "    \"modelConfidence\": \"" << escape(profile.model_confidence) << "\",\n";
+    out << "    \"details\": {\n";
+    out << "      \"cache\": {\n";
+    out << "        \"inclusion\": \"" << inclusion_policy_name(cfg.inclusion_policy) << "\",\n";
+    out << "        \"levels\": {\n";
+    write_cache_level_detail(out, "l1d", cfg.l1_data, false);
+    write_cache_level_detail(out, "l1i", cfg.l1_inst, false);
+    write_cache_level_detail(out, "l2", cfg.l2, false);
+    write_cache_level_detail(out, "l3", cfg.l3, true);
+    out << "        }\n";
+    out << "      },\n";
+    out << "      \"tlb\": {\n";
+    out << "        \"dtlb\": {\"entries\": 64, \"associativity\": 4, \"pageSize\": 4096},\n";
+    out << "        \"itlb\": {\"entries\": 64, \"associativity\": 4, \"pageSize\": 4096}\n";
+    out << "      },\n";
+    out << "      \"prefetch\": {\n";
+    out << "        \"activePolicy\": \"" << escape(prefetch_policy_name) << "\",\n";
+    out << "        \"activeDegree\": " << prefetch_degree << ",\n";
+    write_bool_field(out, "l1Stream", pf.l1_stream_prefetch, false);
+    write_bool_field(out, "l1Stride", pf.l1_stride_prefetch, false);
+    out << "        \"l1Degree\": " << pf.l1_prefetch_degree << ",\n";
+    write_bool_field(out, "l2Stream", pf.l2_stream_prefetch, false);
+    write_bool_field(out, "l2Adjacent", pf.l2_adjacent_prefetch, false);
+    out << "        \"l2Degree\": " << pf.l2_prefetch_degree << ",\n";
+    out << "        \"l2Streams\": " << pf.l2_max_streams << ",\n";
+    out << "        \"l2MaxDistance\": " << pf.l2_max_distance << ",\n";
+    write_bool_field(out, "l3Prefetch", pf.l3_prefetch, false);
+    write_bool_field(out, "pointerPrefetch", pf.pointer_prefetch, false);
+    write_bool_field(out, "dynamicDegree", pf.dynamic_degree, true);
+    out << "      },\n";
+    out << "      \"executionCore\": {\n";
+    out << "        \"model\": \"analytical-ooo\",\n";
+    out << "        \"issueWidth\": " << pipeline_cfg.issue_width << ",\n";
+    out << "        \"robSize\": " << pipeline_cfg.rob_size << ",\n";
+    out << "        \"hideableCycles\": " << pipeline_cfg.hideable_cycles() << ",\n";
+    out << "        \"branchMispredictPenalty\": "
+        << pipeline_cfg.branch_mispredict_penalty << ",\n";
+    out << "        \"branchPredictor\": \"bimodal-2bit\",\n";
+    out << "        \"branchPredictorEntries\": 1024\n";
+    out << "      },\n";
+    out << "      \"memory\": {\n";
+    out << "        \"l1HitCycles\": " << latency.l1_hit << ",\n";
+    out << "        \"l2HitCycles\": " << latency.l2_hit << ",\n";
+    out << "        \"l3HitCycles\": " << latency.l3_hit << ",\n";
+    out << "        \"dramCycles\": " << latency.memory << ",\n";
+    out << "        \"tlbMissPenaltyCycles\": " << latency.tlb_miss_penalty << "\n";
+    out << "      },\n";
+    out << "      \"topology\": {\n";
+    out << "        \"activeCores\": " << cores << ",\n";
+    out << "        \"l1Scope\": \"private-per-core\",\n";
+    out << "        \"l2Scope\": \"" << l2_scope << "\",\n";
+    out << "        \"l3Scope\": \"" << l3_scope << "\",\n";
+    out << "        \"coherence\": \"" << coherence << "\"\n";
+    out << "      }\n";
+    out << "    }\n";
+    out << "  }";
 }
 
 // ========== Coherence Statistics ==========

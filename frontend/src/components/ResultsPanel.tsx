@@ -4,14 +4,18 @@ import {
   ErrorDisplay,
   MetricCards,
   DiffSummary,
+  BottleneckSummaryPanel,
   CacheHierarchyViz,
   PrefetchStatsPanel,
   AdvancedStatsPanel,
+  ExecutionEnginePanel,
+  HardwareProfilePanel,
   LevelDetail,
   TLBDetail,
   FalseSharingDisplay,
   HotLinesPanel,
   SuggestionsPanel,
+  SourceAnnotationsPanel,
   CacheGrid,
   LoadingState,
   EmptyState,
@@ -62,6 +66,8 @@ export function ResultsPanel({
   isMobile,
   mobilePane,
 }: ResultsPanelProps) {
+  const execution = result?.subsystems?.execution ?? result?.execution
+
   return (
     <div className={`results-panel${isMobile && mobilePane !== 'results' ? ' mobile-hidden' : ''}`}>
       <div className="results-header">
@@ -93,6 +99,12 @@ export function ResultsPanel({
             {/* Metric Cards */}
             <MetricCards result={result} baselineResult={baselineResult} diffMode={diffMode} />
 
+            {/* Hardware Bottleneck Summary */}
+            {result.summary && <BottleneckSummaryPanel summary={result.summary} />}
+
+            {/* Hardware Profile */}
+            {result.profile && <HardwareProfilePanel profile={result.profile} cacheConfig={result.cacheConfig} />}
+
             {/* Cache Hierarchy Visualization */}
             <CacheHierarchyViz result={result} baselineResult={baselineResult} diffMode={diffMode} />
 
@@ -101,6 +113,12 @@ export function ResultsPanel({
 
             {/* Advanced Stats */}
             {result.advancedStats && <AdvancedStatsPanel stats={result.advancedStats} />}
+
+            {/* Execution Engine */}
+            {execution && <ExecutionEnginePanel execution={execution} />}
+
+            {/* Source Annotations */}
+            {result.sourceAnnotations && <SourceAnnotationsPanel annotations={result.sourceAnnotations} />}
 
             {/* Toggle Buttons */}
             <div className="toggle-buttons" style={{ margin: 'var(--space-4) 0' }}>

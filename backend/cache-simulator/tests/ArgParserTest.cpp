@@ -49,6 +49,15 @@ void test_config_flag() {
   std::cout << "[PASS] test_config_flag\n";
 }
 
+void test_hardware_alias() {
+  ArgvBuilder builder;
+  builder.add("--hardware").add("m3");
+  auto opts = ArgParser::parse(builder.argc(), builder.argv());
+
+  assert(opts.config_name == "m3");
+  std::cout << "[PASS] test_hardware_alias\n";
+}
+
 void test_verbose_flag() {
   ArgvBuilder builder;
   builder.add("--verbose");
@@ -247,12 +256,30 @@ void test_unknown_config_defaults_to_intel() {
   std::cout << "[PASS] test_unknown_config_defaults_to_intel\n";
 }
 
+void test_profile_metadata() {
+  auto intel = ArgParser::get_profile_metadata("intel14");
+  assert(intel.id == "intel14");
+  assert(intel.display_name == "Intel 14th Gen");
+  assert(intel.vendor == "Intel");
+  assert(intel.model_confidence == "directional");
+
+  auto educational = ArgParser::get_profile_metadata("educational");
+  assert(educational.profile_class == "learning");
+  assert(educational.model_confidence == "educational");
+
+  auto unknown = ArgParser::get_profile_metadata("nonexistent");
+  assert(unknown.id == "intel");
+  assert(unknown.vendor == "Intel");
+  std::cout << "[PASS] test_profile_metadata\n";
+}
+
 int main() {
   std::cout << "Running ArgParser tests...\n\n";
 
   // Default and basic flags
   test_default_options();
   test_config_flag();
+  test_hardware_alias();
   test_verbose_flag();
   test_json_flag();
   test_stream_flag();
@@ -277,6 +304,7 @@ int main() {
   test_preset_config_apple();
   test_preset_config_educational();
   test_unknown_config_defaults_to_intel();
+  test_profile_metadata();
 
   // Custom configs
   test_custom_config_l1_size();
@@ -285,6 +313,6 @@ int main() {
   // Combined flags
   test_combined_flags();
 
-  std::cout << "\n=== All 26 ArgParser tests passed! ===\n";
+  std::cout << "\n=== All 28 ArgParser tests passed! ===\n";
   return 0;
 }

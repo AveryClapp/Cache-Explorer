@@ -251,27 +251,218 @@ int main() {
 `
   },
 
+  // === Execution Engine ===
+  branch_patterns: {
+    name: 'Branch Patterns',
+    description: 'Predictable vs alternating branches',
+    language: 'c',
+    code: `// Branch prediction patterns
+// Set RUN_ALTERNATING=1 to isolate alternating data branches
+#include <stdio.h>
+
+#ifndef RUN_ALTERNATING
+#define RUN_ALTERNATING 0
+#endif
+
+#define N 100000
+
+int main() {
+    volatile int total = 0;
+
+#if RUN_ALTERNATING
+    for (int i = 0; i < N; i++) {
+        if (i & 1) {
+            total += 3;
+        } else {
+            total -= 1;
+        }
+    }
+#else
+    for (int i = 0; i < N; i++) {
+        if (i < N - 1) {
+            total += i & 7;
+        }
+    }
+#endif
+
+    printf("%d\\n", total);
+    return 0;
+}
+`
+  },
+  pointer_chasing: {
+    name: 'Pointer Chasing',
+    description: 'Dependent random loads - memory stalls dominate',
+    language: 'c',
+    code: `// Pointer chasing with a randomized node order
+// The loop branch is predictable, but each load depends on the previous load
+#include <stdio.h>
+
+#define N 65536
+#define STRIDE 4099
+#define REPS 8
+
+struct Node {
+    int value;
+    int next;
+    char padding[56];
+};
+
+static struct Node nodes[N];
+
+int main() {
+    for (int i = 0; i < N; i++) {
+        nodes[i].value = i;
+        nodes[i].next = (i + STRIDE) & (N - 1);
+    }
+
+    long long sum = 0;
+    int index = 0;
+
+    for (int rep = 0; rep < REPS; rep++) {
+        for (int i = 0; i < N; i++) {
+            sum += nodes[index].value;
+            index = nodes[index].next;
+        }
+    }
+
+    printf("%lld %d\\n", sum, index);
+    return 0;
+}
+`
+  },
+  conv2d_kernel: {
+    name: 'Conv2D Kernel',
+    description: 'Direct vs tiled convolution kernel',
+    language: 'c',
+    code: `// Direct vs tiled 3x3 convolution kernel
+// Set RUN_TILED=1 to compare the tiled traversal
+#include <stdio.h>
+
+#ifndef RUN_TILED
+#define RUN_TILED 0
+#endif
+
+#define IN_C 8
+#define OUT_C 8
+#define H 48
+#define W 48
+#define KH 3
+#define KW 3
+#define OH (H - KH + 1)
+#define OW (W - KW + 1)
+#define TILE_H 8
+#define TILE_W 16
+
+static float input[IN_C][H][W];
+static float weight[OUT_C][IN_C][KH][KW];
+static float output[OUT_C][OH][OW];
+
+static void init_data(void) {
+    for (int c = 0; c < IN_C; c++)
+        for (int y = 0; y < H; y++)
+            for (int x = 0; x < W; x++)
+                input[c][y][x] = (float)((c * 31 + y * 7 + x) & 15) * 0.0625f;
+
+    for (int oc = 0; oc < OUT_C; oc++)
+        for (int ic = 0; ic < IN_C; ic++)
+            for (int ky = 0; ky < KH; ky++)
+                for (int kx = 0; kx < KW; kx++)
+                    weight[oc][ic][ky][kx] =
+                        (float)(((oc + 1) * (ic + 3) + ky * 5 + kx) & 7) * 0.03125f;
+}
+
+static void conv2d_direct(void) {
+    for (int oc = 0; oc < OUT_C; oc++)
+        for (int oy = 0; oy < OH; oy++)
+            for (int ox = 0; ox < OW; ox++) {
+                float sum = 0.0f;
+                for (int ic = 0; ic < IN_C; ic++)
+                    for (int ky = 0; ky < KH; ky++)
+                        for (int kx = 0; kx < KW; kx++)
+                            sum += input[ic][oy + ky][ox + kx] * weight[oc][ic][ky][kx];
+                output[oc][oy][ox] = sum;
+            }
+}
+
+static void conv2d_tiled(void) {
+    for (int oc = 0; oc < OUT_C; oc++)
+        for (int ty = 0; ty < OH; ty += TILE_H)
+            for (int tx = 0; tx < OW; tx += TILE_W) {
+                int y_end = ty + TILE_H < OH ? ty + TILE_H : OH;
+                int x_end = tx + TILE_W < OW ? tx + TILE_W : OW;
+                for (int oy = ty; oy < y_end; oy++)
+                    for (int ox = tx; ox < x_end; ox++) {
+                        float sum = 0.0f;
+                        for (int ic = 0; ic < IN_C; ic++)
+                            for (int ky = 0; ky < KH; ky++)
+                                for (int kx = 0; kx < KW; kx++)
+                                    sum += input[ic][oy + ky][ox + kx] * weight[oc][ic][ky][kx];
+                        output[oc][oy][ox] = sum;
+                    }
+            }
+}
+
+static float checksum(void) {
+    float sum = 0.0f;
+    for (int oc = 0; oc < OUT_C; oc++)
+        for (int y = 0; y < OH; y++)
+            for (int x = 0; x < OW; x++)
+                sum += output[oc][y][x];
+    return sum;
+}
+
+int main(void) {
+    init_data();
+#if RUN_TILED
+    conv2d_tiled();
+#else
+    conv2d_direct();
+#endif
+    printf("checksum %.4f\\n", checksum());
+    return 0;
+}
+`
+  },
+
   // === Optimizations ===
   blocking: {
     name: 'Cache Blocking',
     description: 'Tiled matrix multiply',
     language: 'c',
     code: `// Cache Blocking - Matrix Multiply Optimization
+// Set RUN_BLOCKED=1 to compare the blocked traversal
 #include <stdio.h>
+
+#ifndef RUN_BLOCKED
+#define RUN_BLOCKED 0
+#endif
+
 #define N 256
 #define BLOCK 32
 
 float A[N][N], B[N][N], C[N][N];
 
-int main() {
+static void init_data(void) {
     for (int i = 0; i < N; i++)
         for (int j = 0; j < N; j++) {
             A[i][j] = i + j;
             B[i][j] = i - j;
             C[i][j] = 0;
         }
+}
 
-    // Blocked multiply - better cache reuse
+static void matmul_direct(void) {
+    for (int i = 0; i < N; i++)
+        for (int j = 0; j < N; j++) {
+            float sum = 0.0f;
+            for (int k = 0; k < N; k++)
+                sum += A[i][k] * B[k][j];
+            C[i][j] = sum;
+        }
+}
+
+static void matmul_blocked(void) {
     for (int i = 0; i < N; i += BLOCK)
         for (int j = 0; j < N; j += BLOCK)
             for (int k = 0; k < N; k += BLOCK)
@@ -282,6 +473,16 @@ int main() {
                             sum += A[ii][kk] * B[kk][jj];
                         C[ii][jj] = sum;
                     }
+}
+
+int main() {
+    init_data();
+
+#if RUN_BLOCKED
+    matmul_blocked();
+#else
+    matmul_direct();
+#endif
 
     float sum = 0;
     for (int i = 0; i < N; i++)

@@ -11,6 +11,8 @@ import {
   SettingsToolbar,
   ExamplesSidebar,
   BatchResultsModal,
+  ExperimentResultsModal,
+  HardwareExplorerModal,
   ResultsPanel,
   EditorPanel,
 } from './components'
@@ -20,16 +22,27 @@ import type { ProjectFile, CommandItem, ExampleLangFilter } from './components'
 import type {
   CacheResult,
   ErrorResult,
+  HardwareExperimentResult,
+  HardwareProfile,
   Language,
   FileTab,
   Stage,
   DefineEntry,
   CustomCacheConfig,
   PrefetchPolicy,
+  SourceAnnotation,
 } from './types'
 
 // Constants
-import { DEFAULT_EXAMPLE, API_BASE, WS_URL, PREFETCH_DEFAULTS, defaultCustomConfig } from './constants'
+import {
+  DEFAULT_EXAMPLE,
+  EXAMPLES,
+  EXPERIMENT_TEMPLATES,
+  API_BASE,
+  WS_URL,
+  PREFETCH_DEFAULTS,
+  defaultCustomConfig,
+} from './constants'
 
 // Hooks
 import { createFileTab, getFileExtension, useBaseline } from './hooks'
@@ -37,8 +50,53 @@ import { createFileTab, getFileExtension, useBaseline } from './hooks'
 // Utilities
 import { fuzzyMatch } from './utils/formatting'
 import { encodeState, decodeState } from './utils/state'
-import { exportAsJSON, exportAsCSV } from './utils/export'
+import {
+  exportAsJSON,
+  exportAsCSV,
+  exportBatchResultsAsCSV,
+  exportBatchResultsAsJSON,
+  exportExperimentAsCSV,
+  exportExperimentAsJSON,
+} from './utils/export'
 
+function annotationClass(annotation: SourceAnnotation) {
+  return `hw-${annotation.subsystem} ${annotation.severity}`
+}
+
+function annotationBadge(annotation: SourceAnnotation) {
+  const subsystem = annotation.subsystem
+    ? annotation.subsystem[0].toUpperCase() + annotation.subsystem.slice(1)
+    : 'Hardware'
+  const share = (annotation.metrics.share * 100).toFixed(0)
+  return `${subsystem} ${share}%`
+}
+
+const BATCH_HARDWARE_CONFIGS = ['educational', 'intel', 'amd', 'apple']
+const HARDWARE_RUN_SET_STORAGE_KEY = 'cache-explorer-hardware-run-set'
+
+function hardwareConfigsOrDefault(configs: string[]) {
+  return configs.length > 0 ? configs : BATCH_HARDWARE_CONFIGS
+}
+
+function readStoredHardwareRunSet() {
+  if (typeof window === 'undefined') return BATCH_HARDWARE_CONFIGS
+  try {
+    const raw = localStorage.getItem(HARDWARE_RUN_SET_STORAGE_KEY)
+    const parsed = raw ? JSON.parse(raw) : null
+    if (!Array.isArray(parsed)) return BATCH_HARDWARE_CONFIGS
+    const configs = Array.from(new Set(parsed.filter(item => typeof item === 'string' && item.trim())))
+    return configs.length > 0 ? configs : BATCH_HARDWARE_CONFIGS
+  } catch {
+    return BATCH_HARDWARE_CONFIGS
+  }
+}
+
+function parseExperimentVariants(value: string) {
+  return value
+    .split(/\r?\n/)
+    .map(variant => variant.trim())
+    .filter(Boolean)
+}
 
 function App() {
   // Embed mode detection from URL params
@@ -98,6 +156,29 @@ function App() {
     const newFile = createFileTab(name, '', language)
     setFiles(prev => [...prev, newFile])
     setActiveFileId(newFile.id)
+  }, [])
+
+  const loadExampleByKey = useCallback((exampleKey: string) => {
+    const example = EXAMPLES[exampleKey]
+    if (!example) return
+
+    if (example.files && example.files.length > 0) {
+      const newFiles = example.files.map(file => ({
+        ...createFileTab(file.name, file.code, file.language),
+        isMain: file.isMain,
+      }))
+      const mainFile = newFiles.find(file => file.isMain) || newFiles[0]
+      if (!mainFile) return
+      setFiles(newFiles)
+      setActiveFileId(mainFile.id)
+      setMainFileId(mainFile.id)
+      return
+    }
+
+    const newFile = createFileTab(`main${getFileExtension(example.language)}`, example.code, example.language)
+    setFiles([newFile])
+    setActiveFileId(newFile.id)
+    setMainFileId(newFile.id)
   }, [])
 
   // Convert files to ProjectFile format for FileManager
@@ -160,6 +241,19 @@ function App() {
   const [batchResults, setBatchResults] = useState<{config: string; result: CacheResult}[]>([])
   const [showBatchModal, setShowBatchModal] = useState(false)
   const [batchRunning, setBatchRunning] = useState(false)
+  const [experimentResult, setExperimentResult] = useState<HardwareExperimentResult | null>(null)
+  const [showExperimentModal, setShowExperimentModal] = useState(false)
+  const [experimentRunning, setExperimentRunning] = useState(false)
+  const [experimentError, setExperimentError] = useState<string | null>(null)
+  const [experimentVariants, setExperimentVariants] = useState('direct\ntiled:RUN_TILED=1')
+  const [selectedExperimentTemplateId, setSelectedExperimentTemplateId] = useState(EXPERIMENT_TEMPLATES[0]?.id || '')
+  const [hardwareProfiles, setHardwareProfiles] = useState<HardwareProfile[]>([])
+  const [showHardwareExplorer, setShowHardwareExplorer] = useState(false)
+  const [hardwareProfilesLoading, setHardwareProfilesLoading] = useState(false)
+  const [hardwareProfilesError, setHardwareProfilesError] = useState<string | null>(null)
+  const [selectedHardwareProfileId, setSelectedHardwareProfileId] = useState('')
+  const [runHardwareConfigIds, setRunHardwareConfigIds] = useState<string[]>(readStoredHardwareRunSet)
+  const [batchTotal, setBatchTotal] = useState(BATCH_HARDWARE_CONFIGS.length)
   const commandInputRef = useRef<HTMLInputElement>(null)
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const monacoRef = useRef<Monaco | null>(null)
@@ -172,6 +266,10 @@ function App() {
     document.documentElement.setAttribute('data-theme', theme)
     localStorage.setItem('cache-explorer-theme', theme)
   }, [theme])
+
+  useEffect(() => {
+    localStorage.setItem(HARDWARE_RUN_SET_STORAGE_KEY, JSON.stringify(runHardwareConfigIds))
+  }, [runHardwareConfigIds])
 
 
   // Fetch default compiler on mount
@@ -365,6 +463,17 @@ function App() {
     if (!model) return
 
     const decorations: editor.IModelDeltaDecoration[] = []
+    const inlineBadges = new Map<number, { parts: string[]; className: string }>()
+
+    const addInlineBadge = (lineNumber: number, text: string, className: string) => {
+      const current = inlineBadges.get(lineNumber)
+      if (current) {
+        current.parts.push(text)
+        if (className.startsWith('inline-hw')) current.className = className
+      } else {
+        inlineBadges.set(lineNumber, { parts: [text], className })
+      }
+    }
 
     for (const line of result.hotLines) {
       const fileName = line.file.split('/').pop() || line.file
@@ -394,19 +503,48 @@ function App() {
             }
           })
 
-          // Inline annotation at end of line showing miss info
-          const lineContent = model.getLineContent(lineNum)
+          addInlineBadge(
+            lineNum,
+            `${line.misses} misses (${(line.missRate * 100).toFixed(0)}%)`,
+            inlineClass,
+          )
+        }
+      }
+    }
+
+    for (const annotation of result.sourceAnnotations || []) {
+      const fileName = annotation.file.split('/').pop() || annotation.file
+      if (fileName.includes('cache-explorer') || annotation.file.startsWith('/tmp/')) {
+        const lineNum = annotation.line
+        if (lineNum > 0 && lineNum <= model.getLineCount()) {
+          const className = `line-${annotationClass(annotation)}`
           decorations.push({
-            range: new monaco.Range(lineNum, lineContent.length + 1, lineNum, lineContent.length + 1),
+            range: new monaco.Range(lineNum, 1, lineNum, 1),
             options: {
-              after: {
-                content: ` // ${line.misses} misses (${(line.missRate * 100).toFixed(0)}%)`,
-                inlineClassName: inlineClass
+              isWholeLine: true,
+              className,
+              glyphMarginClassName: `glyph-${annotationClass(annotation)}`,
+              glyphMarginHoverMessage: {
+                value: `**${annotation.label}**\n\n${annotation.detail}\n\n${annotation.metrics.cycles.toLocaleString()} cycles`
               }
             }
           })
+          addInlineBadge(lineNum, annotationBadge(annotation), `inline-${annotationClass(annotation)}`)
         }
       }
+    }
+
+    for (const [lineNum, badge] of inlineBadges) {
+      const lineContent = model.getLineContent(lineNum)
+      decorations.push({
+        range: new monaco.Range(lineNum, lineContent.length + 1, lineNum, lineContent.length + 1),
+        options: {
+          after: {
+            content: ` // ${badge.parts.join(' | ')}`,
+            inlineClassName: badge.className
+          }
+        }
+      })
     }
 
     decorationsRef.current = editor.deltaDecorations(decorationsRef.current, decorations)
@@ -552,26 +690,74 @@ function App() {
 
   const isLoading = stage !== 'idle'
 
+  const makeHardwarePayload = useCallback(() => {
+    const payload: Record<string, unknown> = {
+      optLevel,
+    }
+
+    if (files.length === 1) {
+      payload.code = files[0].code
+      payload.language = files[0].language
+    } else {
+      payload.files = files.map(f => ({ name: f.name, code: f.code, language: f.language }))
+      payload.language = files[0].language
+    }
+
+    if (defines.length > 0) payload.defines = defines.filter(d => d.name.trim())
+    if (prefetchPolicy !== 'none') payload.prefetch = prefetchPolicy
+    if (sampleRate > 1) payload.sample = sampleRate
+    payload.limit = eventLimit
+    if (selectedCompiler) payload.compiler = selectedCompiler
+    if (fastMode) payload.fast = true
+    if (cacheSegments) payload.cacheSegments = true
+
+    return payload
+  }, [cacheSegments, defines, eventLimit, fastMode, files, optLevel, prefetchPolicy, sampleRate, selectedCompiler])
+
   // Batch analysis - compare same code across multiple hardware presets
-  const runBatchAnalysis = async () => {
-    const configs = ['educational', 'intel', 'amd', 'apple']
+  const runBatchAnalysis = useCallback(async () => {
+    const configsToRun = hardwareConfigsOrDefault(runHardwareConfigIds)
     setBatchResults([])
     setBatchRunning(true)
+    setBatchTotal(configsToRun.length)
     setShowBatchModal(true)
 
-    for (const cfg of configs) {
+    const canUseCompareEndpoint =
+      files.length === 1 && (files[0].language === 'c' || files[0].language === 'cpp')
+
+    if (canUseCompareEndpoint) {
+      try {
+        const response = await fetch(`${API_BASE}/compare`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...makeHardwarePayload(),
+            configs: configsToRun,
+          }),
+        })
+        const data = await response.json()
+
+        if (response.ok && data.configs) {
+          setBatchResults(
+            configsToRun
+              .filter(cfg => data.configs[cfg])
+              .map(cfg => ({ config: cfg, result: data.configs[cfg] as CacheResult }))
+          )
+          setBatchRunning(false)
+          return
+        }
+      } catch {
+        // Fall back to per-config analysis below.
+      }
+    }
+
+    for (const cfg of configsToRun) {
       try {
         const payload = {
-          code: files.length > 1 ? files.map(f => f.code).join('\n// --- FILE SEPARATOR ---\n') : files[0].code,
-          language: files[0].language,
+          ...makeHardwarePayload(),
           config: cfg,
-          optLevel,
-          prefetch: prefetchPolicy,
-          sampleRate,
-          eventLimit,
-          fastMode,
-          cacheSegments,
         }
+
         const response = await fetch(`${API_BASE}/compile`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -586,7 +772,134 @@ function App() {
       }
     }
     setBatchRunning(false)
-  }
+  }, [files, makeHardwarePayload, runHardwareConfigIds])
+
+  const openExperimentModal = useCallback(() => {
+    setShowExperimentModal(true)
+  }, [])
+
+  const applyExperimentTemplate = useCallback(() => {
+    const template = EXPERIMENT_TEMPLATES.find(item => item.id === selectedExperimentTemplateId)
+    if (!template) return
+
+    setExperimentVariants(template.variants.join('\n'))
+    if (template.exampleKey) loadExampleByKey(template.exampleKey)
+    if (template.optLevel) setOptLevel(template.optLevel)
+    if (template.prefetchPolicy) setPrefetchPolicy(template.prefetchPolicy)
+    if (typeof template.eventLimit === 'number') setEventLimit(template.eventLimit)
+    if (typeof template.fastMode === 'boolean') setFastMode(template.fastMode)
+    if (typeof template.cacheSegments === 'boolean') setCacheSegments(template.cacheSegments)
+  }, [loadExampleByKey, selectedExperimentTemplateId])
+
+  const loadHardwareProfiles = useCallback(async () => {
+    setHardwareProfilesLoading(true)
+    setHardwareProfilesError(null)
+
+    try {
+      const response = await fetch(`${API_BASE}/profiles`)
+      const data = await response.json()
+      if (!response.ok || !Array.isArray(data.profiles)) {
+        setHardwareProfilesError(data.message || data.error || 'Failed to load profiles')
+        return
+      }
+
+      const profiles = data.profiles as HardwareProfile[]
+      const canonicalIds = new Map<string, string>()
+      for (const profile of profiles) {
+        canonicalIds.set(profile.id, profile.id)
+        for (const alias of profile.aliases || []) {
+          canonicalIds.set(alias, profile.id)
+        }
+      }
+      setHardwareProfiles(profiles)
+      setRunHardwareConfigIds(prev => {
+        const normalized = Array.from(new Set(
+          prev.map(profileId => canonicalIds.get(profileId)).filter((profileId): profileId is string => Boolean(profileId))
+        ))
+        if (normalized.length > 0) return normalized
+
+        const defaults = BATCH_HARDWARE_CONFIGS.filter(profileId => canonicalIds.has(profileId))
+        return defaults.length > 0 ? defaults : profiles.slice(0, 1).map(profile => profile.id)
+      })
+      setSelectedHardwareProfileId(prev => {
+        const normalized = canonicalIds.get(prev)
+        if (normalized) return normalized
+        return profiles.find(profile => profile.id === config)?.id || profiles[0]?.id || ''
+      })
+    } catch (err) {
+      setHardwareProfilesError(err instanceof Error ? err.message : 'Failed to load profiles')
+    } finally {
+      setHardwareProfilesLoading(false)
+    }
+  }, [config])
+
+  const openHardwareExplorer = useCallback(() => {
+    setShowHardwareExplorer(true)
+    if (hardwareProfiles.length === 0 && !hardwareProfilesLoading) {
+      void loadHardwareProfiles()
+    }
+  }, [hardwareProfiles.length, hardwareProfilesLoading, loadHardwareProfiles])
+
+  const applyHardwareProfile = useCallback((profileId: string) => {
+    setConfig(profileId)
+    setPrefetchPolicy(PREFETCH_DEFAULTS[profileId] || 'none')
+    setSelectedHardwareProfileId(profileId)
+    setRunHardwareConfigIds(prev => prev.includes(profileId) ? prev : [...prev, profileId])
+  }, [])
+
+  const toggleRunHardwareConfig = useCallback((profileId: string) => {
+    setRunHardwareConfigIds(prev => {
+      if (!prev.includes(profileId)) return [...prev, profileId]
+      if (prev.length === 1) return prev
+      return prev.filter(id => id !== profileId)
+    })
+  }, [])
+
+  const compareHardwareRunSet = useCallback(() => {
+    setShowHardwareExplorer(false)
+    void runBatchAnalysis()
+  }, [runBatchAnalysis])
+
+  const openExperimentFromExplorer = useCallback(() => {
+    setShowHardwareExplorer(false)
+    setShowExperimentModal(true)
+  }, [])
+
+  const runExperimentAnalysis = useCallback(async () => {
+    const variants = parseExperimentVariants(experimentVariants)
+    if (variants.length === 0) {
+      setExperimentError('Add at least one variant')
+      return
+    }
+
+    setExperimentResult(null)
+    setExperimentError(null)
+    setExperimentRunning(true)
+    setShowExperimentModal(true)
+
+    try {
+      const response = await fetch(`${API_BASE}/experiment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...makeHardwarePayload(),
+          variants,
+          configs: hardwareConfigsOrDefault(runHardwareConfigIds),
+        }),
+      })
+      const data = await response.json()
+
+      if (response.ok && data.summary && data.variants) {
+        setExperimentResult(data as HardwareExperimentResult)
+      } else {
+        setExperimentError(data.message || data.error || 'Experiment failed')
+      }
+    } catch (err) {
+      setExperimentError(err instanceof Error ? err.message : 'Experiment failed')
+    } finally {
+      setExperimentRunning(false)
+    }
+  }, [experimentVariants, makeHardwarePayload, runHardwareConfigIds])
 
   const commands: CommandItem[] = useMemo(() => [
     // Actions (@)
@@ -598,6 +911,8 @@ function App() {
     { id: 'export-json', icon: '@', label: 'Export results as JSON', action: () => result && exportAsJSON(result), category: 'actions' },
     { id: 'export-csv', icon: '@', label: 'Export results as CSV', action: () => result && exportAsCSV(result), category: 'actions' },
     { id: 'batch-analyze', icon: '@', label: 'Compare hardware presets', action: runBatchAnalysis, category: 'actions' },
+    { id: 'hardware-experiment', icon: '@', label: 'Open hardware experiment', action: openExperimentModal, category: 'actions' },
+    { id: 'hardware-explorer', icon: '@', label: 'Open hardware explorer', action: openHardwareExplorer, category: 'actions' },
     // Settings (:)
     { id: 'vim', icon: ':', label: vimMode ? 'Disable Vim mode' : 'Enable Vim mode', action: () => setVimMode(!vimMode), category: 'settings' },
     { id: 'lang-c', icon: ':', label: 'Language: C', action: () => updateActiveLanguage('c'), category: 'settings' },
@@ -610,7 +925,7 @@ function App() {
     { id: 'limit-1m', icon: '*', label: 'Event limit: 1M', action: () => setEventLimit(1000000), category: 'config' },
     { id: 'limit-5m', icon: '*', label: 'Event limit: 5M', action: () => setEventLimit(5000000), category: 'config' },
     { id: 'limit-none', icon: '*', label: 'Event limit: None', action: () => setEventLimit(0), category: 'config' },
-  ], [isLoading, activeFileId, vimMode, diffMode, baselineResult, config, files, result, code, handleShare, updateActiveLanguage, setBaselineFromHook, clearBaselineHook])
+  ], [isLoading, activeFileId, vimMode, diffMode, baselineResult, config, files, result, code, handleShare, updateActiveLanguage, setBaselineFromHook, clearBaselineHook, runBatchAnalysis, openExperimentModal, openHardwareExplorer])
 
   // Command palette handlers
   const handleCommandSelect = useCallback((cmd: CommandItem) => {
@@ -647,7 +962,49 @@ function App() {
         <BatchResultsModal
           results={batchResults}
           running={batchRunning}
+          total={batchTotal}
+          onExportCSV={() => exportBatchResultsAsCSV(batchResults)}
+          onExportJSON={() => exportBatchResultsAsJSON(batchResults)}
           onClose={() => setShowBatchModal(false)}
+        />
+      )}
+
+      {/* Hardware Experiment Modal */}
+      {showExperimentModal && (
+        <ExperimentResultsModal
+          result={experimentResult}
+          running={experimentRunning}
+          error={experimentError}
+          variantsText={experimentVariants}
+          hardwareConfigIds={hardwareConfigsOrDefault(runHardwareConfigIds)}
+          templates={EXPERIMENT_TEMPLATES}
+          selectedTemplateId={selectedExperimentTemplateId}
+          onVariantsTextChange={setExperimentVariants}
+          onTemplateChange={setSelectedExperimentTemplateId}
+          onApplyTemplate={applyExperimentTemplate}
+          onRun={runExperimentAnalysis}
+          onExportCSV={() => experimentResult && exportExperimentAsCSV(experimentResult)}
+          onExportJSON={() => experimentResult && exportExperimentAsJSON(experimentResult)}
+          onClose={() => setShowExperimentModal(false)}
+        />
+      )}
+
+      {/* Hardware Explorer Modal */}
+      {showHardwareExplorer && (
+        <HardwareExplorerModal
+          profiles={hardwareProfiles}
+          selectedId={selectedHardwareProfileId}
+          activeId={config}
+          runConfigIds={runHardwareConfigIds}
+          loading={hardwareProfilesLoading}
+          error={hardwareProfilesError}
+          onSelect={setSelectedHardwareProfileId}
+          onApply={applyHardwareProfile}
+          onToggleRunConfig={toggleRunHardwareConfig}
+          onCompareRunSet={compareHardwareRunSet}
+          onOpenExperiment={openExperimentFromExplorer}
+          onRefresh={loadHardwareProfiles}
+          onClose={() => setShowHardwareExplorer(false)}
         />
       )}
 
@@ -664,6 +1021,9 @@ function App() {
           onSetDiffMode={setDiffMode}
           onSetBaseline={(r) => { setBaselineFromHook(r, config, files); setBaselineCode(code) }}
           onClearBaseline={() => { clearBaselineHook(); setBaselineCode(null) }}
+          onCompareHardware={runBatchAnalysis}
+          onExploreHardware={openHardwareExplorer}
+          onRunExperiment={openExperimentModal}
           onRun={runAnalysis}
           onCancel={cancelAnalysis}
         />
@@ -728,14 +1088,7 @@ function App() {
             langFilter={exampleLangFilter}
             onLangFilterChange={setExampleLangFilter}
             currentCode={files[0]?.code || ''}
-            onLoadExample={(newFiles, mainId) => {
-              setFiles(newFiles)
-              setActiveFileId(mainId)
-              setMainFileId(mainId)
-            }}
-            onUpdateFile={(code, language, name) => {
-              setFiles(prev => prev.map(f => f.id === activeFileId ? { ...f, code, language, name } : f))
-            }}
+            onLoadExample={loadExampleByKey}
           />
         )}
 

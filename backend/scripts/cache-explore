@@ -9,15 +9,33 @@ PROJECT_ROOT="$(dirname "$BACKEND_DIR")"
 # Support both build layouts:
 # 1. Top-level build/ directory (cmake from project root)
 # 2. Per-component build/ directories (legacy)
-if [[ -f "$PROJECT_ROOT/build/backend/llvm-pass/CacheProfiler.so" ]]; then
-  PASS="$PROJECT_ROOT/build/backend/llvm-pass/CacheProfiler.so"
-  RUNTIME="$PROJECT_ROOT/build/backend/runtime/libcache-explorer-rt.a"
-  CACHE_SIM="$PROJECT_ROOT/build/backend/cache-simulator/cache-sim"
-else
-  PASS="$BACKEND_DIR/llvm-pass/build/CacheProfiler.so"
-  RUNTIME="$BACKEND_DIR/runtime/build/libcache-explorer-rt.a"
-  CACHE_SIM="$BACKEND_DIR/cache-simulator/build/cache-sim"
-fi
+select_latest_existing() {
+  local selected=""
+
+  for candidate in "$@"; do
+    if [[ -f "$candidate" ]]; then
+      if [[ -z "$selected" || "$candidate" -nt "$selected" ]]; then
+        selected="$candidate"
+      fi
+    fi
+  done
+
+  if [[ -n "$selected" ]]; then
+    echo "$selected"
+  else
+    echo "$1"
+  fi
+}
+
+PASS=$(select_latest_existing \
+  "$PROJECT_ROOT/build/backend/llvm-pass/CacheProfiler.so" \
+  "$BACKEND_DIR/llvm-pass/build/CacheProfiler.so")
+RUNTIME=$(select_latest_existing \
+  "$PROJECT_ROOT/build/backend/runtime/libcache-explorer-rt.a" \
+  "$BACKEND_DIR/runtime/build/libcache-explorer-rt.a")
+CACHE_SIM=$(select_latest_existing \
+  "$PROJECT_ROOT/build/backend/cache-simulator/cache-sim" \
+  "$BACKEND_DIR/cache-simulator/build/cache-sim")
 RUNTIME_INC="$BACKEND_DIR/runtime"
 CMAKE_MODULE="$BACKEND_DIR/integration/cmake"
 
@@ -227,6 +245,8 @@ main_usage() {
   echo "  cmake <path>      Configure a CMake project with profiling"
   echo "  make <target>     Build and analyze a Makefile target"
   echo "  compare           Compare cache behavior across configs"
+  echo "  experiment        Compare named source variants across configs"
+  echo "  profiles          List modeled hardware profiles"
   echo "  report            Generate HTML report from analysis"
   echo "  cc/c++            Compiler wrapper for build system integration"
   echo "  build-pass        Build the LLVM pass locally for your clang version"
@@ -238,6 +258,8 @@ main_usage() {
   echo "  cache-explore run ./my_program --json"
   echo "  cache-explore cmake /path/to/project -DCMAKE_BUILD_TYPE=Release"
   echo "  cache-explore compare matrix.c --configs intel,amd,apple"
+  echo "  cache-explore experiment conv2d.c -O2 --variant direct --variant tiled:RUN_TILED=1"
+  echo "  cache-explore profiles --ids"
   echo ""
   echo "Run 'cache-explore <command> --help' for command-specific help."
 }
@@ -264,6 +286,14 @@ case "$1" in
   compare)
     shift
     exec "$SCRIPT_DIR/cache-explore-compare" "$@"
+    ;;
+  experiment)
+    shift
+    exec "$SCRIPT_DIR/cache-explore-experiment" "$@"
+    ;;
+  profiles)
+    shift
+    exec "$SCRIPT_DIR/cache-explore-profiles" "$@"
     ;;
   report)
     shift
@@ -324,6 +354,7 @@ usage() {
   echo "Options:"
   echo "  --config <name>   Cache config: intel|intel14|xeon|amd|zen3|epyc|"
   echo "                    apple|m2|m3|graviton|rpi4|embedded|educational"
+  echo "  --hardware <name> Alias for --config"
   echo "  --verbose         Show each cache event"
   echo "  --keep            Keep the instrumented binary"
   echo "  --json            Output JSON format"
@@ -363,7 +394,7 @@ CUSTOM_CONFIG_ARGS=""  # Custom cache config args to pass to cache-sim
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --config) CONFIG="$2"; shift 2 ;;
+    --config|--hardware) CONFIG="$2"; shift 2 ;;
     --verbose) VERBOSE="--verbose"; shift ;;
     --keep) KEEP_BINARY="1"; shift ;;
     --json) JSON_OUTPUT="--json"; shift ;;

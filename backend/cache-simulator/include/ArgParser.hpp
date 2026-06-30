@@ -6,6 +6,15 @@
 #include "../profiles/CacheConfig.hpp"
 #include "Prefetcher.hpp"
 
+struct HardwareProfileMetadata {
+    std::string id;
+    std::string display_name;
+    std::string vendor;
+    std::string architecture;
+    std::string profile_class;
+    std::string model_confidence;
+};
+
 struct SimulatorOptions {
     std::string config_name = "intel";
     CacheHierarchyConfig cache_config;
@@ -51,6 +60,9 @@ public:
 
     /// Get cache configuration for a named preset
     [[nodiscard]] static CacheHierarchyConfig get_preset_config(std::string_view name);
+
+    /// Get display metadata for a named hardware profile
+    [[nodiscard]] static HardwareProfileMetadata get_profile_metadata(std::string_view name);
 
     /// Build final cache config from options (handles custom vs preset)
     [[nodiscard]] static CacheHierarchyConfig build_cache_config(const SimulatorOptions& opts);

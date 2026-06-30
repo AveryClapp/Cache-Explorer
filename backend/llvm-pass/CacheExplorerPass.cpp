@@ -74,6 +74,9 @@ namespace {
 // Counter for generating unique basic block IDs (avoids BlockAddress issues on ARM64)
 static uint64_t GlobalBBCounter = 0;
 
+// Counter for generating unique conditional-branch site IDs
+static uint64_t GlobalBranchCounter = 0;
+
 /// Check if a source file path is from system/library headers that should be skipped
 bool isSystemHeader(StringRef Filename) {
   // Always skip empty or synthetic filenames (no source info available)
@@ -488,6 +491,18 @@ PreservedAnalyses CacheExplorerPass::run(Function &F,
                                   "__tag_bb_entry", M);
   }
 
+  // Branch-direction tracking: __tag_branch(i64 branch_id, i32 taken, ptr file, i32 line)
+  Function *TagBranch = M->getFunction("__tag_branch");
+  if (!TagBranch) {
+    FunctionType *BranchFnTy =
+        FunctionType::get(Type::getVoidTy(Ctx),
+                          {Type::getInt64Ty(Ctx), Type::getInt32Ty(Ctx),
+                           PointerType::getUnqual(Ctx), Type::getInt32Ty(Ctx)},
+                          false);
+    TagBranch = Function::Create(BranchFnTy, Function::ExternalLinkage,
+                                 "__tag_branch", M);
+  }
+
   for (auto &BB : F) {
     // Count instructions in this basic block for I-cache simulation
     uint32_t instrCount = 0;
@@ -618,6 +633,22 @@ PreservedAnalyses CacheExplorerPass::run(Function &F,
             continue;
           }
         }
+      }
+
+      // Conditional branch: record the runtime direction (taken/not-taken)
+      if (auto *BI = dyn_cast<BranchInst>(&I)) {
+        if (BI->isConditional()) {
+          IRBuilder<> Builder(&I);
+          Value *Taken =
+              Builder.CreateZExt(BI->getCondition(), Type::getInt32Ty(Ctx));
+          Value *BrID =
+              ConstantInt::get(Type::getInt64Ty(Ctx), GlobalBranchCounter++);
+          Value *File = Builder.CreateGlobalString(I.getDebugLoc()->getFilename());
+          Value *Line =
+              ConstantInt::get(Type::getInt32Ty(Ctx), I.getDebugLoc()->getLine());
+          Builder.CreateCall(TagBranch, {BrID, Taken, File, Line});
+        }
+        continue;
       }
 
       // Load instruction

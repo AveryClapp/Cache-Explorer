@@ -31,6 +31,14 @@ A collection of C and C++ programs demonstrating various cache access patterns a
 | Loop Fusion | `loop_fusion.c` | - | Combining multiple loops | Reduces cache traffic |
 | Cache Line Align | `cache_line_align.c` | - | Aligned data structures | Avoids split accesses |
 
+## Execution Engine
+
+| Example | C | C++ | Description | Expected Behavior |
+|---------|---|-----|-------------|-------------------|
+| Branch Patterns | `branch_patterns.c` | - | Predictable vs alternating branches | Loop branches warm up, alternating branch mispredicts often |
+| Pointer Chasing | `pointer_chasing.c` | - | Randomized dependent node traversal | Memory stalls dominate, branch behavior is mostly predictable |
+| Conv2D Kernel | `conv2d_kernel.c` | - | Direct/tiled 3x3 convolution kernel | Cache and memory stalls expose kernel layout tradeoffs |
+
 ## Working Set Size
 
 | Example | C | C++ | Description | Expected Behavior |
@@ -74,6 +82,21 @@ Run any example with Cache Explorer:
 # With optimization
 ./backend/scripts/cache-explore examples/cache_blocking.c -O2
 
+# Hardware experiment
+./backend/scripts/cache-explore examples/conv2d_kernel.c -O2 --hardware intel14 --json
+./backend/scripts/cache-explore examples/conv2d_kernel.c -O2 -D RUN_TILED=1 --hardware intel14 --json
+./backend/scripts/cache-explore compare examples/conv2d_kernel.c -O2 --configs intel14,zen4,m3
+
+# Faster iteration while keeping bottleneck/source summaries active
+./backend/scripts/cache-explore compare examples/conv2d_kernel.c -O2 --configs educational,intel14 --limit 200000
+
+# Variant experiment: direct vs tiled across hardware profiles
+./backend/scripts/cache-explore experiment examples/conv2d_kernel.c -O2 \
+  --variant direct \
+  --variant tiled:RUN_TILED=1 \
+  --configs educational,intel14,zen4,m3 \
+  --limit 200000
+
 # Generate HTML report
 ./backend/scripts/cache-explore-report examples/linked_list.c
 ```
@@ -103,3 +126,17 @@ Run any example with Cache Explorer:
    ./backend/scripts/cache-explore examples/working_set_small.c
    ./backend/scripts/cache-explore examples/working_set_large.c
    ```
+
+5. **Direct vs Tiled Conv2D**
+   ```bash
+   ./backend/scripts/cache-explore examples/conv2d_kernel.c -O2 --hardware intel14
+   ./backend/scripts/cache-explore examples/conv2d_kernel.c -O2 -D RUN_TILED=1 --hardware intel14
+   ./backend/scripts/cache-explore compare examples/conv2d_kernel.c -O2 --configs intel14,zen4,m3
+   ./backend/scripts/cache-explore experiment examples/conv2d_kernel.c -O2 --variant direct --variant tiled:RUN_TILED=1 --configs educational,intel14 --limit 200000
+   ```
+   Comparison mode compiles and traces once, then replays the captured trace
+   across hardware profiles. The first table reports estimated bottleneck,
+   cycles, confidence, and top source; the second table keeps cache hit rates
+   visible for the same run.
+   Experiment mode repeats that single-trace comparison for each named variant
+   and adds per-profile cycle deltas against the first variant.

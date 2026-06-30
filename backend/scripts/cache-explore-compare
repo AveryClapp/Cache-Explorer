@@ -4,16 +4,42 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BACKEND_DIR="$(dirname "$SCRIPT_DIR")"
+PROJECT_ROOT="$(dirname "$BACKEND_DIR")"
 
-PASS="${CACHE_EXPLORER_PASS:-$BACKEND_DIR/llvm-pass/build/CacheProfiler.so}"
-RUNTIME="${CACHE_EXPLORER_RUNTIME:-$BACKEND_DIR/runtime/build/libcache-explorer-rt.a}"
+select_latest_existing() {
+  local selected=""
+
+  for candidate in "$@"; do
+    if [[ -f "$candidate" ]]; then
+      if [[ -z "$selected" || "$candidate" -nt "$selected" ]]; then
+        selected="$candidate"
+      fi
+    fi
+  done
+
+  if [[ -n "$selected" ]]; then
+    echo "$selected"
+  else
+    echo "$1"
+  fi
+}
+
+PASS="${CACHE_EXPLORER_PASS:-$(select_latest_existing \
+  "$PROJECT_ROOT/build/backend/llvm-pass/CacheProfiler.so" \
+  "$BACKEND_DIR/llvm-pass/build/CacheProfiler.so")}"
+RUNTIME="${CACHE_EXPLORER_RUNTIME:-$(select_latest_existing \
+  "$PROJECT_ROOT/build/backend/runtime/libcache-explorer-rt.a" \
+  "$BACKEND_DIR/runtime/build/libcache-explorer-rt.a")}"
 RUNTIME_INC="$BACKEND_DIR/runtime"
-CACHE_SIM="${CACHE_EXPLORER_SIM:-$BACKEND_DIR/cache-simulator/build/cache-sim}"
+CACHE_SIM="${CACHE_EXPLORER_SIM:-$(select_latest_existing \
+  "$PROJECT_ROOT/build/backend/cache-simulator/cache-sim" \
+  "$BACKEND_DIR/cache-simulator/build/cache-sim")}"
 
 usage() {
   echo "Usage: cache-explore compare [options] <source.c|.cpp>"
   echo ""
   echo "Compare cache behavior across multiple hardware configurations."
+  echo "The source is compiled and traced once, then replayed across profiles."
   echo ""
   echo "Options:"
   echo "  --configs <list>   Comma-separated list of configs to compare"
@@ -23,6 +49,12 @@ usage() {
   echo "  -D <name>=<val>    Preprocessor define"
   echo "  --sample <N>       Sample 1 in N events"
   echo "  --limit <N>        Max events to process"
+  echo "  --prefetch <p>     Prefetch policy: none|next|stream|stride|adaptive|intel"
+  echo "  --prefetch-degree <N> Number of lines to prefetch ahead"
+  echo "  --fast             Disable 3C miss classification for faster simulation"
+  echo "  --cache-segments   Cache repeated loop segments during simulation"
+  echo "  --compiler <path>  Path to LLVM bin directory"
+  echo "  -I <path>          Add include path"
   echo "  --help             Show this help"
   echo ""
   echo "Available configs:"
@@ -42,8 +74,14 @@ CONFIGS="intel,amd,apple,educational"
 JSON_OUTPUT=""
 OPT_LEVEL="-O0"
 DEFINES=()
+INCLUDES=()
 SAMPLE_RATE=""
 EVENT_LIMIT=""
+PREFETCH=""
+PREFETCH_DEGREE=""
+FAST_MODE=""
+CACHE_SEGMENTS=""
+COMPILER_PATH=""
 INPUT_FILE=""
 
 while [[ $# -gt 0 ]]; do
@@ -52,9 +90,16 @@ while [[ $# -gt 0 ]]; do
     --json) JSON_OUTPUT="1"; shift ;;
     --sample) SAMPLE_RATE="$2"; shift 2 ;;
     --limit) EVENT_LIMIT="$2"; shift 2 ;;
+    --prefetch) PREFETCH="$2"; shift 2 ;;
+    --prefetch-degree) PREFETCH_DEGREE="$2"; shift 2 ;;
+    --fast) FAST_MODE="--fast"; shift ;;
+    --cache-segments) CACHE_SEGMENTS="--cache-segments"; shift ;;
+    --compiler) COMPILER_PATH="$2"; shift 2 ;;
     -O*) OPT_LEVEL="$1"; shift ;;
     -D) DEFINES+=("-D$2"); shift 2 ;;
     -D*) DEFINES+=("$1"); shift ;;
+    -I) INCLUDES+=("-I$2"); shift 2 ;;
+    -I*) INCLUDES+=("$1"); shift ;;
     --help) usage; exit 0 ;;
     -*) echo "Unknown option: $1"; usage; exit 1 ;;
     *) INPUT_FILE="$1"; shift ;;
@@ -80,7 +125,28 @@ case "$EXT" in
   *) echo "Error: Unsupported extension: .$EXT"; exit 1 ;;
 esac
 
+if [[ -n "$COMPILER_PATH" ]]; then
+  if [[ "$EXT" == "c" && -x "$COMPILER_PATH/clang" ]]; then
+    COMPILER="$COMPILER_PATH/clang"
+  elif [[ "$EXT" != "c" && -x "$COMPILER_PATH/clang++" ]]; then
+    COMPILER="$COMPILER_PATH/clang++"
+  else
+    echo "Error: compiler not found in: $COMPILER_PATH" >&2
+    exit 1
+  fi
+fi
+
 BINARY="/tmp/cache-explore-compare-$$-$BASENAME"
+RESULT_DIR=""
+
+cleanup() {
+  rm -f "$BINARY"
+  rm -f /tmp/cache-explore-compare-err-$$
+  if [[ -n "$RESULT_DIR" ]]; then
+    rm -rf "$RESULT_DIR"
+  fi
+}
+trap cleanup EXIT
 
 # Compile once
 EXTRA_FLAGS=""
@@ -98,16 +164,15 @@ fi
 
 if ! $COMPILER $OPT_LEVEL $EXTRA_FLAGS -g -fpass-plugin="$PASS" \
   -I"$RUNTIME_INC" \
+  "${INCLUDES[@]}" \
   "${DEFINES[@]}" \
   "$INPUT_FILE" \
   "$RUNTIME" \
   -o "$BINARY" 2>/tmp/cache-explore-compare-err-$$; then
   echo "Compilation failed:" >&2
   cat /tmp/cache-explore-compare-err-$$ >&2
-  rm -f /tmp/cache-explore-compare-err-$$
   exit 1
 fi
-rm -f /tmp/cache-explore-compare-err-$$
 
 # Build runtime env
 RUN_ENV=""
@@ -132,67 +197,222 @@ fi
 # Split configs
 IFS=',' read -ra CONFIG_ARRAY <<< "$CONFIGS"
 
+RESULT_DIR=$(mktemp -d /tmp/cache-explore-compare-results.XXXXXX)
+RESULT_ARGS=()
+SIM_COMMON_ARGS=(--json)
+
+if [[ -n "$PREFETCH" ]]; then
+  SIM_COMMON_ARGS+=(--prefetch "$PREFETCH")
+fi
+if [[ -n "$PREFETCH_DEGREE" ]]; then
+  SIM_COMMON_ARGS+=(--prefetch-degree "$PREFETCH_DEGREE")
+fi
+if [[ -n "$FAST_MODE" ]]; then
+  SIM_COMMON_ARGS+=(--fast)
+fi
+if [[ -n "$CACHE_SEGMENTS" ]]; then
+  SIM_COMMON_ARGS+=(--cache-segments)
+fi
+
+for i in "${!CONFIG_ARRAY[@]}"; do
+  cfg="${CONFIG_ARRAY[$i]}"
+  result_path="$RESULT_DIR/result-$i.json"
+
+  if ! echo "$TRACE" | "$CACHE_SIM" --config "$cfg" "${SIM_COMMON_ARGS[@]}" > "$result_path" 2>/dev/null; then
+    printf '{"error":"failed to simulate config"}\n' > "$result_path"
+  fi
+
+  RESULT_ARGS+=("$cfg" "$result_path")
+done
+
 if [[ -n "$JSON_OUTPUT" ]]; then
-  # JSON output
-  echo "{"
-  echo "  \"source\": \"$INPUT_FILE\","
-  echo "  \"configs\": {"
+  python3 - "$INPUT_FILE" "${RESULT_ARGS[@]}" <<'PY'
+import json
+import sys
 
-  FIRST=1
-  for cfg in "${CONFIG_ARRAY[@]}"; do
-    if [[ $FIRST -eq 0 ]]; then
-      echo ","
-    fi
-    FIRST=0
 
-    echo -n "    \"$cfg\": "
-    echo "$TRACE" | "$CACHE_SIM" --config "$cfg" --json 2>/dev/null | sed 's/^/    /'
-  done
+def load_result(path):
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            return json.load(handle)
+    except Exception as exc:
+        return {"error": f"failed to parse simulator output: {exc}"}
 
-  echo ""
-  echo "  }"
-  echo "}"
+
+def hit_rate(data, key):
+    levels = data.get("levels", {})
+    if key == "l1d":
+        level = levels.get("l1d") or levels.get("l1") or {}
+    else:
+        level = levels.get(key) or {}
+    value = level.get("hitRate")
+    return value if isinstance(value, (int, float)) else None
+
+
+def estimated_cycles(data, summary):
+    value = summary.get("estimatedCycles")
+    if isinstance(value, (int, float)) and value > 0:
+        return value
+    timing = data.get("timing") or {}
+    value = timing.get("totalCycles")
+    return value if isinstance(value, (int, float)) else 0
+
+
+def summarize(config, data):
+    profile = data.get("profile") or {}
+    bottleneck = data.get("summary") or {}
+    top_source = bottleneck.get("topSource")
+
+    return {
+        "config": config,
+        "profile": {
+            "id": profile.get("id", config),
+            "displayName": profile.get("displayName", config),
+            "vendor": profile.get("vendor"),
+            "architecture": profile.get("architecture"),
+            "class": profile.get("class"),
+            "modelConfidence": profile.get("modelConfidence"),
+        },
+        "primaryBottleneck": bottleneck.get("primaryBottleneck", "unknown"),
+        "estimatedCycles": estimated_cycles(data, bottleneck),
+        "confidence": bottleneck.get("confidence", "unknown"),
+        "bottleneckShare": bottleneck.get("bottleneckShare"),
+        "topSource": top_source if isinstance(top_source, dict) else None,
+        "hitRates": {
+            "l1d": hit_rate(data, "l1d"),
+            "l2": hit_rate(data, "l2"),
+            "l3": hit_rate(data, "l3"),
+        },
+        "events": data.get("events", 0),
+    }
+
+
+source = sys.argv[1]
+pairs = sys.argv[2:]
+configs = {}
+summary = []
+
+for index in range(0, len(pairs), 2):
+    config = pairs[index]
+    path = pairs[index + 1]
+    result = load_result(path)
+    configs[config] = result
+    summary.append(summarize(config, result))
+
+print(json.dumps({"source": source, "summary": summary, "configs": configs}, indent=2))
+PY
 else
   # Human-readable output
-  echo ""
-  echo "=== Comparison Results ==="
-  echo ""
+  python3 - "${RESULT_ARGS[@]}" <<'PY'
+import json
+import sys
 
-  # Header
-  printf "%-15s %10s %10s %10s %10s\n" "Config" "L1D Hit%" "L2 Hit%" "L3 Hit%" "Events"
-  printf "%-15s %10s %10s %10s %10s\n" "---------------" "----------" "----------" "----------" "----------"
 
-  for cfg in "${CONFIG_ARRAY[@]}"; do
-    # Get JSON and parse
-    RESULT=$(echo "$TRACE" | "$CACHE_SIM" --config "$cfg" --json 2>/dev/null)
+def load_result(path):
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            return json.load(handle)
+    except Exception as exc:
+        return {"error": str(exc)}
 
-    # Extract hit rates using python for reliable JSON parsing
-    STATS=$(echo "$RESULT" | python3 -c "
-import sys, json
-try:
-    d = json.load(sys.stdin)
-    l1 = d.get('levels', {}).get('l1d', d.get('levels', {}).get('l1', {}))
-    l2 = d.get('levels', {}).get('l2', {})
-    l3 = d.get('levels', {}).get('l3', {})
-    events = d.get('events', 0)
 
-    l1_rate = l1.get('hitRate', 0) * 100
-    l2_rate = l2.get('hitRate', 0) * 100
-    l3_rate = l3.get('hitRate', 0) * 100
+def hit_rate(data, key):
+    levels = data.get("levels", {})
+    if key == "l1d":
+        level = levels.get("l1d") or levels.get("l1") or {}
+    else:
+        level = levels.get(key) or {}
+    value = level.get("hitRate")
+    return value if isinstance(value, (int, float)) else None
 
-    print(f'{l1_rate:.1f} {l2_rate:.1f} {l3_rate:.1f} {events}')
-except:
-    print('N/A N/A N/A N/A')
-" 2>/dev/null)
 
-    read L1_RATE L2_RATE L3_RATE EVENTS <<< "$STATS"
+def percent(value):
+    return "N/A" if value is None else f"{value * 100:.1f}%"
 
-    printf "%-15s %9s%% %9s%% %9s%% %10s\n" "$cfg" "$L1_RATE" "$L2_RATE" "$L3_RATE" "$EVENTS"
-  done
+
+def integer(value):
+    return "N/A" if not isinstance(value, int) else f"{value}"
+
+
+def shorten(value, width):
+    text = str(value) if value else "-"
+    return text if len(text) <= width else text[: width - 3] + "..."
+
+
+def top_source_text(summary):
+    top_source = summary.get("topSource")
+    if not isinstance(top_source, dict):
+        return "-"
+    file_name = top_source.get("file")
+    line = top_source.get("line")
+    if not file_name or not line:
+        return "-"
+    return f"{file_name}:{line}"
+
+
+def estimated_cycles(data, summary):
+    value = summary.get("estimatedCycles")
+    if isinstance(value, (int, float)) and value > 0:
+        return value
+    timing = data.get("timing") or {}
+    value = timing.get("totalCycles")
+    return value if isinstance(value, (int, float)) else None
+
+
+pairs = sys.argv[1:]
+rows = []
+
+for index in range(0, len(pairs), 2):
+    config = pairs[index]
+    data = load_result(pairs[index + 1])
+    profile = data.get("profile") or {}
+    summary = data.get("summary") or {}
+
+    rows.append(
+        {
+            "config": config,
+            "profile": profile.get("displayName", config),
+            "bottleneck": summary.get("primaryBottleneck", "unknown"),
+            "cycles": estimated_cycles(data, summary),
+            "confidence": summary.get("confidence", "unknown"),
+            "topSource": top_source_text(summary),
+            "l1d": hit_rate(data, "l1d"),
+            "l2": hit_rate(data, "l2"),
+            "l3": hit_rate(data, "l3"),
+            "events": data.get("events"),
+        }
+    )
+
+print()
+print("=== Hardware Summary ===")
+print()
+print(f"{'Config':<13} {'Profile':<24} {'Bottleneck':<11} {'Cycles':>12} {'Conf':<7}  Top Source")
+print(f"{'-' * 13:<13} {'-' * 24:<24} {'-' * 11:<11} {'-' * 12:>12} {'-' * 7:<7}  {'-' * 40}")
+for row in rows:
+    print(
+        f"{row['config']:<13} "
+        f"{shorten(row['profile'], 24):<24} "
+        f"{row['bottleneck']:<11} "
+        f"{integer(row['cycles']):>12} "
+        f"{row['confidence']:<7}  "
+        f"{shorten(row['topSource'], 52)}"
+    )
+
+print()
+print("=== Cache Hit Rates ===")
+print()
+print(f"{'Config':<13} {'L1D Hit':>9} {'L2 Hit':>9} {'L3 Hit':>9} {'Events':>10}")
+print(f"{'-' * 13:<13} {'-' * 9:>9} {'-' * 9:>9} {'-' * 9:>9} {'-' * 10:>10}")
+for row in rows:
+    print(
+        f"{row['config']:<13} "
+        f"{percent(row['l1d']):>9} "
+        f"{percent(row['l2']):>9} "
+        f"{percent(row['l3']):>9} "
+        f"{integer(row['events']):>10}"
+    )
+PY
 
   echo ""
   echo "Tip: Use --json for detailed results"
 fi
-
-# Cleanup
-rm -f "$BINARY"

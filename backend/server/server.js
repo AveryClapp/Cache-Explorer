@@ -13,6 +13,7 @@ import { initDb, createShortUrl, getShortUrl, isHealthy as isDbHealthy, getDbSta
 import { getCachedResult, cacheResult, startCachePruning } from './cache.js';
 import { incCounter, setGauge, recordDuration, getPrometheusMetrics, getHealthStatus } from './metrics.js';
 import { discoverCompilers, getCompiler, getDefaultCompiler } from './compilers.js';
+import { listHardwareProfiles, getHardwareProfile } from './hardwareProfiles.js';
 
 // Modular imports (gradually migrating to these)
 import { CONFIG } from './config.js';
@@ -147,6 +148,23 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 // ============================================================================
 // HTTP Endpoints
 // ============================================================================
+
+app.get('/profiles', (req, res) => {
+  incCounter('requests', { type: 'profiles' });
+  res.json({ profiles: listHardwareProfiles() });
+});
+
+app.get('/profiles/:id', (req, res) => {
+  incCounter('requests', { type: 'profiles' });
+  const profile = getHardwareProfile(req.params.id);
+  if (!profile) {
+    return res.status(404).json({
+      type: 'not_found',
+      message: `Unknown hardware profile: ${req.params.id}`,
+    });
+  }
+  res.json(profile);
+});
 
 app.post('/compile', async (req, res) => {
   const startTime = Date.now();
@@ -418,6 +436,365 @@ app.post('/compile', async (req, res) => {
   }
 });
 
+app.post('/compare', async (req, res) => {
+  const startTime = Date.now();
+  incCounter('requests', { type: 'compare' });
+
+  if (sandboxAvailable) {
+    return res.status(501).json({
+      type: 'unsupported',
+      message: 'Hardware comparison endpoint is not available in sandbox mode'
+    });
+  }
+
+  const {
+    code,
+    files,
+    configs = ['educational', 'intel', 'amd', 'apple'],
+    optLevel = '-O0',
+    language = 'c',
+    defines,
+    prefetch,
+    sample,
+    limit,
+    fast,
+    cacheSegments,
+    timeout: requestedTimeout
+  } = req.body;
+
+  const inputFiles = files || (code ? code : null);
+  if (!inputFiles) {
+    return res.status(400).json({ error: 'No code provided', type: 'validation_error' });
+  }
+
+  if (Array.isArray(inputFiles) && inputFiles.length > 1) {
+    return res.status(422).json({
+      type: 'unsupported',
+      message: 'Hardware comparison endpoint currently supports single-file C/C++ inputs'
+    });
+  }
+
+  if (language !== 'c' && language !== 'cpp') {
+    return res.status(422).json({
+      type: 'unsupported',
+      message: 'Hardware comparison endpoint currently supports C and C++ inputs'
+    });
+  }
+
+  const configList = Array.isArray(configs) ? configs.join(',') : String(configs);
+  if (!/^[A-Za-z0-9_,.-]+$/.test(configList)) {
+    return res.status(400).json({ error: 'Invalid config list', type: 'validation_error' });
+  }
+
+  const eventLimit = limit !== undefined ? limit : 1000000;
+  const sampleRate = sample !== undefined ? sample : 1;
+  const fastMode = fast === true;
+  const segmentCaching = cacheSegments === true;
+  const timeout = Math.min(
+    Math.max(requestedTimeout || CONFIG.timeouts.default, CONFIG.timeouts.min),
+    CONFIG.timeouts.max
+  );
+
+  let tempDir, mainFile;
+
+  try {
+    const project = await createTempProject(inputFiles, language);
+    tempDir = project.tempDir;
+    mainFile = project.mainFile;
+
+    const result = await new Promise((resolve, reject) => {
+      const args = ['compare', mainFile, '--configs', configList, optLevel, '--json'];
+
+      if (defines && Array.isArray(defines)) {
+        for (const def of defines) {
+          if (def.name && def.name.trim()) {
+            const defineStr = def.value ? `${def.name}=${def.value}` : def.name;
+            args.push('-D', defineStr);
+          }
+        }
+      }
+
+      const VALID_PREFETCH_POLICIES = ['none', 'next', 'next-line', 'stream', 'stride', 'adaptive', 'intel'];
+      const prefetchToUse = prefetch && VALID_PREFETCH_POLICIES.includes(prefetch) ? prefetch : 'none';
+      args.push('--prefetch', prefetchToUse);
+
+      if (sampleRate > 1) {
+        args.push('--sample', String(sampleRate));
+      }
+      if (eventLimit > 0) {
+        args.push('--limit', String(eventLimit));
+      }
+      if (fastMode) {
+        args.push('--fast');
+      }
+      if (segmentCaching) {
+        args.push('--cache-segments');
+      }
+      if (req.body.compiler) {
+        const compiler = getCompiler(req.body.compiler);
+        if (compiler && compiler.path) {
+          args.push('--compiler', compiler.path);
+        }
+      }
+
+      const proc = spawn(CACHE_EXPLORE, args);
+
+      let stdout = '';
+      let stderr = '';
+      let killed = false;
+
+      const timeoutId = setTimeout(() => {
+        killed = true;
+        proc.kill('SIGTERM');
+        setTimeout(() => proc.kill('SIGKILL'), 1000);
+      }, timeout);
+
+      proc.stdout.on('data', (data) => {
+        stdout += data;
+        if (stdout.length > CONFIG.memory.maxOutputBuffer) {
+          killed = true;
+          proc.kill('SIGKILL');
+        }
+      });
+
+      proc.stderr.on('data', (data) => {
+        stderr += data;
+        if (stderr.length > CONFIG.memory.maxOutputBuffer) {
+          killed = true;
+          proc.kill('SIGKILL');
+        }
+      });
+
+      proc.on('close', (exitCode) => {
+        clearTimeout(timeoutId);
+        if (killed && exitCode !== 0) {
+          reject({ stdout, stderr, exitCode, mainFile, timeout: true, timeoutMs: timeout });
+        } else if (exitCode !== 0) {
+          reject({ stdout, stderr, exitCode, mainFile });
+        } else {
+          resolve({ stdout, stderr });
+        }
+      });
+
+      proc.on('error', (err) => {
+        clearTimeout(timeoutId);
+        reject(err);
+      });
+    });
+
+    const json = JSON.parse(result.stdout.trim());
+    if (json.configs && typeof json.configs === 'object') {
+      for (const configResult of Object.values(json.configs)) {
+        if (configResult && typeof configResult === 'object' && configResult.cacheState) {
+          delete configResult.cacheState;
+        }
+      }
+    }
+
+    recordDuration('compilation_duration', (Date.now() - startTime) / 1000);
+    res.json(json);
+  } catch (err) {
+    incCounter('errors', { type: 'compare' });
+    console.error('HTTP compare error:', err);
+    const parsed = createErrorResponse(err, mainFile);
+    res.status(400).json(parsed);
+  } finally {
+    if (tempDir) {
+      await cleanupTempProject(tempDir);
+    }
+  }
+});
+
+app.post('/experiment', async (req, res) => {
+  const startTime = Date.now();
+  incCounter('requests', { type: 'experiment' });
+
+  if (sandboxAvailable) {
+    return res.status(501).json({
+      type: 'unsupported',
+      message: 'Hardware experiment endpoint is not available in sandbox mode'
+    });
+  }
+
+  const {
+    code,
+    files,
+    variants = ['baseline'],
+    configs = ['educational', 'intel14', 'amd', 'apple'],
+    optLevel = '-O0',
+    language = 'c',
+    defines,
+    prefetch,
+    sample,
+    limit,
+    fast,
+    cacheSegments,
+    timeout: requestedTimeout
+  } = req.body;
+
+  const inputFiles = files || (code ? code : null);
+  if (!inputFiles) {
+    return res.status(400).json({ error: 'No code provided', type: 'validation_error' });
+  }
+
+  if (Array.isArray(inputFiles) && inputFiles.length > 1) {
+    return res.status(422).json({
+      type: 'unsupported',
+      message: 'Hardware experiment endpoint currently supports single-file C/C++ inputs'
+    });
+  }
+
+  if (language !== 'c' && language !== 'cpp') {
+    return res.status(422).json({
+      type: 'unsupported',
+      message: 'Hardware experiment endpoint currently supports C and C++ inputs'
+    });
+  }
+
+  const variantList = Array.isArray(variants) ? variants : [String(variants)];
+  if (variantList.length === 0) {
+    return res.status(400).json({ error: 'At least one variant is required', type: 'validation_error' });
+  }
+
+  for (const variant of variantList) {
+    if (typeof variant !== 'string' || !/^[A-Za-z0-9_.-]+(?::[A-Za-z0-9_=,.-]+)?$/.test(variant)) {
+      return res.status(400).json({ error: `Invalid variant spec: ${variant}`, type: 'validation_error' });
+    }
+  }
+
+  const configList = Array.isArray(configs) ? configs.join(',') : String(configs);
+  if (!/^[A-Za-z0-9_,.-]+$/.test(configList)) {
+    return res.status(400).json({ error: 'Invalid config list', type: 'validation_error' });
+  }
+
+  const eventLimit = limit !== undefined ? limit : 1000000;
+  const sampleRate = sample !== undefined ? sample : 1;
+  const fastMode = fast === true;
+  const segmentCaching = cacheSegments === true;
+  const timeout = Math.min(
+    Math.max(requestedTimeout || CONFIG.timeouts.default, CONFIG.timeouts.min),
+    CONFIG.timeouts.max
+  );
+
+  let tempDir, mainFile;
+
+  try {
+    const project = await createTempProject(inputFiles, language);
+    tempDir = project.tempDir;
+    mainFile = project.mainFile;
+
+    const result = await new Promise((resolve, reject) => {
+      const args = ['experiment', mainFile, '--configs', configList, optLevel, '--json'];
+
+      for (const variant of variantList) {
+        args.push('--variant', variant);
+      }
+
+      if (defines && Array.isArray(defines)) {
+        for (const def of defines) {
+          if (def.name && def.name.trim()) {
+            const defineStr = def.value ? `${def.name}=${def.value}` : def.name;
+            args.push('-D', defineStr);
+          }
+        }
+      }
+
+      const VALID_PREFETCH_POLICIES = ['none', 'next', 'next-line', 'stream', 'stride', 'adaptive', 'intel'];
+      const prefetchToUse = prefetch && VALID_PREFETCH_POLICIES.includes(prefetch) ? prefetch : 'none';
+      args.push('--prefetch', prefetchToUse);
+
+      if (sampleRate > 1) {
+        args.push('--sample', String(sampleRate));
+      }
+      if (eventLimit > 0) {
+        args.push('--limit', String(eventLimit));
+      }
+      if (fastMode) {
+        args.push('--fast');
+      }
+      if (segmentCaching) {
+        args.push('--cache-segments');
+      }
+      if (req.body.compiler) {
+        const compiler = getCompiler(req.body.compiler);
+        if (compiler && compiler.path) {
+          args.push('--compiler', compiler.path);
+        }
+      }
+
+      const proc = spawn(CACHE_EXPLORE, args);
+
+      let stdout = '';
+      let stderr = '';
+      let killed = false;
+
+      const timeoutId = setTimeout(() => {
+        killed = true;
+        proc.kill('SIGTERM');
+        setTimeout(() => proc.kill('SIGKILL'), 1000);
+      }, timeout);
+
+      proc.stdout.on('data', (data) => {
+        stdout += data;
+        if (stdout.length > CONFIG.memory.maxOutputBuffer) {
+          killed = true;
+          proc.kill('SIGKILL');
+        }
+      });
+
+      proc.stderr.on('data', (data) => {
+        stderr += data;
+        if (stderr.length > CONFIG.memory.maxOutputBuffer) {
+          killed = true;
+          proc.kill('SIGKILL');
+        }
+      });
+
+      proc.on('close', (exitCode) => {
+        clearTimeout(timeoutId);
+        if (killed && exitCode !== 0) {
+          reject({ stdout, stderr, exitCode, mainFile, timeout: true, timeoutMs: timeout });
+        } else if (exitCode !== 0) {
+          reject({ stdout, stderr, exitCode, mainFile });
+        } else {
+          resolve({ stdout, stderr });
+        }
+      });
+
+      proc.on('error', (err) => {
+        clearTimeout(timeoutId);
+        reject(err);
+      });
+    });
+
+    const json = JSON.parse(result.stdout.trim());
+    if (json.variants && typeof json.variants === 'object') {
+      for (const variantResult of Object.values(json.variants)) {
+        const configsByName = variantResult?.configs;
+        if (!configsByName || typeof configsByName !== 'object') continue;
+
+        for (const configResult of Object.values(configsByName)) {
+          if (configResult && typeof configResult === 'object' && configResult.cacheState) {
+            delete configResult.cacheState;
+          }
+        }
+      }
+    }
+
+    recordDuration('compilation_duration', (Date.now() - startTime) / 1000);
+    res.json(json);
+  } catch (err) {
+    incCounter('errors', { type: 'experiment' });
+    console.error('HTTP experiment error:', err);
+    const parsed = createErrorResponse(err, mainFile);
+    res.status(400).json(parsed);
+  } finally {
+    if (tempDir) {
+      await cleanupTempProject(tempDir);
+    }
+  }
+});
+
 app.get('/health', (req, res) => {
   const health = getHealthStatus();
   res.json({
@@ -455,6 +832,22 @@ app.get('/api/compilers', (req, res) => {
 // Link Shortener (SQLite-backed)
 // ============================================================================
 
+function dbUnavailableResponse(res) {
+  return res.status(503).json({
+    error: 'Persistence unavailable',
+    message: 'Database-backed sharing is unavailable in this server process'
+  });
+}
+
+function logShareError(action, err) {
+  if (err.code === 'DB_UNAVAILABLE') {
+    console.warn(`${action}: database unavailable`);
+    return;
+  }
+
+  console.error(`${action}:`, err);
+}
+
 // Create short link
 app.post('/shorten', (req, res) => {
   incCounter('requests', { type: 'share' });
@@ -467,8 +860,11 @@ app.post('/shorten', (req, res) => {
     const code = createShortUrl(state);
     res.json({ id: code, url: `/s/${code}` });
   } catch (err) {
-    console.error('Failed to create short URL:', err);
+    logShareError('Failed to create short URL', err);
     incCounter('errors', { type: 'share' });
+    if (err.code === 'DB_UNAVAILABLE') {
+      return dbUnavailableResponse(res);
+    }
     res.status(500).json({ error: 'Failed to create short URL' });
   }
 });
@@ -484,7 +880,10 @@ app.get('/s/:id', (req, res) => {
     }
     res.json({ state: data });
   } catch (err) {
-    console.error('Failed to retrieve short URL:', err);
+    logShareError('Failed to retrieve short URL', err);
+    if (err.code === 'DB_UNAVAILABLE') {
+      return dbUnavailableResponse(res);
+    }
     res.status(500).json({ error: 'Failed to retrieve link' });
   }
 });
@@ -501,8 +900,11 @@ app.post('/api/share', (req, res) => {
     const code = createShortUrl(data);
     res.json({ code, url: `/s/${code}` });
   } catch (err) {
-    console.error('Failed to create short URL:', err);
+    logShareError('Failed to create short URL', err);
     incCounter('errors', { type: 'share' });
+    if (err.code === 'DB_UNAVAILABLE') {
+      return dbUnavailableResponse(res);
+    }
     res.status(500).json({ error: 'Failed to create short URL' });
   }
 });
@@ -517,7 +919,10 @@ app.get('/api/s/:code', (req, res) => {
     }
     res.json({ data });
   } catch (err) {
-    console.error('Failed to retrieve short URL:', err);
+    logShareError('Failed to retrieve short URL', err);
+    if (err.code === 'DB_UNAVAILABLE') {
+      return dbUnavailableResponse(res);
+    }
     res.status(500).json({ error: 'Failed to retrieve' });
   }
 });

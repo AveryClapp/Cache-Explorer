@@ -82,6 +82,182 @@ export interface AdvancedStats {
 }
 
 // =============================================================================
+// HARDWARE PROFILE
+// =============================================================================
+
+export interface HardwareProfile {
+  id: string
+  aliases?: string[]
+  displayName: string
+  vendor: string
+  architecture: string
+  class: string
+  modelConfidence: string
+  modelCoverage?: Record<string, string>
+  validation?: {
+    source: string
+    confidence: string
+    caveats: string[]
+  }
+  notes?: string
+  details?: HardwareProfileDetails
+}
+
+export interface HardwareProfileCacheLevel {
+  sizeKB: number
+  associativity: number
+  lineSize: number
+  sets: number
+  replacement: string
+  writePolicy: string
+}
+
+export interface HardwareProfileDetails {
+  cache: {
+    inclusion: string
+    levels: {
+      l1d: HardwareProfileCacheLevel
+      l1i: HardwareProfileCacheLevel
+      l2: HardwareProfileCacheLevel
+      l3: HardwareProfileCacheLevel
+    }
+  }
+  tlb: {
+    dtlb: { entries: number; associativity: number; pageSize: number }
+    itlb: { entries: number; associativity: number; pageSize: number }
+  }
+  prefetch: {
+    activePolicy: string
+    activeDegree: number
+    l1Stream: boolean
+    l1Stride: boolean
+    l1Degree: number
+    l2Stream: boolean
+    l2Adjacent: boolean
+    l2Degree: number
+    l2Streams: number
+    l2MaxDistance: number
+    l3Prefetch: boolean
+    pointerPrefetch: boolean
+    dynamicDegree: boolean
+  }
+  executionCore: {
+    model: string
+    issueWidth: number
+    robSize: number
+    hideableCycles: number
+    branchMispredictPenalty: number
+    branchPredictor: string
+    branchPredictorEntries: number
+    vectorBits?: number
+    vectorIsa?: string
+    loadPorts?: number
+    storePorts?: number
+    integerPipelines?: number
+    fpPipelines?: number
+  }
+  memory: {
+    l1HitCycles: number
+    l2HitCycles: number
+    l3HitCycles: number
+    dramCycles: number
+    tlbMissPenaltyCycles: number
+    l1BandwidthBytesPerCycle?: number
+    l2BandwidthBytesPerCycle?: number
+    l3BandwidthBytesPerCycle?: number
+    dramBandwidthGBs?: number
+    maxMemoryLevelParallelism?: number
+  }
+  topology: {
+    activeCores: number
+    l1Scope: string
+    l2Scope: string
+    l3Scope: string
+    coherence: string
+  }
+}
+
+// =============================================================================
+// EXECUTION ENGINE STATS
+// =============================================================================
+
+export interface PipelineBreakdown {
+  baseCycles: number
+  frontendStallCycles: number
+  l2StallCycles: number
+  l3StallCycles: number
+  dramStallCycles: number
+  branchStallCycles: number
+  memoryStallCycles: number
+}
+
+export interface PipelineExecutionStats {
+  instructions: number
+  cycles: number
+  ipc: number
+  cpi: number
+  breakdown: PipelineBreakdown
+}
+
+export interface HotBranch {
+  file: string
+  line: number
+  total: number
+  mispredictions: number
+  mispredictionRate: number
+}
+
+export interface BranchPredictionStats {
+  total: number
+  correct: number
+  mispredictions: number
+  accuracy: number
+  mispredictionRate: number
+  hotBranches: HotBranch[]
+}
+
+export interface ExecutionStats {
+  available: boolean
+  model?: 'estimated'
+  reason?: string
+  pipeline?: PipelineExecutionStats
+  branchPrediction?: BranchPredictionStats
+}
+
+export interface BottleneckSummary {
+  primaryBottleneck: 'memory' | 'branch' | 'frontend' | 'cache' | 'balanced' | string
+  estimatedCycles: number
+  bottleneckShare: number
+  confidence: 'high' | 'medium' | 'low' | string
+  reason: string
+  topSource: {
+    file: string
+    line: number
+    subsystem: string
+    cycles: number
+  } | null
+}
+
+export interface SourceAnnotation {
+  subsystem: 'memory' | 'branch' | 'frontend' | 'cache' | string
+  severity: 'high' | 'medium' | 'low' | string
+  file: string
+  line: number
+  label: string
+  detail: string
+  metrics: {
+    cycles: number
+    share: number
+    misses: number
+    branchMispredictions: number
+  }
+}
+
+export interface HardwareSubsystems {
+  execution?: ExecutionStats
+}
+
+// =============================================================================
 // TIMING STATS
 // =============================================================================
 
@@ -193,6 +369,10 @@ export interface CacheState {
 
 export interface CacheResult {
   config: string
+  profile?: HardwareProfile
+  summary?: BottleneckSummary
+  sourceAnnotations?: SourceAnnotation[]
+  subsystems?: HardwareSubsystems
   events: number
   multicore?: boolean
   cores?: number
@@ -214,6 +394,44 @@ export interface CacheResult {
   tlb?: TLBHierarchyStats
   timing?: TimingStats
   advancedStats?: AdvancedStats
+  execution?: ExecutionStats
+}
+
+export interface ExperimentHitRates {
+  l1d?: number | null
+  l2?: number | null
+  l3?: number | null
+}
+
+export interface ExperimentSummaryRow {
+  variant: string
+  variantSpec: string
+  config: string
+  profile?: HardwareProfile
+  primaryBottleneck: string
+  estimatedCycles: number
+  cycleDelta: number | null
+  cycleDeltaPercent: number | null
+  confidence?: string
+  bottleneckShare?: number | null
+  topSource?: {
+    file: string
+    line: number
+    subsystem?: string
+  } | null
+  hitRates?: ExperimentHitRates
+  events?: number
+}
+
+export interface HardwareExperimentResult {
+  source: string
+  baselineVariant: string
+  summary: ExperimentSummaryRow[]
+  variants: Record<string, {
+    source: string
+    summary: unknown[]
+    configs: Record<string, CacheResult>
+  }>
 }
 
 export interface OptimizationSuggestion {

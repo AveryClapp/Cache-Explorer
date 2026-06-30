@@ -37,6 +37,7 @@
   /* ─── Semantic Signals (Logo Colors) ─── */
   --signal-excellent: #4ec9b0;  /* L1 teal */
   --signal-good: #b5cea8;       /* L2 green */
+  --signal-success: #b5cea8;
   --signal-warning: #dcdcaa;    /* L3 yellow */
   --signal-critical: #f14c4c;
   --signal-info: #4ec9b0;       /* L1 teal */
@@ -147,4 +148,3 @@ body::before {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--border-glow);
 }
-
