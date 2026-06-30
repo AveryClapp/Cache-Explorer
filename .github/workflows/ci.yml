@@ -109,6 +109,10 @@ jobs:
         working-directory: backend/server
         run: npm run lint || true
 
+      - name: Run server tests
+        working-directory: backend/server
+        run: npm test
+
   vscode-extension:
     name: VS Code Extension Build
     runs-on: ubuntu-latest
