@@ -116,12 +116,25 @@
   display: flex;
   align-items: center;
   gap: var(--space-4);
+  min-width: 0;
 }
 
 .status-item {
   display: flex;
   align-items: center;
   gap: var(--space-1);
+  min-width: 0;
+}
+
+.analysis-status {
+  max-width: min(560px, 58vw);
+}
+
+.status-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .status-indicator {
@@ -130,6 +143,7 @@
   border-radius: 50%;
   background: var(--phosphor);
   box-shadow: 0 0 6px var(--phosphor);
+  flex: 0 0 auto;
 }
 
 .status-indicator.idle {
@@ -143,9 +157,39 @@
   animation: pulse 1s ease-in-out infinite;
 }
 
+.analysis-progress {
+  position: relative;
+  width: 96px;
+  height: 4px;
+  flex: 0 0 96px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.analysis-progress-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background: var(--signal-warning);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--signal-warning) 60%, transparent);
+  transition: width 120ms linear;
+}
+
+.analysis-progress.indeterminate .analysis-progress-fill {
+  width: 40%;
+  animation: progress-indeterminate 1.1s ease-in-out infinite;
+}
+
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
+}
+
+@keyframes progress-indeterminate {
+  0% { transform: translateX(-110%); }
+  100% { transform: translateX(260%); }
 }
 
 /* Analysis Decorations */

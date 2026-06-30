@@ -11,6 +11,8 @@ import type {
 
 import { API_BASE, WS_URL } from '../constants'
 
+const PROGRESS_RENDER_INTERVAL_MS = 120
+
 export interface AnalysisConfig {
   config: string
   optLevel: string
@@ -26,6 +28,18 @@ export interface AnalysisConfig {
 export interface SimProgress {
   eventsProcessed: number
   eventsTotal: number
+}
+
+function toNonNegativeCount(value: unknown) {
+  const count = Number(value)
+  return Number.isFinite(count) ? Math.max(0, count) : 0
+}
+
+function normalizeProgressMessage(message: { eventsProcessed?: unknown; eventsTotal?: unknown }): SimProgress {
+  return {
+    eventsProcessed: toNonNegativeCount(message.eventsProcessed),
+    eventsTotal: toNonNegativeCount(message.eventsTotal),
+  }
 }
 
 export interface UseAnalysisReturn {
@@ -58,6 +72,45 @@ export function useAnalysis(): UseAnalysisReturn {
   const wsRef = useRef<WebSocket | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const longRunTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const progressRenderTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingProgressRef = useRef<SimProgress | null>(null)
+  const lastProgressRenderRef = useRef(0)
+
+  const clearQueuedProgress = useCallback(() => {
+    if (progressRenderTimeoutRef.current) {
+      clearTimeout(progressRenderTimeoutRef.current)
+      progressRenderTimeoutRef.current = null
+    }
+    pendingProgressRef.current = null
+    lastProgressRenderRef.current = 0
+    setProgress(null)
+  }, [])
+
+  const queueProgress = useCallback((nextProgress: SimProgress) => {
+    pendingProgressRef.current = nextProgress
+    const now = Date.now()
+    const elapsed = now - lastProgressRenderRef.current
+
+    if (elapsed >= PROGRESS_RENDER_INTERVAL_MS) {
+      if (progressRenderTimeoutRef.current) {
+        clearTimeout(progressRenderTimeoutRef.current)
+        progressRenderTimeoutRef.current = null
+      }
+      lastProgressRenderRef.current = now
+      setProgress(nextProgress)
+      return
+    }
+
+    if (!progressRenderTimeoutRef.current) {
+      progressRenderTimeoutRef.current = setTimeout(() => {
+        progressRenderTimeoutRef.current = null
+        lastProgressRenderRef.current = Date.now()
+        if (pendingProgressRef.current) {
+          setProgress(pendingProgressRef.current)
+        }
+      }, PROGRESS_RENDER_INTERVAL_MS - elapsed)
+    }
+  }, [])
 
   const cancelAnalysis = useCallback(() => {
     if (wsRef.current) {
@@ -74,7 +127,8 @@ export function useAnalysis(): UseAnalysisReturn {
     }
     setStage('idle')
     setLongRunning(false)
-  }, [])
+    clearQueuedProgress()
+  }, [clearQueuedProgress])
 
   const clearResults = useCallback(() => {
     setResult(null)
@@ -112,7 +166,7 @@ export function useAnalysis(): UseAnalysisReturn {
     setError(null)
     setResult(null)
     setLongRunning(false)
-    setProgress(null)
+    clearQueuedProgress()
 
     // Set long-running warning after 10 seconds
     longRunTimeoutRef.current = setTimeout(() => setLongRunning(true), 10000)
@@ -150,21 +204,27 @@ export function useAnalysis(): UseAnalysisReturn {
       const msg = JSON.parse(event.data)
       if (msg.type === 'status') {
         setStage(msg.stage as Stage)
-      } else if (msg.type === 'progress' && msg.eventsTotal) {
-        setProgress({ eventsProcessed: msg.eventsProcessed, eventsTotal: msg.eventsTotal })
+      } else if (msg.type === 'progress' && msg.eventsProcessed !== undefined) {
+        queueProgress(normalizeProgressMessage(msg))
         setStage('processing')
       } else if (msg.type === 'result') {
-        if (longRunTimeoutRef.current) clearTimeout(longRunTimeoutRef.current)
+        if (longRunTimeoutRef.current) {
+          clearTimeout(longRunTimeoutRef.current)
+          longRunTimeoutRef.current = null
+        }
         setLongRunning(false)
-        setProgress(null)
+        clearQueuedProgress()
         setResult(msg.data as CacheResult)
         setStage('idle')
         wsRef.current = null
         ws.close()
       } else if (msg.type === 'error' || msg.type?.includes('error') || msg.errors) {
-        if (longRunTimeoutRef.current) clearTimeout(longRunTimeoutRef.current)
+        if (longRunTimeoutRef.current) {
+          clearTimeout(longRunTimeoutRef.current)
+          longRunTimeoutRef.current = null
+        }
         setLongRunning(false)
-        setProgress(null)
+        clearQueuedProgress()
         setError(msg as ErrorResult)
         setStage('idle')
         wsRef.current = null
@@ -175,6 +235,7 @@ export function useAnalysis(): UseAnalysisReturn {
     const fallbackToHttp = async () => {
       wsRef.current = null
       setStage('compiling')
+      clearQueuedProgress()
 
       const controller = new AbortController()
       abortControllerRef.current = controller
@@ -198,8 +259,12 @@ export function useAnalysis(): UseAnalysisReturn {
         setError({ type: 'server_error', message: err instanceof Error ? err.message : 'Connection failed' })
       } finally {
         abortControllerRef.current = null
-        if (longRunTimeoutRef.current) clearTimeout(longRunTimeoutRef.current)
+        if (longRunTimeoutRef.current) {
+          clearTimeout(longRunTimeoutRef.current)
+          longRunTimeoutRef.current = null
+        }
         setLongRunning(false)
+        clearQueuedProgress()
         setStage('idle')
       }
     }
@@ -208,7 +273,7 @@ export function useAnalysis(): UseAnalysisReturn {
     ws.onclose = (e) => {
       if (!e.wasClean && stage !== 'idle') fallbackToHttp()
     }
-  }, [cancelAnalysis, stage])
+  }, [cancelAnalysis, clearQueuedProgress, queueProgress, stage])
 
   const exportAsJSON = useCallback(() => {
     if (!result) return

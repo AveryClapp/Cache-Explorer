@@ -59,6 +59,11 @@ function formatCount(n: number): string {
   return String(n)
 }
 
+function clampPercent(value: number) {
+  if (!Number.isFinite(value)) return 0
+  return Math.max(0, Math.min(100, value))
+}
+
 export function EditorPanel({
   code,
   language,
@@ -86,8 +91,19 @@ export function EditorPanel({
   mobilePane,
 }: EditorPanelProps) {
   const monacoLanguage = language === 'cpp' ? 'cpp' : language === 'rust' ? 'rust' : language === 'zig' ? 'rust' : 'c'
-  const hasTotal = progress && progress.eventsTotal > 0
-  const progressPct = hasTotal ? Math.min(100, (progress.eventsProcessed / progress.eventsTotal) * 100) : 0
+  const processedEvents = Math.max(0, progress?.eventsProcessed ?? 0)
+  const totalEvents = Math.max(0, progress?.eventsTotal ?? 0)
+  const hasProgress = Boolean(progress)
+  const hasTotal = totalEvents > 0
+  const displayProcessedEvents = hasTotal ? Math.min(processedEvents, totalEvents) : processedEvents
+  const progressPct = hasTotal ? clampPercent((processedEvents / totalEvents) * 100) : 0
+  const statusLabel = isLoading
+    ? hasTotal
+      ? `${stageText[stage] || 'Processing...'} ${formatCount(displayProcessedEvents)} / ${formatCount(totalEvents)} events (${Math.round(progressPct)}%)`
+      : hasProgress
+        ? `${stageText[stage] || 'Processing...'} ${formatCount(displayProcessedEvents)} events`
+        : stageText[stage]
+    : 'Ready'
 
   return (
     <div className={`editor-area${isMobile && mobilePane !== 'editor' ? ' mobile-hidden' : ''}`}>
@@ -146,15 +162,24 @@ export function EditorPanel({
       {!isEmbedMode && (
         <div className="status-bar">
           <div className="status-bar-left">
-            <span className="status-item">
+            <span className={`status-item analysis-status${isLoading ? ' active' : ''}`}>
               <span className={`status-indicator ${isLoading ? 'running' : 'idle'}`} />
-              {isLoading
-                ? hasTotal
-                  ? `${stageText[stage] || 'Processing...'} ${formatCount(progress.eventsProcessed)} / ${formatCount(progress.eventsTotal)} events (${Math.round(progressPct)}%)`
-                  : progress
-                    ? `${stageText[stage] || 'Processing...'} ${formatCount(progress.eventsProcessed)} events`
-                    : stageText[stage]
-                : 'Ready'}
+              <span className="status-text">{statusLabel}</span>
+              {isLoading && hasProgress && (
+                <span
+                  className={`analysis-progress${hasTotal ? '' : ' indeterminate'}`}
+                  aria-label={hasTotal ? `Analysis progress ${Math.round(progressPct)} percent` : 'Analysis progress'}
+                  aria-valuemin={hasTotal ? 0 : undefined}
+                  aria-valuemax={hasTotal ? 100 : undefined}
+                  aria-valuenow={hasTotal ? Math.round(progressPct) : undefined}
+                  role={hasTotal ? 'progressbar' : 'status'}
+                >
+                  <span
+                    className="analysis-progress-fill"
+                    style={hasTotal ? { width: `${progressPct}%` } : undefined}
+                  />
+                </span>
+              )}
             </span>
             <span className="status-item">{language.toUpperCase()}</span>
           </div>

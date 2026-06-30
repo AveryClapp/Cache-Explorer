@@ -73,6 +73,24 @@ function annotationBadge(annotation: SourceAnnotation) {
 
 const BATCH_HARDWARE_CONFIGS = ['educational', 'intel', 'amd', 'apple']
 const HARDWARE_RUN_SET_STORAGE_KEY = 'cache-explorer-hardware-run-set'
+const PROGRESS_RENDER_INTERVAL_MS = 120
+
+type AnalysisProgress = {
+  eventsProcessed: number
+  eventsTotal: number
+}
+
+function toNonNegativeCount(value: unknown) {
+  const count = Number(value)
+  return Number.isFinite(count) ? Math.max(0, count) : 0
+}
+
+function normalizeProgressMessage(message: { eventsProcessed?: unknown; eventsTotal?: unknown }): AnalysisProgress {
+  return {
+    eventsProcessed: toNonNegativeCount(message.eventsProcessed),
+    eventsTotal: toNonNegativeCount(message.eventsTotal),
+  }
+}
 
 function hardwareConfigsOrDefault(configs: string[]) {
   return configs.length > 0 ? configs : BATCH_HARDWARE_CONFIGS
@@ -208,6 +226,10 @@ function App() {
   const [error, setError] = useState<ErrorResult | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
+  const longRunTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const progressRenderTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingProgressRef = useRef<AnalysisProgress | null>(null)
+  const lastProgressRenderRef = useRef(0)
   const [customConfig, setCustomConfig] = useState<CustomCacheConfig>(defaultCustomConfig)
   const [defines, setDefines] = useState<DefineEntry[]>([])
   const [exampleLangFilter, setExampleLangFilter] = useState<ExampleLangFilter>('all')
@@ -219,7 +241,7 @@ function App() {
   const [cacheSegments, setCacheSegments] = useState(false)
   const [eventLimit, setEventLimit] = useState(1000000)  // Default 1M events
   const [longRunning, setLongRunning] = useState(false)
-  const [progress, setProgress] = useState<{ eventsProcessed: number; eventsTotal: number } | null>(null)
+  const [progress, setProgress] = useState<AnalysisProgress | null>(null)
 
   // Use baseline hook for persistent comparison mode
   const {
@@ -550,6 +572,42 @@ function App() {
     decorationsRef.current = editor.deltaDecorations(decorationsRef.current, decorations)
   }, [result])
 
+  const clearQueuedProgress = useCallback(() => {
+    if (progressRenderTimeoutRef.current) {
+      clearTimeout(progressRenderTimeoutRef.current)
+      progressRenderTimeoutRef.current = null
+    }
+    pendingProgressRef.current = null
+    lastProgressRenderRef.current = 0
+    setProgress(null)
+  }, [])
+
+  const queueProgress = useCallback((nextProgress: AnalysisProgress) => {
+    pendingProgressRef.current = nextProgress
+    const now = Date.now()
+    const elapsed = now - lastProgressRenderRef.current
+
+    if (elapsed >= PROGRESS_RENDER_INTERVAL_MS) {
+      if (progressRenderTimeoutRef.current) {
+        clearTimeout(progressRenderTimeoutRef.current)
+        progressRenderTimeoutRef.current = null
+      }
+      lastProgressRenderRef.current = now
+      setProgress(nextProgress)
+      return
+    }
+
+    if (!progressRenderTimeoutRef.current) {
+      progressRenderTimeoutRef.current = setTimeout(() => {
+        progressRenderTimeoutRef.current = null
+        lastProgressRenderRef.current = Date.now()
+        if (pendingProgressRef.current) {
+          setProgress(pendingProgressRef.current)
+        }
+      }, PROGRESS_RENDER_INTERVAL_MS - elapsed)
+    }
+  }, [])
+
   const cancelAnalysis = useCallback(() => {
     if (wsRef.current) {
       wsRef.current.close()
@@ -559,9 +617,14 @@ function App() {
       abortControllerRef.current.abort()
       abortControllerRef.current = null
     }
+    if (longRunTimeoutRef.current) {
+      clearTimeout(longRunTimeoutRef.current)
+      longRunTimeoutRef.current = null
+    }
     setStage('idle')
     setLongRunning(false)
-  }, [])
+    clearQueuedProgress()
+  }, [clearQueuedProgress])
 
   const runAnalysis = () => {
     // Input validation - check total size across all files
@@ -582,10 +645,10 @@ function App() {
     setError(null)
     setResult(null)
     setLongRunning(false)
-    setProgress(null)
+    clearQueuedProgress()
 
     // Set long-running warning after 10 seconds
-    const longRunTimeout = setTimeout(() => setLongRunning(true), 10000)
+    longRunTimeoutRef.current = setTimeout(() => setLongRunning(true), 10000)
 
     const ws = new WebSocket(WS_URL)
     wsRef.current = ws
@@ -615,19 +678,26 @@ function App() {
       const msg = JSON.parse(event.data)
       if (msg.type === 'status') setStage(msg.stage as Stage)
       else if (msg.type === 'progress' && msg.eventsProcessed !== undefined) {
-        setProgress({ eventsProcessed: msg.eventsProcessed, eventsTotal: msg.eventsTotal || 0 })
+        queueProgress(normalizeProgressMessage(msg))
+        setStage('processing')
       } else if (msg.type === 'result') {
-        clearTimeout(longRunTimeout)
+        if (longRunTimeoutRef.current) {
+          clearTimeout(longRunTimeoutRef.current)
+          longRunTimeoutRef.current = null
+        }
         setLongRunning(false)
-        setProgress(null)
+        clearQueuedProgress()
         setResult(msg.data as CacheResult)
         setStage('idle')
         wsRef.current = null
         ws.close()
       } else if (msg.type === 'error' || msg.type?.includes('error') || msg.errors) {
-        clearTimeout(longRunTimeout)
+        if (longRunTimeoutRef.current) {
+          clearTimeout(longRunTimeoutRef.current)
+          longRunTimeoutRef.current = null
+        }
         setLongRunning(false)
-        setProgress(null)
+        clearQueuedProgress()
         setError(msg as ErrorResult)
         setStage('idle')
         wsRef.current = null
@@ -641,6 +711,7 @@ function App() {
     const fallbackToHttp = async () => {
       wsRef.current = null
       setStage('compiling')
+      clearQueuedProgress()
 
       // Create abort controller for HTTP request
       const controller = new AbortController()
@@ -683,6 +754,12 @@ function App() {
         setError({ type: 'server_error', message: err instanceof Error ? err.message : 'Connection failed' })
       } finally {
         abortControllerRef.current = null
+        if (longRunTimeoutRef.current) {
+          clearTimeout(longRunTimeoutRef.current)
+          longRunTimeoutRef.current = null
+        }
+        setLongRunning(false)
+        clearQueuedProgress()
         setStage('idle')
       }
     }
