@@ -478,6 +478,63 @@
   color: var(--text-secondary);
 }
 
+.experiment-winners {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.experiment-winner-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.experiment-winner-hardware {
+  grid-column: 1;
+  min-width: 0;
+  color: var(--text-bright);
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.experiment-winner-variant {
+  grid-column: 1;
+  color: var(--text-secondary);
+  font-family: var(--font-code);
+  font-size: var(--text-xs);
+}
+
+.experiment-winner-row .good,
+.experiment-winner-row .warning,
+.experiment-winner-row .neutral {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  font-family: var(--font-code);
+  font-size: var(--text-xs);
+}
+
+.experiment-winner-row .good {
+  color: var(--signal-success);
+}
+
+.experiment-winner-row .warning {
+  color: var(--signal-warning);
+}
+
+.experiment-winner-row .neutral {
+  color: var(--text-secondary);
+}
+
 .hardware-explorer-modal {
   max-width: 1120px;
 }

@@ -39,6 +39,18 @@ function bottleneckClass(value: string) {
   return `bottleneck-chip ${bottleneck}`
 }
 
+function winnerRows(result: HardwareExperimentResult | null) {
+  if (!result) return []
+  const winners = new Map<string, HardwareExperimentResult['summary'][number]>()
+  for (const row of result.summary) {
+    const current = winners.get(row.config)
+    if (!current || row.estimatedCycles < current.estimatedCycles) {
+      winners.set(row.config, row)
+    }
+  }
+  return Array.from(winners.values())
+}
+
 export function ExperimentResultsModal({
   result,
   running,
@@ -49,6 +61,8 @@ export function ExperimentResultsModal({
   onRun,
   onClose,
 }: ExperimentResultsModalProps) {
+  const winners = winnerRows(result)
+
   return (
     <div className="batch-modal-overlay" onClick={() => !running && onClose()}>
       <div className="batch-modal experiment-modal" onClick={event => event.stopPropagation()}>
@@ -86,6 +100,20 @@ export function ExperimentResultsModal({
             <div className="batch-loading">
               <span className="loading-spinner" />
               Running experiment...
+            </div>
+          )}
+
+          {winners.length > 0 && (
+            <div className="experiment-winners">
+              {winners.map(row => (
+                <div className="experiment-winner-row" key={row.config}>
+                  <span className="experiment-winner-hardware">{row.profile?.displayName || row.config}</span>
+                  <span className="experiment-winner-variant">{row.variant}</span>
+                  <span className={deltaClass(row.cycleDelta)}>
+                    {formatDelta(row.cycleDelta, row.cycleDeltaPercent)}
+                  </span>
+                </div>
+              ))}
             </div>
           )}
 
