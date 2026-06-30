@@ -37,6 +37,7 @@ A collection of C and C++ programs demonstrating various cache access patterns a
 |---------|---|-----|-------------|-------------------|
 | Branch Patterns | `branch_patterns.c` | - | Predictable vs alternating branches | Loop branches warm up, alternating branch mispredicts often |
 | Pointer Chasing | `pointer_chasing.c` | - | Randomized dependent node traversal | Memory stalls dominate, branch behavior is mostly predictable |
+| Conv2D Kernel | `conv2d_kernel.c` | - | Direct/tiled 3x3 convolution kernel | Cache and memory stalls expose kernel layout tradeoffs |
 
 ## Working Set Size
 
@@ -81,6 +82,11 @@ Run any example with Cache Explorer:
 # With optimization
 ./backend/scripts/cache-explore examples/cache_blocking.c -O2
 
+# Hardware experiment
+./backend/scripts/cache-explore examples/conv2d_kernel.c -O2 --hardware intel14 --json
+./backend/scripts/cache-explore examples/conv2d_kernel.c -O2 -D RUN_TILED=1 --hardware intel14 --json
+./backend/scripts/cache-explore compare examples/conv2d_kernel.c -O2 --configs intel14,zen4,m3
+
 # Generate HTML report
 ./backend/scripts/cache-explore-report examples/linked_list.c
 ```
@@ -109,4 +115,11 @@ Run any example with Cache Explorer:
    ```bash
    ./backend/scripts/cache-explore examples/working_set_small.c
    ./backend/scripts/cache-explore examples/working_set_large.c
+   ```
+
+5. **Direct vs Tiled Conv2D**
+   ```bash
+   ./backend/scripts/cache-explore examples/conv2d_kernel.c -O2 --hardware intel14
+   ./backend/scripts/cache-explore examples/conv2d_kernel.c -O2 -D RUN_TILED=1 --hardware intel14
+   ./backend/scripts/cache-explore compare examples/conv2d_kernel.c -O2 --configs intel14,zen4,m3
    ```
