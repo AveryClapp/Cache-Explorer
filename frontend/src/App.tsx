@@ -42,7 +42,14 @@ import { createFileTab, getFileExtension, useBaseline } from './hooks'
 // Utilities
 import { fuzzyMatch } from './utils/formatting'
 import { encodeState, decodeState } from './utils/state'
-import { exportAsJSON, exportAsCSV } from './utils/export'
+import {
+  exportAsJSON,
+  exportAsCSV,
+  exportBatchResultsAsCSV,
+  exportBatchResultsAsJSON,
+  exportExperimentAsCSV,
+  exportExperimentAsJSON,
+} from './utils/export'
 
 function annotationClass(annotation: SourceAnnotation) {
   return `hw-${annotation.subsystem} ${annotation.severity}`
@@ -911,6 +918,8 @@ function App() {
           results={batchResults}
           running={batchRunning}
           total={batchTotal}
+          onExportCSV={() => exportBatchResultsAsCSV(batchResults)}
+          onExportJSON={() => exportBatchResultsAsJSON(batchResults)}
           onClose={() => setShowBatchModal(false)}
         />
       )}
@@ -925,6 +934,8 @@ function App() {
           hardwareConfigIds={hardwareConfigsOrDefault(runHardwareConfigIds)}
           onVariantsTextChange={setExperimentVariants}
           onRun={runExperimentAnalysis}
+          onExportCSV={() => experimentResult && exportExperimentAsCSV(experimentResult)}
+          onExportJSON={() => experimentResult && exportExperimentAsJSON(experimentResult)}
           onClose={() => setShowExperimentModal(false)}
         />
       )}

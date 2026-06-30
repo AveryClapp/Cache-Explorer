@@ -1,4 +1,5 @@
 import type { HardwareProfile } from '../types'
+import { exportHardwareProfilesAsCSV, exportHardwareProfilesAsJSON } from '../utils/export'
 import { HardwareProfilePanel } from './HardwareProfilePanel'
 
 interface HardwareExplorerModalProps {
@@ -167,6 +168,20 @@ export function HardwareExplorerModal({
               disabled={loading || runConfigIds.length === 0}
             >
               Experiment
+            </button>
+            <button
+              className="btn"
+              onClick={() => selected && exportHardwareProfilesAsCSV(diffProfiles, selected)}
+              disabled={loading || !selected || diffProfiles.length === 0}
+            >
+              Export CSV
+            </button>
+            <button
+              className="btn"
+              onClick={() => selected && exportHardwareProfilesAsJSON(diffProfiles, selected)}
+              disabled={loading || !selected || diffProfiles.length === 0}
+            >
+              Export JSON
             </button>
             <button
               className="btn"

@@ -1,13 +1,66 @@
-import type { CacheResult } from '../types'
+import type { CacheResult, HardwareExperimentResult, HardwareProfile } from '../types'
 
-export function exportAsJSON(result: CacheResult) {
-  const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' })
+interface BatchExportResult {
+  config: string
+  result: CacheResult
+}
+
+function dateStamp() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function downloadText(filename: string, text: string, type: string) {
+  const blob = new Blob([text], { type })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `cache-analysis-${new Date().toISOString().slice(0, 10)}.json`
+  a.download = filename
   a.click()
   URL.revokeObjectURL(url)
+}
+
+function downloadJSON(filename: string, payload: unknown) {
+  downloadText(filename, JSON.stringify(payload, null, 2), 'application/json')
+}
+
+function csvCell(value: unknown) {
+  if (value === null || value === undefined) return ''
+  const text = String(value)
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+}
+
+function csvRow(values: unknown[]) {
+  return values.map(csvCell).join(',')
+}
+
+function profileName(config: string, result: CacheResult) {
+  return result.profile?.displayName || config
+}
+
+function estimatedCycles(result: CacheResult) {
+  return result.summary?.estimatedCycles ?? result.timing?.totalCycles ?? null
+}
+
+function topSource(result: CacheResult) {
+  const source = result.summary?.topSource
+  return source ? `${source.file}:${source.line}` : ''
+}
+
+function hitRate(result: CacheResult, level: 'l1d' | 'l2' | 'l3') {
+  if (level === 'l1d') return result.levels.l1d?.hitRate ?? result.levels.l1?.hitRate ?? null
+  return result.levels[level]?.hitRate ?? null
+}
+
+function percent(value: number | null | undefined) {
+  return typeof value === 'number' ? `${(value * 100).toFixed(2)}%` : ''
+}
+
+function numericDelta(value: number | undefined, baseline: number | undefined) {
+  return typeof value === 'number' && typeof baseline === 'number' ? value - baseline : ''
+}
+
+export function exportAsJSON(result: CacheResult) {
+  downloadJSON(`cache-analysis-${dateStamp()}.json`, result)
 }
 
 export function exportAsCSV(result: CacheResult) {
@@ -68,11 +121,183 @@ export function exportAsCSV(result: CacheResult) {
     }
   }
   lines.push(`Total Events,${result.events}`)
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `cache-analysis-${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  downloadText(`cache-analysis-${dateStamp()}.csv`, lines.join('\n'), 'text/csv')
+}
+
+export function exportBatchResultsAsJSON(results: BatchExportResult[]) {
+  downloadJSON(`hardware-comparison-${dateStamp()}.json`, {
+    generatedAt: new Date().toISOString(),
+    results,
+  })
+}
+
+export function exportBatchResultsAsCSV(results: BatchExportResult[]) {
+  const rows = [
+    csvRow([
+      'Hardware',
+      'Config',
+      'Vendor',
+      'Class',
+      'Bottleneck',
+      'Estimated Cycles',
+      'L1D Hit',
+      'L2 Hit',
+      'L3 Hit',
+      'Top Source',
+      'Events',
+      'Model Confidence',
+    ]),
+  ]
+
+  for (const { config, result } of results) {
+    rows.push(csvRow([
+      profileName(config, result),
+      config,
+      result.profile?.vendor,
+      result.profile?.class,
+      result.summary?.primaryBottleneck || 'unknown',
+      estimatedCycles(result),
+      percent(hitRate(result, 'l1d')),
+      percent(hitRate(result, 'l2')),
+      percent(hitRate(result, 'l3')),
+      topSource(result),
+      result.events,
+      result.profile?.modelConfidence,
+    ]))
+  }
+
+  downloadText(`hardware-comparison-${dateStamp()}.csv`, rows.join('\n'), 'text/csv')
+}
+
+export function exportExperimentAsJSON(result: HardwareExperimentResult) {
+  downloadJSON(`hardware-experiment-${dateStamp()}.json`, {
+    generatedAt: new Date().toISOString(),
+    ...result,
+  })
+}
+
+export function exportExperimentAsCSV(result: HardwareExperimentResult) {
+  const rows = [
+    csvRow([
+      'Variant',
+      'Variant Spec',
+      'Hardware',
+      'Config',
+      'Vendor',
+      'Bottleneck',
+      'Estimated Cycles',
+      'Cycle Delta',
+      'Cycle Delta Percent',
+      'L1D Hit',
+      'L2 Hit',
+      'L3 Hit',
+      'Top Source',
+      'Events',
+      'Confidence',
+    ]),
+  ]
+
+  for (const row of result.summary) {
+    rows.push(csvRow([
+      row.variant,
+      row.variantSpec,
+      row.profile?.displayName || row.config,
+      row.config,
+      row.profile?.vendor,
+      row.primaryBottleneck,
+      row.estimatedCycles,
+      row.cycleDelta,
+      percent(row.cycleDeltaPercent),
+      percent(row.hitRates?.l1d),
+      percent(row.hitRates?.l2),
+      percent(row.hitRates?.l3),
+      row.topSource ? `${row.topSource.file}:${row.topSource.line}` : '',
+      row.events,
+      row.confidence,
+    ]))
+  }
+
+  downloadText(`hardware-experiment-${dateStamp()}.csv`, rows.join('\n'), 'text/csv')
+}
+
+export function exportHardwareProfilesAsJSON(profiles: HardwareProfile[], baseline?: HardwareProfile) {
+  downloadJSON(`hardware-profiles-${dateStamp()}.json`, {
+    generatedAt: new Date().toISOString(),
+    baselineId: baseline?.id || null,
+    profiles,
+  })
+}
+
+export function exportHardwareProfilesAsCSV(profiles: HardwareProfile[], baseline?: HardwareProfile) {
+  const baselineDetails = baseline?.details
+  const rows = [
+    csvRow([
+      'Profile',
+      'ID',
+      'Vendor',
+      'Architecture',
+      'Class',
+      'Confidence',
+      'Validation',
+      'Baseline',
+      'L1D KB',
+      'L1D Delta KB',
+      'L2 KB',
+      'L2 Delta KB',
+      'L3 KB',
+      'L3 Delta KB',
+      'DRAM Cycles',
+      'DRAM Delta Cycles',
+      'Issue Width',
+      'Issue Width Delta',
+      'Vector Bits',
+      'Vector Delta Bits',
+      'DRAM GB/s',
+      'DRAM GB/s Delta',
+      'MLP',
+      'MLP Delta',
+      'Prefetch',
+      'Execution Coverage',
+      'SIMD Coverage',
+      'Bandwidth Coverage',
+      'Notes',
+    ]),
+  ]
+
+  for (const profile of profiles) {
+    const details = profile.details
+    rows.push(csvRow([
+      profile.displayName,
+      profile.id,
+      profile.vendor,
+      profile.architecture,
+      profile.class,
+      profile.modelConfidence,
+      profile.validation?.confidence,
+      baseline?.id === profile.id ? 'yes' : '',
+      details?.cache.levels.l1d.sizeKB,
+      numericDelta(details?.cache.levels.l1d.sizeKB, baselineDetails?.cache.levels.l1d.sizeKB),
+      details?.cache.levels.l2.sizeKB,
+      numericDelta(details?.cache.levels.l2.sizeKB, baselineDetails?.cache.levels.l2.sizeKB),
+      details?.cache.levels.l3.sizeKB,
+      numericDelta(details?.cache.levels.l3.sizeKB, baselineDetails?.cache.levels.l3.sizeKB),
+      details?.memory.dramCycles,
+      numericDelta(details?.memory.dramCycles, baselineDetails?.memory.dramCycles),
+      details?.executionCore.issueWidth,
+      numericDelta(details?.executionCore.issueWidth, baselineDetails?.executionCore.issueWidth),
+      details?.executionCore.vectorBits,
+      numericDelta(details?.executionCore.vectorBits, baselineDetails?.executionCore.vectorBits),
+      details?.memory.dramBandwidthGBs,
+      numericDelta(details?.memory.dramBandwidthGBs, baselineDetails?.memory.dramBandwidthGBs),
+      details?.memory.maxMemoryLevelParallelism,
+      numericDelta(details?.memory.maxMemoryLevelParallelism, baselineDetails?.memory.maxMemoryLevelParallelism),
+      details?.prefetch.activePolicy,
+      profile.modelCoverage?.executionCore,
+      profile.modelCoverage?.simd,
+      profile.modelCoverage?.bandwidth,
+      profile.notes,
+    ]))
+  }
+
+  downloadText(`hardware-profiles-${dateStamp()}.csv`, rows.join('\n'), 'text/csv')
 }

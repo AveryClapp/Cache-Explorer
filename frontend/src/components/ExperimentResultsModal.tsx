@@ -9,6 +9,8 @@ interface ExperimentResultsModalProps {
   hardwareConfigIds: string[]
   onVariantsTextChange: (value: string) => void
   onRun: () => void
+  onExportCSV?: () => void
+  onExportJSON?: () => void
   onClose: () => void
 }
 
@@ -71,6 +73,8 @@ export function ExperimentResultsModal({
   hardwareConfigIds,
   onVariantsTextChange,
   onRun,
+  onExportCSV,
+  onExportJSON,
   onClose,
 }: ExperimentResultsModalProps) {
   const winners = winnerRows(result)
@@ -81,7 +85,19 @@ export function ExperimentResultsModal({
       <div className="batch-modal experiment-modal" onClick={event => event.stopPropagation()}>
         <div className="batch-modal-header">
           <span className="batch-modal-title">Hardware Experiment</span>
-          <button className="batch-modal-close" onClick={onClose}>×</button>
+          <div className="batch-modal-header-actions">
+            {onExportCSV && (
+              <button className="btn" onClick={onExportCSV} disabled={!result}>
+                Export CSV
+              </button>
+            )}
+            {onExportJSON && (
+              <button className="btn" onClick={onExportJSON} disabled={!result}>
+                Export JSON
+              </button>
+            )}
+            <button className="batch-modal-close" onClick={onClose}>×</button>
+          </div>
         </div>
         <div className="batch-modal-content">
           <div className="experiment-controls">

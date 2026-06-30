@@ -10,6 +10,8 @@ interface BatchResultsModalProps {
   results: BatchResult[]
   running: boolean
   total: number
+  onExportCSV?: () => void
+  onExportJSON?: () => void
   onClose: () => void
 }
 
@@ -38,13 +40,25 @@ function bottleneckClass(result: CacheResult) {
   return `bottleneck-chip ${bottleneck}`
 }
 
-export function BatchResultsModal({ results, running, total, onClose }: BatchResultsModalProps) {
+export function BatchResultsModal({ results, running, total, onExportCSV, onExportJSON, onClose }: BatchResultsModalProps) {
   return (
     <div className="batch-modal-overlay" onClick={() => !running && onClose()}>
       <div className="batch-modal" onClick={e => e.stopPropagation()}>
         <div className="batch-modal-header">
           <span className="batch-modal-title">Hardware Comparison</span>
-          <button className="batch-modal-close" onClick={onClose}>×</button>
+          <div className="batch-modal-header-actions">
+            {onExportCSV && (
+              <button className="btn" onClick={onExportCSV} disabled={results.length === 0}>
+                Export CSV
+              </button>
+            )}
+            {onExportJSON && (
+              <button className="btn" onClick={onExportJSON} disabled={results.length === 0}>
+                Export JSON
+              </button>
+            )}
+            <button className="batch-modal-close" onClick={onClose}>×</button>
+          </div>
         </div>
         <div className="batch-modal-content">
           {running && results.length < total && (

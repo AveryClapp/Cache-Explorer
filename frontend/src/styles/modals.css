@@ -259,6 +259,24 @@
   border-bottom: 1px solid var(--border);
 }
 
+.batch-modal-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.batch-modal-header-actions .btn {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-xs);
+}
+
+.batch-modal-header-actions .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .batch-modal-title {
   font-family: var(--font-display);
   font-size: var(--text-lg);
