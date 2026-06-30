@@ -28,12 +28,14 @@ const FILE_EXTENSIONS: Record<string, Language> = {
   '.cc': 'cpp',
   '.cxx': 'cpp',
   '.zig': 'zig',
+  '.rs': 'rust',
 }
 
 const DEFAULT_EXTENSIONS: Record<Language, string> = {
   c: '.c',
   cpp: '.cpp',
   zig: '.zig',
+  rust: '.rs',
 }
 
 const LANGUAGE_COLORS: Record<Language, string> = {
