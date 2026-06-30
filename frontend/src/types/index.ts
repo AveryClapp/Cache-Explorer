@@ -205,6 +205,39 @@ export interface ExecutionStats {
   branchPrediction?: BranchPredictionStats
 }
 
+export interface BottleneckSummary {
+  primaryBottleneck: 'memory' | 'branch' | 'frontend' | 'cache' | 'balanced' | string
+  estimatedCycles: number
+  bottleneckShare: number
+  confidence: 'high' | 'medium' | 'low' | string
+  reason: string
+  topSource: {
+    file: string
+    line: number
+    subsystem: string
+    cycles: number
+  } | null
+}
+
+export interface SourceAnnotation {
+  subsystem: 'memory' | 'branch' | 'frontend' | 'cache' | string
+  severity: 'high' | 'medium' | 'low' | string
+  file: string
+  line: number
+  label: string
+  detail: string
+  metrics: {
+    cycles: number
+    share: number
+    misses: number
+    branchMispredictions: number
+  }
+}
+
+export interface HardwareSubsystems {
+  execution?: ExecutionStats
+}
+
 // =============================================================================
 // TIMING STATS
 // =============================================================================
@@ -318,6 +351,9 @@ export interface CacheState {
 export interface CacheResult {
   config: string
   profile?: HardwareProfile
+  summary?: BottleneckSummary
+  sourceAnnotations?: SourceAnnotation[]
+  subsystems?: HardwareSubsystems
   events: number
   multicore?: boolean
   cores?: number

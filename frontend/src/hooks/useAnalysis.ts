@@ -237,6 +237,15 @@ export function useAnalysis(): UseAnalysisReturn {
         lines.push(`DRAM Latency Cycles,${memory.dramCycles}`)
       }
     }
+    if (result.summary) {
+      lines.push(`Primary Bottleneck,${result.summary.primaryBottleneck}`)
+      lines.push(`Estimated Cycles,${result.summary.estimatedCycles}`)
+      lines.push(`Bottleneck Share,${(result.summary.bottleneckShare * 100).toFixed(2)}%`)
+      lines.push(`Bottleneck Confidence,${result.summary.confidence}`)
+      if (result.summary.topSource) {
+        lines.push(`Bottleneck Source,${result.summary.topSource.file}:${result.summary.topSource.line}`)
+      }
+    }
     const l1 = result.levels.l1d || result.levels.l1
     if (l1) {
       lines.push(`L1 Hits,${l1.hits}`)

@@ -4,6 +4,7 @@ import {
   ErrorDisplay,
   MetricCards,
   DiffSummary,
+  BottleneckSummaryPanel,
   CacheHierarchyViz,
   PrefetchStatsPanel,
   AdvancedStatsPanel,
@@ -14,6 +15,7 @@ import {
   FalseSharingDisplay,
   HotLinesPanel,
   SuggestionsPanel,
+  SourceAnnotationsPanel,
   CacheGrid,
   LoadingState,
   EmptyState,
@@ -95,6 +97,9 @@ export function ResultsPanel({
             {/* Metric Cards */}
             <MetricCards result={result} baselineResult={baselineResult} diffMode={diffMode} />
 
+            {/* Hardware Bottleneck Summary */}
+            {result.summary && <BottleneckSummaryPanel summary={result.summary} />}
+
             {/* Hardware Profile */}
             {result.profile && <HardwareProfilePanel profile={result.profile} cacheConfig={result.cacheConfig} />}
 
@@ -109,6 +114,9 @@ export function ResultsPanel({
 
             {/* Execution Engine */}
             {result.execution && <ExecutionEnginePanel execution={result.execution} />}
+
+            {/* Source Annotations */}
+            {result.sourceAnnotations && <SourceAnnotationsPanel annotations={result.sourceAnnotations} />}
 
             {/* Toggle Buttons */}
             <div className="toggle-buttons" style={{ margin: 'var(--space-4) 0' }}>

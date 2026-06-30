@@ -147,3 +147,85 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
 }
+
+/* Analysis Decorations */
+.line-good {
+  background: rgba(78, 201, 176, 0.08);
+}
+
+.line-warn {
+  background: rgba(220, 220, 170, 0.10);
+}
+
+.line-bad {
+  background: rgba(241, 76, 76, 0.10);
+}
+
+.line-hw-memory {
+  background: rgba(241, 76, 76, 0.14);
+}
+
+.line-hw-branch {
+  background: rgba(220, 220, 170, 0.12);
+}
+
+.line-hw-frontend {
+  background: rgba(78, 201, 176, 0.12);
+}
+
+.glyph-good,
+.glyph-warn,
+.glyph-bad,
+.glyph-hw-memory,
+.glyph-hw-branch,
+.glyph-hw-frontend {
+  border-left: 3px solid currentColor;
+}
+
+.glyph-good {
+  color: var(--signal-good);
+}
+
+.glyph-warn,
+.glyph-hw-branch {
+  color: var(--signal-warning);
+}
+
+.glyph-bad,
+.glyph-hw-memory {
+  color: var(--signal-critical);
+}
+
+.glyph-hw-frontend {
+  color: var(--signal-info);
+}
+
+.inline-good,
+.inline-warn,
+.inline-bad,
+.inline-hw-memory,
+.inline-hw-branch,
+.inline-hw-frontend {
+  margin-left: 12px;
+  font-family: var(--font-code);
+  font-size: 11px;
+  opacity: 0.88;
+}
+
+.inline-good {
+  color: var(--signal-good);
+}
+
+.inline-warn,
+.inline-hw-branch {
+  color: var(--signal-warning);
+}
+
+.inline-bad,
+.inline-hw-memory {
+  color: var(--signal-critical);
+}
+
+.inline-hw-frontend {
+  color: var(--signal-info);
+}

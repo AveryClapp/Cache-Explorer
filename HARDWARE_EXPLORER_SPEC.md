@@ -15,6 +15,12 @@ emitted in JSON, and the frontend has a Hardware Profile panel backed by
 topology parameters. The examples now include both branch-heavy and
 pointer-chasing execution-engine workloads.
 
+**Performance notes:** Bottleneck source attribution is collected during the
+existing trace-processing pass. Summary selection scans aggregated source
+locations rather than the raw trace, and the frontend folds hardware source
+badges into the existing Monaco decoration update instead of adding a second
+editor pass.
+
 ## Summary
 
 Hardware Explorer is the staged evolution of Cache Explorer from a cache-focused

@@ -26,6 +26,7 @@ import type {
   DefineEntry,
   CustomCacheConfig,
   PrefetchPolicy,
+  SourceAnnotation,
 } from './types'
 
 // Constants
@@ -38,6 +39,18 @@ import { createFileTab, getFileExtension, useBaseline } from './hooks'
 import { fuzzyMatch } from './utils/formatting'
 import { encodeState, decodeState } from './utils/state'
 import { exportAsJSON, exportAsCSV } from './utils/export'
+
+function annotationClass(annotation: SourceAnnotation) {
+  return `hw-${annotation.subsystem} ${annotation.severity}`
+}
+
+function annotationBadge(annotation: SourceAnnotation) {
+  const subsystem = annotation.subsystem
+    ? annotation.subsystem[0].toUpperCase() + annotation.subsystem.slice(1)
+    : 'Hardware'
+  const share = (annotation.metrics.share * 100).toFixed(0)
+  return `${subsystem} ${share}%`
+}
 
 
 function App() {
@@ -365,6 +378,17 @@ function App() {
     if (!model) return
 
     const decorations: editor.IModelDeltaDecoration[] = []
+    const inlineBadges = new Map<number, { parts: string[]; className: string }>()
+
+    const addInlineBadge = (lineNumber: number, text: string, className: string) => {
+      const current = inlineBadges.get(lineNumber)
+      if (current) {
+        current.parts.push(text)
+        if (className.startsWith('inline-hw')) current.className = className
+      } else {
+        inlineBadges.set(lineNumber, { parts: [text], className })
+      }
+    }
 
     for (const line of result.hotLines) {
       const fileName = line.file.split('/').pop() || line.file
@@ -394,19 +418,48 @@ function App() {
             }
           })
 
-          // Inline annotation at end of line showing miss info
-          const lineContent = model.getLineContent(lineNum)
+          addInlineBadge(
+            lineNum,
+            `${line.misses} misses (${(line.missRate * 100).toFixed(0)}%)`,
+            inlineClass,
+          )
+        }
+      }
+    }
+
+    for (const annotation of result.sourceAnnotations || []) {
+      const fileName = annotation.file.split('/').pop() || annotation.file
+      if (fileName.includes('cache-explorer') || annotation.file.startsWith('/tmp/')) {
+        const lineNum = annotation.line
+        if (lineNum > 0 && lineNum <= model.getLineCount()) {
+          const className = `line-${annotationClass(annotation)}`
           decorations.push({
-            range: new monaco.Range(lineNum, lineContent.length + 1, lineNum, lineContent.length + 1),
+            range: new monaco.Range(lineNum, 1, lineNum, 1),
             options: {
-              after: {
-                content: ` // ${line.misses} misses (${(line.missRate * 100).toFixed(0)}%)`,
-                inlineClassName: inlineClass
+              isWholeLine: true,
+              className,
+              glyphMarginClassName: `glyph-${annotationClass(annotation)}`,
+              glyphMarginHoverMessage: {
+                value: `**${annotation.label}**\n\n${annotation.detail}\n\n${annotation.metrics.cycles.toLocaleString()} cycles`
               }
             }
           })
+          addInlineBadge(lineNum, annotationBadge(annotation), `inline-${annotationClass(annotation)}`)
         }
       }
+    }
+
+    for (const [lineNum, badge] of inlineBadges) {
+      const lineContent = model.getLineContent(lineNum)
+      decorations.push({
+        range: new monaco.Range(lineNum, lineContent.length + 1, lineNum, lineContent.length + 1),
+        options: {
+          after: {
+            content: ` // ${badge.parts.join(' | ')}`,
+            inlineClassName: badge.className
+          }
+        }
+      })
     }
 
     decorationsRef.current = editor.deltaDecorations(decorationsRef.current, decorations)
