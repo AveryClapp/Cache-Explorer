@@ -57,9 +57,23 @@ function annotationBadge(annotation: SourceAnnotation) {
 }
 
 const BATCH_HARDWARE_CONFIGS = ['educational', 'intel', 'amd', 'apple']
+const HARDWARE_RUN_SET_STORAGE_KEY = 'cache-explorer-hardware-run-set'
 
 function hardwareConfigsOrDefault(configs: string[]) {
   return configs.length > 0 ? configs : BATCH_HARDWARE_CONFIGS
+}
+
+function readStoredHardwareRunSet() {
+  if (typeof window === 'undefined') return BATCH_HARDWARE_CONFIGS
+  try {
+    const raw = localStorage.getItem(HARDWARE_RUN_SET_STORAGE_KEY)
+    const parsed = raw ? JSON.parse(raw) : null
+    if (!Array.isArray(parsed)) return BATCH_HARDWARE_CONFIGS
+    const configs = Array.from(new Set(parsed.filter(item => typeof item === 'string' && item.trim())))
+    return configs.length > 0 ? configs : BATCH_HARDWARE_CONFIGS
+  } catch {
+    return BATCH_HARDWARE_CONFIGS
+  }
 }
 
 function parseExperimentVariants(value: string) {
@@ -199,7 +213,7 @@ function App() {
   const [hardwareProfilesLoading, setHardwareProfilesLoading] = useState(false)
   const [hardwareProfilesError, setHardwareProfilesError] = useState<string | null>(null)
   const [selectedHardwareProfileId, setSelectedHardwareProfileId] = useState('')
-  const [runHardwareConfigIds, setRunHardwareConfigIds] = useState<string[]>(BATCH_HARDWARE_CONFIGS)
+  const [runHardwareConfigIds, setRunHardwareConfigIds] = useState<string[]>(readStoredHardwareRunSet)
   const [batchTotal, setBatchTotal] = useState(BATCH_HARDWARE_CONFIGS.length)
   const commandInputRef = useRef<HTMLInputElement>(null)
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
@@ -213,6 +227,10 @@ function App() {
     document.documentElement.setAttribute('data-theme', theme)
     localStorage.setItem('cache-explorer-theme', theme)
   }, [theme])
+
+  useEffect(() => {
+    localStorage.setItem(HARDWARE_RUN_SET_STORAGE_KEY, JSON.stringify(runHardwareConfigIds))
+  }, [runHardwareConfigIds])
 
 
   // Fetch default compiler on mount
