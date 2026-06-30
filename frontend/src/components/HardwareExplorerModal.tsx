@@ -29,10 +29,78 @@ function cacheSummary(profile: HardwareProfile) {
   return `L1D ${formatSize(levels.l1d.sizeKB)} / L2 ${formatSize(levels.l2.sizeKB)} / ${formatSize(levels.l3.sizeKB)}`
 }
 
-function latencySummary(profile: HardwareProfile) {
-  const memory = profile.details?.memory
-  if (!memory) return '-'
-  return `L1 ${memory.l1HitCycles} / L2 ${memory.l2HitCycles} / DRAM ${memory.dramCycles}`
+type DiffTone = 'good' | 'warning' | 'neutral'
+
+interface DiffMetric {
+  value: string
+  delta?: string
+  tone?: DiffTone
+}
+
+function formatNumber(value: number | undefined, suffix = '') {
+  return typeof value === 'number' ? `${value.toLocaleString()}${suffix}` : '-'
+}
+
+function signed(value: number) {
+  return value > 0 ? `+${value.toLocaleString()}` : value.toLocaleString()
+}
+
+function deltaTone(delta: number, higherIsBetter: boolean): DiffTone {
+  if (delta === 0) return 'neutral'
+  return (higherIsBetter && delta > 0) || (!higherIsBetter && delta < 0) ? 'good' : 'warning'
+}
+
+function numberMetric(value: number | undefined, baseline: number | undefined, valueSuffix = '', deltaSuffix = valueSuffix, higherIsBetter = true): DiffMetric {
+  if (typeof value !== 'number' || typeof baseline !== 'number') return { value: formatNumber(value, valueSuffix) }
+  const delta = value - baseline
+  return {
+    value: formatNumber(value, valueSuffix),
+    delta: delta === 0 ? undefined : `${signed(delta)}${deltaSuffix}`,
+    tone: deltaTone(delta, higherIsBetter),
+  }
+}
+
+function sizeMetric(valueKB: number | undefined, baselineKB: number | undefined, higherIsBetter = true): DiffMetric {
+  if (typeof valueKB !== 'number' || typeof baselineKB !== 'number') {
+    return { value: typeof valueKB === 'number' ? formatSize(valueKB) : '-' }
+  }
+  const delta = valueKB - baselineKB
+  return {
+    value: formatSize(valueKB),
+    delta: delta === 0 ? undefined : `${delta > 0 ? '+' : '-'}${formatSize(Math.abs(delta))}`,
+    tone: deltaTone(delta, higherIsBetter),
+  }
+}
+
+function textMetric(value: string | undefined, baseline: string | undefined): DiffMetric {
+  if (!value) return { value: '-' }
+  return {
+    value,
+    delta: baseline && value !== baseline ? 'diff' : undefined,
+    tone: 'neutral',
+  }
+}
+
+function DiffCell({ metric }: { metric: DiffMetric }) {
+  return (
+    <span className="hardware-diff-cell">
+      <span>{metric.value}</span>
+      {metric.delta && <span className={`hardware-diff-delta ${metric.tone || 'neutral'}`}>{metric.delta}</span>}
+    </span>
+  )
+}
+
+function bestProfile(
+  profiles: HardwareProfile[],
+  valueOf: (profile: HardwareProfile) => number | undefined,
+  higherIsBetter = true,
+) {
+  return profiles.reduce<{ profile: HardwareProfile; value: number } | null>((best, profile) => {
+    const value = valueOf(profile)
+    if (typeof value !== 'number') return best
+    if (!best) return { profile, value }
+    return higherIsBetter === value > best.value ? { profile, value } : best
+  }, null)
 }
 
 export function HardwareExplorerModal({
@@ -54,6 +122,30 @@ export function HardwareExplorerModal({
   const runProfiles = runConfigIds
     .map(profileId => profiles.find(profile => profile.id === profileId))
     .filter((profile): profile is HardwareProfile => Boolean(profile))
+  const diffProfiles = runProfiles.length > 0 ? runProfiles : selected ? [selected] : []
+  const baselineDetails = selected?.details
+  const diffHighlights = [
+    {
+      label: 'Largest LLC',
+      best: bestProfile(diffProfiles, profile => profile.details?.cache.levels.l3.sizeKB),
+      format: formatSize,
+    },
+    {
+      label: 'Lowest DRAM',
+      best: bestProfile(diffProfiles, profile => profile.details?.memory.dramCycles, false),
+      format: (value: number) => `${value.toLocaleString()} cycles`,
+    },
+    {
+      label: 'Widest Core',
+      best: bestProfile(diffProfiles, profile => profile.details?.executionCore.issueWidth),
+      format: (value: number) => `${value}-wide`,
+    },
+    {
+      label: 'Highest DRAM BW',
+      best: bestProfile(diffProfiles, profile => profile.details?.memory.dramBandwidthGBs),
+      format: (value: number) => `${value.toLocaleString()} GB/s`,
+    },
+  ].filter(item => item.best)
 
   return (
     <div className="batch-modal-overlay" onClick={() => !loading && onClose()}>
@@ -126,9 +218,27 @@ export function HardwareExplorerModal({
               <>
                 <HardwareProfilePanel profile={selected} />
                 {selected.notes && <div className="hardware-profile-note">{selected.notes}</div>}
-                {runProfiles.length > 0 && (
+                {diffProfiles.length > 0 && (
                   <div className="hardware-run-set-matrix">
-                    <div className="profile-detail-title">Run Set</div>
+                    <div className="hardware-run-set-header">
+                      <div>
+                        <div className="profile-detail-title">Run Set Diff</div>
+                        <div className="hardware-run-set-baseline">
+                          Baseline {selected.displayName}
+                        </div>
+                      </div>
+                      {diffHighlights.length > 0 && (
+                        <div className="hardware-diff-highlights">
+                          {diffHighlights.map(item => item.best && (
+                            <span className="hardware-diff-highlight" key={item.label}>
+                              <span>{item.label}</span>
+                              <strong>{item.best.profile.displayName}</strong>
+                              <code>{item.format(item.best.value)}</code>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     <table>
                       <thead>
                         <tr>
@@ -136,21 +246,36 @@ export function HardwareExplorerModal({
                           <th>L1D</th>
                           <th>L2</th>
                           <th>L3</th>
-                          <th>Latency</th>
+                          <th>DRAM</th>
+                          <th>Core</th>
+                          <th>Vector</th>
+                          <th>DRAM BW</th>
+                          <th>MLP</th>
                           <th>Prefetch</th>
+                          <th>Model</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {runProfiles.map(profile => {
+                        {diffProfiles.map(profile => {
                           const levels = profile.details?.cache.levels
+                          const memory = profile.details?.memory
+                          const core = profile.details?.executionCore
                           return (
                             <tr key={profile.id}>
-                              <td>{profile.displayName}</td>
-                              <td>{levels ? formatSize(levels.l1d.sizeKB) : '-'}</td>
-                              <td>{levels ? formatSize(levels.l2.sizeKB) : '-'}</td>
-                              <td>{levels ? formatSize(levels.l3.sizeKB) : '-'}</td>
-                              <td>{latencySummary(profile)}</td>
-                              <td>{profile.details?.prefetch.activePolicy || '-'}</td>
+                              <td>
+                                <span className="hardware-diff-profile-name">{profile.displayName}</span>
+                                {profile.id === selected.id && <span className="hardware-diff-baseline-chip">Baseline</span>}
+                              </td>
+                              <td><DiffCell metric={sizeMetric(levels?.l1d.sizeKB, baselineDetails?.cache.levels.l1d.sizeKB)} /></td>
+                              <td><DiffCell metric={sizeMetric(levels?.l2.sizeKB, baselineDetails?.cache.levels.l2.sizeKB)} /></td>
+                              <td><DiffCell metric={sizeMetric(levels?.l3.sizeKB, baselineDetails?.cache.levels.l3.sizeKB)} /></td>
+                              <td><DiffCell metric={numberMetric(memory?.dramCycles, baselineDetails?.memory.dramCycles, ' cyc', ' cyc', false)} /></td>
+                              <td><DiffCell metric={numberMetric(core?.issueWidth, baselineDetails?.executionCore.issueWidth, '-wide', 'w')} /></td>
+                              <td><DiffCell metric={numberMetric(core?.vectorBits, baselineDetails?.executionCore.vectorBits, '-bit', 'b')} /></td>
+                              <td><DiffCell metric={numberMetric(memory?.dramBandwidthGBs, baselineDetails?.memory.dramBandwidthGBs, ' GB/s')} /></td>
+                              <td><DiffCell metric={numberMetric(memory?.maxMemoryLevelParallelism, baselineDetails?.memory.maxMemoryLevelParallelism, '')} /></td>
+                              <td><DiffCell metric={textMetric(profile.details?.prefetch.activePolicy, baselineDetails?.prefetch.activePolicy)} /></td>
+                              <td><DiffCell metric={textMetric(profile.validation?.confidence || profile.modelConfidence, selected.validation?.confidence || selected.modelConfidence)} /></td>
                             </tr>
                           )
                         })}
