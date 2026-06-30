@@ -567,6 +567,8 @@ components:
             cacheHierarchy: modeled
             executionCore: estimated
             simd: metadata-only
+        modelContract:
+          $ref: '#/components/schemas/HardwareModelContract'
         validation:
           $ref: '#/components/schemas/HardwareProfileValidation'
         notes:
@@ -574,6 +576,73 @@ components:
           nullable: true
         details:
           $ref: '#/components/schemas/HardwareProfileDetails'
+
+    HardwareModelContract:
+      type: object
+      description: Explicit contract describing which hardware profile fields drive results and which are estimated, metadata-only, or unsupported.
+      properties:
+        version:
+          type: integer
+          example: 1
+        statusTerms:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/HardwareModelStatusTerm'
+        fields:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/HardwareModelContractField'
+          example:
+            cacheHierarchy:
+              subsystem: cache
+              status: modeled
+              drivesSimulation: true
+              resultSurface: [levels, hotLines, cacheState]
+              description: Cache geometry drives cache hit/miss simulation.
+            simd:
+              subsystem: execution
+              status: metadata-only
+              drivesSimulation: false
+              resultSurface: [profile.details.executionCore]
+              description: SIMD width describes profile capability but does not currently affect scheduling.
+
+    HardwareModelStatusTerm:
+      type: object
+      properties:
+        label:
+          type: string
+          example: Modeled
+        description:
+          type: string
+          example: The simulator consumes this field directly when computing results.
+
+    HardwareModelContractField:
+      type: object
+      properties:
+        subsystem:
+          type: string
+          example: cache
+        status:
+          type: string
+          enum: [calibrated, modeled, estimated, conditional, metadata-only, unsupported]
+          example: modeled
+        drivesSimulation:
+          type: boolean
+          example: true
+        resultSurface:
+          type: array
+          items:
+            type: string
+          example: [levels, hotLines, cacheState]
+        description:
+          type: string
+          example: Cache geometry drives cache hit/miss simulation.
+        caveats:
+          type: array
+          items:
+            type: string
+          example:
+            - Vendor-specific behavior is simplified.
 
     HardwareProfileDetails:
       type: object

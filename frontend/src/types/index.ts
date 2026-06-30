@@ -94,6 +94,7 @@ export interface HardwareProfile {
   class: string
   modelConfidence: string
   modelCoverage?: Record<string, string>
+  modelContract?: HardwareModelContract
   validation?: {
     source: string
     confidence: string
@@ -101,6 +102,35 @@ export interface HardwareProfile {
   }
   notes?: string
   details?: HardwareProfileDetails
+}
+
+export type HardwareModelStatus =
+  | 'calibrated'
+  | 'modeled'
+  | 'estimated'
+  | 'conditional'
+  | 'metadata-only'
+  | 'unsupported'
+  | string
+
+export interface HardwareModelStatusTerm {
+  label: string
+  description: string
+}
+
+export interface HardwareModelContractField {
+  subsystem: string
+  status: HardwareModelStatus
+  drivesSimulation: boolean
+  resultSurface: string[]
+  description: string
+  caveats?: string[]
+}
+
+export interface HardwareModelContract {
+  version: number
+  statusTerms: Record<string, HardwareModelStatusTerm>
+  fields: Record<string, HardwareModelContractField>
 }
 
 export interface HardwareProfileCacheLevel {

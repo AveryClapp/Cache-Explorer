@@ -7,6 +7,23 @@ interface HardwareProfilePanelProps {
 
 type DetailRow = [label: string, value: string]
 
+const contractLabels: Record<string, string> = {
+  cacheHierarchy: 'Cache hierarchy',
+  cacheReplacement: 'Replacement',
+  cacheTiming: 'Timing',
+  tlb: 'TLB',
+  prefetch: 'Prefetch',
+  coherence: 'Coherence',
+  branchPrediction: 'Branch prediction',
+  executionPipeline: 'Pipeline',
+  memoryBandwidth: 'Bandwidth',
+  memoryLevelParallelism: 'MLP',
+  simd: 'SIMD',
+  topology: 'Topology',
+  dependencyModel: 'Dependencies',
+  numa: 'NUMA',
+}
+
 function formatCache(level?: HardwareProfileCacheLevel) {
   if (!level) return 'Unknown'
   const size = level.sizeKB >= 1024 ? `${level.sizeKB / 1024} MB` : `${level.sizeKB} KB`
@@ -29,6 +46,15 @@ function formatBool(value: boolean) {
 
 function formatOptional(value: string | number | undefined, suffix = '') {
   return value === undefined ? 'Unknown' : `${value}${suffix}`
+}
+
+function formatContractLabel(id: string) {
+  return contractLabels[id] || formatToken(id)
+}
+
+function formatContractStatus(status: string, drivesSimulation: boolean) {
+  const scope = drivesSimulation ? 'drives results' : 'profile only'
+  return `${formatToken(status)} / ${scope}`
 }
 
 function DetailSection({ title, rows }: { title: string; rows: DetailRow[] }) {
@@ -120,6 +146,13 @@ export function HardwareProfilePanel({ profile, cacheConfig }: HardwareProfilePa
     ? Object.entries(profile.modelCoverage).map(([label, value]) => [formatToken(label), formatToken(value)] as DetailRow)
     : []
 
+  const contractRows: DetailRow[] = profile.modelContract
+    ? Object.entries(profile.modelContract.fields).map(([id, field]) => [
+        formatContractLabel(id),
+        formatContractStatus(field.status, field.drivesSimulation),
+      ] as DetailRow)
+    : coverageRows
+
   const validationRows: DetailRow[] = profile.validation
     ? [
         ['Source', profile.validation.source],
@@ -154,7 +187,7 @@ export function HardwareProfilePanel({ profile, cacheConfig }: HardwareProfilePa
             <DetailSection title="Execution" rows={executionRows} />
             <DetailSection title="Memory" rows={memoryRows} />
             <DetailSection title="Topology" rows={topologyRows} />
-            {coverageRows.length > 0 && <DetailSection title="Coverage" rows={coverageRows} />}
+            {contractRows.length > 0 && <DetailSection title="Model Contract" rows={contractRows} />}
             {validationRows.length > 0 && <DetailSection title="Validation" rows={validationRows} />}
           </div>
         )}

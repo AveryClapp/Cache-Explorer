@@ -14,6 +14,8 @@ Each profile carries cache geometry, topology, TLB defaults, prefetch behavior, 
 
 The simulator still treats execution width, SIMD, bandwidth, and dependency effects as estimates unless a profile marks the field as calibrated. Cache hierarchy, TLB, prefetch behavior, and multicore coherence are the strongest modeled surfaces today.
 
+The exact trust boundary is documented in [Hardware Model Contract](docs/HARDWARE_MODEL_CONTRACT.md). Every profile exposes `modelContract.fields` so the UI, exports, and API can distinguish modeled, estimated, metadata-only, conditional, calibrated, and unsupported hardware surfaces.
+
 ## Experiment Templates
 
 The UI includes starter templates for:

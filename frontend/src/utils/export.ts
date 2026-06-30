@@ -63,6 +63,12 @@ function numericDelta(value: number | undefined, baseline: number | undefined) {
   return typeof value === 'number' && typeof baseline === 'number' ? value - baseline : ''
 }
 
+function modelContractStatus(profile: HardwareProfile, fieldId: string, fallback?: string) {
+  const field = profile.modelContract?.fields[fieldId]
+  if (!field) return fallback || ''
+  return `${field.status}${field.drivesSimulation ? ' (drives results)' : ' (profile only)'}`
+}
+
 export function exportAsJSON(result: CacheResult) {
   downloadJSON(`cache-analysis-${dateStamp()}.json`, result)
 }
@@ -73,6 +79,9 @@ export function exportAsCSV(result: CacheResult) {
     lines.push(metricRow('Hardware Profile', result.profile.displayName))
     lines.push(metricRow('Hardware Vendor', result.profile.vendor))
     lines.push(metricRow('Model Confidence', result.profile.modelConfidence))
+    lines.push(metricRow('Cache Contract', modelContractStatus(result.profile, 'cacheHierarchy', result.profile.modelCoverage?.cacheHierarchy)))
+    lines.push(metricRow('Pipeline Contract', modelContractStatus(result.profile, 'executionPipeline', result.profile.modelCoverage?.executionCore)))
+    lines.push(metricRow('Dependency Model', modelContractStatus(result.profile, 'dependencyModel', result.profile.modelCoverage?.dependencyModel)))
     if (result.profile.details) {
       const { executionCore, memory, prefetch, topology } = result.profile.details
       lines.push(metricRow('Hardware Cores', topology.activeCores))
@@ -261,9 +270,12 @@ export function exportHardwareProfilesAsCSV(profiles: HardwareProfile[], baselin
       'MLP',
       'MLP Delta',
       'Prefetch',
+      'Cache Contract',
       'Execution Coverage',
+      'Pipeline Contract',
       'SIMD Coverage',
       'Bandwidth Coverage',
+      'Dependency Model',
       'Notes',
     ]),
   ]
@@ -296,9 +308,12 @@ export function exportHardwareProfilesAsCSV(profiles: HardwareProfile[], baselin
       details?.memory.maxMemoryLevelParallelism,
       numericDelta(details?.memory.maxMemoryLevelParallelism, baselineDetails?.memory.maxMemoryLevelParallelism),
       details?.prefetch.activePolicy,
+      modelContractStatus(profile, 'cacheHierarchy', profile.modelCoverage?.cacheHierarchy),
       profile.modelCoverage?.executionCore,
+      modelContractStatus(profile, 'executionPipeline', profile.modelCoverage?.executionCore),
       profile.modelCoverage?.simd,
       profile.modelCoverage?.bandwidth,
+      modelContractStatus(profile, 'dependencyModel', profile.modelCoverage?.dependencyModel),
       profile.notes,
     ]))
   }
