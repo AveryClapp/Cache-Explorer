@@ -71,6 +71,26 @@ else
   fail "expected sequential avg latency ($SEQ_AVG) < pointer-chasing avg latency ($PTR_AVG)"
 fi
 
+echo -n "Test: tiled conv2d improves Intel14 L2 hit rate... "
+CONV_DIRECT_JSON=$(run_final_json "$EXAMPLES_DIR/conv2d_kernel.c" -O2 --config intel14 --limit 200000)
+CONV_TILED_JSON=$(run_final_json "$EXAMPLES_DIR/conv2d_kernel.c" -O2 -D RUN_TILED=1 --config intel14 --limit 200000)
+CONV_DIRECT_L2_HIT=$(printf '%s\n' "$CONV_DIRECT_JSON" | json_number '.levels.l2.hitRate')
+CONV_TILED_L2_HIT=$(printf '%s\n' "$CONV_TILED_JSON" | json_number '.levels.l2.hitRate')
+if less_than "$CONV_DIRECT_L2_HIT" "$CONV_TILED_L2_HIT"; then
+  pass
+else
+  fail "expected tiled L2 hit rate ($CONV_TILED_L2_HIT) > direct L2 hit rate ($CONV_DIRECT_L2_HIT)"
+fi
+
+echo -n "Test: tiled conv2d reduces Intel14 L2 misses... "
+CONV_DIRECT_L2_MISSES=$(printf '%s\n' "$CONV_DIRECT_JSON" | json_number '.levels.l2.misses')
+CONV_TILED_L2_MISSES=$(printf '%s\n' "$CONV_TILED_JSON" | json_number '.levels.l2.misses')
+if [[ "$CONV_DIRECT_L2_MISSES" =~ ^[0-9]+$ && "$CONV_TILED_L2_MISSES" =~ ^[0-9]+$ && "$CONV_TILED_L2_MISSES" -lt "$CONV_DIRECT_L2_MISSES" ]]; then
+  pass
+else
+  fail "expected tiled L2 misses ($CONV_TILED_L2_MISSES) < direct L2 misses ($CONV_DIRECT_L2_MISSES)"
+fi
+
 echo ""
 echo "========================================"
 echo "  Golden Kernel Summary"

@@ -29,7 +29,15 @@ Tests key functionality:
 - **Execution engine**: Branch trace JSON stats
 - **Hardware alias**: `--hardware` compatibility with `--config`
 
-### 3. Master Runner (`run-all-tests.sh`)
+### 3. Golden Kernels (`test-golden-kernels.sh`)
+Tests directional workload relationships that should stay true:
+- Row-major matrix traversal has fewer L1D misses and modeled cycles than column-major traversal
+- Sequential scan has lower average latency than pointer chasing
+- Tiled Conv2D improves modeled Intel 14th Gen L2 locality versus direct Conv2D
+
+Workload snapshots live in `workload-snapshots/` for benchmark provenance and expected relationships.
+
+### 4. Master Runner (`run-all-tests.sh`)
 Runs all test suites and provides overall pass/fail summary.
 
 ## Running Tests
@@ -44,6 +52,7 @@ cd tests/integration
 ```bash
 ./test-all-presets.sh  # Hardware presets
 ./test-features.sh     # Core features
+./test-golden-kernels.sh  # Directional workload relationships
 ```
 
 ### From Project Root
@@ -65,6 +74,7 @@ Tests run automatically on:
   - Small enough to run quickly
   - Complex enough to exercise cache behavior
   - Deterministic results
+- `workload-snapshots/conv2d-intel14.json` - Conv2D direct/tiled benchmark relationship
 
 ## Adding New Tests
 
@@ -122,7 +132,7 @@ All tests should pass:
 ========================================
   Overall Summary
 ========================================
-Test Suites Passed: 2
+Test Suites Passed: 5
 Test Suites Failed: 0
 
 All tests passed!
@@ -131,4 +141,5 @@ All tests passed!
 Individual test counts:
 - Hardware Presets: 12 tests
 - Core Features: 12 tests
-- **Total: 24 integration tests**
+- Golden Kernels: 5 tests
+- **Total: 29 integration tests**

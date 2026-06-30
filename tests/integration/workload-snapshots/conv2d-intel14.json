@@ -1,0 +1,37 @@
+{
+  "id": "conv2d-intel14",
+  "description": "Direct vs tiled 3x3 convolution on the Intel 14th Gen profile.",
+  "example": "examples/conv2d_kernel.c",
+  "language": "c",
+  "optLevel": "-O2",
+  "config": "intel14",
+  "limit": 200000,
+  "variants": [
+    {
+      "id": "direct",
+      "defines": []
+    },
+    {
+      "id": "tiled",
+      "defines": ["RUN_TILED=1"]
+    }
+  ],
+  "expectedRelationships": [
+    {
+      "metric": "levels.l2.hitRate",
+      "relationship": "tiled > direct",
+      "lastObserved": {
+        "direct": 0.348,
+        "tiled": 0.472
+      }
+    },
+    {
+      "metric": "levels.l2.misses",
+      "relationship": "tiled < direct",
+      "lastObserved": {
+        "direct": 333,
+        "tiled": 317
+      }
+    }
+  ]
+}
