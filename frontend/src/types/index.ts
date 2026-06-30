@@ -363,12 +363,36 @@ export interface CacheState {
   l1d: CoreCacheState[]
 }
 
+export interface ResultProvenance {
+  resultKind: string
+  executor: 'sandbox' | 'direct-dev' | string
+  cached?: boolean
+  hardwareProfile?: {
+    id: string
+    displayName: string
+    modelConfidence: string
+    validationConfidence: string
+  }
+  configs?: string[]
+  variants?: string[]
+  fidelity: {
+    trace: 'full' | 'sampled' | string
+    sampleRate: number
+    eventLimit: number
+    fastMode: boolean
+    cacheSegments: boolean
+    prefetch: string
+  }
+  caveats: string[]
+}
+
 // =============================================================================
 // ANALYSIS RESULTS
 // =============================================================================
 
 export interface CacheResult {
   config: string
+  provenance?: ResultProvenance
   profile?: HardwareProfile
   summary?: BottleneckSummary
   sourceAnnotations?: SourceAnnotation[]
@@ -426,6 +450,7 @@ export interface ExperimentSummaryRow {
 export interface HardwareExperimentResult {
   source: string
   baselineVariant: string
+  provenance?: ResultProvenance
   summary: ExperimentSummaryRow[]
   variants: Record<string, {
     source: string

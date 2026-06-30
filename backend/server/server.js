@@ -83,6 +83,66 @@ async function cleanupTempProject(tempDir) {
   }
 }
 
+function resultProvenance({
+  config,
+  sampleRate,
+  eventLimit,
+  fastMode,
+  segmentCaching,
+  prefetch,
+  sandbox,
+  cached = false,
+}) {
+  const profile = getHardwareProfile(config);
+  const caveats = [
+    'Cycles and bottlenecks are simulator estimates, not wall-clock measurements.',
+  ];
+
+  if (sampleRate > 1) {
+    caveats.push(`Trace events were sampled at 1:${sampleRate}.`);
+  }
+  if (fastMode) {
+    caveats.push('Fast mode disables detailed 3C miss classification.');
+  }
+  if (segmentCaching) {
+    caveats.push('Segment caching may reuse repeated loop traces.');
+  }
+
+  return {
+    resultKind: 'simulated',
+    executor: sandbox ? 'sandbox' : 'direct-dev',
+    cached,
+    hardwareProfile: {
+      id: profile?.id || config,
+      displayName: profile?.displayName || config,
+      modelConfidence: profile?.modelConfidence || 'unknown',
+      validationConfidence: profile?.validation?.confidence || profile?.modelConfidence || 'unknown',
+    },
+    fidelity: {
+      trace: sampleRate > 1 ? 'sampled' : 'full',
+      sampleRate,
+      eventLimit,
+      fastMode,
+      cacheSegments: segmentCaching,
+      prefetch: prefetch || 'none',
+    },
+    caveats,
+  };
+}
+
+function stripCacheState(result) {
+  if (result && typeof result === 'object' && result.cacheState) {
+    delete result.cacheState;
+  }
+  return result;
+}
+
+function attachResultProvenance(result, options) {
+  if (!result || typeof result !== 'object') return result;
+  result.provenance = resultProvenance(options);
+  return result;
+}
+
 // Cleanup orphaned temp directories periodically
 async function cleanupOrphanedTempDirs() {
   try {
@@ -219,7 +279,16 @@ app.post('/compile', async (req, res) => {
     if (cached) {
       incCounter('cache_hits');
       recordDuration('compilation_duration', (Date.now() - startTime) / 1000);
-      return res.json(cached);
+      return res.json(attachResultProvenance(cached, {
+        config,
+        sampleRate,
+        eventLimit,
+        fastMode,
+        segmentCaching,
+        prefetch: req.body.prefetch || 'none',
+        sandbox: sandboxAvailable,
+        cached: true,
+      }));
     }
   } catch (err) {
     // Cache miss or error, continue with compilation
@@ -253,10 +322,16 @@ app.post('/compile', async (req, res) => {
       try {
         const json = JSON.parse(output);
 
-        // Remove cacheState to reduce output size (it's huge and unused by UI)
-        if (json.cacheState) {
-          delete json.cacheState;
-        }
+        stripCacheState(json);
+        attachResultProvenance(json, {
+          config,
+          sampleRate,
+          eventLimit,
+          fastMode,
+          segmentCaching,
+          prefetch: req.body.prefetch || 'none',
+          sandbox: true,
+        });
 
         // Cache successful result
         try {
@@ -403,10 +478,16 @@ app.post('/compile', async (req, res) => {
     try {
       const json = JSON.parse(output);
 
-      // Remove cacheState to reduce output size (it's huge and unused by UI)
-      if (json.cacheState) {
-        delete json.cacheState;
-      }
+      stripCacheState(json);
+      attachResultProvenance(json, {
+        config,
+        sampleRate,
+        eventLimit,
+        fastMode,
+        segmentCaching,
+        prefetch: req.body.prefetch || 'none',
+        sandbox: false,
+      });
 
       // Cache successful result
       try {
@@ -584,12 +665,33 @@ app.post('/compare', async (req, res) => {
 
     const json = JSON.parse(result.stdout.trim());
     if (json.configs && typeof json.configs === 'object') {
-      for (const configResult of Object.values(json.configs)) {
-        if (configResult && typeof configResult === 'object' && configResult.cacheState) {
-          delete configResult.cacheState;
-        }
+      for (const [configName, configResult] of Object.entries(json.configs)) {
+        stripCacheState(configResult);
+        attachResultProvenance(configResult, {
+          config: configName,
+          sampleRate,
+          eventLimit,
+          fastMode,
+          segmentCaching,
+          prefetch: prefetch || 'none',
+          sandbox: false,
+        });
       }
     }
+    json.provenance = {
+      resultKind: 'hardware-comparison',
+      executor: 'direct-dev',
+      configs: Object.keys(json.configs || {}),
+      fidelity: {
+        trace: sampleRate > 1 ? 'sampled' : 'full',
+        sampleRate,
+        eventLimit,
+        fastMode,
+        cacheSegments: segmentCaching,
+        prefetch: prefetch || 'none',
+      },
+      caveats: ['Each profile replays the same traced program through simulator models.'],
+    };
 
     recordDuration('compilation_duration', (Date.now() - startTime) / 1000);
     res.json(json);
@@ -774,12 +876,36 @@ app.post('/experiment', async (req, res) => {
         if (!configsByName || typeof configsByName !== 'object') continue;
 
         for (const configResult of Object.values(configsByName)) {
-          if (configResult && typeof configResult === 'object' && configResult.cacheState) {
-            delete configResult.cacheState;
-          }
+          stripCacheState(configResult);
+        }
+        for (const [configName, configResult] of Object.entries(configsByName)) {
+          attachResultProvenance(configResult, {
+            config: configName,
+            sampleRate,
+            eventLimit,
+            fastMode,
+            segmentCaching,
+            prefetch: prefetch || 'none',
+            sandbox: false,
+          });
         }
       }
     }
+    json.provenance = {
+      resultKind: 'hardware-experiment',
+      executor: 'direct-dev',
+      configs: configList.split(','),
+      variants: variantList,
+      fidelity: {
+        trace: sampleRate > 1 ? 'sampled' : 'full',
+        sampleRate,
+        eventLimit,
+        fastMode,
+        cacheSegments: segmentCaching,
+        prefetch: prefetch || 'none',
+      },
+      caveats: ['Variant deltas compare simulator estimates relative to the first variant for each hardware profile.'],
+    };
 
     recordDuration('compilation_duration', (Date.now() - startTime) / 1000);
     res.json(json);

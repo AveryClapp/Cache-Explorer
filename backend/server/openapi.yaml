@@ -981,6 +981,8 @@ components:
     CompileResult:
       type: object
       properties:
+        provenance:
+          $ref: '#/components/schemas/ResultProvenance'
         summary:
           $ref: '#/components/schemas/CacheSummary'
         cacheConfig:
@@ -1004,6 +1006,8 @@ components:
     CompareResult:
       type: object
       properties:
+        provenance:
+          $ref: '#/components/schemas/ResultProvenance'
         source:
           type: string
           description: Source file used for the comparison
@@ -1060,6 +1064,8 @@ components:
     ExperimentResult:
       type: object
       properties:
+        provenance:
+          $ref: '#/components/schemas/ResultProvenance'
         source:
           type: string
           description: Source file used for the experiment
@@ -1098,6 +1104,72 @@ components:
               format: float
               description: Fractional cycle delta from baseline; -0.01 means 1% fewer cycles
               example: -0.003
+
+    ResultProvenance:
+      type: object
+      description: Trust and fidelity metadata for simulated results
+      properties:
+        resultKind:
+          type: string
+          example: simulated
+        executor:
+          type: string
+          example: direct-dev
+        cached:
+          type: boolean
+          example: false
+        hardwareProfile:
+          type: object
+          properties:
+            id:
+              type: string
+              example: intel14
+            displayName:
+              type: string
+              example: Intel 14th Gen Core
+            modelConfidence:
+              type: string
+              example: directional
+            validationConfidence:
+              type: string
+              example: directional
+        configs:
+          type: array
+          items:
+            type: string
+          example: [educational, intel14]
+        variants:
+          type: array
+          items:
+            type: string
+          example: [direct, "tiled:RUN_TILED=1"]
+        fidelity:
+          type: object
+          properties:
+            trace:
+              type: string
+              example: full
+            sampleRate:
+              type: integer
+              example: 1
+            eventLimit:
+              type: integer
+              example: 1000000
+            fastMode:
+              type: boolean
+              example: false
+            cacheSegments:
+              type: boolean
+              example: false
+            prefetch:
+              type: string
+              example: none
+        caveats:
+          type: array
+          items:
+            type: string
+          example:
+            - Cycles and bottlenecks are simulator estimates, not wall-clock measurements.
 
     CacheSummary:
       type: object
