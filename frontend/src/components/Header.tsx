@@ -11,6 +11,7 @@ interface HeaderProps {
   onSetDiffMode: (mode: boolean) => void;
   onSetBaseline: (result: CacheResult) => void;
   onClearBaseline: () => void;
+  onCompareHardware: () => void;
   onRun: () => void;
   onCancel: () => void;
 }
@@ -36,6 +37,7 @@ export function Header({
   onSetDiffMode,
   onSetBaseline,
   onClearBaseline,
+  onCompareHardware,
   onRun,
   onCancel,
 }: HeaderProps) {
@@ -76,6 +78,16 @@ export function Header({
         >
           {theme === "dark" ? "☀" : "☾"}
         </button>
+
+        {!isLoading && (
+          <button
+            onClick={onCompareHardware}
+            className="btn-hardware-compare"
+            title="Compare hardware presets"
+          >
+            Hardware
+          </button>
+        )}
 
         {/* Compare button - visible when result exists */}
         {result && !isLoading && (

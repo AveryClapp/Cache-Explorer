@@ -765,6 +765,7 @@ function App() {
           onSetDiffMode={setDiffMode}
           onSetBaseline={(r) => { setBaselineFromHook(r, config, files); setBaselineCode(code) }}
           onClearBaseline={() => { clearBaselineHook(); setBaselineCode(null) }}
+          onCompareHardware={runBatchAnalysis}
           onRun={runAnalysis}
           onCancel={cancelAnalysis}
         />
