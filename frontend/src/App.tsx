@@ -752,9 +752,26 @@ function App() {
       }
 
       const profiles = data.profiles as HardwareProfile[]
+      const canonicalIds = new Map<string, string>()
+      for (const profile of profiles) {
+        canonicalIds.set(profile.id, profile.id)
+        for (const alias of profile.aliases || []) {
+          canonicalIds.set(alias, profile.id)
+        }
+      }
       setHardwareProfiles(profiles)
+      setRunHardwareConfigIds(prev => {
+        const normalized = Array.from(new Set(
+          prev.map(profileId => canonicalIds.get(profileId)).filter((profileId): profileId is string => Boolean(profileId))
+        ))
+        if (normalized.length > 0) return normalized
+
+        const defaults = BATCH_HARDWARE_CONFIGS.filter(profileId => canonicalIds.has(profileId))
+        return defaults.length > 0 ? defaults : profiles.slice(0, 1).map(profile => profile.id)
+      })
       setSelectedHardwareProfileId(prev => {
-        if (profiles.some(profile => profile.id === prev)) return prev
+        const normalized = canonicalIds.get(prev)
+        if (normalized) return normalized
         return profiles.find(profile => profile.id === config)?.id || profiles[0]?.id || ''
       })
     } catch (err) {
