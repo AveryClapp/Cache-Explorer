@@ -1,0 +1,112 @@
+#!/usr/bin/env node
+
+const { readdir, readFile } = require('fs/promises')
+const { dirname, join, resolve } = require('path')
+
+function usage() {
+  console.log(`Usage: cache-explore workloads [options] [workload-id]
+
+List benchmark workload snapshots modeled by Cache Explorer.
+
+Options:
+  --json       Output JSON
+  --ids        Output only workload ids
+  --help       Show this help
+
+Examples:
+  cache-explore workloads
+  cache-explore workloads --ids
+  cache-explore workloads conv2d-intel14 --json`)
+}
+
+function projectRoot() {
+  const scriptDir = dirname(resolve(process.argv[1]))
+  return dirname(dirname(scriptDir))
+}
+
+async function loadWorkloads() {
+  const catalogDir = join(projectRoot(), 'benchmarks', 'workloads')
+  const entries = await readdir(catalogDir, { withFileTypes: true })
+  const files = entries
+    .filter(entry => entry.isFile() && entry.name.endsWith('.json'))
+    .map(entry => join(catalogDir, entry.name))
+    .sort()
+
+  const workloads = []
+  for (const file of files) {
+    const workload = JSON.parse(await readFile(file, 'utf8'))
+    workloads.push(workload)
+  }
+  return workloads
+}
+
+function relationshipSummary(workload) {
+  return (workload.expectedRelationships || [])
+    .map(item => item.relationship)
+    .join(', ')
+}
+
+function variantSummary(workload) {
+  return (workload.variants || [])
+    .map(variant => variant.id)
+    .join(', ')
+}
+
+function printTable(workloads) {
+  const headers = ['ID', 'Example', 'Config', 'Limit', 'Variants', 'Relationships']
+  const rows = workloads.map(workload => [
+    workload.id,
+    workload.example,
+    workload.config,
+    String(workload.limit || 'full'),
+    variantSummary(workload),
+    relationshipSummary(workload),
+  ])
+  const widths = headers.map((header, index) => (
+    Math.max(header.length, ...rows.map(row => row[index].length))
+  ))
+  const formatRow = row => row.map((cell, index) => cell.padEnd(widths[index])).join('  ')
+
+  console.log(formatRow(headers))
+  console.log(formatRow(widths.map(width => '-'.repeat(width))))
+  for (const row of rows) {
+    console.log(formatRow(row))
+  }
+}
+
+async function main() {
+  const args = process.argv.slice(2)
+  const json = args.includes('--json')
+  const ids = args.includes('--ids')
+  const help = args.includes('--help') || args.includes('-h')
+  const workloadId = args.find(arg => !arg.startsWith('-'))
+
+  if (help) {
+    usage()
+    return
+  }
+
+  const workloads = await loadWorkloads()
+  const selected = workloadId
+    ? workloads.filter(workload => workload.id === workloadId)
+    : workloads
+
+  if (workloadId && selected.length === 0) {
+    console.error(`Unknown workload snapshot: ${workloadId}`)
+    process.exitCode = 1
+    return
+  }
+
+  if (json) {
+    console.log(JSON.stringify(workloadId ? selected[0] : { workloads: selected }, null, 2))
+  } else if (ids) {
+    console.log(selected.map(workload => workload.id).join('\n'))
+  } else {
+    printTable(selected)
+  }
+}
+
+main().catch(error => {
+  console.error(error instanceof Error ? error.message : String(error))
+  process.exitCode = 1
+})

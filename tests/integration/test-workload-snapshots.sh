@@ -6,7 +6,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CACHE_EXPLORE="$PROJECT_ROOT/backend/scripts/cache-explore"
-SNAPSHOT_DIR="$SCRIPT_DIR/workload-snapshots"
+SNAPSHOT_DIR="$PROJECT_ROOT/benchmarks/workloads"
 
 PASSED=0
 FAILED=0

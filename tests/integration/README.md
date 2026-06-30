@@ -35,7 +35,7 @@ Tests directional workload relationships that should stay true:
 - Sequential scan has lower average latency than pointer chasing
 
 ### 4. Workload Snapshots (`test-workload-snapshots.sh`)
-Runs benchmark snapshots from `workload-snapshots/` and validates their expected relationships:
+Runs benchmark snapshots from `../../benchmarks/workloads/` and validates their expected relationships:
 - Tiled Conv2D improves modeled Intel 14th Gen L2 locality versus direct Conv2D
 
 These snapshots are executable benchmark metadata: example path, config, optimization level, variants, and metric relationships live together.
@@ -78,7 +78,7 @@ Tests run automatically on:
   - Small enough to run quickly
   - Complex enough to exercise cache behavior
   - Deterministic results
-- `workload-snapshots/conv2d-intel14.json` - Conv2D direct/tiled benchmark relationship
+- `../../benchmarks/workloads/conv2d-intel14.json` - Conv2D direct/tiled benchmark relationship
 
 ## Adding New Tests
 
