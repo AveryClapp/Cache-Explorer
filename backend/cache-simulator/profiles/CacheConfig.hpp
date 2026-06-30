@@ -238,4 +238,9 @@ struct CacheHierarchyConfig {
   InclusionPolicy inclusion_policy;
   PrefetchConfig prefetch = {};   // Default prefetch settings
   LatencyConfig latency = {};     // Default latency settings
+
+  // Execution-core parameters consumed by the analytical pipeline model.
+  int issue_width = 4;
+  int rob_size = 192;
+  int branch_mispredict_penalty = 14;
 };

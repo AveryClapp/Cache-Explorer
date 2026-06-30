@@ -93,7 +93,12 @@ void TraceProcessor::process_line_access(uint64_t line_addr, bool is_write,
 }
 
 TraceProcessor::TraceProcessor(const CacheHierarchyConfig &cfg)
-    : cache(cfg), pipeline(PipelineConfig{.latency = cfg.latency}) {}
+    : cache(cfg),
+      pipeline(PipelineConfig{
+          .issue_width = cfg.issue_width,
+          .rob_size = cfg.rob_size,
+          .branch_mispredict_penalty = cfg.branch_mispredict_penalty,
+          .latency = cfg.latency}) {}
 
 void TraceProcessor::set_event_callback(
     std::function<void(const EventResult &)> cb) {

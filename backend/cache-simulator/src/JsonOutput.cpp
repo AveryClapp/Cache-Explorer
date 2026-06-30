@@ -512,7 +512,11 @@ void JsonOutput::write_profile_metadata(std::ostream& out,
                                         int active_cores) {
     const auto& pf = cfg.prefetch;
     const auto& latency = cfg.latency;
-    const PipelineConfig pipeline_cfg{.latency = latency};
+    const PipelineConfig pipeline_cfg{
+        .issue_width = cfg.issue_width,
+        .rob_size = cfg.rob_size,
+        .branch_mispredict_penalty = cfg.branch_mispredict_penalty,
+        .latency = latency};
     const int cores = active_cores > 0 ? active_cores : 1;
     const char* l2_scope = cores > 1 ? "shared-across-modeled-cores"
                                      : "private-to-modeled-core";

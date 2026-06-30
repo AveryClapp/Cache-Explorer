@@ -79,7 +79,10 @@ inline CacheHierarchyConfig make_apple_m_series_config() {
              .write_policy = WritePolicy::Back},
       .inclusion_policy = InclusionPolicy::NINE,
       .prefetch = PrefetchConfig::apple_default(),
-      .latency = LatencyConfig::apple_default()};
+      .latency = LatencyConfig::apple_default(),
+      .issue_width = 8,
+      .rob_size = 256,
+      .branch_mispredict_penalty = 11};
 }
 
 // Intel 14th Gen (Raptor Lake Refresh) - P-cores
@@ -160,7 +163,9 @@ inline CacheHierarchyConfig make_aws_graviton3_config() {
              .policy = EvictionPolicy::LRU,
              .write_policy = WritePolicy::Back},
       .inclusion_policy = InclusionPolicy::NINE,
-      .prefetch = PrefetchConfig::arm_default()};
+      .prefetch = PrefetchConfig::arm_default(),
+      .issue_width = 5,
+      .rob_size = 160};
 }
 
 // Apple M2 Pro/Max
@@ -187,7 +192,10 @@ inline CacheHierarchyConfig make_apple_m2_config() {
              .policy = EvictionPolicy::PLRU,
              .write_policy = WritePolicy::Back},
       .inclusion_policy = InclusionPolicy::NINE,
-      .prefetch = PrefetchConfig::apple_default()};
+      .prefetch = PrefetchConfig::apple_default(),
+      .issue_width = 8,
+      .rob_size = 256,
+      .branch_mispredict_penalty = 11};
 }
 
 // Embedded/IoT (typical Cortex-A53)
@@ -214,7 +222,10 @@ inline CacheHierarchyConfig make_embedded_config() {
              .policy = EvictionPolicy::LRU,
              .write_policy = WritePolicy::Back},
       .inclusion_policy = InclusionPolicy::Inclusive,
-      .prefetch = PrefetchConfig::none()};  // Simple embedded, minimal prefetch
+      .prefetch = PrefetchConfig::none(),  // Simple embedded, minimal prefetch
+      .issue_width = 2,
+      .rob_size = 48,
+      .branch_mispredict_penalty = 8};
 }
 
 // Intel Xeon Scalable (Ice Lake Server)
@@ -241,7 +252,9 @@ inline CacheHierarchyConfig make_intel_xeon_config() {
              .policy = EvictionPolicy::PLRU,
              .write_policy = WritePolicy::Back},
       .inclusion_policy = InclusionPolicy::NINE,
-      .prefetch = PrefetchConfig::intel_default()};
+      .prefetch = PrefetchConfig::intel_default(),
+      .issue_width = 6,
+      .rob_size = 320};
 }
 
 // Intel Xeon Platinum 8488C (Sapphire Rapids) - AWS c7i instance
@@ -271,7 +284,9 @@ inline CacheHierarchyConfig make_xeon_8488c_config() {
              .policy = EvictionPolicy::PLRU,
              .write_policy = WritePolicy::Back},
       .inclusion_policy = InclusionPolicy::NINE,
-      .prefetch = PrefetchConfig::intel_default()};
+      .prefetch = PrefetchConfig::intel_default(),
+      .issue_width = 6,
+      .rob_size = 320};
 }
 
 // AMD EPYC (Milan/Genoa)
@@ -298,7 +313,9 @@ inline CacheHierarchyConfig make_amd_epyc_config() {
              .policy = EvictionPolicy::LRU,
              .write_policy = WritePolicy::Back},
       .inclusion_policy = InclusionPolicy::Exclusive,
-      .prefetch = PrefetchConfig::amd_default()};
+      .prefetch = PrefetchConfig::amd_default(),
+      .issue_width = 6,
+      .rob_size = 320};
 }
 
 // Raspberry Pi 4 (Cortex-A72)
@@ -325,7 +342,10 @@ inline CacheHierarchyConfig make_raspberry_pi4_config() {
              .policy = EvictionPolicy::LRU,
              .write_policy = WritePolicy::Back},
       .inclusion_policy = InclusionPolicy::Inclusive,
-      .prefetch = PrefetchConfig::arm_default()};
+      .prefetch = PrefetchConfig::arm_default(),
+      .issue_width = 2,
+      .rob_size = 48,
+      .branch_mispredict_penalty = 8};
 }
 
 // Apple M3 Pro/Max (latest)
@@ -352,7 +372,10 @@ inline CacheHierarchyConfig make_apple_m3_config() {
              .policy = EvictionPolicy::PLRU,
              .write_policy = WritePolicy::Back},
       .inclusion_policy = InclusionPolicy::NINE,
-      .prefetch = PrefetchConfig::apple_default()};
+      .prefetch = PrefetchConfig::apple_default(),
+      .issue_width = 8,
+      .rob_size = 256,
+      .branch_mispredict_penalty = 11};
 }
 
 inline CacheHierarchyConfig make_educational_config() {
@@ -379,7 +402,9 @@ inline CacheHierarchyConfig make_educational_config() {
              .write_policy = WritePolicy::Back},
       .inclusion_policy = InclusionPolicy::Inclusive,
       .prefetch = PrefetchConfig::none(),  // Educational: no prefetch for clarity
-      .latency = LatencyConfig::educational_default()};
+      .latency = LatencyConfig::educational_default(),
+      .issue_width = 2,
+      .rob_size = 64};
 }
 
 // =============================================================================

@@ -74,6 +74,9 @@ jobs:
             fi
           done
 
+      - name: Check hardware profile drift
+        run: node tests/integration/check-profile-drift.mjs
+
       - name: Verify CLI tools exist
         run: |
           ls -la backend/scripts/cache-explore*
