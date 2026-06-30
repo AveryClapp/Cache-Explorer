@@ -4,6 +4,11 @@ export { useKeyboardShortcuts, type KeyboardShortcutHandlers } from './useKeyboa
 export { useUrlState, shareUrl } from './useUrlState'
 export { useMobileResponsive, type MobilePane } from './useMobileResponsive'
 export { useBaseline } from './useBaseline'
+export {
+  normalizeProgressMessage,
+  useThrottledProgress,
+  type AnalysisProgress,
+} from './useThrottledProgress'
 
 // Extracted domain hooks
 export { useAnalysis, type AnalysisConfig, type UseAnalysisReturn } from './useAnalysis'

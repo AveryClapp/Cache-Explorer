@@ -10,8 +10,11 @@ import type {
 } from '../types'
 
 import { API_BASE, WS_URL } from '../constants'
-
-const PROGRESS_RENDER_INTERVAL_MS = 120
+import {
+  normalizeProgressMessage,
+  useThrottledProgress,
+  type AnalysisProgress,
+} from './useThrottledProgress'
 
 export interface AnalysisConfig {
   config: string
@@ -25,22 +28,7 @@ export interface AnalysisConfig {
   fastMode?: boolean
 }
 
-export interface SimProgress {
-  eventsProcessed: number
-  eventsTotal: number
-}
-
-function toNonNegativeCount(value: unknown) {
-  const count = Number(value)
-  return Number.isFinite(count) ? Math.max(0, count) : 0
-}
-
-function normalizeProgressMessage(message: { eventsProcessed?: unknown; eventsTotal?: unknown }): SimProgress {
-  return {
-    eventsProcessed: toNonNegativeCount(message.eventsProcessed),
-    eventsTotal: toNonNegativeCount(message.eventsTotal),
-  }
-}
+export type SimProgress = AnalysisProgress
 
 export interface UseAnalysisReturn {
   // State
@@ -67,50 +55,11 @@ export function useAnalysis(): UseAnalysisReturn {
   const [error, setError] = useState<ErrorResult | null>(null)
   const [stage, setStage] = useState<Stage>('idle')
   const [longRunning, setLongRunning] = useState(false)
-  const [progress, setProgress] = useState<SimProgress | null>(null)
+  const { progress, queueProgress, clearProgress } = useThrottledProgress()
 
   const wsRef = useRef<WebSocket | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const longRunTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const progressRenderTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pendingProgressRef = useRef<SimProgress | null>(null)
-  const lastProgressRenderRef = useRef(0)
-
-  const clearQueuedProgress = useCallback(() => {
-    if (progressRenderTimeoutRef.current) {
-      clearTimeout(progressRenderTimeoutRef.current)
-      progressRenderTimeoutRef.current = null
-    }
-    pendingProgressRef.current = null
-    lastProgressRenderRef.current = 0
-    setProgress(null)
-  }, [])
-
-  const queueProgress = useCallback((nextProgress: SimProgress) => {
-    pendingProgressRef.current = nextProgress
-    const now = Date.now()
-    const elapsed = now - lastProgressRenderRef.current
-
-    if (elapsed >= PROGRESS_RENDER_INTERVAL_MS) {
-      if (progressRenderTimeoutRef.current) {
-        clearTimeout(progressRenderTimeoutRef.current)
-        progressRenderTimeoutRef.current = null
-      }
-      lastProgressRenderRef.current = now
-      setProgress(nextProgress)
-      return
-    }
-
-    if (!progressRenderTimeoutRef.current) {
-      progressRenderTimeoutRef.current = setTimeout(() => {
-        progressRenderTimeoutRef.current = null
-        lastProgressRenderRef.current = Date.now()
-        if (pendingProgressRef.current) {
-          setProgress(pendingProgressRef.current)
-        }
-      }, PROGRESS_RENDER_INTERVAL_MS - elapsed)
-    }
-  }, [])
 
   const cancelAnalysis = useCallback(() => {
     if (wsRef.current) {
@@ -127,8 +76,8 @@ export function useAnalysis(): UseAnalysisReturn {
     }
     setStage('idle')
     setLongRunning(false)
-    clearQueuedProgress()
-  }, [clearQueuedProgress])
+    clearProgress()
+  }, [clearProgress])
 
   const clearResults = useCallback(() => {
     setResult(null)
@@ -166,7 +115,7 @@ export function useAnalysis(): UseAnalysisReturn {
     setError(null)
     setResult(null)
     setLongRunning(false)
-    clearQueuedProgress()
+    clearProgress()
 
     // Set long-running warning after 10 seconds
     longRunTimeoutRef.current = setTimeout(() => setLongRunning(true), 10000)
@@ -213,7 +162,7 @@ export function useAnalysis(): UseAnalysisReturn {
           longRunTimeoutRef.current = null
         }
         setLongRunning(false)
-        clearQueuedProgress()
+        clearProgress()
         setResult(msg.data as CacheResult)
         setStage('idle')
         wsRef.current = null
@@ -224,7 +173,7 @@ export function useAnalysis(): UseAnalysisReturn {
           longRunTimeoutRef.current = null
         }
         setLongRunning(false)
-        clearQueuedProgress()
+        clearProgress()
         setError(msg as ErrorResult)
         setStage('idle')
         wsRef.current = null
@@ -235,7 +184,7 @@ export function useAnalysis(): UseAnalysisReturn {
     const fallbackToHttp = async () => {
       wsRef.current = null
       setStage('compiling')
-      clearQueuedProgress()
+      clearProgress()
 
       const controller = new AbortController()
       abortControllerRef.current = controller
@@ -264,7 +213,7 @@ export function useAnalysis(): UseAnalysisReturn {
           longRunTimeoutRef.current = null
         }
         setLongRunning(false)
-        clearQueuedProgress()
+        clearProgress()
         setStage('idle')
       }
     }
@@ -273,7 +222,7 @@ export function useAnalysis(): UseAnalysisReturn {
     ws.onclose = (e) => {
       if (!e.wasClean && stage !== 'idle') fallbackToHttp()
     }
-  }, [cancelAnalysis, clearQueuedProgress, queueProgress, stage])
+  }, [cancelAnalysis, clearProgress, queueProgress, stage])
 
   const exportAsJSON = useCallback(() => {
     if (!result) return
