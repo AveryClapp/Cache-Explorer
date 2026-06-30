@@ -1155,6 +1155,16 @@ wss.on('connection', (ws) => {
           const output = result.stdout.trim();
           try {
             const json = JSON.parse(output);
+            stripCacheState(json);
+            attachResultProvenance(json, {
+              config,
+              sampleRate,
+              eventLimit,
+              fastMode,
+              segmentCaching,
+              prefetch: prefetch || 'none',
+              sandbox: true,
+            });
             ws.send(JSON.stringify({ type: 'result', data: json }));
           } catch {
             ws.send(JSON.stringify({ type: 'result', data: { raw: output } }));
@@ -1337,6 +1347,16 @@ wss.on('connection', (ws) => {
                 }
                 finalResult = parsed;
               } else {
+                stripCacheState(parsed);
+                attachResultProvenance(parsed, {
+                  config,
+                  sampleRate,
+                  eventLimit,
+                  fastMode,
+                  segmentCaching,
+                  prefetch: prefetch || 'none',
+                  sandbox: false,
+                });
                 finalResult = parsed;
               }
             } catch (e) {

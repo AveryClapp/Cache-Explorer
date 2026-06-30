@@ -29,6 +29,103 @@
   padding: var(--space-4);
 }
 
+/* ─── Result Fidelity ─── */
+.result-provenance-panel .panel-content {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.provenance-chip,
+.provenance-inline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  padding: 2px var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-family: var(--font-code);
+  font-size: var(--text-2xs);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.provenance-chip.empirical,
+.provenance-inline.empirical {
+  color: var(--signal-success);
+  border-color: color-mix(in srgb, var(--signal-success) 45%, var(--border));
+}
+
+.provenance-chip.simulated,
+.provenance-inline.simulated {
+  color: var(--signal-info);
+  border-color: color-mix(in srgb, var(--signal-info) 45%, var(--border));
+}
+
+.provenance-chip.directional,
+.provenance-inline.directional {
+  color: var(--signal-warning);
+  border-color: color-mix(in srgb, var(--signal-warning) 45%, var(--border));
+}
+
+.provenance-chip.unknown,
+.provenance-inline.unknown {
+  color: var(--text-muted);
+}
+
+.provenance-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.provenance-item {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.provenance-label {
+  color: var(--text-muted);
+  font-family: var(--font-display);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.provenance-value {
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+.provenance-caveats {
+  display: grid;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+}
+
+.provenance-caveats span {
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--border);
+}
+
+@media (max-width: 720px) {
+  .provenance-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ─── Diff Summary ─── */
 .diff-summary {
   margin-bottom: var(--space-4);
@@ -189,4 +286,3 @@
 .hotline-rate.low {
   color: var(--signal-good);
 }
-

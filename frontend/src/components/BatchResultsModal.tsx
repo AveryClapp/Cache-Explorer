@@ -1,4 +1,5 @@
 import { formatPercent } from '../utils/formatting'
+import { formatTrustLabel, provenanceClass } from '../utils/provenance'
 import type { CacheResult } from '../types'
 
 interface BatchResult {
@@ -72,6 +73,7 @@ export function BatchResultsModal({ results, running, total, onExportCSV, onExpo
               <thead>
                 <tr>
                   <th>Hardware</th>
+                  <th>Trust</th>
                   <th>Bottleneck</th>
                   <th>Cycles</th>
                   <th>L1D Hit</th>
@@ -85,6 +87,11 @@ export function BatchResultsModal({ results, running, total, onExportCSV, onExpo
                   return (
                     <tr key={config}>
                       <td className="config-name">{formatHardwareName(config, r)}</td>
+                      <td>
+                        <span className={`provenance-inline ${provenanceClass(r.provenance)}`}>
+                          {formatTrustLabel(r.provenance)}
+                        </span>
+                      </td>
                       <td><span className={bottleneckClass(r)}>{formatBottleneck(r)}</span></td>
                       <td>{formatCycles(r)}</td>
                       <td className={l1 && l1.hitRate > 0.9 ? 'good' : 'warning'}>{l1 ? formatPercent(l1.hitRate) : '-'}</td>

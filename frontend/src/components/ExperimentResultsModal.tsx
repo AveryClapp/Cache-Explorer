@@ -1,6 +1,7 @@
 import { formatPercent } from '../utils/formatting'
+import { formatTrustLabel, provenanceClass } from '../utils/provenance'
 import type { ExperimentTemplate } from '../constants'
-import type { HardwareExperimentResult } from '../types'
+import type { CacheResult, HardwareExperimentResult } from '../types'
 
 interface ExperimentResultsModalProps {
   result: HardwareExperimentResult | null
@@ -44,6 +45,10 @@ function deltaClass(value: number | null | undefined) {
 function bottleneckClass(value: string) {
   const bottleneck = value.toLowerCase().replace(/[^a-z0-9_-]/g, '-')
   return `bottleneck-chip ${bottleneck}`
+}
+
+function resultForSummaryRow(result: HardwareExperimentResult, row: HardwareExperimentResult['summary'][number]): CacheResult | undefined {
+  return result.variants[row.variant]?.configs[row.config]
 }
 
 function winnerRows(result: HardwareExperimentResult | null) {
@@ -189,6 +194,7 @@ export function ExperimentResultsModal({
                 <tr>
                   <th>Variant</th>
                   <th>Hardware</th>
+                  <th>Trust</th>
                   <th>Bottleneck</th>
                   <th>Cycles</th>
                   <th>Delta</th>
@@ -197,21 +203,29 @@ export function ExperimentResultsModal({
                 </tr>
               </thead>
               <tbody>
-                {result.summary.map(row => (
-                  <tr key={`${row.variant}-${row.config}`}>
-                    <td className="config-name">{row.variant}</td>
-                    <td>{row.profile?.displayName || row.config}</td>
-                    <td><span className={bottleneckClass(row.primaryBottleneck)}>{row.primaryBottleneck}</span></td>
-                    <td>{formatCycles(row.estimatedCycles)}</td>
-                    <td className={deltaClass(row.cycleDelta)}>
-                      {formatDelta(row.cycleDelta, row.cycleDeltaPercent)}
-                    </td>
-                    <td>{typeof row.hitRates?.l1d === 'number' ? formatPercent(row.hitRates.l1d) : '-'}</td>
-                    <td className="source-cell" title={row.topSource ? `${row.topSource.file}:${row.topSource.line}` : undefined}>
-                      {formatTopSource(row)}
-                    </td>
-                  </tr>
-                ))}
+                {result.summary.map(row => {
+                  const rowResult = resultForSummaryRow(result, row)
+                  return (
+                    <tr key={`${row.variant}-${row.config}`}>
+                      <td className="config-name">{row.variant}</td>
+                      <td>{row.profile?.displayName || row.config}</td>
+                      <td>
+                        <span className={`provenance-inline ${provenanceClass(rowResult?.provenance)}`}>
+                          {formatTrustLabel(rowResult?.provenance)}
+                        </span>
+                      </td>
+                      <td><span className={bottleneckClass(row.primaryBottleneck)}>{row.primaryBottleneck}</span></td>
+                      <td>{formatCycles(row.estimatedCycles)}</td>
+                      <td className={deltaClass(row.cycleDelta)}>
+                        {formatDelta(row.cycleDelta, row.cycleDeltaPercent)}
+                      </td>
+                      <td>{typeof row.hitRates?.l1d === 'number' ? formatPercent(row.hitRates.l1d) : '-'}</td>
+                      <td className="source-cell" title={row.topSource ? `${row.topSource.file}:${row.topSource.line}` : undefined}>
+                        {formatTopSource(row)}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           )}

@@ -11,6 +11,7 @@ import {
   ExecutionEnginePanel,
   HardwareProfilePanel,
   LevelDetail,
+  ResultProvenancePanel,
   TLBDetail,
   FalseSharingDisplay,
   HotLinesPanel,
@@ -98,6 +99,9 @@ export function ResultsPanel({
 
             {/* Metric Cards */}
             <MetricCards result={result} baselineResult={baselineResult} diffMode={diffMode} />
+
+            {/* Result Fidelity */}
+            <ResultProvenancePanel result={result} />
 
             {/* Hardware Bottleneck Summary */}
             {result.summary && <BottleneckSummaryPanel summary={result.summary} />}
