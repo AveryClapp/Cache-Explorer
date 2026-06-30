@@ -4,11 +4,36 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BACKEND_DIR="$(dirname "$SCRIPT_DIR")"
+PROJECT_ROOT="$(dirname "$BACKEND_DIR")"
 
-PASS="${CACHE_EXPLORER_PASS:-$BACKEND_DIR/llvm-pass/build/CacheProfiler.so}"
-RUNTIME="${CACHE_EXPLORER_RUNTIME:-$BACKEND_DIR/runtime/build/libcache-explorer-rt.a}"
+select_latest_existing() {
+  local selected=""
+
+  for candidate in "$@"; do
+    if [[ -f "$candidate" ]]; then
+      if [[ -z "$selected" || "$candidate" -nt "$selected" ]]; then
+        selected="$candidate"
+      fi
+    fi
+  done
+
+  if [[ -n "$selected" ]]; then
+    echo "$selected"
+  else
+    echo "$1"
+  fi
+}
+
+PASS="${CACHE_EXPLORER_PASS:-$(select_latest_existing \
+  "$PROJECT_ROOT/build/backend/llvm-pass/CacheProfiler.so" \
+  "$BACKEND_DIR/llvm-pass/build/CacheProfiler.so")}"
+RUNTIME="${CACHE_EXPLORER_RUNTIME:-$(select_latest_existing \
+  "$PROJECT_ROOT/build/backend/runtime/libcache-explorer-rt.a" \
+  "$BACKEND_DIR/runtime/build/libcache-explorer-rt.a")}"
 RUNTIME_INC="$BACKEND_DIR/runtime"
-CACHE_SIM="${CACHE_EXPLORER_SIM:-$BACKEND_DIR/cache-simulator/build/cache-sim}"
+CACHE_SIM="${CACHE_EXPLORER_SIM:-$(select_latest_existing \
+  "$PROJECT_ROOT/build/backend/cache-simulator/cache-sim" \
+  "$BACKEND_DIR/cache-simulator/build/cache-sim")}"
 
 usage() {
   echo "Usage: cache-explore compare [options] <source.c|.cpp>"
@@ -24,6 +49,12 @@ usage() {
   echo "  -D <name>=<val>    Preprocessor define"
   echo "  --sample <N>       Sample 1 in N events"
   echo "  --limit <N>        Max events to process"
+  echo "  --prefetch <p>     Prefetch policy: none|next|stream|stride|adaptive|intel"
+  echo "  --prefetch-degree <N> Number of lines to prefetch ahead"
+  echo "  --fast             Disable 3C miss classification for faster simulation"
+  echo "  --cache-segments   Cache repeated loop segments during simulation"
+  echo "  --compiler <path>  Path to LLVM bin directory"
+  echo "  -I <path>          Add include path"
   echo "  --help             Show this help"
   echo ""
   echo "Available configs:"
@@ -43,8 +74,14 @@ CONFIGS="intel,amd,apple,educational"
 JSON_OUTPUT=""
 OPT_LEVEL="-O0"
 DEFINES=()
+INCLUDES=()
 SAMPLE_RATE=""
 EVENT_LIMIT=""
+PREFETCH=""
+PREFETCH_DEGREE=""
+FAST_MODE=""
+CACHE_SEGMENTS=""
+COMPILER_PATH=""
 INPUT_FILE=""
 
 while [[ $# -gt 0 ]]; do
@@ -53,9 +90,16 @@ while [[ $# -gt 0 ]]; do
     --json) JSON_OUTPUT="1"; shift ;;
     --sample) SAMPLE_RATE="$2"; shift 2 ;;
     --limit) EVENT_LIMIT="$2"; shift 2 ;;
+    --prefetch) PREFETCH="$2"; shift 2 ;;
+    --prefetch-degree) PREFETCH_DEGREE="$2"; shift 2 ;;
+    --fast) FAST_MODE="--fast"; shift ;;
+    --cache-segments) CACHE_SEGMENTS="--cache-segments"; shift ;;
+    --compiler) COMPILER_PATH="$2"; shift 2 ;;
     -O*) OPT_LEVEL="$1"; shift ;;
     -D) DEFINES+=("-D$2"); shift 2 ;;
     -D*) DEFINES+=("$1"); shift ;;
+    -I) INCLUDES+=("-I$2"); shift 2 ;;
+    -I*) INCLUDES+=("$1"); shift ;;
     --help) usage; exit 0 ;;
     -*) echo "Unknown option: $1"; usage; exit 1 ;;
     *) INPUT_FILE="$1"; shift ;;
@@ -80,6 +124,17 @@ case "$EXT" in
   cpp|cc|cxx|C) COMPILER="clang++"; BASENAME=$(basename "$INPUT_FILE" ."$EXT") ;;
   *) echo "Error: Unsupported extension: .$EXT"; exit 1 ;;
 esac
+
+if [[ -n "$COMPILER_PATH" ]]; then
+  if [[ "$EXT" == "c" && -x "$COMPILER_PATH/clang" ]]; then
+    COMPILER="$COMPILER_PATH/clang"
+  elif [[ "$EXT" != "c" && -x "$COMPILER_PATH/clang++" ]]; then
+    COMPILER="$COMPILER_PATH/clang++"
+  else
+    echo "Error: compiler not found in: $COMPILER_PATH" >&2
+    exit 1
+  fi
+fi
 
 BINARY="/tmp/cache-explore-compare-$$-$BASENAME"
 RESULT_DIR=""
@@ -109,6 +164,7 @@ fi
 
 if ! $COMPILER $OPT_LEVEL $EXTRA_FLAGS -g -fpass-plugin="$PASS" \
   -I"$RUNTIME_INC" \
+  "${INCLUDES[@]}" \
   "${DEFINES[@]}" \
   "$INPUT_FILE" \
   "$RUNTIME" \
@@ -143,12 +199,26 @@ IFS=',' read -ra CONFIG_ARRAY <<< "$CONFIGS"
 
 RESULT_DIR=$(mktemp -d /tmp/cache-explore-compare-results.XXXXXX)
 RESULT_ARGS=()
+SIM_COMMON_ARGS=(--json)
+
+if [[ -n "$PREFETCH" ]]; then
+  SIM_COMMON_ARGS+=(--prefetch "$PREFETCH")
+fi
+if [[ -n "$PREFETCH_DEGREE" ]]; then
+  SIM_COMMON_ARGS+=(--prefetch-degree "$PREFETCH_DEGREE")
+fi
+if [[ -n "$FAST_MODE" ]]; then
+  SIM_COMMON_ARGS+=(--fast)
+fi
+if [[ -n "$CACHE_SEGMENTS" ]]; then
+  SIM_COMMON_ARGS+=(--cache-segments)
+fi
 
 for i in "${!CONFIG_ARRAY[@]}"; do
   cfg="${CONFIG_ARRAY[$i]}"
   result_path="$RESULT_DIR/result-$i.json"
 
-  if ! echo "$TRACE" | "$CACHE_SIM" --config "$cfg" --json > "$result_path" 2>/dev/null; then
+  if ! echo "$TRACE" | "$CACHE_SIM" --config "$cfg" "${SIM_COMMON_ARGS[@]}" > "$result_path" 2>/dev/null; then
     printf '{"error":"failed to simulate config"}\n' > "$result_path"
   fi
 
