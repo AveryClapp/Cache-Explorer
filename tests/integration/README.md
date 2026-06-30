@@ -36,10 +36,10 @@ Tests directional workload relationships that should stay true:
 - Sequential scan has lower average latency than pointer chasing
 
 ### 4. Workload Snapshots (`test-workload-snapshots.sh`)
-Runs benchmark snapshots from `../../benchmarks/workloads/` and validates their expected relationships:
+Runs `cache-explore workloads --verify --json` against benchmark snapshots from `../../benchmarks/workloads/` and validates their expected relationships:
 - Tiled Conv2D improves modeled Intel 14th Gen L2 locality versus direct Conv2D
 
-These snapshots are executable benchmark metadata: example path, config, optimization level, variants, and metric relationships live together.
+These snapshots are executable benchmark metadata: example path, config, optimization level, variants, metric relationships, timing, and result provenance live together.
 
 ### 5. Master Runner (`run-all-tests.sh`)
 Runs all test suites and provides overall pass/fail summary.
@@ -58,6 +58,7 @@ cd tests/integration
 ./test-features.sh     # Core features
 ./test-golden-kernels.sh  # Directional workload relationships
 ./test-workload-snapshots.sh  # Snapshot-driven benchmark relationships
+../../backend/scripts/cache-explore workloads --verify --json  # Product verifier
 ```
 
 ### From Project Root

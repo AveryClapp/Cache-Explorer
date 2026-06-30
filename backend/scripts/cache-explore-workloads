@@ -1,24 +1,28 @@
 #!/usr/bin/env node
 
 const { readdir, readFile } = require('fs/promises')
+const { spawnSync } = require('child_process')
 const { dirname, join, resolve } = require('path')
 
 function usage() {
   console.log(`Usage: cache-explore workloads [options] [workload-id]
 
-List benchmark workload snapshots modeled by Cache Explorer.
+List and verify benchmark workload snapshots modeled by Cache Explorer.
 
 Options:
   --json       Output JSON
   --ids        Output only workload ids
   --commands   Print cache-explore commands for each variant
+  --verify     Run variants and validate expected relationships
   --help       Show this help
 
 Examples:
   cache-explore workloads
   cache-explore workloads --ids
   cache-explore workloads conv2d-intel14 --json
-  cache-explore workloads conv2d-intel14 --commands`)
+  cache-explore workloads conv2d-intel14 --commands
+  cache-explore workloads conv2d-intel14 --verify
+  cache-explore workloads --verify --json`)
 }
 
 function projectRoot() {
@@ -75,6 +79,21 @@ function commandForVariant(workload, variant) {
   return args.map(shellQuote).join(' ')
 }
 
+function argsForVariant(workload, variant) {
+  const args = [join(projectRoot(), workload.example)]
+  if (workload.optLevel) args.push(workload.optLevel)
+
+  for (const define of variant.defines || []) {
+    args.push('-D', define)
+  }
+
+  args.push('--config', workload.config)
+  if (workload.limit) args.push('--limit', String(workload.limit))
+  args.push('--json')
+
+  return args
+}
+
 function printCommands(workloads) {
   for (const workload of workloads) {
     console.log(`# ${workload.id}: ${workload.description}`)
@@ -84,6 +103,186 @@ function printCommands(workloads) {
     }
     console.log('')
   }
+}
+
+function metricValue(result, metric) {
+  return metric.split('.').reduce((value, key) => {
+    if (value === undefined || value === null) return undefined
+    return value[key]
+  }, result)
+}
+
+function parseRelationship(relationship) {
+  const [leftVariant, operator, rightVariant] = relationship.split(/\s+/)
+  if (!leftVariant || !operator || !rightVariant) {
+    throw new Error(`Invalid relationship: ${relationship}`)
+  }
+  return { leftVariant, operator, rightVariant }
+}
+
+function compareValues(left, operator, right) {
+  switch (operator) {
+    case '>':
+      return left > right
+    case '<':
+      return left < right
+    case '>=':
+      return left >= right
+    case '<=':
+      return left <= right
+    case '==':
+    case '=':
+      return left === right
+    default:
+      throw new Error(`Unsupported relationship operator: ${operator}`)
+  }
+}
+
+function runVariant(workload, variant) {
+  const start = Date.now()
+  const result = spawnSync(join(projectRoot(), 'backend', 'scripts', 'cache-explore'), argsForVariant(workload, variant), {
+    cwd: projectRoot(),
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+  })
+  const durationMs = Date.now() - start
+
+  if (result.status !== 0) {
+    return {
+      id: variant.id,
+      ok: false,
+      durationMs,
+      error: result.stderr.trim() || result.stdout.trim() || `cache-explore exited with ${result.status}`,
+    }
+  }
+
+  try {
+    return {
+      id: variant.id,
+      ok: true,
+      durationMs,
+      result: JSON.parse(result.stdout.trim()),
+    }
+  } catch (error) {
+    return {
+      id: variant.id,
+      ok: false,
+      durationMs,
+      error: error instanceof Error ? error.message : String(error),
+    }
+  }
+}
+
+function evaluateRelationships(workload, variants) {
+  return (workload.expectedRelationships || []).map(item => {
+    const { leftVariant, operator, rightVariant } = parseRelationship(item.relationship)
+    const left = variants[leftVariant]
+    const right = variants[rightVariant]
+    const leftValue = left?.ok ? metricValue(left.result, item.metric) : undefined
+    const rightValue = right?.ok ? metricValue(right.result, item.metric) : undefined
+    const numeric = typeof leftValue === 'number' && typeof rightValue === 'number'
+    const passed = numeric ? compareValues(leftValue, operator, rightValue) : false
+
+    return {
+      metric: item.metric,
+      relationship: item.relationship,
+      leftVariant,
+      rightVariant,
+      operator,
+      leftValue,
+      rightValue,
+      passed,
+      error: numeric ? undefined : 'relationship values must be numeric',
+    }
+  })
+}
+
+function summarizeResult(result) {
+  const summary = result.summary || {}
+  const levels = result.levels || {}
+  return {
+    events: result.events,
+    estimatedCycles: summary.estimatedCycles ?? result.timing?.totalCycles,
+    primaryBottleneck: summary.primaryBottleneck,
+    hitRates: {
+      l1d: levels.l1d?.hitRate ?? levels.l1?.hitRate,
+      l2: levels.l2?.hitRate,
+      l3: levels.l3?.hitRate,
+    },
+  }
+}
+
+function verifyWorkload(workload) {
+  const start = Date.now()
+  const variantRuns = {}
+
+  for (const variant of workload.variants || []) {
+    variantRuns[variant.id] = runVariant(workload, variant)
+  }
+
+  const checks = evaluateRelationships(workload, variantRuns)
+  const variants = Object.fromEntries(Object.entries(variantRuns).map(([id, run]) => [
+    id,
+    {
+      ok: run.ok,
+      durationMs: run.durationMs,
+      error: run.error,
+      summary: run.ok ? summarizeResult(run.result) : undefined,
+      provenance: run.ok ? run.result.provenance : undefined,
+    },
+  ]))
+  const failedVariantCount = Object.values(variantRuns).filter(run => !run.ok).length
+  const failedCheckCount = checks.filter(check => !check.passed).length
+
+  return {
+    id: workload.id,
+    description: workload.description,
+    ok: failedVariantCount === 0 && failedCheckCount === 0,
+    durationMs: Date.now() - start,
+    variants,
+    checks,
+  }
+}
+
+function verificationSummary(results) {
+  const passed = results.reduce((count, result) => (
+    count + result.checks.filter(check => check.passed).length
+  ), 0)
+  const failed = results.reduce((count, result) => (
+    count + result.checks.filter(check => !check.passed).length
+      + Object.values(result.variants).filter(variant => !variant.ok).length
+  ), 0)
+
+  return {
+    ok: failed === 0,
+    workloads: results.length,
+    passed,
+    failed,
+    durationMs: results.reduce((total, result) => total + result.durationMs, 0),
+  }
+}
+
+function printVerification(results) {
+  const summary = verificationSummary(results)
+
+  for (const result of results) {
+    console.log(`Snapshot: ${result.id}`)
+    console.log(`  ${result.description}`)
+    for (const [variantId, variant] of Object.entries(result.variants)) {
+      const status = variant.ok ? 'PASS' : 'FAIL'
+      console.log(`  Variant: ${variantId} ${status} (${variant.durationMs}ms)`)
+      if (variant.error) console.log(`    ${variant.error}`)
+    }
+    for (const check of result.checks) {
+      const status = check.passed ? 'PASS' : 'FAIL'
+      console.log(`  Check: ${check.metric} ${check.relationship} ${status} (${check.leftValue} vs ${check.rightValue})`)
+      if (check.error) console.log(`    ${check.error}`)
+    }
+    console.log('')
+  }
+
+  console.log(`Summary: ${summary.passed} passed, ${summary.failed} failed, ${summary.durationMs}ms`)
+  if (!summary.ok) process.exitCode = 1
 }
 
 function printTable(workloads) {
@@ -113,6 +312,7 @@ async function main() {
   const json = args.includes('--json')
   const ids = args.includes('--ids')
   const commands = args.includes('--commands')
+  const verify = args.includes('--verify')
   const help = args.includes('--help') || args.includes('-h')
   const workloadId = args.find(arg => !arg.startsWith('-'))
 
@@ -132,7 +332,16 @@ async function main() {
     return
   }
 
-  if (json) {
+  if (verify) {
+    const results = selected.map(verifyWorkload)
+    const summary = verificationSummary(results)
+    if (json) {
+      console.log(JSON.stringify({ ok: summary.ok, summary, workloads: results }, null, 2))
+    } else {
+      printVerification(results)
+    }
+    if (!summary.ok) process.exitCode = 1
+  } else if (json) {
     console.log(JSON.stringify(workloadId ? selected[0] : { workloads: selected }, null, 2))
   } else if (ids) {
     console.log(selected.map(workload => workload.id).join('\n'))

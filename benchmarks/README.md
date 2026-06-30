@@ -18,5 +18,7 @@ backend/scripts/cache-explore workloads
 backend/scripts/cache-explore workloads --ids
 backend/scripts/cache-explore workloads conv2d-intel14 --json
 backend/scripts/cache-explore workloads conv2d-intel14 --commands
+backend/scripts/cache-explore workloads --verify
+backend/scripts/cache-explore workloads --verify --json
 tests/integration/test-workload-snapshots.sh
 ```
