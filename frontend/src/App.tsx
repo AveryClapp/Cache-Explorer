@@ -31,6 +31,7 @@ import type {
   CustomCacheConfig,
   PrefetchPolicy,
   SourceAnnotation,
+  ShareableState,
 } from './types'
 
 // Constants
@@ -268,6 +269,38 @@ function App() {
   const vimStatusRef = useRef<HTMLDivElement>(null)
   const vimModeRef = useRef<{ dispose: () => void } | null>(null)
 
+  const shareState = useMemo<ShareableState>(() => ({
+    code,
+    config,
+    optLevel,
+    language,
+    defines,
+    prefetchPolicy,
+    selectedCompiler: selectedCompiler || undefined,
+    sampleRate,
+    eventLimit,
+    fastMode,
+    cacheSegments,
+    customConfig: config === 'custom' ? customConfig : undefined,
+    runHardwareConfigIds,
+    experimentVariants,
+  }), [
+    cacheSegments,
+    code,
+    config,
+    customConfig,
+    defines,
+    eventLimit,
+    experimentVariants,
+    fastMode,
+    language,
+    optLevel,
+    prefetchPolicy,
+    runHardwareConfigIds,
+    sampleRate,
+    selectedCompiler,
+  ])
+
   // Theme sync
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -285,9 +318,9 @@ function App() {
       .then(res => res.json())
       .then(data => {
         if (data.default) {
-          setSelectedCompiler(data.default)
+          setSelectedCompiler(prev => prev || data.default)
         } else if (data.compilers && data.compilers.length > 0) {
-          setSelectedCompiler(data.compilers[0].id)
+          setSelectedCompiler(prev => prev || data.compilers[0].id)
         }
       })
       .catch(err => {
@@ -359,7 +392,7 @@ function App() {
       const shortId = params.get('s')
 
       // Helper to apply loaded state to the first file
-      const applyState = (state: { code: string; config: string; optLevel: string; language?: Language; defines?: DefineEntry[] }) => {
+      const applyState = (state: ShareableState) => {
         const lang = state.language || 'c'
         const newFile = createFileTab(`main${getFileExtension(lang)}`, state.code, lang)
         setFiles([newFile])
@@ -368,6 +401,18 @@ function App() {
         setConfig(state.config)
         setOptLevel(state.optLevel)
         if (state.defines) setDefines(state.defines)
+        if (state.prefetchPolicy) setPrefetchPolicy(state.prefetchPolicy)
+        if (state.selectedCompiler) setSelectedCompiler(state.selectedCompiler)
+        if (typeof state.sampleRate === 'number') setSampleRate(state.sampleRate)
+        if (typeof state.eventLimit === 'number') setEventLimit(state.eventLimit)
+        if (typeof state.fastMode === 'boolean') setFastMode(state.fastMode)
+        if (typeof state.cacheSegments === 'boolean') setCacheSegments(state.cacheSegments)
+        if (state.customConfig) setCustomConfig({ ...defaultCustomConfig, ...state.customConfig })
+        if (Array.isArray(state.runHardwareConfigIds)) {
+          const nextRunSet = Array.from(new Set(state.runHardwareConfigIds.filter(Boolean)))
+          if (nextRunSet.length > 0) setRunHardwareConfigIds(nextRunSet)
+        }
+        if (state.experimentVariants) setExperimentVariants(state.experimentVariants)
       }
 
       if (shortId) {
@@ -395,18 +440,18 @@ function App() {
   // Update URL when state changes
   useEffect(() => {
     const timer = setTimeout(() => {
-      const encoded = encodeState({ code, config, optLevel, language, defines })
+      const encoded = encodeState(shareState)
       window.history.replaceState(null, '', `${window.location.pathname}#${encoded}`)
     }, 500)
     return () => clearTimeout(timer)
-  }, [code, config, optLevel, language, defines])
+  }, [shareState])
 
   const handleShare = useCallback(async () => {
     try {
       const response = await fetch(`${API_BASE}/shorten`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ state: { code, config, optLevel, language, defines } }),
+        body: JSON.stringify({ state: shareState }),
       })
       const data = await response.json()
       if (data.id) {
@@ -420,7 +465,7 @@ function App() {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     }
-  }, [code, config, optLevel, language, defines])
+  }, [shareState])
 
   // Apply error markers (red squiggles) for compile errors
   useEffect(() => {

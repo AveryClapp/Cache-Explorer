@@ -1,11 +1,11 @@
 import { useEffect } from 'react'
 import { encodeState, decodeState } from '../utils/state'
 import { API_BASE } from '../constants/config'
-import type { ShareableState, Language, DefineEntry } from '../types'
+import type { ShareableState, Language, DefineEntry, PrefetchPolicy } from '../types'
 
 export function useUrlState(
-  onLoadState: (state: { code: string; config: string; optLevel: string; language?: Language; defines?: DefineEntry[] }) => void,
-  deps: [string, string, string, Language, DefineEntry[]]
+  onLoadState: (state: ShareableState) => void,
+  deps: [string, string, string, Language, DefineEntry[], PrefetchPolicy?, string?, number?, number?, boolean?, boolean?]
 ) {
   // Load state from URL on mount
   useEffect(() => {
@@ -38,8 +38,32 @@ export function useUrlState(
   // Update URL when state changes
   useEffect(() => {
     const timer = setTimeout(() => {
-      const [code, config, optLevel, language, defines] = deps
-      const encoded = encodeState({ code, config, optLevel, language, defines })
+      const [
+        code,
+        config,
+        optLevel,
+        language,
+        defines,
+        prefetchPolicy,
+        selectedCompiler,
+        sampleRate,
+        eventLimit,
+        fastMode,
+        cacheSegments,
+      ] = deps
+      const encoded = encodeState({
+        code,
+        config,
+        optLevel,
+        language,
+        defines,
+        prefetchPolicy,
+        selectedCompiler,
+        sampleRate,
+        eventLimit,
+        fastMode,
+        cacheSegments,
+      })
       window.history.replaceState(null, '', `${window.location.pathname}#${encoded}`)
     }, 500)
     return () => clearTimeout(timer)

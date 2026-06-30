@@ -603,7 +603,7 @@ export type Stage = 'idle' | 'connecting' | 'preparing' | 'compiling' | 'running
 
 export type Theme = 'dark' | 'light'
 
-export type PrefetchPolicy = 'none' | 'next' | 'stream' | 'stride' | 'adaptive'
+export type PrefetchPolicy = 'none' | 'next' | 'next-line' | 'stream' | 'stride' | 'adaptive' | 'intel'
 
 export interface DefineEntry {
   name: string
@@ -616,6 +616,15 @@ export interface ShareableState {
   optLevel: string
   language?: Language
   defines?: DefineEntry[]
+  prefetchPolicy?: PrefetchPolicy
+  selectedCompiler?: string
+  sampleRate?: number
+  eventLimit?: number
+  fastMode?: boolean
+  cacheSegments?: boolean
+  customConfig?: CustomCacheConfig
+  runHardwareConfigIds?: string[]
+  experimentVariants?: string
 }
 
 // =============================================================================
