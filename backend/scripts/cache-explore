@@ -251,6 +251,7 @@ main_usage() {
   echo "  cc/c++            Compiler wrapper for build system integration"
   echo "  build-pass        Build the LLVM pass locally for your clang version"
   echo "  cache             Manage cached passes (list, clear, size)"
+  echo "  doctor            Check local toolchain, build artifacts, and server deps"
   echo "  pin <binary>      Profile a pre-compiled binary via Intel Pin"
   echo ""
   echo "Examples:"
@@ -260,6 +261,7 @@ main_usage() {
   echo "  cache-explore compare matrix.c --configs intel,amd,apple"
   echo "  cache-explore experiment conv2d.c -O2 --variant direct --variant tiled:RUN_TILED=1"
   echo "  cache-explore profiles --ids"
+  echo "  cache-explore doctor"
   echo ""
   echo "Run 'cache-explore <command> --help' for command-specific help."
 }
@@ -314,6 +316,10 @@ case "$1" in
   cache)
     shift
     exec "$SCRIPT_DIR/cache-explore-cache" "$@"
+    ;;
+  doctor)
+    shift
+    exec "$SCRIPT_DIR/cache-explore-doctor" "$@"
     ;;
   pin)
     shift

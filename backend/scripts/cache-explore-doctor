@@ -1,0 +1,141 @@
+#!/bin/bash
+# cache-explore doctor - Check local readiness without running user code.
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BACKEND_DIR="$(dirname "$SCRIPT_DIR")"
+PROJECT_ROOT="$(dirname "$BACKEND_DIR")"
+
+if [[ -f "$PROJECT_ROOT/build/backend/llvm-pass/CacheProfiler.so" ]]; then
+  PASS="$PROJECT_ROOT/build/backend/llvm-pass/CacheProfiler.so"
+  RUNTIME="$PROJECT_ROOT/build/backend/runtime/libcache-explorer-rt.a"
+  CACHE_SIM="$PROJECT_ROOT/build/backend/cache-simulator/cache-sim"
+else
+  PASS="$BACKEND_DIR/llvm-pass/build/CacheProfiler.so"
+  RUNTIME="$BACKEND_DIR/runtime/build/libcache-explorer-rt.a"
+  CACHE_SIM="$BACKEND_DIR/cache-simulator/build/cache-sim"
+fi
+
+FAILURES=0
+WARNINGS=0
+
+ok() {
+  printf 'ok    %s\n' "$1"
+}
+
+warn() {
+  WARNINGS=$((WARNINGS + 1))
+  printf 'warn  %s\n' "$1"
+}
+
+fail() {
+  FAILURES=$((FAILURES + 1))
+  printf 'fail  %s\n' "$1"
+}
+
+has_cmd() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+check_file() {
+  local label="$1"
+  local path="$2"
+  if [[ -f "$path" ]]; then
+    ok "$label: $path"
+  else
+    fail "$label missing: $path"
+  fi
+}
+
+compiler_cmd() {
+  if [[ -n "${CACHE_EXPLORER_CC:-}" ]]; then
+    printf '%s\n' "$CACHE_EXPLORER_CC"
+  elif has_cmd clang; then
+    printf 'clang\n'
+  else
+    for version in 21 20 19 18 17 16 15; do
+      if has_cmd "clang-$version"; then
+        printf 'clang-%s\n' "$version"
+        return
+      fi
+    done
+  fi
+}
+
+echo "Cache Explorer Doctor"
+echo "====================="
+echo ""
+
+CLANG_CMD="$(compiler_cmd)"
+if [[ -z "$CLANG_CMD" ]]; then
+  fail "LLVM clang not found"
+else
+  VERSION_OUTPUT="$("$CLANG_CMD" --version 2>/dev/null | head -1)"
+  if echo "$VERSION_OUTPUT" | grep -qi "apple"; then
+    fail "Apple clang detected; install upstream LLVM and set CACHE_EXPLORER_CC or use --compiler"
+  else
+    ok "compiler: $CLANG_CMD ($VERSION_OUTPUT)"
+  fi
+fi
+
+check_file "LLVM pass" "$PASS"
+check_file "runtime library" "$RUNTIME"
+check_file "cache simulator" "$CACHE_SIM"
+
+if has_cmd node; then
+  ok "node: $(node --version)"
+else
+  fail "node not found"
+fi
+
+if has_cmd npm; then
+  ok "npm: $(npm --version)"
+else
+  warn "npm not found"
+fi
+
+if [[ -d "$BACKEND_DIR/server/node_modules" ]]; then
+  ok "backend node_modules present"
+else
+  fail "backend dependencies missing; run npm install in backend/server"
+fi
+
+if [[ -d "$PROJECT_ROOT/frontend/node_modules" ]]; then
+  ok "frontend node_modules present"
+else
+  warn "frontend dependencies missing; run npm install in frontend"
+fi
+
+if node --input-type=module - "$BACKEND_DIR/server" >/tmp/cache-explorer-doctor-db.$$ 2>&1 <<'NODE'
+const serverDir = process.argv[2];
+const db = await import(`${serverDir}/db.js`);
+const metrics = await import(`${serverDir}/metrics.js`);
+const health = metrics.getHealthStatus();
+if (health.checks.database !== 'ok' || health.checks.temp_dir !== 'ok') {
+  console.error(JSON.stringify(health, null, 2));
+  process.exit(1);
+}
+NODE
+then
+  ok "server database and temp directory"
+else
+  fail "server database/temp health failed: $(tail -1 /tmp/cache-explorer-doctor-db.$$)"
+fi
+rm -f /tmp/cache-explorer-doctor-db.$$
+
+if has_cmd docker; then
+  if docker info >/dev/null 2>&1; then
+    ok "docker available for sandbox mode"
+  else
+    warn "docker command exists, but daemon is not reachable"
+  fi
+else
+  warn "docker not found; ENABLE_SANDBOX=1 will not work"
+fi
+
+echo ""
+if [[ "$FAILURES" -gt 0 ]]; then
+  echo "Doctor found $FAILURES failure(s) and $WARNINGS warning(s)."
+  exit 1
+fi
+
+echo "Doctor passed with $WARNINGS warning(s)."
