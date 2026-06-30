@@ -31,6 +31,13 @@ A collection of C and C++ programs demonstrating various cache access patterns a
 | Loop Fusion | `loop_fusion.c` | - | Combining multiple loops | Reduces cache traffic |
 | Cache Line Align | `cache_line_align.c` | - | Aligned data structures | Avoids split accesses |
 
+## Execution Engine
+
+| Example | C | C++ | Description | Expected Behavior |
+|---------|---|-----|-------------|-------------------|
+| Branch Patterns | `branch_patterns.c` | - | Predictable vs alternating branches | Loop branches warm up, alternating branch mispredicts often |
+| Pointer Chasing | `pointer_chasing.c` | - | Randomized dependent node traversal | Memory stalls dominate, branch behavior is mostly predictable |
+
 ## Working Set Size
 
 | Example | C | C++ | Description | Expected Behavior |

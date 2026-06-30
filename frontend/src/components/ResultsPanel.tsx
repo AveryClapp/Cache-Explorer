@@ -7,6 +7,8 @@ import {
   CacheHierarchyViz,
   PrefetchStatsPanel,
   AdvancedStatsPanel,
+  ExecutionEnginePanel,
+  HardwareProfilePanel,
   LevelDetail,
   TLBDetail,
   FalseSharingDisplay,
@@ -93,6 +95,9 @@ export function ResultsPanel({
             {/* Metric Cards */}
             <MetricCards result={result} baselineResult={baselineResult} diffMode={diffMode} />
 
+            {/* Hardware Profile */}
+            {result.profile && <HardwareProfilePanel profile={result.profile} cacheConfig={result.cacheConfig} />}
+
             {/* Cache Hierarchy Visualization */}
             <CacheHierarchyViz result={result} baselineResult={baselineResult} diffMode={diffMode} />
 
@@ -101,6 +106,9 @@ export function ResultsPanel({
 
             {/* Advanced Stats */}
             {result.advancedStats && <AdvancedStatsPanel stats={result.advancedStats} />}
+
+            {/* Execution Engine */}
+            {result.execution && <ExecutionEnginePanel execution={result.execution} />}
 
             {/* Toggle Buttons */}
             <div className="toggle-buttons" style={{ margin: 'var(--space-4) 0' }}>

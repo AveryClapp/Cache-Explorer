@@ -38,13 +38,24 @@ void TraceProcessor::process_line_access(uint64_t line_addr, bool is_write,
       it->second.misses++;
   }
 
+  // Feed the OoO pipeline model: instruction fetches supply the dynamic
+  // instruction count and front-end stalls; data accesses supply back-end
+  // memory stalls.
+  if (is_icache) {
+    pipeline.on_inst_fetch(result.l1_hit, result.l2_hit, result.l3_hit,
+                           event_size / 4);
+  } else {
+    pipeline.on_data_access(result.l1_hit, result.l2_hit, result.l3_hit);
+  }
+
   if (event_callback) {
     event_callback({result.l1_hit, result.l2_hit, result.l3_hit, line_addr,
                     event_size, std::string(file), line});
   }
 }
 
-TraceProcessor::TraceProcessor(const CacheHierarchyConfig &cfg) : cache(cfg) {}
+TraceProcessor::TraceProcessor(const CacheHierarchyConfig &cfg)
+    : cache(cfg), pipeline(PipelineConfig{.latency = cfg.latency}) {}
 
 void TraceProcessor::set_event_callback(
     std::function<void(const EventResult &)> cb) {
@@ -70,6 +81,16 @@ const PrefetchStats &TraceProcessor::get_prefetch_stats() const {
 }
 
 void TraceProcessor::process(const TraceEvent &event) {
+  // Conditional branch: feed the predictor and the pipeline; it touches no
+  // cache (the branch-site id is not a memory address).
+  if (event.is_branch) {
+    bool mispredicted = branch_predictor.process(event.branch_id,
+                                                 event.branch_taken,
+                                                 event.file, event.line);
+    pipeline.on_branch(mispredicted);
+    return;
+  }
+
   uint32_t line_size = event.is_icache ? cache.get_l1i().get_line_size()
                                        : cache.get_l1d().get_line_size();
 
@@ -187,6 +208,8 @@ void TraceProcessor::reset() {
   atomic_stats = {};
   mem_intrinsic_stats = {};
   prefetched_addresses.clear();
+  branch_predictor.reset();
+  pipeline.reset();
 }
 
 const CacheSystem &TraceProcessor::get_cache_system() const { return cache; }
@@ -205,4 +228,17 @@ const AtomicStats &TraceProcessor::get_atomic_stats() const {
 
 const MemoryIntrinsicStats &TraceProcessor::get_memory_intrinsic_stats() const {
   return mem_intrinsic_stats;
+}
+
+const BranchPredictionStats &TraceProcessor::get_branch_prediction_stats() const {
+  return branch_predictor.stats();
+}
+
+std::vector<BranchSiteStats>
+TraceProcessor::get_branch_hot_mispredicts(size_t limit) const {
+  return branch_predictor.hot_mispredicts(limit);
+}
+
+PipelineStats TraceProcessor::get_pipeline_stats() const {
+  return pipeline.finish();
 }

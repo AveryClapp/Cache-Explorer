@@ -7,8 +7,10 @@
 #include <vector>
 
 #include "AdvancedStats.hpp"
+#include "BranchPredictor.hpp"
 #include "CacheSystem.hpp"
 #include "MemoryAccess.hpp"
+#include "PipelineModel.hpp"
 #include "TraceEvent.hpp"
 
 // Struct key for source location lookup - avoids string allocation in hot path
@@ -41,6 +43,8 @@ struct SourceStats {
 class TraceProcessor {
 private:
   CacheSystem cache;
+  BranchPredictor branch_predictor;
+  PipelineModel pipeline;
   std::unordered_map<SourceKey, SourceStats, SourceKeyHash> source_stats;
   std::function<void(const EventResult &)> event_callback;
 
@@ -88,4 +92,10 @@ public:
   [[nodiscard]] const VectorStats &get_vector_stats() const;
   [[nodiscard]] const AtomicStats &get_atomic_stats() const;
   [[nodiscard]] const MemoryIntrinsicStats &get_memory_intrinsic_stats() const;
+
+  // Execution-engine model getters (branch prediction + OoO pipeline)
+  [[nodiscard]] const BranchPredictionStats &get_branch_prediction_stats() const;
+  [[nodiscard]] std::vector<BranchSiteStats>
+  get_branch_hot_mispredicts(size_t limit = 10) const;
+  [[nodiscard]] PipelineStats get_pipeline_stats() const;
 };

@@ -251,6 +251,82 @@ int main() {
 `
   },
 
+  // === Execution Engine ===
+  branch_patterns: {
+    name: 'Branch Patterns',
+    description: 'Predictable vs alternating branches',
+    language: 'c',
+    code: `// Branch prediction patterns
+// Predictable loop branches warm up; alternating data branches mispredict often
+#include <stdio.h>
+
+#define N 100000
+
+int main() {
+    volatile int predictable = 0;
+    volatile int alternating = 0;
+
+    for (int i = 0; i < N; i++) {
+        if (i < N - 1) {
+            predictable += i & 7;
+        }
+    }
+
+    for (int i = 0; i < N; i++) {
+        if (i & 1) {
+            alternating += 3;
+        } else {
+            alternating -= 1;
+        }
+    }
+
+    printf("%d %d\\n", predictable, alternating);
+    return 0;
+}
+`
+  },
+  pointer_chasing: {
+    name: 'Pointer Chasing',
+    description: 'Dependent random loads - memory stalls dominate',
+    language: 'c',
+    code: `// Pointer chasing with a randomized node order
+// The loop branch is predictable, but each load depends on the previous load
+#include <stdio.h>
+
+#define N 65536
+#define STRIDE 4099
+#define REPS 8
+
+struct Node {
+    int value;
+    int next;
+    char padding[56];
+};
+
+static struct Node nodes[N];
+
+int main() {
+    for (int i = 0; i < N; i++) {
+        nodes[i].value = i;
+        nodes[i].next = (i + STRIDE) & (N - 1);
+    }
+
+    long long sum = 0;
+    int index = 0;
+
+    for (int rep = 0; rep < REPS; rep++) {
+        for (int i = 0; i < N; i++) {
+            sum += nodes[index].value;
+            index = nodes[index].next;
+        }
+    }
+
+    printf("%lld %d\\n", sum, index);
+    return 0;
+}
+`
+  },
+
   // === Optimizations ===
   blocking: {
     name: 'Cache Blocking',

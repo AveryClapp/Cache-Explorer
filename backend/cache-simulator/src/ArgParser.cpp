@@ -6,6 +6,7 @@ void ArgParser::print_usage(const char* prog) {
     std::cerr << "Usage: " << prog << " [options]\n"
               << "Options:\n"
               << "  --config <name>   intel|amd|apple|educational|custom (default: intel)\n"
+              << "  --hardware <name> Alias for --config\n"
               << "  --cores <n>       Number of cores to simulate (default: auto)\n"
               << "  --prefetch <p>    Prefetch policy: none|next|stream|stride|adaptive|intel\n"
               << "  --prefetch-degree <n>  Number of lines to prefetch (default: 2)\n"
@@ -79,6 +80,74 @@ CacheHierarchyConfig ArgParser::get_preset_config(std::string_view name) {
     return make_intel_12th_gen_config();
 }
 
+HardwareProfileMetadata ArgParser::get_profile_metadata(std::string_view name) {
+    if (name == "custom") {
+        return {"custom", "Custom Hardware", "Custom", "custom", "custom", "custom"};
+    }
+
+    if (name == "educational") {
+        return {"educational", "Educational", "Learning", "teaching-model",
+                "learning", "educational"};
+    }
+
+    if (name == "intel" || name == "intel12") {
+        return {std::string(name), "Intel 12th Gen", "Intel", "x86_64",
+                "client", "directional"};
+    }
+    if (name == "intel14") {
+        return {"intel14", "Intel 14th Gen", "Intel", "x86_64", "client",
+                "directional"};
+    }
+    if (name == "xeon") {
+        return {"xeon", "Intel Xeon", "Intel", "x86_64", "server",
+                "directional"};
+    }
+    if (name == "xeon8488c" || name == "sapphire") {
+        return {std::string(name), "Intel Xeon Platinum 8488C", "Intel",
+                "x86_64", "server", "calibrated"};
+    }
+
+    if (name == "amd" || name == "zen4") {
+        return {std::string(name), "AMD Zen 4", "AMD", "x86_64", "client",
+                "directional"};
+    }
+    if (name == "zen3") {
+        return {"zen3", "AMD Zen 3", "AMD", "x86_64", "client",
+                "directional"};
+    }
+    if (name == "epyc") {
+        return {"epyc", "AMD EPYC", "AMD", "x86_64", "server",
+                "directional"};
+    }
+
+    if (name == "apple" || name == "m1") {
+        return {std::string(name), "Apple M1", "Apple", "arm64", "client",
+                "directional"};
+    }
+    if (name == "m2") {
+        return {"m2", "Apple M2", "Apple", "arm64", "client", "directional"};
+    }
+    if (name == "m3") {
+        return {"m3", "Apple M3", "Apple", "arm64", "client", "directional"};
+    }
+
+    if (name == "graviton" || name == "graviton3") {
+        return {std::string(name), "AWS Graviton 3", "ARM", "arm64", "cloud",
+                "directional"};
+    }
+    if (name == "embedded") {
+        return {"embedded", "Embedded ARM", "ARM", "arm64", "embedded",
+                "educational"};
+    }
+    if (name == "rpi4" || name == "raspberry") {
+        return {std::string(name), "Raspberry Pi 4", "ARM", "arm64",
+                "embedded", "directional"};
+    }
+
+    return {"intel", "Intel 12th Gen", "Intel", "x86_64", "client",
+            "directional"};
+}
+
 CacheHierarchyConfig ArgParser::build_cache_config(const SimulatorOptions& opts) {
     if (opts.config_name == "custom") {
         CacheHierarchyConfig cfg;
@@ -116,7 +185,7 @@ SimulatorOptions ArgParser::parse(int argc, char* argv[]) {
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
 
-        if (arg == "--config" && i + 1 < argc) {
+        if ((arg == "--config" || arg == "--hardware") && i + 1 < argc) {
             opts.config_name = argv[++i];
         } else if (arg == "--cores" && i + 1 < argc) {
             opts.num_cores = std::stoi(argv[++i]);

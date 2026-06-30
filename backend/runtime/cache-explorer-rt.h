@@ -24,6 +24,7 @@ typedef struct {
 // Bit 58-57: atomic subtype (00=load, 01=store, 10=RMW, 11=cmpxchg)
 // Bit 56: 1=memory intrinsic
 // Bit 55-54: intrinsic type (00=memcpy, 01=memset, 10=memmove)
+// Bit 53: 1=conditional branch (low bits = branch-site id; size = taken 0|1)
 #define EVENT_STORE_FLAG    (1ULL << 63)
 #define EVENT_ICACHE_FLAG   (1ULL << 62)
 #define EVENT_PREFETCH_FLAG (1ULL << 61)
@@ -34,6 +35,7 @@ typedef struct {
 #define EVENT_MEMINTR_FLAG  (1ULL << 56)
 #define EVENT_MEMSET_TYPE   (1ULL << 54)    // Bit 55-54 = 01
 #define EVENT_MEMMOVE_TYPE  (2ULL << 54)    // Bit 55-54 = 10
+#define EVENT_BRANCH_FLAG   (1ULL << 53)
 #define EVENT_ADDR_MASK     0x00FFFFFFFFFFFFFFULL  // Lower 56 bits for address
 
 void __tag_mem_load(void *addr, uint32_t size, const char *file, uint32_t line);
@@ -42,6 +44,11 @@ void __tag_mem_store(void *addr, uint32_t size, const char *file,
 // bb_id is a unique identifier for the basic block (not an address)
 void __tag_bb_entry(uint64_t bb_id, uint32_t instr_count, const char *file,
                     uint32_t line);
+
+// Conditional branch direction (for branch prediction).
+// branch_id is a static unique identifier for the branch site; taken is 0|1.
+void __tag_branch(uint64_t branch_id, uint32_t taken, const char *file,
+                  uint32_t line);
 
 // Software prefetch hints (__builtin_prefetch)
 // hint: 0=T0 (all caches), 1=T1 (L2+), 2=T2 (L3), 3=NTA

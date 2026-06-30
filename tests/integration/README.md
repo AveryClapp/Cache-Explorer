@@ -26,6 +26,8 @@ Tests key functionality:
 - **JSON structure**: All required output fields
 - **TLB simulation**: DTLB stats
 - **Timing model**: Cycle counts
+- **Execution engine**: Branch trace JSON stats
+- **Hardware alias**: `--hardware` compatibility with `--config`
 
 ### 3. Master Runner (`run-all-tests.sh`)
 Runs all test suites and provides overall pass/fail summary.
@@ -128,5 +130,5 @@ All tests passed!
 
 Individual test counts:
 - Hardware Presets: 12 tests
-- Core Features: 10 tests
-- **Total: 22 integration tests**
+- Core Features: 12 tests
+- **Total: 24 integration tests**

@@ -18,6 +18,8 @@ export type { MemoryRegion, MemoryAccess } from './MemoryLayout'
 // Results Display Components
 export { CacheHierarchyLevel } from './CacheHierarchyDisplay'
 export { AdvancedStatsPanel } from './AdvancedStatsPanel'
+export { ExecutionEnginePanel } from './ExecutionEnginePanel'
+export { HardwareProfilePanel } from './HardwareProfilePanel'
 export { PrefetchStatsPanel } from './PrefetchStatsPanel'
 export { MetricCards } from './MetricCards'
 export { DiffSummary } from './DiffSummary'

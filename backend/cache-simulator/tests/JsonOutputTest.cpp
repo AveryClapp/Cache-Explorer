@@ -101,6 +101,51 @@ void test_write_timing_stats() {
   std::cout << "[PASS] test_write_timing_stats\n";
 }
 
+void test_write_execution_stats() {
+  std::ostringstream out;
+  BranchPredictionStats branch;
+  branch.total = 10;
+  branch.mispredictions = 2;
+
+  BranchSiteStats site;
+  site.file = "branch.c";
+  site.line = 42;
+  site.total = 5;
+  site.mispredictions = 2;
+
+  PipelineStats pipeline;
+  pipeline.instructions = 100;
+  pipeline.base_cycles = 25;
+  pipeline.frontend_stall_cycles = 4;
+  pipeline.l2_stall_cycles = 3;
+  pipeline.l3_stall_cycles = 2;
+  pipeline.dram_stall_cycles = 50;
+  pipeline.branch_stall_cycles = 28;
+
+  JsonOutput::write_execution_stats(out, branch, {site}, pipeline);
+
+  std::string json = out.str();
+  assert(json.find("\"execution\"") != std::string::npos);
+  assert(json.find("\"available\": true") != std::string::npos);
+  assert(json.find("\"pipeline\"") != std::string::npos);
+  assert(json.find("\"branchPrediction\"") != std::string::npos);
+  assert(json.find("\"hotBranches\"") != std::string::npos);
+  assert(json.find("\"branch.c\"") != std::string::npos);
+  assert(json.find("\"memoryStallCycles\": 55") != std::string::npos);
+  std::cout << "[PASS] test_write_execution_stats\n";
+}
+
+void test_write_execution_unavailable() {
+  std::ostringstream out;
+  JsonOutput::write_execution_unavailable(out, "multi-core mode");
+
+  std::string json = out.str();
+  assert(json.find("\"execution\"") != std::string::npos);
+  assert(json.find("\"available\": false") != std::string::npos);
+  assert(json.find("\"reason\": \"multi-core mode\"") != std::string::npos);
+  std::cout << "[PASS] test_write_execution_unavailable\n";
+}
+
 void test_write_hot_lines() {
   std::ostringstream out;
   std::vector<SourceStats> hot;
@@ -196,6 +241,30 @@ void test_write_cache_config() {
   std::cout << "[PASS] test_write_cache_config\n";
 }
 
+void test_write_profile_metadata() {
+  std::ostringstream out;
+  HardwareProfileMetadata profile{
+      "intel14", "Intel 14th Gen", "Intel", "x86_64", "client",
+      "directional"};
+  auto cfg = make_intel_14th_gen_config();
+
+  JsonOutput::write_profile_metadata(out, profile, cfg, "adaptive", 4, 1);
+
+  std::string json = out.str();
+  assert(json.find("\"profile\"") != std::string::npos);
+  assert(json.find("\"displayName\": \"Intel 14th Gen\"") != std::string::npos);
+  assert(json.find("\"vendor\": \"Intel\"") != std::string::npos);
+  assert(json.find("\"modelConfidence\": \"directional\"") != std::string::npos);
+  assert(json.find("\"details\"") != std::string::npos);
+  assert(json.find("\"executionCore\"") != std::string::npos);
+  assert(json.find("\"issueWidth\": 4") != std::string::npos);
+  assert(json.find("\"activePolicy\": \"adaptive\"") != std::string::npos);
+  assert(json.find("\"dtlb\"") != std::string::npos);
+  assert(json.find("\"l1HitCycles\"") != std::string::npos);
+  assert(json.find("\"activeCores\": 1") != std::string::npos);
+  std::cout << "[PASS] test_write_profile_metadata\n";
+}
+
 void test_write_stream_start() {
   std::ostringstream out;
   JsonOutput::write_stream_start(out, "intel", true);
@@ -264,16 +333,19 @@ int main() {
   test_write_cache_stats();
   test_write_tlb_stats();
   test_write_timing_stats();
+  test_write_execution_stats();
+  test_write_execution_unavailable();
   test_write_hot_lines();
   test_write_suggestions();
   test_write_coherence_stats();
   test_write_prefetch_stats();
   test_write_cache_config();
+  test_write_profile_metadata();
 
   // Streaming mode tests
   test_write_stream_start();
   test_write_stream_progress();
 
-  std::cout << "\n=== All 18 JsonOutput tests passed! ===\n";
+  std::cout << "\n=== All 21 JsonOutput tests passed! ===\n";
   return 0;
 }
