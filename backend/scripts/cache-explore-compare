@@ -249,6 +249,15 @@ def hit_rate(data, key):
     return value if isinstance(value, (int, float)) else None
 
 
+def estimated_cycles(data, summary):
+    value = summary.get("estimatedCycles")
+    if isinstance(value, (int, float)) and value > 0:
+        return value
+    timing = data.get("timing") or {}
+    value = timing.get("totalCycles")
+    return value if isinstance(value, (int, float)) else 0
+
+
 def summarize(config, data):
     profile = data.get("profile") or {}
     bottleneck = data.get("summary") or {}
@@ -265,7 +274,7 @@ def summarize(config, data):
             "modelConfidence": profile.get("modelConfidence"),
         },
         "primaryBottleneck": bottleneck.get("primaryBottleneck", "unknown"),
-        "estimatedCycles": bottleneck.get("estimatedCycles", 0),
+        "estimatedCycles": estimated_cycles(data, bottleneck),
         "confidence": bottleneck.get("confidence", "unknown"),
         "bottleneckShare": bottleneck.get("bottleneckShare"),
         "topSource": top_source if isinstance(top_source, dict) else None,
@@ -341,6 +350,15 @@ def top_source_text(summary):
     return f"{file_name}:{line}"
 
 
+def estimated_cycles(data, summary):
+    value = summary.get("estimatedCycles")
+    if isinstance(value, (int, float)) and value > 0:
+        return value
+    timing = data.get("timing") or {}
+    value = timing.get("totalCycles")
+    return value if isinstance(value, (int, float)) else None
+
+
 pairs = sys.argv[1:]
 rows = []
 
@@ -355,7 +373,7 @@ for index in range(0, len(pairs), 2):
             "config": config,
             "profile": profile.get("displayName", config),
             "bottleneck": summary.get("primaryBottleneck", "unknown"),
-            "cycles": summary.get("estimatedCycles"),
+            "cycles": estimated_cycles(data, summary),
             "confidence": summary.get("confidence", "unknown"),
             "topSource": top_source_text(summary),
             "l1d": hit_rate(data, "l1d"),

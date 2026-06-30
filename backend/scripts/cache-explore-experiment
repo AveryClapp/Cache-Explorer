@@ -185,6 +185,16 @@ def top_source_text(summary):
     return {"file": file_name, "line": line, "subsystem": top_source.get("subsystem")}
 
 
+def estimated_cycles(row, result, config):
+    value = row.get("estimatedCycles")
+    if isinstance(value, (int, float)) and value > 0:
+        return value
+    config_result = (result.get("configs") or {}).get(config) or {}
+    timing = config_result.get("timing") or {}
+    value = timing.get("totalCycles")
+    return value if isinstance(value, (int, float)) else 0
+
+
 source = sys.argv[1]
 triples = sys.argv[2:]
 variants = {}
@@ -201,7 +211,7 @@ for index in range(0, len(triples), 3):
 
     for row in result.get("summary", []):
         config = row.get("config")
-        cycles = row.get("estimatedCycles", 0)
+        cycles = estimated_cycles(row, result, config)
         if index == 0:
             baseline_cycles[config] = cycles
 
@@ -276,6 +286,16 @@ def top_source_text(summary):
     return f"{file_name}:{line}"
 
 
+def estimated_cycles(summary, result, config):
+    value = summary.get("estimatedCycles")
+    if isinstance(value, (int, float)) and value > 0:
+        return value
+    config_result = (result.get("configs") or {}).get(config) or {}
+    timing = config_result.get("timing") or {}
+    value = timing.get("totalCycles")
+    return value if isinstance(value, (int, float)) else 0
+
+
 triples = sys.argv[1:]
 rows = []
 baseline_cycles = {}
@@ -287,7 +307,7 @@ for index in range(0, len(triples), 3):
 
     for summary in result.get("summary", []):
         config = summary.get("config", "unknown")
-        cycles = summary.get("estimatedCycles", 0)
+        cycles = estimated_cycles(summary, result, config)
         if index == 0:
             baseline_cycles[config] = cycles
         base = baseline_cycles.get(config)
