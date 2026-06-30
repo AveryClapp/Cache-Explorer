@@ -171,6 +171,13 @@ cache-explore mycode.c -O3 --config apple
 ./backend/scripts/cache-explore examples/conv2d_kernel.c -O2 --hardware intel14 --json
 ./backend/scripts/cache-explore examples/conv2d_kernel.c -O2 -D RUN_TILED=1 --hardware intel14 --json
 ./backend/scripts/cache-explore compare examples/conv2d_kernel.c -O2 --configs educational,intel14,zen4,m3
+
+# Compare named kernel variants across hardware profiles
+./backend/scripts/cache-explore experiment examples/conv2d_kernel.c -O2 \
+  --variant direct \
+  --variant tiled:RUN_TILED=1 \
+  --configs educational,intel14,zen4,m3 \
+  --limit 200000
 ```
 
 ## Running Tests

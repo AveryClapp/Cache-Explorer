@@ -1,0 +1,332 @@
+#!/bin/bash
+# cache-explore experiment - Compare named source variants across hardware profiles
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+COMPARE="$SCRIPT_DIR/cache-explore-compare"
+
+usage() {
+  echo "Usage: cache-explore experiment [options] <source.c|.cpp>"
+  echo ""
+  echo "Compare kernel variants across hardware profiles."
+  echo "Each variant is compiled/traced once, then replayed across all profiles."
+  echo ""
+  echo "Options:"
+  echo "  --variant <spec>   Variant spec: name[:DEFINE[=value][,DEFINE2...]]"
+  echo "                     Can be used multiple times"
+  echo "  --configs <list>   Comma-separated hardware profiles"
+  echo "                     (default: educational,intel14,amd,apple)"
+  echo "  --json             Output JSON format"
+  echo "  -O<level>          Optimization level (default: -O0)"
+  echo "  -D <name>=<val>    Common preprocessor define for every variant"
+  echo "  --sample <N>       Sample 1 in N events"
+  echo "  --limit <N>        Max events to process"
+  echo "  --prefetch <p>     Prefetch policy: none|next|stream|stride|adaptive|intel"
+  echo "  --prefetch-degree <N> Number of lines to prefetch ahead"
+  echo "  --fast             Disable 3C miss classification for faster simulation"
+  echo "  --cache-segments   Cache repeated loop segments during simulation"
+  echo "  --compiler <path>  Path to LLVM bin directory"
+  echo "  -I <path>          Add include path"
+  echo "  --help             Show this help"
+  echo ""
+  echo "Examples:"
+  echo "  cache-explore experiment conv2d.c -O2 --variant direct --variant tiled:RUN_TILED=1"
+  echo "  cache-explore experiment conv2d.c -O2 --configs educational,intel14 --limit 200000"
+}
+
+CONFIGS="educational,intel14,amd,apple"
+JSON_OUTPUT=""
+OPT_LEVEL="-O0"
+COMMON_DEFINES=()
+INCLUDES=()
+VARIANTS=()
+SAMPLE_RATE=""
+EVENT_LIMIT=""
+PREFETCH=""
+PREFETCH_DEGREE=""
+FAST_MODE=""
+CACHE_SEGMENTS=""
+COMPILER_PATH=""
+INPUT_FILE=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --variant) VARIANTS+=("$2"); shift 2 ;;
+    --configs) CONFIGS="$2"; shift 2 ;;
+    --json) JSON_OUTPUT="1"; shift ;;
+    --sample) SAMPLE_RATE="$2"; shift 2 ;;
+    --limit) EVENT_LIMIT="$2"; shift 2 ;;
+    --prefetch) PREFETCH="$2"; shift 2 ;;
+    --prefetch-degree) PREFETCH_DEGREE="$2"; shift 2 ;;
+    --fast) FAST_MODE="1"; shift ;;
+    --cache-segments) CACHE_SEGMENTS="1"; shift ;;
+    --compiler) COMPILER_PATH="$2"; shift 2 ;;
+    -O*) OPT_LEVEL="$1"; shift ;;
+    -D) COMMON_DEFINES+=("$2"); shift 2 ;;
+    -D*) COMMON_DEFINES+=("${1#-D}"); shift ;;
+    -I) INCLUDES+=("-I" "$2"); shift 2 ;;
+    -I*) INCLUDES+=("$1"); shift ;;
+    --help) usage; exit 0 ;;
+    -*) echo "Unknown option: $1"; usage; exit 1 ;;
+    *) INPUT_FILE="$1"; shift ;;
+  esac
+done
+
+if [[ -z "$INPUT_FILE" ]]; then
+  echo "Error: No input file specified" >&2
+  usage
+  exit 1
+fi
+
+if [[ ! -f "$INPUT_FILE" ]]; then
+  echo "Error: File not found: $INPUT_FILE" >&2
+  exit 1
+fi
+
+if [[ ${#VARIANTS[@]} -eq 0 ]]; then
+  VARIANTS=("baseline")
+fi
+
+RESULT_DIR=""
+
+cleanup() {
+  if [[ -n "$RESULT_DIR" ]]; then
+    rm -rf "$RESULT_DIR"
+  fi
+}
+trap cleanup EXIT
+
+RESULT_DIR=$(mktemp -d /tmp/cache-explore-experiment-results.XXXXXX)
+SUMMARY_ARGS=()
+
+for i in "${!VARIANTS[@]}"; do
+  spec="${VARIANTS[$i]}"
+  name="$spec"
+  defines_csv=""
+
+  if [[ "$spec" == *:* ]]; then
+    name="${spec%%:*}"
+    defines_csv="${spec#*:}"
+  fi
+
+  if [[ -z "$name" ]]; then
+    echo "Error: variant name cannot be empty: $spec" >&2
+    exit 1
+  fi
+
+  result_path="$RESULT_DIR/variant-$i.json"
+  compare_args=("$INPUT_FILE" "--configs" "$CONFIGS" "$OPT_LEVEL" "--json")
+
+  for define in "${COMMON_DEFINES[@]}"; do
+    compare_args+=("-D" "$define")
+  done
+
+  if [[ -n "$defines_csv" ]]; then
+    IFS=',' read -ra variant_defines <<< "$defines_csv"
+    for define in "${variant_defines[@]}"; do
+      if [[ -n "$define" ]]; then
+        compare_args+=("-D" "$define")
+      fi
+    done
+  fi
+
+  if [[ ${#INCLUDES[@]} -gt 0 ]]; then
+    compare_args+=("${INCLUDES[@]}")
+  fi
+  if [[ -n "$SAMPLE_RATE" ]]; then
+    compare_args+=("--sample" "$SAMPLE_RATE")
+  fi
+  if [[ -n "$EVENT_LIMIT" ]]; then
+    compare_args+=("--limit" "$EVENT_LIMIT")
+  fi
+  if [[ -n "$PREFETCH" ]]; then
+    compare_args+=("--prefetch" "$PREFETCH")
+  fi
+  if [[ -n "$PREFETCH_DEGREE" ]]; then
+    compare_args+=("--prefetch-degree" "$PREFETCH_DEGREE")
+  fi
+  if [[ -n "$FAST_MODE" ]]; then
+    compare_args+=("--fast")
+  fi
+  if [[ -n "$CACHE_SEGMENTS" ]]; then
+    compare_args+=("--cache-segments")
+  fi
+  if [[ -n "$COMPILER_PATH" ]]; then
+    compare_args+=("--compiler" "$COMPILER_PATH")
+  fi
+
+  if [[ -z "$JSON_OUTPUT" ]]; then
+    echo "Running variant: $name" >&2
+  fi
+
+  "$COMPARE" "${compare_args[@]}" > "$result_path"
+  SUMMARY_ARGS+=("$name" "$spec" "$result_path")
+done
+
+if [[ -n "$JSON_OUTPUT" ]]; then
+  python3 - "$INPUT_FILE" "${SUMMARY_ARGS[@]}" <<'PY'
+import json
+import sys
+
+
+def load_result(path):
+    with open(path, "r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def top_source_text(summary):
+    top_source = summary.get("topSource")
+    if not isinstance(top_source, dict):
+        return None
+    file_name = top_source.get("file")
+    line = top_source.get("line")
+    if not file_name or not line:
+        return None
+    return {"file": file_name, "line": line, "subsystem": top_source.get("subsystem")}
+
+
+source = sys.argv[1]
+triples = sys.argv[2:]
+variants = {}
+flat_summary = []
+baseline_cycles = {}
+baseline_variant = triples[0] if triples else None
+
+for index in range(0, len(triples), 3):
+    variant = triples[index]
+    spec = triples[index + 1]
+    path = triples[index + 2]
+    result = load_result(path)
+    variants[variant] = result
+
+    for row in result.get("summary", []):
+        config = row.get("config")
+        cycles = row.get("estimatedCycles", 0)
+        if index == 0:
+            baseline_cycles[config] = cycles
+
+        base = baseline_cycles.get(config)
+        delta = cycles - base if isinstance(cycles, int) and isinstance(base, int) else None
+        delta_pct = (delta / base) if delta is not None and base else None
+
+        flat_summary.append({
+            "variant": variant,
+            "variantSpec": spec,
+            "config": config,
+            "profile": row.get("profile"),
+            "primaryBottleneck": row.get("primaryBottleneck"),
+            "estimatedCycles": cycles,
+            "cycleDelta": delta,
+            "cycleDeltaPercent": delta_pct,
+            "confidence": row.get("confidence"),
+            "bottleneckShare": row.get("bottleneckShare"),
+            "topSource": top_source_text(row),
+            "hitRates": row.get("hitRates"),
+            "events": row.get("events"),
+        })
+
+print(json.dumps({
+    "source": source,
+    "baselineVariant": baseline_variant,
+    "summary": flat_summary,
+    "variants": variants,
+}, indent=2))
+PY
+else
+  python3 - "${SUMMARY_ARGS[@]}" <<'PY'
+import json
+import sys
+
+
+def load_result(path):
+    with open(path, "r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def percent(value):
+    return "N/A" if value is None else f"{value * 100:.1f}%"
+
+
+def integer(value):
+    return "N/A" if not isinstance(value, int) else f"{value}"
+
+
+def delta_text(delta, delta_pct):
+    if delta is None:
+        return "N/A"
+    if delta == 0:
+        return "0"
+    pct = "" if delta_pct is None else f" ({delta_pct * 100:+.1f}%)"
+    return f"{delta:+,}{pct}"
+
+
+def shorten(value, width):
+    text = str(value) if value else "-"
+    return text if len(text) <= width else text[: width - 3] + "..."
+
+
+def top_source_text(summary):
+    top_source = summary.get("topSource")
+    if not isinstance(top_source, dict):
+        return "-"
+    file_name = top_source.get("file")
+    line = top_source.get("line")
+    if not file_name or not line:
+        return "-"
+    return f"{file_name}:{line}"
+
+
+triples = sys.argv[1:]
+rows = []
+baseline_cycles = {}
+
+for index in range(0, len(triples), 3):
+    variant = triples[index]
+    path = triples[index + 2]
+    result = load_result(path)
+
+    for summary in result.get("summary", []):
+        config = summary.get("config", "unknown")
+        cycles = summary.get("estimatedCycles", 0)
+        if index == 0:
+            baseline_cycles[config] = cycles
+        base = baseline_cycles.get(config)
+        delta = cycles - base if isinstance(cycles, int) and isinstance(base, int) else None
+        delta_pct = (delta / base) if delta is not None and base else None
+        hit_rates = summary.get("hitRates") or {}
+        profile = summary.get("profile") or {}
+
+        rows.append({
+            "variant": variant,
+            "config": config,
+            "profile": profile.get("displayName", config),
+            "bottleneck": summary.get("primaryBottleneck", "unknown"),
+            "cycles": cycles,
+            "delta": delta,
+            "delta_pct": delta_pct,
+            "l1d": hit_rates.get("l1d"),
+            "top_source": top_source_text(summary),
+        })
+
+print()
+print("=== Hardware Experiment Summary ===")
+print()
+print(f"{'Variant':<13} {'Config':<13} {'Profile':<22} {'Bottleneck':<11} {'Cycles':>12} {'Delta':>17} {'L1D':>8}  Top Source")
+print(f"{'-' * 13:<13} {'-' * 13:<13} {'-' * 22:<22} {'-' * 11:<11} {'-' * 12:>12} {'-' * 17:>17} {'-' * 8:>8}  {'-' * 40}")
+for row in rows:
+    print(
+        f"{shorten(row['variant'], 13):<13} "
+        f"{row['config']:<13} "
+        f"{shorten(row['profile'], 22):<22} "
+        f"{row['bottleneck']:<11} "
+        f"{integer(row['cycles']):>12} "
+        f"{delta_text(row['delta'], row['delta_pct']):>17} "
+        f"{percent(row['l1d']):>8}  "
+        f"{shorten(row['top_source'], 50)}"
+    )
+
+print()
+print("Delta is relative to the first variant for the same hardware config.")
+print("Tip: Use --json for full per-variant, per-profile results.")
+PY
+fi

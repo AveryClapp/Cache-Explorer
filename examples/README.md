@@ -90,6 +90,13 @@ Run any example with Cache Explorer:
 # Faster iteration while keeping bottleneck/source summaries active
 ./backend/scripts/cache-explore compare examples/conv2d_kernel.c -O2 --configs educational,intel14 --limit 200000
 
+# Variant experiment: direct vs tiled across hardware profiles
+./backend/scripts/cache-explore experiment examples/conv2d_kernel.c -O2 \
+  --variant direct \
+  --variant tiled:RUN_TILED=1 \
+  --configs educational,intel14,zen4,m3 \
+  --limit 200000
+
 # Generate HTML report
 ./backend/scripts/cache-explore-report examples/linked_list.c
 ```
@@ -125,8 +132,11 @@ Run any example with Cache Explorer:
    ./backend/scripts/cache-explore examples/conv2d_kernel.c -O2 --hardware intel14
    ./backend/scripts/cache-explore examples/conv2d_kernel.c -O2 -D RUN_TILED=1 --hardware intel14
    ./backend/scripts/cache-explore compare examples/conv2d_kernel.c -O2 --configs intel14,zen4,m3
+   ./backend/scripts/cache-explore experiment examples/conv2d_kernel.c -O2 --variant direct --variant tiled:RUN_TILED=1 --configs educational,intel14 --limit 200000
    ```
    Comparison mode compiles and traces once, then replays the captured trace
    across hardware profiles. The first table reports estimated bottleneck,
    cycles, confidence, and top source; the second table keeps cache hit rates
    visible for the same run.
+   Experiment mode repeats that single-trace comparison for each named variant
+   and adds per-profile cycle deltas against the first variant.
