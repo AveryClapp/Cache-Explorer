@@ -19,6 +19,7 @@ import { listHardwareProfiles, getHardwareProfile } from './hardwareProfiles.js'
 import { CONFIG } from './config.js';
 import { healthRoutes, shareRoutes, compilerRoutes } from './routes/index.js';
 import { parseCompileErrors, createErrorResponse } from './services/errorParser.js';
+import { runProcess } from './services/processRunner.js';
 import { createTempProject, cleanupTempProject, cleanupOrphanedTempDirs } from './services/tempProject.js';
 import { ConnectionResourceTracker, connectionResources, getOrCreateTracker, removeTracker } from './middleware/resourceTracker.js';
 
@@ -288,111 +289,69 @@ app.post('/compile', async (req, res) => {
     tempDir = project.tempDir;
     mainFile = project.mainFile;
 
-    const result = await new Promise((resolve, reject) => {
-      const args = [mainFile, '--config', config, optLevel, '--json'];
+    const args = [mainFile, '--config', config, optLevel, '--json'];
 
-      // Enable multi-file compilation for multi-file projects
-      if (Array.isArray(inputFiles) && inputFiles.length > 1) {
-        args.push('--multi-file');
-        args.push('-I', tempDir);
-      }
+    // Enable multi-file compilation for multi-file projects
+    if (Array.isArray(inputFiles) && inputFiles.length > 1) {
+      args.push('--multi-file');
+      args.push('-I', tempDir);
+    }
 
-      // Add custom cache config args if provided
-      if (req.body.customConfig) {
-        const cc = req.body.customConfig;
-        if (cc.l1Size) args.push('--l1-size', String(cc.l1Size));
-        if (cc.l1Assoc) args.push('--l1-assoc', String(cc.l1Assoc));
-        if (cc.lineSize) args.push('--l1-line', String(cc.lineSize));
-        if (cc.l2Size) args.push('--l2-size', String(cc.l2Size));
-        if (cc.l2Assoc) args.push('--l2-assoc', String(cc.l2Assoc));
-        if (cc.l3Size) args.push('--l3-size', String(cc.l3Size));
-        if (cc.l3Assoc) args.push('--l3-assoc', String(cc.l3Assoc));
-      }
+    // Add custom cache config args if provided
+    if (req.body.customConfig) {
+      const cc = req.body.customConfig;
+      if (cc.l1Size) args.push('--l1-size', String(cc.l1Size));
+      if (cc.l1Assoc) args.push('--l1-assoc', String(cc.l1Assoc));
+      if (cc.lineSize) args.push('--l1-line', String(cc.lineSize));
+      if (cc.l2Size) args.push('--l2-size', String(cc.l2Size));
+      if (cc.l2Assoc) args.push('--l2-assoc', String(cc.l2Assoc));
+      if (cc.l3Size) args.push('--l3-size', String(cc.l3Size));
+      if (cc.l3Assoc) args.push('--l3-assoc', String(cc.l3Assoc));
+    }
 
-      // Add preprocessor defines
-      if (req.body.defines && Array.isArray(req.body.defines)) {
-        for (const def of req.body.defines) {
-          if (def.name && def.name.trim()) {
-            const defineStr = def.value ? `${def.name}=${def.value}` : def.name;
-            args.push('-D', defineStr);
-          }
+    // Add preprocessor defines
+    if (req.body.defines && Array.isArray(req.body.defines)) {
+      for (const def of req.body.defines) {
+        if (def.name && def.name.trim()) {
+          const defineStr = def.value ? `${def.name}=${def.value}` : def.name;
+          args.push('-D', defineStr);
         }
       }
+    }
 
-      // Always pass prefetch policy explicitly (whitelist valid policies)
-      const VALID_PREFETCH_POLICIES = ['none', 'next-line', 'stream', 'stride', 'adaptive', 'intel'];
-      const prefetchToUse = req.body.prefetch && VALID_PREFETCH_POLICIES.includes(req.body.prefetch) ? req.body.prefetch : 'none';
-      args.push('--prefetch', prefetchToUse);
+    // Always pass prefetch policy explicitly (whitelist valid policies)
+    const VALID_PREFETCH_POLICIES = ['none', 'next-line', 'stream', 'stride', 'adaptive', 'intel'];
+    const prefetchToUse = req.body.prefetch && VALID_PREFETCH_POLICIES.includes(req.body.prefetch) ? req.body.prefetch : 'none';
+    args.push('--prefetch', prefetchToUse);
 
-      // Add compiler selection if specified
-      if (req.body.compiler) {
-        const compiler = getCompiler(req.body.compiler);
-        if (compiler && compiler.path) {
-          args.push('--compiler', compiler.path);
-        }
+    // Add compiler selection if specified
+    if (req.body.compiler) {
+      const compiler = getCompiler(req.body.compiler);
+      if (compiler && compiler.path) {
+        args.push('--compiler', compiler.path);
       }
+    }
 
-      // Add sampling and limit for performance
-      if (sampleRate > 1) {
-        args.push('--sample', String(sampleRate));
-      }
-      if (eventLimit > 0) {
-        args.push('--limit', String(eventLimit));
-      }
-      // Add fast mode flag (disables 3C miss classification for ~3x speedup)
-      if (fastMode) {
-        args.push('--fast');
-      }
-      // Add segment caching flag (caches repeated loop segments for speedup)
-      if (segmentCaching) {
-        args.push('--cache-segments');
-      }
+    // Add sampling and limit for performance
+    if (sampleRate > 1) {
+      args.push('--sample', String(sampleRate));
+    }
+    if (eventLimit > 0) {
+      args.push('--limit', String(eventLimit));
+    }
+    // Add fast mode flag (disables 3C miss classification for ~3x speedup)
+    if (fastMode) {
+      args.push('--fast');
+    }
+    // Add segment caching flag (caches repeated loop segments for speedup)
+    if (segmentCaching) {
+      args.push('--cache-segments');
+    }
 
-      const proc = spawn(CACHE_EXPLORE, args);
-
-      let stdout = '';
-      let stderr = '';
-      let killed = false;
-
-      // Set up timeout
-      const timeoutId = setTimeout(() => {
-        killed = true;
-        proc.kill('SIGTERM');
-        setTimeout(() => proc.kill('SIGKILL'), 1000);
-      }, timeout);
-
-      proc.stdout.on('data', (data) => {
-        stdout += data;
-        // Prevent excessive memory usage
-        if (stdout.length > CONFIG.memory.maxOutputBuffer) {
-          killed = true;
-          proc.kill('SIGKILL');
-        }
-      });
-      proc.stderr.on('data', (data) => {
-        stderr += data;
-        // Apply same buffer limit as stdout to prevent OOM
-        if (stderr.length > CONFIG.memory.maxOutputBuffer) {
-          killed = true;
-          proc.kill('SIGKILL');
-        }
-      });
-
-      proc.on('close', (exitCode) => {
-        clearTimeout(timeoutId);
-        if (killed && exitCode !== 0) {
-          reject({ stdout, stderr, exitCode, mainFile, timeout: true, timeoutMs: timeout });
-        } else if (exitCode !== 0) {
-          reject({ stdout, stderr, exitCode, mainFile });
-        } else {
-          resolve({ stdout, stderr });
-        }
-      });
-
-      proc.on('error', (err) => {
-        clearTimeout(timeoutId);
-        reject(err);
-      });
+    const result = await runProcess(CACHE_EXPLORE, args, {
+      timeout,
+      maxOutputBuffer: CONFIG.memory.maxOutputBuffer,
+      mainFile,
     });
 
     const output = result.stdout.trim();
@@ -505,84 +464,44 @@ app.post('/compare', async (req, res) => {
     tempDir = project.tempDir;
     mainFile = project.mainFile;
 
-    const result = await new Promise((resolve, reject) => {
-      const args = ['compare', mainFile, '--configs', configList, optLevel, '--json'];
+    const args = ['compare', mainFile, '--configs', configList, optLevel, '--json'];
 
-      if (defines && Array.isArray(defines)) {
-        for (const def of defines) {
-          if (def.name && def.name.trim()) {
-            const defineStr = def.value ? `${def.name}=${def.value}` : def.name;
-            args.push('-D', defineStr);
-          }
+    if (defines && Array.isArray(defines)) {
+      for (const def of defines) {
+        if (def.name && def.name.trim()) {
+          const defineStr = def.value ? `${def.name}=${def.value}` : def.name;
+          args.push('-D', defineStr);
         }
       }
+    }
 
-      const VALID_PREFETCH_POLICIES = ['none', 'next', 'next-line', 'stream', 'stride', 'adaptive', 'intel'];
-      const prefetchToUse = prefetch && VALID_PREFETCH_POLICIES.includes(prefetch) ? prefetch : 'none';
-      args.push('--prefetch', prefetchToUse);
+    const VALID_PREFETCH_POLICIES = ['none', 'next', 'next-line', 'stream', 'stride', 'adaptive', 'intel'];
+    const prefetchToUse = prefetch && VALID_PREFETCH_POLICIES.includes(prefetch) ? prefetch : 'none';
+    args.push('--prefetch', prefetchToUse);
 
-      if (sampleRate > 1) {
-        args.push('--sample', String(sampleRate));
+    if (sampleRate > 1) {
+      args.push('--sample', String(sampleRate));
+    }
+    if (eventLimit > 0) {
+      args.push('--limit', String(eventLimit));
+    }
+    if (fastMode) {
+      args.push('--fast');
+    }
+    if (segmentCaching) {
+      args.push('--cache-segments');
+    }
+    if (req.body.compiler) {
+      const compiler = getCompiler(req.body.compiler);
+      if (compiler && compiler.path) {
+        args.push('--compiler', compiler.path);
       }
-      if (eventLimit > 0) {
-        args.push('--limit', String(eventLimit));
-      }
-      if (fastMode) {
-        args.push('--fast');
-      }
-      if (segmentCaching) {
-        args.push('--cache-segments');
-      }
-      if (req.body.compiler) {
-        const compiler = getCompiler(req.body.compiler);
-        if (compiler && compiler.path) {
-          args.push('--compiler', compiler.path);
-        }
-      }
+    }
 
-      const proc = spawn(CACHE_EXPLORE, args);
-
-      let stdout = '';
-      let stderr = '';
-      let killed = false;
-
-      const timeoutId = setTimeout(() => {
-        killed = true;
-        proc.kill('SIGTERM');
-        setTimeout(() => proc.kill('SIGKILL'), 1000);
-      }, timeout);
-
-      proc.stdout.on('data', (data) => {
-        stdout += data;
-        if (stdout.length > CONFIG.memory.maxOutputBuffer) {
-          killed = true;
-          proc.kill('SIGKILL');
-        }
-      });
-
-      proc.stderr.on('data', (data) => {
-        stderr += data;
-        if (stderr.length > CONFIG.memory.maxOutputBuffer) {
-          killed = true;
-          proc.kill('SIGKILL');
-        }
-      });
-
-      proc.on('close', (exitCode) => {
-        clearTimeout(timeoutId);
-        if (killed && exitCode !== 0) {
-          reject({ stdout, stderr, exitCode, mainFile, timeout: true, timeoutMs: timeout });
-        } else if (exitCode !== 0) {
-          reject({ stdout, stderr, exitCode, mainFile });
-        } else {
-          resolve({ stdout, stderr });
-        }
-      });
-
-      proc.on('error', (err) => {
-        clearTimeout(timeoutId);
-        reject(err);
-      });
+    const result = await runProcess(CACHE_EXPLORE, args, {
+      timeout,
+      maxOutputBuffer: CONFIG.memory.maxOutputBuffer,
+      mainFile,
     });
 
     const json = JSON.parse(result.stdout.trim());
@@ -707,88 +626,48 @@ app.post('/experiment', async (req, res) => {
     tempDir = project.tempDir;
     mainFile = project.mainFile;
 
-    const result = await new Promise((resolve, reject) => {
-      const args = ['experiment', mainFile, '--configs', configList, optLevel, '--json'];
+    const args = ['experiment', mainFile, '--configs', configList, optLevel, '--json'];
 
-      for (const variant of variantList) {
-        args.push('--variant', variant);
-      }
+    for (const variant of variantList) {
+      args.push('--variant', variant);
+    }
 
-      if (defines && Array.isArray(defines)) {
-        for (const def of defines) {
-          if (def.name && def.name.trim()) {
-            const defineStr = def.value ? `${def.name}=${def.value}` : def.name;
-            args.push('-D', defineStr);
-          }
+    if (defines && Array.isArray(defines)) {
+      for (const def of defines) {
+        if (def.name && def.name.trim()) {
+          const defineStr = def.value ? `${def.name}=${def.value}` : def.name;
+          args.push('-D', defineStr);
         }
       }
+    }
 
-      const VALID_PREFETCH_POLICIES = ['none', 'next', 'next-line', 'stream', 'stride', 'adaptive', 'intel'];
-      const prefetchToUse = prefetch && VALID_PREFETCH_POLICIES.includes(prefetch) ? prefetch : 'none';
-      args.push('--prefetch', prefetchToUse);
+    const VALID_PREFETCH_POLICIES = ['none', 'next', 'next-line', 'stream', 'stride', 'adaptive', 'intel'];
+    const prefetchToUse = prefetch && VALID_PREFETCH_POLICIES.includes(prefetch) ? prefetch : 'none';
+    args.push('--prefetch', prefetchToUse);
 
-      if (sampleRate > 1) {
-        args.push('--sample', String(sampleRate));
+    if (sampleRate > 1) {
+      args.push('--sample', String(sampleRate));
+    }
+    if (eventLimit > 0) {
+      args.push('--limit', String(eventLimit));
+    }
+    if (fastMode) {
+      args.push('--fast');
+    }
+    if (segmentCaching) {
+      args.push('--cache-segments');
+    }
+    if (req.body.compiler) {
+      const compiler = getCompiler(req.body.compiler);
+      if (compiler && compiler.path) {
+        args.push('--compiler', compiler.path);
       }
-      if (eventLimit > 0) {
-        args.push('--limit', String(eventLimit));
-      }
-      if (fastMode) {
-        args.push('--fast');
-      }
-      if (segmentCaching) {
-        args.push('--cache-segments');
-      }
-      if (req.body.compiler) {
-        const compiler = getCompiler(req.body.compiler);
-        if (compiler && compiler.path) {
-          args.push('--compiler', compiler.path);
-        }
-      }
+    }
 
-      const proc = spawn(CACHE_EXPLORE, args);
-
-      let stdout = '';
-      let stderr = '';
-      let killed = false;
-
-      const timeoutId = setTimeout(() => {
-        killed = true;
-        proc.kill('SIGTERM');
-        setTimeout(() => proc.kill('SIGKILL'), 1000);
-      }, timeout);
-
-      proc.stdout.on('data', (data) => {
-        stdout += data;
-        if (stdout.length > CONFIG.memory.maxOutputBuffer) {
-          killed = true;
-          proc.kill('SIGKILL');
-        }
-      });
-
-      proc.stderr.on('data', (data) => {
-        stderr += data;
-        if (stderr.length > CONFIG.memory.maxOutputBuffer) {
-          killed = true;
-          proc.kill('SIGKILL');
-        }
-      });
-
-      proc.on('close', (exitCode) => {
-        clearTimeout(timeoutId);
-        if (killed && exitCode !== 0) {
-          reject({ stdout, stderr, exitCode, mainFile, timeout: true, timeoutMs: timeout });
-        } else if (exitCode !== 0) {
-          reject({ stdout, stderr, exitCode, mainFile });
-        } else {
-          resolve({ stdout, stderr });
-        }
-      });
-
-      proc.on('error', (err) => {
-        clearTimeout(timeoutId);
-        reject(err);
-      });
+    const result = await runProcess(CACHE_EXPLORE, args, {
+      timeout,
+      maxOutputBuffer: CONFIG.memory.maxOutputBuffer,
+      mainFile,
     });
 
     const json = JSON.parse(result.stdout.trim());
