@@ -236,7 +236,7 @@
 
 .batch-modal {
   width: 90%;
-  max-width: 700px;
+  max-width: 920px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -281,6 +281,7 @@
   padding: var(--space-4);
   max-height: 400px;
   overflow-y: auto;
+  overflow-x: auto;
 }
 
 .batch-loading {
@@ -331,3 +332,43 @@
   color: var(--signal-warning);
 }
 
+.batch-results-table .source-cell {
+  max-width: 180px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.batch-results-table .bottleneck-chip {
+  display: inline-flex;
+  align-items: center;
+  min-width: 76px;
+  justify-content: center;
+  padding: 2px var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  background: var(--surface);
+  text-transform: capitalize;
+}
+
+.batch-results-table .bottleneck-chip.memory {
+  color: var(--signal-warning);
+  border-color: color-mix(in srgb, var(--signal-warning) 45%, var(--border));
+}
+
+.batch-results-table .bottleneck-chip.branch {
+  color: var(--signal-critical);
+  border-color: color-mix(in srgb, var(--signal-critical) 45%, var(--border));
+}
+
+.batch-results-table .bottleneck-chip.frontend {
+  color: var(--signal-info);
+  border-color: color-mix(in srgb, var(--signal-info) 45%, var(--border));
+}
+
+.batch-results-table .bottleneck-chip.balanced {
+  color: var(--signal-success);
+  border-color: color-mix(in srgb, var(--signal-success) 45%, var(--border));
+}

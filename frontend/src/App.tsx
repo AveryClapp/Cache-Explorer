@@ -52,6 +52,7 @@ function annotationBadge(annotation: SourceAnnotation) {
   return `${subsystem} ${share}%`
 }
 
+const BATCH_HARDWARE_CONFIGS = ['educational', 'intel', 'amd', 'apple']
 
 function App() {
   // Embed mode detection from URL params
@@ -606,25 +607,34 @@ function App() {
   const isLoading = stage !== 'idle'
 
   // Batch analysis - compare same code across multiple hardware presets
-  const runBatchAnalysis = async () => {
-    const configs = ['educational', 'intel', 'amd', 'apple']
+  const runBatchAnalysis = useCallback(async () => {
     setBatchResults([])
     setBatchRunning(true)
     setShowBatchModal(true)
 
-    for (const cfg of configs) {
+    for (const cfg of BATCH_HARDWARE_CONFIGS) {
       try {
-        const payload = {
-          code: files.length > 1 ? files.map(f => f.code).join('\n// --- FILE SEPARATOR ---\n') : files[0].code,
-          language: files[0].language,
+        const payload: Record<string, unknown> = {
           config: cfg,
           optLevel,
-          prefetch: prefetchPolicy,
-          sampleRate,
-          eventLimit,
-          fastMode,
-          cacheSegments,
         }
+
+        if (files.length === 1) {
+          payload.code = files[0].code
+          payload.language = files[0].language
+        } else {
+          payload.files = files.map(f => ({ name: f.name, code: f.code, language: f.language }))
+          payload.language = files[0].language
+        }
+
+        if (defines.length > 0) payload.defines = defines.filter(d => d.name.trim())
+        if (prefetchPolicy !== 'none') payload.prefetch = prefetchPolicy
+        if (sampleRate > 1) payload.sample = sampleRate
+        payload.limit = eventLimit
+        if (selectedCompiler) payload.compiler = selectedCompiler
+        if (fastMode) payload.fast = true
+        if (cacheSegments) payload.cacheSegments = true
+
         const response = await fetch(`${API_BASE}/compile`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -639,7 +649,7 @@ function App() {
       }
     }
     setBatchRunning(false)
-  }
+  }, [cacheSegments, defines, eventLimit, fastMode, files, optLevel, prefetchPolicy, sampleRate, selectedCompiler])
 
   const commands: CommandItem[] = useMemo(() => [
     // Actions (@)
@@ -663,7 +673,7 @@ function App() {
     { id: 'limit-1m', icon: '*', label: 'Event limit: 1M', action: () => setEventLimit(1000000), category: 'config' },
     { id: 'limit-5m', icon: '*', label: 'Event limit: 5M', action: () => setEventLimit(5000000), category: 'config' },
     { id: 'limit-none', icon: '*', label: 'Event limit: None', action: () => setEventLimit(0), category: 'config' },
-  ], [isLoading, activeFileId, vimMode, diffMode, baselineResult, config, files, result, code, handleShare, updateActiveLanguage, setBaselineFromHook, clearBaselineHook])
+  ], [isLoading, activeFileId, vimMode, diffMode, baselineResult, config, files, result, code, handleShare, updateActiveLanguage, setBaselineFromHook, clearBaselineHook, runBatchAnalysis])
 
   // Command palette handlers
   const handleCommandSelect = useCallback((cmd: CommandItem) => {
@@ -700,6 +710,7 @@ function App() {
         <BatchResultsModal
           results={batchResults}
           running={batchRunning}
+          total={BATCH_HARDWARE_CONFIGS.length}
           onClose={() => setShowBatchModal(false)}
         />
       )}
