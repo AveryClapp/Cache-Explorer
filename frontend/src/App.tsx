@@ -768,6 +768,16 @@ function App() {
     })
   }, [])
 
+  const compareHardwareRunSet = useCallback(() => {
+    setShowHardwareExplorer(false)
+    void runBatchAnalysis()
+  }, [runBatchAnalysis])
+
+  const openExperimentFromExplorer = useCallback(() => {
+    setShowHardwareExplorer(false)
+    setShowExperimentModal(true)
+  }, [])
+
   const runExperimentAnalysis = useCallback(async () => {
     const variants = parseExperimentVariants(experimentVariants)
     if (variants.length === 0) {
@@ -896,6 +906,8 @@ function App() {
           onSelect={setSelectedHardwareProfileId}
           onApply={applyHardwareProfile}
           onToggleRunConfig={toggleRunHardwareConfig}
+          onCompareRunSet={compareHardwareRunSet}
+          onOpenExperiment={openExperimentFromExplorer}
           onRefresh={loadHardwareProfiles}
           onClose={() => setShowHardwareExplorer(false)}
         />

@@ -11,6 +11,8 @@ interface HardwareExplorerModalProps {
   onSelect: (id: string) => void
   onApply: (id: string) => void
   onToggleRunConfig: (id: string) => void
+  onCompareRunSet: () => void
+  onOpenExperiment: () => void
   onRefresh: () => void
   onClose: () => void
 }
@@ -36,6 +38,8 @@ export function HardwareExplorerModal({
   onSelect,
   onApply,
   onToggleRunConfig,
+  onCompareRunSet,
+  onOpenExperiment,
   onRefresh,
   onClose,
 }: HardwareExplorerModalProps) {
@@ -48,6 +52,20 @@ export function HardwareExplorerModal({
           <span className="batch-modal-title">Hardware Explorer</span>
           <div className="hardware-explorer-actions">
             <span className="hardware-run-set-count">{runConfigIds.length} selected</span>
+            <button
+              className="btn"
+              onClick={onCompareRunSet}
+              disabled={loading || runConfigIds.length === 0}
+            >
+              Compare Set
+            </button>
+            <button
+              className="btn"
+              onClick={onOpenExperiment}
+              disabled={loading || runConfigIds.length === 0}
+            >
+              Experiment
+            </button>
             <button
               className="btn"
               onClick={() => selected && onApply(selected.id)}
