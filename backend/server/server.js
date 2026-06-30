@@ -13,6 +13,7 @@ import { initDb, createShortUrl, getShortUrl, isHealthy as isDbHealthy, getDbSta
 import { getCachedResult, cacheResult, startCachePruning } from './cache.js';
 import { incCounter, setGauge, recordDuration, getPrometheusMetrics, getHealthStatus } from './metrics.js';
 import { discoverCompilers, getCompiler, getDefaultCompiler } from './compilers.js';
+import { listHardwareProfiles, getHardwareProfile } from './hardwareProfiles.js';
 
 // Modular imports (gradually migrating to these)
 import { CONFIG } from './config.js';
@@ -147,6 +148,23 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 // ============================================================================
 // HTTP Endpoints
 // ============================================================================
+
+app.get('/profiles', (req, res) => {
+  incCounter('requests', { type: 'profiles' });
+  res.json({ profiles: listHardwareProfiles() });
+});
+
+app.get('/profiles/:id', (req, res) => {
+  incCounter('requests', { type: 'profiles' });
+  const profile = getHardwareProfile(req.params.id);
+  if (!profile) {
+    return res.status(404).json({
+      type: 'not_found',
+      message: `Unknown hardware profile: ${req.params.id}`,
+    });
+  }
+  res.json(profile);
+});
 
 app.post('/compile', async (req, res) => {
   const startTime = Date.now();

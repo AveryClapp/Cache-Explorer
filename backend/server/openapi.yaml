@@ -18,12 +18,58 @@ servers:
 tags:
   - name: profiling
     description: Code compilation and cache profiling endpoints
+  - name: hardware
+    description: Hardware profile catalog and model details
   - name: sharing
     description: URL shortening and code sharing endpoints
   - name: monitoring
     description: Health checks and metrics endpoints
 
 paths:
+  /profiles:
+    get:
+      tags:
+        - hardware
+      summary: List hardware profiles
+      description: |
+        Returns the hardware profiles supported by the simulator, including cache geometry,
+        TLB defaults, prefetch capabilities, execution-core assumptions, memory latency,
+        and topology details.
+      responses:
+        '200':
+          description: Supported hardware profiles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HardwareProfilesResponse'
+
+  /profiles/{id}:
+    get:
+      tags:
+        - hardware
+      summary: Get one hardware profile
+      description: Returns a single hardware profile by canonical id or supported alias.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: intel14
+      responses:
+        '200':
+          description: Hardware profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HardwareProfile'
+        '404':
+          description: Unknown hardware profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompileError'
+
   /compile:
     post:
       tags:
@@ -479,6 +525,212 @@ paths:
 
 components:
   schemas:
+    HardwareProfilesResponse:
+      type: object
+      properties:
+        profiles:
+          type: array
+          items:
+            $ref: '#/components/schemas/HardwareProfile'
+
+    HardwareProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          example: intel14
+        aliases:
+          type: array
+          items:
+            type: string
+          example: [intel14]
+        displayName:
+          type: string
+          example: Intel 14th Gen
+        vendor:
+          type: string
+          example: Intel
+        architecture:
+          type: string
+          example: x86_64
+        class:
+          type: string
+          example: client
+        modelConfidence:
+          type: string
+          example: directional
+        notes:
+          type: string
+          nullable: true
+        details:
+          $ref: '#/components/schemas/HardwareProfileDetails'
+
+    HardwareProfileDetails:
+      type: object
+      properties:
+        cache:
+          type: object
+          properties:
+            inclusion:
+              type: string
+              example: non-inclusive-non-exclusive
+            levels:
+              type: object
+              properties:
+                l1d:
+                  $ref: '#/components/schemas/HardwareProfileCacheLevel'
+                l1i:
+                  $ref: '#/components/schemas/HardwareProfileCacheLevel'
+                l2:
+                  $ref: '#/components/schemas/HardwareProfileCacheLevel'
+                l3:
+                  $ref: '#/components/schemas/HardwareProfileCacheLevel'
+        tlb:
+          type: object
+          properties:
+            dtlb:
+              $ref: '#/components/schemas/HardwareProfileTlb'
+            itlb:
+              $ref: '#/components/schemas/HardwareProfileTlb'
+        prefetch:
+          $ref: '#/components/schemas/HardwareProfilePrefetch'
+        executionCore:
+          $ref: '#/components/schemas/HardwareProfileExecutionCore'
+        memory:
+          $ref: '#/components/schemas/HardwareProfileMemory'
+        topology:
+          $ref: '#/components/schemas/HardwareProfileTopology'
+
+    HardwareProfileCacheLevel:
+      type: object
+      properties:
+        sizeKB:
+          type: integer
+          example: 48
+        associativity:
+          type: integer
+          example: 12
+        lineSize:
+          type: integer
+          example: 64
+        sets:
+          type: integer
+          example: 64
+        replacement:
+          type: string
+          example: pseudo-lru
+        writePolicy:
+          type: string
+          example: write-back
+
+    HardwareProfileTlb:
+      type: object
+      properties:
+        entries:
+          type: integer
+          example: 64
+        associativity:
+          type: integer
+          example: 4
+        pageSize:
+          type: integer
+          example: 4096
+
+    HardwareProfilePrefetch:
+      type: object
+      properties:
+        activePolicy:
+          type: string
+          example: adaptive
+        activeDegree:
+          type: integer
+          example: 4
+        l1Stream:
+          type: boolean
+        l1Stride:
+          type: boolean
+        l1Degree:
+          type: integer
+        l2Stream:
+          type: boolean
+        l2Adjacent:
+          type: boolean
+        l2Degree:
+          type: integer
+        l2Streams:
+          type: integer
+        l2MaxDistance:
+          type: integer
+        l3Prefetch:
+          type: boolean
+        pointerPrefetch:
+          type: boolean
+        dynamicDegree:
+          type: boolean
+
+    HardwareProfileExecutionCore:
+      type: object
+      properties:
+        model:
+          type: string
+          example: analytical-ooo
+        issueWidth:
+          type: integer
+          example: 4
+        robSize:
+          type: integer
+          example: 192
+        hideableCycles:
+          type: integer
+          example: 48
+        branchMispredictPenalty:
+          type: integer
+          example: 14
+        branchPredictor:
+          type: string
+          example: bimodal-2bit
+        branchPredictorEntries:
+          type: integer
+          example: 1024
+
+    HardwareProfileMemory:
+      type: object
+      properties:
+        l1HitCycles:
+          type: integer
+          example: 4
+        l2HitCycles:
+          type: integer
+          example: 12
+        l3HitCycles:
+          type: integer
+          example: 40
+        dramCycles:
+          type: integer
+          example: 200
+        tlbMissPenaltyCycles:
+          type: integer
+          example: 7
+
+    HardwareProfileTopology:
+      type: object
+      properties:
+        activeCores:
+          type: integer
+          example: 1
+        l1Scope:
+          type: string
+          example: private-per-core
+        l2Scope:
+          type: string
+          example: private-to-modeled-core
+        l3Scope:
+          type: string
+          example: shared-last-level
+        coherence:
+          type: string
+          example: not-applicable
+
     CompileRequest:
       type: object
       properties:
