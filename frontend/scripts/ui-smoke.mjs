@@ -534,6 +534,12 @@ function mockResultWithContract() {
   }
 }
 
+function mockLegacyResultWithContract() {
+  const result = mockResultWithContract()
+  delete result.provenance
+  return result
+}
+
 async function verifyResultTrustPanel(url) {
   await page.route('**/compile', async route => {
     await route.fulfill({
@@ -558,6 +564,29 @@ async function verifyResultTrustPanel(url) {
   await assertVisible(panel.getByText('Unsupported', { exact: true }), 'unsupported contract bucket')
   await assertVisible(panel.getByText('1 not modeled', { exact: true }), 'unsupported contract count')
   await assertVisible(panel.getByText('Repro Command', { exact: true }), 'repro command')
+
+  await page.unroute('**/compile')
+}
+
+async function verifyLegacyResultTrustPanel(url) {
+  await page.route('**/compile', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(mockLegacyResultWithContract()),
+    })
+  })
+
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await page.goto(url, { waitUntil: 'domcontentloaded' })
+  await page.getByRole('button', { name: 'Execute' }).click()
+
+  const panel = page.locator('.result-provenance-panel')
+  await assertVisible(panel.getByText('Result Fidelity', { exact: true }), 'legacy result fidelity panel')
+  await assertVisible(panel.getByText('Legacy', { exact: true }), 'legacy fidelity chip')
+  await assertVisible(panel.getByText('Provenance metadata unavailable for this result.', { exact: true }), 'legacy provenance caveat')
+  await assertVisible(panel.getByText('Modeled', { exact: true }), 'legacy modeled contract bucket')
+  assert(await panel.getByText('Repro Command', { exact: true }).count() === 0, 'legacy result should not show repro command')
 
   await page.unroute('**/compile')
 }
@@ -973,6 +1002,7 @@ try {
 
   await runSmokeStep('launch surface', () => verifyLaunchSurface(url))
   await runSmokeStep('result trust panel', () => verifyResultTrustPanel(url))
+  await runSmokeStep('legacy result trust panel', () => verifyLegacyResultTrustPanel(url))
   await runSmokeStep('workload catalog', () => verifyWorkloadCatalogControls(url))
   await runSmokeStep('experiment results', () => verifyExperimentResults(url))
   await runSmokeStep('share round trip', () => verifyShareRoundTrip(url))

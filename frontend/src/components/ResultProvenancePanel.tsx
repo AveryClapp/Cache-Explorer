@@ -21,9 +21,10 @@ interface ResultProvenancePanelProps {
 export function ResultProvenancePanel({ result }: ResultProvenancePanelProps) {
   const [copiedCommand, setCopiedCommand] = useState(false)
   const provenance = result.provenance
-  if (!provenance) return null
 
-  const caveats = provenance.caveats.slice(0, 3)
+  const caveats = provenance
+    ? provenance.caveats.slice(0, 3)
+    : ['Provenance metadata unavailable for this result.']
   const reproCommand = buildReproCommand(result)
   const modelContract = summarizeModelContract(result.profile)
 
@@ -60,7 +61,7 @@ export function ResultProvenancePanel({ result }: ResultProvenancePanelProps) {
             <span className="provenance-label">Executor</span>
             <span className="provenance-value">
               {formatExecutor(provenance)}
-              {provenance.cached ? ' / cached' : ''}
+              {provenance?.cached ? ' / cached' : ''}
             </span>
           </div>
           <div className="provenance-item">
