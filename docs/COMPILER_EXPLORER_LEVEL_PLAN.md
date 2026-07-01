@@ -78,6 +78,8 @@ Already in place:
   cannot silently fall back to browser defaults.
 - Docker deployment proxies the product API surface and exposes backend/frontend
   health checks.
+- Expensive HTTP product routes enforce the same configured request window as
+  WebSocket runs, while health and metrics stay probe-friendly.
 - Releases publish LLVM pass checksums and the download helper verifies them
   when available, with strict verification available for CI or locked-down use.
 - Release assets are covered by GitHub artifact attestations so downloaded pass

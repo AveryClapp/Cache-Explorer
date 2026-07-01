@@ -22,7 +22,13 @@ import { runManagedProcess, runProcess } from './services/processRunner.js';
 import { createTempProject, cleanupTempProject, cleanupOrphanedTempDirs } from './services/tempProject.js';
 import { workloadProcessErrorResponse } from './services/workloadErrors.js';
 import { loadWorkloadHistory } from './services/workloadHistory.js';
-import { ConnectionResourceTracker, connectionResources, getOrCreateTracker, removeTracker } from './middleware/resourceTracker.js';
+import {
+  ConnectionResourceTracker,
+  connectionResources,
+  createHttpRateLimitMiddleware,
+  getOrCreateTracker,
+  removeTracker,
+} from './middleware/resourceTracker.js';
 
 // CONFIG is now imported from ./config.js
 
@@ -161,6 +167,21 @@ function aggregateProvenance(existing = {}, next) {
     },
     caveats: uniqueCaveats([...(existing.caveats || []), ...(next.caveats || [])]),
   };
+}
+
+const RATE_LIMITED_HTTP_ROUTES = [
+  { method: 'POST', pattern: /^\/compile$/ },
+  { method: 'POST', pattern: /^\/compare$/ },
+  { method: 'POST', pattern: /^\/experiment$/ },
+  { method: 'POST', pattern: /^\/shorten$/ },
+  { method: 'POST', pattern: /^\/api\/share$/ },
+  { method: 'GET', pattern: /^\/api\/workloads\/verify$/ },
+];
+
+function isRateLimitedHttpRequest(req) {
+  return RATE_LIMITED_HTTP_ROUTES.some(route =>
+    route.method === req.method && route.pattern.test(req.path)
+  );
 }
 
 function httpError(status, message, type = 'validation_error') {
@@ -307,8 +328,12 @@ if (process.env.ENABLE_SANDBOX) {
 // ============================================================================
 
 const app = express();
+if (CONFIG.server.trustProxy) {
+  app.set('trust proxy', true);
+}
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
+app.use(createHttpRateLimitMiddleware({ shouldLimit: isRateLimitedHttpRequest }));
 
 const server = createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });

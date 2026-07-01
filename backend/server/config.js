@@ -43,6 +43,7 @@ export const CONFIG = {
   server: {
     port: parseInt(process.env.PORT) || 3001,
     host: process.env.HOST || '0.0.0.0',
+    trustProxy: process.env.TRUST_PROXY === '1' || process.env.TRUST_PROXY === 'true',
   },
 
   // Paths

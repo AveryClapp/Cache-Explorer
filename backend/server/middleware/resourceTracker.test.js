@@ -2,7 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { CONFIG } from '../config.js';
-import { ConnectionResourceTracker } from './resourceTracker.js';
+import {
+  ConnectionResourceTracker,
+  createHttpRateLimitMiddleware,
+  httpRateTrackers,
+} from './resourceTracker.js';
 
 test('ConnectionResourceTracker enforces per-window request limits', () => {
   const tracker = new ConnectionResourceTracker('rate-test');
@@ -50,4 +54,71 @@ test('ConnectionResourceTracker cleanup kills processes and removes temp dirs', 
   assert.deepEqual(removedDirs, ['/tmp/cache-explorer-cleanup']);
   assert.equal(tracker.processes.size, 0);
   assert.equal(tracker.tempDirs.size, 0);
+});
+
+function mockResponse() {
+  return {
+    headers: {},
+    statusCode: 200,
+    body: null,
+    set(name, value) {
+      this.headers[name] = value;
+      return this;
+    },
+    status(code) {
+      this.statusCode = code;
+      return this;
+    },
+    json(body) {
+      this.body = body;
+      return this;
+    },
+  };
+}
+
+test('HTTP rate limit middleware rejects requests after the configured window quota', () => {
+  httpRateTrackers.clear();
+  const middleware = createHttpRateLimitMiddleware({
+    shouldLimit: req => req.path === '/compile',
+  });
+  const req = {
+    method: 'POST',
+    path: '/compile',
+    ip: '127.0.0.1',
+    headers: {},
+    socket: {},
+  };
+  let nextCalls = 0;
+
+  for (let i = 0; i < CONFIG.rateLimit.maxRequestsPerMinute; i += 1) {
+    middleware(req, mockResponse(), () => { nextCalls += 1; });
+  }
+
+  const limited = mockResponse();
+  middleware(req, limited, () => { nextCalls += 1; });
+
+  assert.equal(nextCalls, CONFIG.rateLimit.maxRequestsPerMinute);
+  assert.equal(limited.statusCode, 429);
+  assert.equal(limited.headers['Retry-After'], String(Math.ceil(CONFIG.rateLimit.windowMs / 1000)));
+  assert.equal(limited.body.type, 'rate_limit');
+});
+
+test('HTTP rate limit middleware skips routes outside the limiter predicate', () => {
+  httpRateTrackers.clear();
+  const middleware = createHttpRateLimitMiddleware({
+    shouldLimit: req => req.path === '/compile',
+  });
+  const req = {
+    method: 'GET',
+    path: '/health',
+    ip: '127.0.0.1',
+    headers: {},
+    socket: {},
+  };
+  let nextCalls = 0;
+
+  middleware(req, mockResponse(), () => { nextCalls += 1; });
+
+  assert.equal(nextCalls, 1);
+  assert.equal(httpRateTrackers.size, 0);
 });
