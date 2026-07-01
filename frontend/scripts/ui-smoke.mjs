@@ -165,6 +165,89 @@ async function verifyLaunchSurface(url) {
   assert((mobileLayout.emptyScrollDelta ?? 0) <= maxLayoutScrollDelta, `mobile launch surface scrolls by ${mobileLayout.emptyScrollDelta}px`)
 }
 
+async function verifyWorkloadCatalogControls(url) {
+  const mockWorkloads = [
+    {
+      id: 'conv2d-intel14',
+      description: 'Direct versus tiled Conv2D locality on Intel 14th Gen.',
+      example: 'examples/conv2d_kernel.c',
+      optLevel: '-O2',
+      config: 'intel14',
+      limit: 200000,
+      variants: [
+        { id: 'direct' },
+        { id: 'tiled', defines: ['RUN_TILED=1'] },
+      ],
+      expectedRelationships: [
+        { metric: 'l2.hitRate', relationship: 'tiled > direct' },
+      ],
+    },
+    {
+      id: 'prefetch-stream-intel',
+      description: 'Sequential scan with stream prefetching enabled.',
+      example: 'examples/sequential_scan.c',
+      optLevel: '-O2',
+      config: 'intel14',
+      limit: 100000,
+      prefetch: 'stream',
+      variants: [
+        { id: 'prefetch-off', prefetch: 'none' },
+        { id: 'prefetch-stream', prefetch: 'stream' },
+      ],
+      expectedRelationships: [
+        { metric: 'estimatedCycles', relationship: 'prefetch-stream < prefetch-off' },
+      ],
+    },
+    {
+      id: 'hash-probe-zen4',
+      description: 'Hash-table probe pattern on Zen 4.',
+      example: 'examples/hash_probe.c',
+      optLevel: '-O3',
+      config: 'zen4',
+      limit: 150000,
+      variants: [
+        { id: 'linear' },
+        { id: 'quadratic' },
+      ],
+      expectedRelationships: [
+        { metric: 'l1d.misses', relationship: 'linear < quadratic' },
+      ],
+    },
+  ]
+
+  await page.route('**/api/workloads', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ workloads: mockWorkloads }),
+  }))
+
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await page.goto(url, { waitUntil: 'domcontentloaded' })
+  await page.getByRole('button', { name: 'Workloads' }).click()
+  await assertVisible(page.getByText('Verified Workloads', { exact: true }), 'workload catalog modal')
+  await assertVisible(page.getByText('conv2d-intel14', { exact: true }), 'conv2d workload row')
+  await assertVisible(page.getByText('3 / 3', { exact: true }), 'workload result count')
+
+  await page.getByLabel('Search workloads').fill('prefetch')
+  await assertVisible(page.getByText('prefetch-stream-intel', { exact: true }), 'searched workload row')
+  assert(await page.getByText('1 / 3', { exact: true }).isVisible(), 'search should narrow workload count')
+  assert(await page.getByText('conv2d-intel14', { exact: true }).count() === 0, 'search should hide unmatched workloads')
+
+  await page.getByLabel('Filter workloads by hardware target').selectOption('zen4')
+  await assertVisible(page.getByText('No matching workloads', { exact: true }), 'filtered empty state')
+
+  await page.getByRole('button', { name: 'Clear filters' }).click()
+  await assertVisible(page.getByText('3 / 3', { exact: true }), 'cleared workload result count')
+
+  await page.getByLabel('Filter workloads by hardware target').selectOption('zen4')
+  await assertVisible(page.getByText('hash-probe-zen4', { exact: true }), 'target-filtered workload row')
+  assert(await page.getByText('1 / 3', { exact: true }).isVisible(), 'target filter should narrow workload count')
+
+  await page.getByLabel('Sort workloads').selectOption('variants')
+  await closeModal()
+  await page.unroute('**/api/workloads')
+}
+
 async function cleanup() {
   if (browser) await browser.close().catch(() => {})
   if (previewProcess) {
@@ -197,6 +280,7 @@ try {
   page = await browser.newPage()
 
   await verifyLaunchSurface(url)
+  await verifyWorkloadCatalogControls(url)
   console.log(`UI smoke passed (${url})`)
 } catch (error) {
   if (page) {

@@ -19,7 +19,8 @@ Already in place:
   frontend build/browser smoke coverage, and server tests in CI.
 - Share links that preserve multi-file projects, active/main file identity, run
   settings, and experiment setup.
-- Verified workload browser in the app, backed by product-facing workload APIs.
+- Verified workload browser in the app, backed by product-facing workload APIs,
+  with search, status filtering, hardware-target filtering, and sorting.
 - Workload-driven experiments for same-source define variants and per-variant
   source comparisons.
 - Workload verification can emit compact benchmark-history JSON artifacts and
@@ -32,8 +33,8 @@ Already in place:
 
 Known gaps:
 
-- Workload catalog still needs more sorting, search, hashing, and threaded
-  real-world kernels before it can act as a broad regression corpus.
+- Workload catalog still needs hashing and threaded real-world kernels before
+  it can act as a broad regression corpus.
 - There is no hosted persistent regression dashboard beyond downloadable CI
   trend reports.
 - Deployment/package polish is still developer-oriented.
