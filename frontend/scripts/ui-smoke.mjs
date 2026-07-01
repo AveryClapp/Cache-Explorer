@@ -129,6 +129,16 @@ async function assertVisible(locator, label) {
   assert(await locator.isVisible(), `${label} is not visible`)
 }
 
+async function waitForRequestCount(requests, count, label) {
+  const startedAt = Date.now()
+  while (requests.length < count) {
+    if (Date.now() - startedAt > 5000) {
+      throw new Error(`${label} did not reach ${count} requests; saw ${requests.length}`)
+    }
+    await delay(50)
+  }
+}
+
 function workloadName(id) {
   return page.locator('.workload-row .workload-name').filter({ hasText: id })
 }
@@ -160,6 +170,58 @@ async function closeModal() {
 }
 
 async function verifyLaunchSurface(url) {
+  await page.route('**/profiles', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        profiles: [
+          {
+            id: 'educational',
+            aliases: ['teaching-l1'],
+            displayName: 'Educational',
+            vendor: 'Generic',
+            architecture: 'teaching',
+            class: 'teaching',
+            modelConfidence: 'educational',
+            validation: {
+              source: 'Local perf smoke',
+              confidence: 'educational',
+              caveats: ['L1 validated on local perf counters'],
+            },
+            modelContract: {
+              version: 1,
+              statusTerms: {},
+              fields: {
+                cacheHierarchy: {
+                  subsystem: 'cache',
+                  status: 'calibrated',
+                  drivesSimulation: true,
+                  resultSurface: ['levels'],
+                  description: 'Cache sizes and associativity',
+                },
+                prefetch: {
+                  subsystem: 'prefetch',
+                  status: 'estimated',
+                  drivesSimulation: true,
+                  resultSurface: ['prefetch'],
+                  description: 'Prefetch policy',
+                },
+                topology: {
+                  subsystem: 'topology',
+                  status: 'metadata-only',
+                  drivesSimulation: false,
+                  resultSurface: ['profile'],
+                  description: 'Topology metadata',
+                },
+              },
+            },
+          },
+        ],
+      }),
+    })
+  })
+
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto(url, { waitUntil: 'domcontentloaded' })
   const environmentStatus = page.locator('.environment-status')
@@ -186,7 +248,13 @@ async function verifyLaunchSurface(url) {
   assert((desktopLayout.emptyScrollDelta ?? 0) <= maxLayoutScrollDelta, `desktop launch surface scrolls by ${desktopLayout.emptyScrollDelta}px`)
 
   await page.getByRole('button', { name: /Hardware map/ }).click()
-  await assertVisible(page.getByText('Hardware Explorer', { exact: true }), 'hardware modal')
+  const hardwareModal = page.locator('.hardware-explorer-modal')
+  await assertVisible(hardwareModal.getByText('Hardware Explorer', { exact: true }), 'hardware modal')
+  await assertVisible(hardwareModal.getByText('Trust Snapshot', { exact: true }), 'hardware trust snapshot')
+  await assertVisible(hardwareModal.getByText('2/3', { exact: true }), 'hardware driven field count')
+  await assertVisible(hardwareModal.getByText('Local perf smoke', { exact: true }), 'hardware validation source')
+  await assertVisible(hardwareModal.getByText('teaching-l1', { exact: true }), 'hardware aliases')
+  await assertVisible(hardwareModal.getByText('L1 validated on local perf counters', { exact: true }), 'hardware validation caveat')
   await closeModal()
 
   await page.getByRole('button', { name: /Experiment matrix/ }).click()
@@ -203,6 +271,8 @@ async function verifyLaunchSurface(url) {
   assert(mobileLayout.pathCount === 4, `expected 4 mobile launch paths, saw ${mobileLayout.pathCount}`)
   assert(!mobileLayout.pathOverflow, `mobile launch paths overflow: ${JSON.stringify(mobileLayout.paths)}`)
   assert((mobileLayout.emptyScrollDelta ?? 0) <= maxLayoutScrollDelta, `mobile launch surface scrolls by ${mobileLayout.emptyScrollDelta}px`)
+
+  await page.unroute('**/profiles')
 }
 
 async function verifyWorkloadCatalogControls(url) {
@@ -465,7 +535,9 @@ async function verifyWorkloadCatalogControls(url) {
   await assertVisible(page.getByText('3 / 3', { exact: true }), 'workload result count')
   assert(await workloadName('false-sharing-stress-intel').count() === 0, 'stress workload should be excluded by default')
 
+  const defaultVerifyRequestCount = verificationRequests.length + 1
   await page.getByRole('button', { name: 'Verify' }).click()
+  await waitForRequestCount(verificationRequests, defaultVerifyRequestCount, 'default verification')
   assert(verificationRequests.at(-1) === '', `default verification should not include stress: ${verificationRequests.at(-1)}`)
   await assertVisible(page.getByText('2 passed / 2 failed', { exact: true }), 'verification summary chip')
   const timeoutRow = page.locator('.workload-row').filter({ hasText: 'prefetch-stream-intel' })
@@ -499,7 +571,9 @@ async function verifyWorkloadCatalogControls(url) {
   await assertVisible(stressRow.getByText('stress', { exact: true }), 'stress workload badge')
   assert(workloadRequests.at(-1) === '?includeStress=1', `stress catalog request missing opt-in: ${workloadRequests.at(-1)}`)
 
+  const stressVerifyRequestCount = verificationRequests.length + 1
   await page.getByRole('button', { name: 'Verify' }).click()
+  await waitForRequestCount(verificationRequests, stressVerifyRequestCount, 'stress verification')
   const stressVerifyParams = new URLSearchParams(verificationRequests.at(-1))
   assert(stressVerifyParams.get('includeStress') === '1', `stress verification request missing opt-in: ${verificationRequests.at(-1)}`)
   assert(stressVerifyParams.get('variantTimeoutMs') === '30000', `stress verification request missing timeout: ${verificationRequests.at(-1)}`)

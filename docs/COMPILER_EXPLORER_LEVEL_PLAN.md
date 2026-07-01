@@ -16,6 +16,9 @@ Already in place:
   fidelity settings.
 - Result Fidelity surfaces the hardware model contract as modeled, estimated,
   metadata-only, and unsupported buckets directly in the result panel.
+- Hardware Explorer surfaces a trust snapshot for each profile with driven
+  model fields, calibrated/estimated/metadata counts, validation source,
+  aliases, and caveats.
 - Result Fidelity remains visible for legacy or partial results that lack
   provenance, showing unknown fields instead of hiding the trust boundary.
 - Copyable local repro commands from result provenance.

@@ -30,6 +30,28 @@ function cacheSummary(profile: HardwareProfile) {
   return `L1D ${formatSize(levels.l1d.sizeKB)} / L2 ${formatSize(levels.l2.sizeKB)} / ${formatSize(levels.l3.sizeKB)}`
 }
 
+function formatToken(value?: string) {
+  return value ? value.replace(/-/g, ' ') : 'unknown'
+}
+
+function trustSnapshot(profile: HardwareProfile) {
+  const fields = Object.values(profile.modelContract?.fields || {})
+  const coverageCount = profile.modelCoverage ? Object.keys(profile.modelCoverage).length : 0
+  const counts = fields.reduce<Record<string, number>>((acc, field) => {
+    acc[field.status] = (acc[field.status] || 0) + 1
+    return acc
+  }, {})
+  const drivenFields = fields.filter(field => field.drivesSimulation).length
+
+  return {
+    totalFields: fields.length || coverageCount,
+    drivenFields,
+    calibratedFields: counts.calibrated || 0,
+    estimatedFields: (counts.estimated || 0) + (counts.conditional || 0),
+    metadataFields: (counts['metadata-only'] || 0) + (counts.unsupported || 0),
+  }
+}
+
 type DiffTone = 'good' | 'warning' | 'neutral'
 
 interface DiffMetric {
@@ -120,6 +142,7 @@ export function HardwareExplorerModal({
   onClose,
 }: HardwareExplorerModalProps) {
   const selected = profiles.find(profile => profile.id === selectedId) || profiles[0]
+  const selectedTrust = selected ? trustSnapshot(selected) : null
   const runProfiles = runConfigIds
     .map(profileId => profiles.find(profile => profile.id === profileId))
     .filter((profile): profile is HardwareProfile => Boolean(profile))
@@ -231,6 +254,54 @@ export function HardwareExplorerModal({
             {error && <div className="experiment-error">{error}</div>}
             {!loading && !error && selected && (
               <>
+                {selectedTrust && (
+                  <div className="hardware-trust-snapshot" aria-label="Hardware trust snapshot">
+                    <div className="hardware-trust-heading">
+                      <span className="profile-detail-title">Trust Snapshot</span>
+                      <span className={`profile-confidence ${selected.modelConfidence}`}>
+                        {formatToken(selected.modelConfidence)}
+                      </span>
+                    </div>
+                    <div className="hardware-trust-grid">
+                      <div className="hardware-trust-cell">
+                        <span>Driven fields</span>
+                        <strong>
+                          {selectedTrust.totalFields > 0 ? `${selectedTrust.drivenFields}/${selectedTrust.totalFields}` : 'unknown'}
+                        </strong>
+                      </div>
+                      <div className="hardware-trust-cell">
+                        <span>Calibrated</span>
+                        <strong>{selectedTrust.calibratedFields}</strong>
+                      </div>
+                      <div className="hardware-trust-cell">
+                        <span>Estimated</span>
+                        <strong>{selectedTrust.estimatedFields}</strong>
+                      </div>
+                      <div className="hardware-trust-cell">
+                        <span>Metadata only</span>
+                        <strong>{selectedTrust.metadataFields}</strong>
+                      </div>
+                      <div className="hardware-trust-cell wide">
+                        <span>Validation</span>
+                        <strong>{selected.validation?.source || 'profile metadata'}</strong>
+                      </div>
+                      <div className="hardware-trust-cell wide">
+                        <span>Aliases</span>
+                        <strong>{selected.aliases?.length ? selected.aliases.join(', ') : 'none'}</strong>
+                      </div>
+                    </div>
+                    {selected.validation?.caveats?.length ? (
+                      <div className="hardware-trust-caveats">
+                        <span>Validation Caveats</span>
+                        <ul>
+                          {selected.validation.caveats.map(caveat => (
+                            <li key={caveat}>{caveat}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
                 <HardwareProfilePanel profile={selected} />
                 {selected.notes && <div className="hardware-profile-note">{selected.notes}</div>}
                 {diffProfiles.length > 0 && (
