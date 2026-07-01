@@ -1309,6 +1309,9 @@ components:
         durationMs:
           type: integer
           example: 2100
+        timeout:
+          type: boolean
+          description: Whether the variant exceeded the verifier timeout.
         error:
           type: string
         summary:

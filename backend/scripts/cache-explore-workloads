@@ -5,6 +5,11 @@ const { spawnSync } = require('child_process')
 const { createHash } = require('crypto')
 const { dirname, join, resolve } = require('path')
 
+const DEFAULT_VARIANT_TIMEOUT_MS = parseNonNegativeInteger(
+  process.env.CACHE_EXPLORER_WORKLOAD_VARIANT_TIMEOUT_MS,
+  120000,
+)
+
 function usage() {
   console.log(`Usage: cache-explore workloads [options] [workload-id]
 
@@ -17,6 +22,8 @@ Options:
   --verify     Run variants and validate expected relationships
   --include-stress
                Include stress workloads that are excluded from default CI runs
+  --variant-timeout-ms <ms>
+               Per-variant verification timeout; 0 disables (default: ${DEFAULT_VARIANT_TIMEOUT_MS})
   --history <path>
                With --verify, write compact benchmark history JSON
   --history-summary <path>
@@ -48,6 +55,12 @@ function sha256(value) {
 
 function shortDigest(value) {
   return value ? value.slice(0, 12) : '-'
+}
+
+function parseNonNegativeInteger(value, fallback) {
+  if (value === undefined || value === null || value === '') return fallback
+  const parsed = Number.parseInt(value, 10)
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback
 }
 
 async function fileIdentity(path, displayPath = path) {
@@ -220,14 +233,29 @@ function compareValues(left, operator, right) {
   }
 }
 
-function runVariant(workload, variant) {
+function runVariant(workload, variant, variantTimeoutMs) {
   const start = Date.now()
   const result = spawnSync(join(projectRoot(), 'backend', 'scripts', 'cache-explore'), argsForVariant(workload, variant), {
     cwd: projectRoot(),
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
+    timeout: variantTimeoutMs > 0 ? variantTimeoutMs : undefined,
+    killSignal: 'SIGTERM',
   })
   const durationMs = Date.now() - start
+
+  if (result.error) {
+    const timedOut = result.error.code === 'ETIMEDOUT'
+    return {
+      id: variant.id,
+      ok: false,
+      durationMs,
+      timeout: timedOut || undefined,
+      error: timedOut
+        ? `cache-explore timed out after ${variantTimeoutMs}ms`
+        : result.error.message,
+    }
+  }
 
   if (result.status !== 0) {
     return {
@@ -298,12 +326,12 @@ function summarizeResult(result) {
   }
 }
 
-function verifyWorkload(workload) {
+function verifyWorkload(workload, variantTimeoutMs) {
   const start = Date.now()
   const variantRuns = {}
 
   for (const variant of workload.variants || []) {
-    variantRuns[variant.id] = runVariant(workload, variant)
+    variantRuns[variant.id] = runVariant(workload, variant, variantTimeoutMs)
   }
 
   const checks = evaluateRelationships(workload, variantRuns)
@@ -312,6 +340,7 @@ function verifyWorkload(workload) {
     {
       ok: run.ok,
       durationMs: run.durationMs,
+      timeout: run.timeout,
       error: run.error,
       summary: run.ok ? summarizeResult(run.result) : undefined,
       provenance: run.ok ? run.result.provenance : undefined,
@@ -758,6 +787,7 @@ function parseArgs(args) {
     help: false,
     historyPath: '',
     historySummaryPaths: [],
+    variantTimeoutMs: DEFAULT_VARIANT_TIMEOUT_MS,
     workloadId: '',
   }
 
@@ -770,6 +800,18 @@ function parseArgs(args) {
     else if (arg === '--include-stress') parsed.includeStress = true
     else if (arg === '--html') parsed.html = true
     else if (arg === '--help' || arg === '-h') parsed.help = true
+    else if (arg === '--variant-timeout-ms') {
+      if (!args[index + 1] || args[index + 1].startsWith('-')) {
+        throw new Error('--variant-timeout-ms requires a millisecond value')
+      }
+      parsed.variantTimeoutMs = parseNonNegativeInteger(args[index + 1], parsed.variantTimeoutMs)
+      index += 1
+    } else if (arg.startsWith('--variant-timeout-ms=')) {
+      parsed.variantTimeoutMs = parseNonNegativeInteger(
+        arg.slice('--variant-timeout-ms='.length),
+        parsed.variantTimeoutMs,
+      )
+    }
     else if (arg === '--history') {
       if (!args[index + 1] || args[index + 1].startsWith('-')) {
         throw new Error('--history requires a path')
@@ -810,7 +852,19 @@ function parseArgs(args) {
 }
 
 async function main() {
-  const { json, ids, commands, verify, includeStress, html, help, historyPath, historySummaryPaths, workloadId } = parseArgs(process.argv.slice(2))
+  const {
+    json,
+    ids,
+    commands,
+    verify,
+    includeStress,
+    html,
+    help,
+    historyPath,
+    historySummaryPaths,
+    variantTimeoutMs,
+    workloadId,
+  } = parseArgs(process.argv.slice(2))
 
   if (help) {
     usage()
@@ -859,7 +913,7 @@ async function main() {
   }
 
   if (verify) {
-    const results = selected.map(verifyWorkload)
+    const results = selected.map(workload => verifyWorkload(workload, variantTimeoutMs))
     const summary = verificationSummary(results)
     if (historyPath) {
       await writeHistory(historyPath, summary, results)

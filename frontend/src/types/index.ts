@@ -595,6 +595,7 @@ export interface WorkloadVerificationCheck {
 export interface WorkloadVerificationRun {
   ok: boolean
   durationMs: number
+  timeout?: boolean
   error?: string
   summary?: {
     events?: number
