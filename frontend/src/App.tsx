@@ -36,6 +36,7 @@ import type {
   ExperimentVariantSource,
   WorkloadSnapshot,
   WorkloadVerificationResponse,
+  WorkloadHistoryResponse,
 } from './types'
 
 // Constants
@@ -284,6 +285,9 @@ function App() {
   const [workloadsVerifying, setWorkloadsVerifying] = useState(false)
   const [workloadsError, setWorkloadsError] = useState<string | null>(null)
   const [workloadVerification, setWorkloadVerification] = useState<WorkloadVerificationResponse | null>(null)
+  const [workloadHistory, setWorkloadHistory] = useState<WorkloadHistoryResponse | null>(null)
+  const [workloadHistoryLoading, setWorkloadHistoryLoading] = useState(false)
+  const [workloadHistoryError, setWorkloadHistoryError] = useState<string | null>(null)
   const [batchTotal, setBatchTotal] = useState(BATCH_HARDWARE_CONFIGS.length)
   const commandInputRef = useRef<HTMLInputElement>(null)
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
@@ -944,12 +948,33 @@ function App() {
     }
   }, [])
 
+  const loadWorkloadHistory = useCallback(async () => {
+    setWorkloadHistoryLoading(true)
+    setWorkloadHistoryError(null)
+    try {
+      const response = await fetch(`${API_BASE}/api/workloads/history`)
+      const data = await response.json()
+      if (!response.ok) {
+        setWorkloadHistoryError(data.message || data.error || 'Failed to load workload history')
+        return
+      }
+      setWorkloadHistory(data as WorkloadHistoryResponse)
+    } catch (err) {
+      setWorkloadHistoryError(err instanceof Error ? err.message : 'Failed to load workload history')
+    } finally {
+      setWorkloadHistoryLoading(false)
+    }
+  }, [])
+
   const openWorkloadCatalog = useCallback(() => {
     setShowWorkloadCatalog(true)
     if (workloads.length === 0 && !workloadsLoading) {
       void loadWorkloads()
     }
-  }, [loadWorkloads, workloads.length, workloadsLoading])
+    if (!workloadHistory && !workloadHistoryLoading) {
+      void loadWorkloadHistory()
+    }
+  }, [loadWorkloadHistory, loadWorkloads, workloadHistory, workloadHistoryLoading, workloads.length, workloadsLoading])
 
   const exampleKeyForPath = useCallback((examplePath: string) => {
     const base = examplePath.split('/').pop()?.replace(/\.(c|cpp|cc|cxx|rs|zig)$/, '')
@@ -1268,11 +1293,15 @@ function App() {
         <WorkloadCatalogModal
           workloads={workloads}
           verification={workloadVerification}
+          history={workloadHistory}
           loading={workloadsLoading}
           verifying={workloadsVerifying}
           error={workloadsError}
+          historyLoading={workloadHistoryLoading}
+          historyError={workloadHistoryError}
           onRefresh={loadWorkloads}
           onVerify={verifyWorkloads}
+          onRefreshHistory={loadWorkloadHistory}
           onLoadWorkload={loadWorkload}
           onClose={() => setShowWorkloadCatalog(false)}
         />

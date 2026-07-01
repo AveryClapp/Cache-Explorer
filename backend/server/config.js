@@ -49,6 +49,13 @@ export const CONFIG = {
   paths: {
     cacheExplore: process.env.CACHE_EXPLORE_PATH || null, // Auto-detected if null
   },
+
+  // Published workload benchmark history
+  workloads: {
+    dashboardBaseUrl: (process.env.CACHE_EXPLORER_DASHBOARD_BASE_URL || '').replace(/\/+$/, ''),
+    historySummaryPath: process.env.CACHE_EXPLORER_WORKLOAD_HISTORY_SUMMARY_PATH || null,
+    historyFetchTimeoutMs: parseInt(process.env.CACHE_EXPLORER_WORKLOAD_HISTORY_TIMEOUT) || 5000,
+  },
 };
 
 export default CONFIG;

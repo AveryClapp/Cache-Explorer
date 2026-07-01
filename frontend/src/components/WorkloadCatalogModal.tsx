@@ -1,5 +1,10 @@
 import { useMemo, useState } from 'react'
-import type { WorkloadSnapshot, WorkloadVerificationResponse } from '../types'
+import type {
+  WorkloadHistoryDurationDelta,
+  WorkloadHistoryResponse,
+  WorkloadSnapshot,
+  WorkloadVerificationResponse,
+} from '../types'
 
 type WorkloadStatusFilter = 'all' | 'verified' | 'failed' | 'unverified'
 type WorkloadSort = 'name' | 'target' | 'duration' | 'checks' | 'variants'
@@ -7,11 +12,15 @@ type WorkloadSort = 'name' | 'target' | 'duration' | 'checks' | 'variants'
 interface WorkloadCatalogModalProps {
   workloads: WorkloadSnapshot[]
   verification: WorkloadVerificationResponse | null
+  history: WorkloadHistoryResponse | null
   loading: boolean
   verifying: boolean
   error: string | null
+  historyLoading: boolean
+  historyError: string | null
   onRefresh: () => void
   onVerify: () => void
+  onRefreshHistory: () => void
   onLoadWorkload: (workload: WorkloadSnapshot) => void
   onClose: () => void
 }
@@ -27,6 +36,35 @@ function statusFor(workload: WorkloadSnapshot, verification: WorkloadVerificatio
 function formatValue(value: number | undefined) {
   if (typeof value !== 'number') return '-'
   return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(3)
+}
+
+function formatDuration(ms: number | undefined) {
+  if (typeof ms !== 'number') return '-'
+  if (Math.abs(ms) >= 1000) return `${(ms / 1000).toFixed(1)}s`
+  return `${ms.toLocaleString()}ms`
+}
+
+function formatSignedDuration(ms: number) {
+  const sign = ms > 0 ? '+' : ''
+  return `${sign}${formatDuration(ms)}`
+}
+
+function formatPercent(value: number | null | undefined) {
+  if (typeof value !== 'number') return ''
+  const sign = value > 0 ? '+' : ''
+  return `${sign}${(value * 100).toFixed(1)}%`
+}
+
+function formatDate(value: string | undefined) {
+  if (!value) return 'unknown'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 function shortDigest(value: string | undefined) {
@@ -100,14 +138,23 @@ function sortWorkloads(
   })
 }
 
+function deltaTone(delta: WorkloadHistoryDurationDelta | undefined) {
+  if (!delta || delta.deltaMs === 0) return 'neutral'
+  return delta.deltaMs > 0 ? 'warn' : 'good'
+}
+
 export function WorkloadCatalogModal({
   workloads,
   verification,
+  history,
   loading,
   verifying,
   error,
+  historyLoading,
+  historyError,
   onRefresh,
   onVerify,
+  onRefreshHistory,
   onLoadWorkload,
   onClose,
 }: WorkloadCatalogModalProps) {
@@ -116,7 +163,12 @@ export function WorkloadCatalogModal({
   const [targetFilter, setTargetFilter] = useState('all')
   const [sortBy, setSortBy] = useState<WorkloadSort>('name')
   const hasWorkloads = workloads.length > 0
+  const historyAvailable = history?.available && history.latest
   const normalizedQuery = query.trim().toLowerCase()
+  const durationDeltas = history?.durationDeltas || []
+  const deltaByWorkload = useMemo(() => (
+    new Map(durationDeltas.map(delta => [delta.id, delta]))
+  ), [durationDeltas])
   const targetOptions = useMemo(() => (
     [...new Set(workloads.map(workload => workload.config))].sort()
   ), [workloads])
@@ -153,11 +205,93 @@ export function WorkloadCatalogModal({
               {verifying ? 'Verifying...' : 'Verify'}
             </button>
             <button className="btn" onClick={onRefresh} disabled={loading || verifying}>Refresh</button>
+            <button className="btn" onClick={onRefreshHistory} disabled={historyLoading}>
+              {historyLoading ? 'History...' : 'History'}
+            </button>
             <button className="batch-modal-close" onClick={onClose}>×</button>
           </div>
         </div>
         <div className="batch-modal-content workload-modal-content">
           {error && <div className="experiment-error">{error}</div>}
+          {historyError && <div className="experiment-error">History unavailable: {historyError}</div>}
+          {historyLoading && (
+            <div className="workload-history-loading">
+              <span className="loading-spinner" />
+              Loading published workload history...
+            </div>
+          )}
+          {!historyLoading && historyAvailable && (
+            <div className="workload-history-panel">
+              <div className="workload-history-heading">
+                <div>
+                  <div className="workload-history-title">Published History</div>
+                  <div className="workload-history-subtitle">
+                    Latest {formatDate(history.latest?.generatedAt)}
+                    {history.source && ` / ${history.source}`}
+                  </div>
+                </div>
+                <span className={`workload-history-status ${(history.latest?.summary?.failed || 0) > 0 ? 'fail' : 'ok'}`}>
+                  {(history.latest?.summary?.failed || 0) > 0 ? 'failing' : 'passing'}
+                </span>
+              </div>
+              <div className="workload-history-stats">
+                <span><strong>{history.files?.length || 0}</strong> runs</span>
+                <span><strong>{history.latest?.summary?.passed || 0}</strong> passed</span>
+                <span><strong>{history.latest?.summary?.failed || 0}</strong> failed</span>
+                <span><strong>{formatDuration(history.latest?.summary?.durationMs)}</strong> latest</span>
+              </div>
+              {durationDeltas.length > 0 && (
+                <div className="workload-history-section">
+                  <span className="workload-history-label">Largest duration changes</span>
+                  <div className="workload-history-pills">
+                    {durationDeltas.slice(0, 3).map(delta => (
+                      <span className={`workload-history-pill ${deltaTone(delta)}`} key={delta.id}>
+                        <span>{delta.id}</span>
+                        <strong>{formatSignedDuration(delta.deltaMs)}</strong>
+                        {delta.deltaPct !== null && <em>{formatPercent(delta.deltaPct)}</em>}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {(history.slowestWorkloads || []).length > 0 && (
+                <div className="workload-history-section">
+                  <span className="workload-history-label">Slowest latest workloads</span>
+                  <div className="workload-history-pills">
+                    {(history.slowestWorkloads || []).slice(0, 3).map(workload => (
+                      <span className={`workload-history-pill ${workload.ok ? 'neutral' : 'fail'}`} key={workload.id}>
+                        <span>{workload.id}</span>
+                        <strong>{formatDuration(workload.durationMs)}</strong>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {(history.failures || []).length > 0 && (
+                <div className="workload-history-section">
+                  <span className="workload-history-label">Latest failures</span>
+                  <div className="workload-history-pills">
+                    {(history.failures || []).slice(0, 3).map(failure => (
+                      <span className="workload-history-pill fail" key={`${failure.workload}-${failure.metric}-${failure.relationship}`}>
+                        <span>{failure.workload}</span>
+                        <strong>{failure.metric} {failure.relationship}</strong>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {!historyLoading && history?.available === false && (
+            <div className="workload-history-empty">
+              <span>{history.message || 'Published workload history is not configured.'}</span>
+            </div>
+          )}
+          {!historyLoading && history?.available === true && !history.latest && (
+            <div className="workload-history-empty">
+              <span>No workload history records found.</span>
+            </div>
+          )}
           {hasWorkloads && (
             <div className="workload-catalog-controls">
               <div className="workload-search-field">
@@ -244,6 +378,7 @@ export function WorkloadCatalogModal({
           {hasWorkloads && visibleWorkloads.length > 0 && <div className="workload-list">
             {visibleWorkloads.map(workload => {
               const status = statusFor(workload, verification)
+              const delta = deltaByWorkload.get(workload.id)
               return (
                 <div className="workload-row" key={workload.id}>
                   <div className="workload-row-main">
@@ -286,7 +421,15 @@ export function WorkloadCatalogModal({
                     </div>
                   </div>
                   <div className="workload-row-actions">
-                    {status && <span className="workload-duration">{status.durationMs.toLocaleString()}ms</span>}
+                    {status && <span className="workload-duration">{formatDuration(status.durationMs)}</span>}
+                    {delta && (
+                      <span
+                        className={`workload-history-delta ${deltaTone(delta)}`}
+                        title={`Previous ${formatDuration(delta.previousDurationMs)}, latest ${formatDuration(delta.durationMs)}`}
+                      >
+                        {formatSignedDuration(delta.deltaMs)}
+                      </span>
+                    )}
                     <button className="btn" onClick={() => onLoadWorkload(workload)}>
                       Experiment
                     </button>

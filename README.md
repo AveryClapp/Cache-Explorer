@@ -214,6 +214,14 @@ keeps the latest 30 runs, and publishes an HTML trend report plus a
 `workload-history-index.json` manifest to GitHub Pages when Pages is configured
 for Actions.
 
+The product workload catalog can surface that published history in-app. Point
+the server at either a local summary file or the hosted dashboard:
+
+```bash
+CACHE_EXPLORER_WORKLOAD_HISTORY_SUMMARY_PATH=reports/workloads/workload-history-summary.json npm start
+CACHE_EXPLORER_DASHBOARD_BASE_URL=https://owner.github.io/Cache-Explorer npm start
+```
+
 Tagged releases include pre-built LLVM pass assets, `SHA256SUMS` for download
 verification, and GitHub artifact attestations for release provenance.
 Published GHCR Docker images include BuildKit provenance attestations and SBOMs.

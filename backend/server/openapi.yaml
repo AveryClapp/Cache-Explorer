@@ -387,6 +387,32 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/workloads/history:
+    get:
+      tags:
+        - workloads
+      summary: Get published workload benchmark history
+      description: |
+        Returns the compact workload benchmark-history summary used by the
+        product workload catalog. The server reads a local summary when
+        CACHE_EXPLORER_WORKLOAD_HISTORY_SUMMARY_PATH is configured, otherwise
+        it fetches workload-history-summary.json from CACHE_EXPLORER_DASHBOARD_BASE_URL.
+        When no history source is configured, the endpoint returns available=false
+        instead of failing the workload catalog.
+      responses:
+        '200':
+          description: Workload history summary or unavailable state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkloadHistoryResponse'
+        '502':
+          description: Failed to retrieve configured workload history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /shorten:
     post:
       tags:
@@ -1071,6 +1097,164 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/WorkloadVerificationResult'
+
+    WorkloadHistoryResponse:
+      type: object
+      properties:
+        available:
+          type: boolean
+          description: Whether a workload history summary was loaded.
+          example: true
+        reason:
+          type: string
+          description: Present when available is false.
+          example: not_configured
+        message:
+          type: string
+          example: Published workload history is not configured for this server.
+        source:
+          type: string
+          enum: [local, dashboard]
+          example: dashboard
+        path:
+          type: string
+          description: Local summary path when source is local.
+          example: reports/workloads/workload-history-summary.json
+        url:
+          type: string
+          description: Remote summary URL when source is dashboard.
+          example: https://owner.github.io/Cache-Explorer/workload-history-summary.json
+        files:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkloadHistoryFile'
+        latest:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/WorkloadHistoryLatest'
+        failures:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkloadHistoryFailure'
+        slowestWorkloads:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkloadHistorySlowWorkload'
+        durationDeltas:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkloadHistoryDurationDelta'
+
+    WorkloadHistoryFile:
+      type: object
+      properties:
+        file:
+          type: string
+          example: workload-history-123456.json
+        generatedAt:
+          type: string
+          format: date-time
+        ok:
+          type: boolean
+        passed:
+          type: integer
+          example: 28
+        failed:
+          type: integer
+          example: 0
+        durationMs:
+          type: integer
+          example: 48231
+        git:
+          $ref: '#/components/schemas/WorkloadHistoryGit'
+
+    WorkloadHistoryLatest:
+      type: object
+      properties:
+        file:
+          type: string
+          example: workload-history-123456.json
+        generatedAt:
+          type: string
+          format: date-time
+        git:
+          $ref: '#/components/schemas/WorkloadHistoryGit'
+        summary:
+          $ref: '#/components/schemas/WorkloadVerificationSummary'
+
+    WorkloadHistoryGit:
+      type: object
+      properties:
+        sha:
+          type: string
+          nullable: true
+          example: abc123
+        ref:
+          type: string
+          nullable: true
+          example: main
+        runId:
+          type: string
+          nullable: true
+          example: "123456"
+
+    WorkloadHistoryFailure:
+      type: object
+      properties:
+        workload:
+          type: string
+          example: conv2d-intel14
+        metric:
+          type: string
+          example: levels.l2.hitRate
+        relationship:
+          type: string
+          example: tiled > direct
+        leftValue:
+          type: number
+          nullable: true
+        rightValue:
+          type: number
+          nullable: true
+
+    WorkloadHistorySlowWorkload:
+      type: object
+      properties:
+        id:
+          type: string
+          example: false-sharing-stress-intel
+        ok:
+          type: boolean
+          example: true
+        durationMs:
+          type: integer
+          example: 9132
+        checks:
+          type: integer
+          example: 3
+        variants:
+          type: integer
+          example: 2
+
+    WorkloadHistoryDurationDelta:
+      type: object
+      properties:
+        id:
+          type: string
+          example: conv2d-intel14
+        durationMs:
+          type: integer
+          example: 4821
+        previousDurationMs:
+          type: integer
+          example: 5310
+        deltaMs:
+          type: integer
+          example: -489
+        deltaPct:
+          type: number
+          nullable: true
+          example: -0.092
 
     WorkloadVerificationSummary:
       type: object

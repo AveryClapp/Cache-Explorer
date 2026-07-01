@@ -169,6 +169,36 @@ function httpError(status, message, type = 'validation_error') {
   return error;
 }
 
+function workloadHistoryUnavailable(reason, message, extra = {}) {
+  return {
+    available: false,
+    reason,
+    message,
+    ...extra,
+  };
+}
+
+async function fetchJsonWithTimeout(url, timeoutMs) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (response.status === 404) {
+      return workloadHistoryUnavailable(
+        'not_found',
+        'No published workload history summary was found',
+        { source: 'dashboard', url },
+      );
+    }
+    if (!response.ok) {
+      throw new Error(`History summary request failed with HTTP ${response.status}`);
+    }
+    return await response.json();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function isStructuredVariant(variant) {
   return variant && typeof variant === 'object' && !Array.isArray(variant);
 }
@@ -1124,6 +1154,51 @@ app.get('/api/workloads', async (req, res) => {
     console.error('Failed to list workloads:', err);
     incCounter('errors', { type: 'workloads' });
     res.status(500).json(workloadProcessErrorResponse(err, 'Failed to list workloads'));
+  }
+});
+
+app.get('/api/workloads/history', async (req, res) => {
+  incCounter('requests', { type: 'workloads_history' });
+  const summaryPath = CONFIG.workloads.historySummaryPath;
+  const dashboardBaseUrl = CONFIG.workloads.dashboardBaseUrl;
+
+  try {
+    if (summaryPath) {
+      const data = JSON.parse(await readFile(summaryPath, 'utf8'));
+      res.json({
+        available: true,
+        source: 'local',
+        path: summaryPath,
+        ...data,
+      });
+      return;
+    }
+
+    if (dashboardBaseUrl) {
+      const url = `${dashboardBaseUrl}/workload-history-summary.json`;
+      const data = await fetchJsonWithTimeout(url, CONFIG.workloads.historyFetchTimeoutMs);
+      res.json(data.available === false ? data : {
+        available: true,
+        source: 'dashboard',
+        url,
+        ...data,
+      });
+      return;
+    }
+
+    res.json(workloadHistoryUnavailable(
+      'not_configured',
+      'Published workload history is not configured for this server',
+    ));
+  } catch (err) {
+    console.error('Failed to load workload history:', err);
+    incCounter('errors', { type: 'workloads_history' });
+    res.status(502).json({
+      error: 'Failed to load workload history',
+      message: err instanceof Error ? err.message : 'Failed to load workload history',
+      type: err?.name === 'AbortError' ? 'timeout' : 'workload_history_error',
+      timeout: err?.name === 'AbortError' || undefined,
+    });
   }
 });
 

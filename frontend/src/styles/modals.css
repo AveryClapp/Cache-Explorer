@@ -612,6 +612,157 @@
   border-color: color-mix(in srgb, var(--signal-critical) 45%, var(--border));
 }
 
+.workload-history-loading,
+.workload-history-empty {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+}
+
+.workload-history-panel {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.workload-history-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.workload-history-title {
+  color: var(--text-bright);
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.workload-history-subtitle {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-family: var(--font-code);
+  font-size: var(--text-2xs);
+}
+
+.workload-history-status,
+.workload-history-delta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-code);
+  font-size: var(--text-2xs);
+  white-space: nowrap;
+}
+
+.workload-history-status.ok,
+.workload-history-delta.good {
+  color: var(--signal-success);
+  border-color: color-mix(in srgb, var(--signal-success) 45%, var(--border));
+}
+
+.workload-history-status.fail,
+.workload-history-delta.warn,
+.workload-history-delta.fail {
+  color: var(--signal-critical);
+  border-color: color-mix(in srgb, var(--signal-critical) 45%, var(--border));
+}
+
+.workload-history-delta.neutral {
+  color: var(--text-muted);
+}
+
+.workload-history-stats {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.workload-history-stats span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 2px var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-family: var(--font-code);
+  font-size: var(--text-2xs);
+}
+
+.workload-history-stats strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.workload-history-section {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.workload-history-label {
+  color: var(--text-muted);
+  font-family: var(--font-display);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+}
+
+.workload-history-pills {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.workload-history-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 26px;
+  padding: 3px var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--elevated);
+  color: var(--text-secondary);
+  font-family: var(--font-code);
+  font-size: var(--text-2xs);
+}
+
+.workload-history-pill strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.workload-history-pill em {
+  color: var(--text-muted);
+  font-style: normal;
+}
+
+.workload-history-pill.good strong {
+  color: var(--signal-success);
+}
+
+.workload-history-pill.warn strong,
+.workload-history-pill.fail strong {
+  color: var(--signal-critical);
+}
+
 .workload-list {
   display: grid;
   gap: var(--space-3);

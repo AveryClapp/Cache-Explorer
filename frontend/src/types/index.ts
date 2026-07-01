@@ -627,6 +627,73 @@ export interface WorkloadVerificationResponse {
   workloads: WorkloadVerificationResult[]
 }
 
+export interface WorkloadHistoryGit {
+  sha?: string | null
+  ref?: string | null
+  runId?: string | null
+}
+
+export interface WorkloadHistoryFile {
+  file: string
+  generatedAt?: string
+  ok?: boolean
+  passed?: number
+  failed?: number
+  durationMs?: number
+  git?: WorkloadHistoryGit
+}
+
+export interface WorkloadHistoryLatest {
+  file: string
+  generatedAt?: string
+  git?: WorkloadHistoryGit
+  summary?: {
+    ok?: boolean
+    workloads?: number
+    passed?: number
+    failed?: number
+    durationMs?: number
+  }
+}
+
+export interface WorkloadHistoryFailure {
+  workload: string
+  metric: string
+  relationship: string
+  leftValue?: number
+  rightValue?: number
+}
+
+export interface WorkloadHistorySlowWorkload {
+  id: string
+  ok: boolean
+  durationMs: number
+  checks: number
+  variants: number
+}
+
+export interface WorkloadHistoryDurationDelta {
+  id: string
+  durationMs: number
+  previousDurationMs: number
+  deltaMs: number
+  deltaPct: number | null
+}
+
+export interface WorkloadHistoryResponse {
+  available: boolean
+  reason?: 'not_configured' | 'not_found' | string
+  message?: string
+  source?: 'local' | 'dashboard' | string
+  path?: string
+  url?: string
+  files?: WorkloadHistoryFile[]
+  latest?: WorkloadHistoryLatest | null
+  failures?: WorkloadHistoryFailure[]
+  slowestWorkloads?: WorkloadHistorySlowWorkload[]
+  durationDeltas?: WorkloadHistoryDurationDelta[]
+}
+
 export interface ExperimentVariantSource {
   id: string
   code?: string

@@ -23,6 +23,9 @@ Already in place:
   settings, and experiment setup.
 - Verified workload browser in the app, backed by product-facing workload APIs,
   with search, status filtering, hardware-target filtering, and sorting.
+- Workload catalog can surface published benchmark history in-app through a
+  product API, including latest status, slowest workloads, duration deltas, and
+  unavailable-history states.
 - Workload-driven experiments for same-source define variants and per-variant
   source comparisons.
 - Workload snapshots include stable manifest and source-file hashes in catalog,
@@ -64,8 +67,8 @@ Known gaps:
   the Actions cache, and release-attached workload-history archives.
 - Deployment/package polish still needs release-cadence tuning once real usage
   patterns are visible.
-- Workload history trend surfacing and deeper onboarding need another design
-  pass; API-side workload error diagnostics are in place.
+- Deeper onboarding still needs another design pass; API-side workload error
+  diagnostics and in-app workload history surfacing are in place.
 
 ## Done Criteria
 
@@ -134,7 +137,7 @@ Known gaps:
 3. Add external benchmark-history archival only if Pages plus release-attached
    archives are not enough.
 4. Harden deployment docs and local dev bootstrap.
-5. Polish workload/history onboarding and modal empty/error states.
+5. Polish onboarding and modal empty/error states around first-run workflows.
 6. Add more browser-level flows for result-bearing experiment journeys.
 
 ## Near-Term Leaps
