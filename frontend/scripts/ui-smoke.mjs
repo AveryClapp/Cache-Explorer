@@ -853,6 +853,42 @@ async function verifyHardwareComparison(url) {
   await page.unroute('**/compare')
 }
 
+async function verifyHardwareComparisonEmptyState(url) {
+  const failureMessage = 'Hardware comparison endpoint currently supports C and C++ inputs'
+  await page.route('**/compare', async route => {
+    await route.fulfill({
+      status: 422,
+      contentType: 'application/json',
+      body: JSON.stringify({ type: 'unsupported_language', message: failureMessage }),
+    })
+  })
+  await page.route('**/compile', async route => {
+    await route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({ type: 'server_error', message: 'Per-profile fallback failed' }),
+    })
+  })
+
+  await page.evaluate(() => {
+    localStorage.removeItem('cache-explorer-hardware-run-set')
+  })
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await page.goto(url, { waitUntil: 'domcontentloaded' })
+  await page.getByRole('button', { name: 'Hardware', exact: true }).click()
+
+  const modal = page.locator('.batch-modal').filter({ hasText: 'Hardware Comparison' })
+  await assertVisible(modal.getByText('No hardware results', { exact: true }), 'comparison empty-state title')
+  await assertVisible(modal.getByText(failureMessage, { exact: true }), 'comparison empty-state message')
+  await assertVisible(modal.getByText('4 profiles requested', { exact: true }), 'comparison empty-state profile count')
+  assert(await modal.getByRole('button', { name: 'Export CSV' }).isDisabled(), 'comparison CSV export should stay disabled on empty state')
+  assert(await modal.getByRole('button', { name: 'Export JSON' }).isDisabled(), 'comparison JSON export should stay disabled on empty state')
+
+  await closeModal()
+  await page.unroute('**/compile')
+  await page.unroute('**/compare')
+}
+
 async function verifySocketCloseFallback(url) {
   let compilePayload = null
 
@@ -1306,6 +1342,7 @@ try {
   await runSmokeStep('result trust panel', () => verifyResultTrustPanel(url))
   await runSmokeStep('legacy result trust panel', () => verifyLegacyResultTrustPanel(url))
   await runSmokeStep('hardware comparison', () => verifyHardwareComparison(url))
+  await runSmokeStep('hardware comparison empty state', () => verifyHardwareComparisonEmptyState(url))
   await runSmokeStep('workload catalog', () => verifyWorkloadCatalogControls(url))
   await runSmokeStep('experiment results', () => verifyExperimentResults(url))
   await runSmokeStep('share round trip', () => verifyShareRoundTrip(url))

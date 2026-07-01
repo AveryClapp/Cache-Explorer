@@ -319,6 +319,39 @@
   font-family: var(--font-display);
 }
 
+.batch-empty-state {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+}
+
+.batch-empty-state.error {
+  border-color: color-mix(in srgb, var(--signal-critical) 45%, var(--border));
+  background: color-mix(in srgb, var(--signal-critical) 8%, var(--surface));
+}
+
+.batch-empty-title {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.batch-empty-desc {
+  max-width: 68ch;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.batch-empty-meta {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
 .batch-results-table {
   width: 100%;
   border-collapse: collapse;

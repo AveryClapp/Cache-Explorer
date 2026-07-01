@@ -9,6 +9,7 @@ interface BatchResult {
 
 interface BatchResultsModalProps {
   results: BatchResult[]
+  error?: string | null
   running: boolean
   total: number
   onExportCSV?: () => void
@@ -41,7 +42,9 @@ function bottleneckClass(result: CacheResult) {
   return `bottleneck-chip ${bottleneck}`
 }
 
-export function BatchResultsModal({ results, running, total, onExportCSV, onExportJSON, onClose }: BatchResultsModalProps) {
+export function BatchResultsModal({ results, error, running, total, onExportCSV, onExportJSON, onClose }: BatchResultsModalProps) {
+  const showEmptyState = !running && results.length === 0
+
   return (
     <div className="batch-modal-overlay" onClick={() => !running && onClose()}>
       <div className="batch-modal" onClick={e => e.stopPropagation()}>
@@ -66,6 +69,15 @@ export function BatchResultsModal({ results, running, total, onExportCSV, onExpo
             <div className="batch-loading">
               <span className="loading-spinner" />
               Analyzing... ({results.length}/{total} complete)
+            </div>
+          )}
+          {showEmptyState && (
+            <div className={`batch-empty-state${error ? ' error' : ''}`} role={error ? 'alert' : 'status'}>
+              <div className="batch-empty-title">No hardware results</div>
+              <div className="batch-empty-desc">
+                {error || 'No comparison results were produced for this run set.'}
+              </div>
+              <div className="batch-empty-meta">{total} profiles requested</div>
             </div>
           )}
           {results.length > 0 && (

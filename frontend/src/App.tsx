@@ -86,6 +86,15 @@ function annotationBadge(annotation: SourceAnnotation) {
   return `${subsystem} ${share}%`
 }
 
+function readApiFailureMessage(data: unknown, fallback: string) {
+  if (data && typeof data === 'object') {
+    const candidate = data as { message?: unknown; error?: unknown }
+    if (typeof candidate.message === 'string' && candidate.message.trim()) return candidate.message
+    if (typeof candidate.error === 'string' && candidate.error.trim()) return candidate.error
+  }
+  return fallback
+}
+
 const BATCH_HARDWARE_CONFIGS = ['educational', 'intel', 'amd', 'apple']
 const HARDWARE_RUN_SET_STORAGE_KEY = 'cache-explorer-hardware-run-set'
 const HARDWARE_OPTION_VALUES = new Set(HARDWARE_OPTIONS.map(option => option.value))
@@ -320,6 +329,7 @@ function App() {
   const [mobilePane, setMobilePane] = useState<'editor' | 'results'>('editor')
   const [selectedHotLineFile, setSelectedHotLineFile] = useState<string>('')  // File filter for hot lines
   const [batchResults, setBatchResults] = useState<{config: string; result: CacheResult}[]>([])
+  const [batchError, setBatchError] = useState<string | null>(null)
   const [showBatchModal, setShowBatchModal] = useState(false)
   const [batchRunning, setBatchRunning] = useState(false)
   const [experimentResult, setExperimentResult] = useState<HardwareExperimentResult | null>(null)
@@ -1004,9 +1014,12 @@ function App() {
   const runBatchAnalysis = useCallback(async () => {
     const configsToRun = hardwareConfigsOrDefault(runHardwareConfigIds)
     setBatchResults([])
+    setBatchError(null)
     setBatchRunning(true)
     setBatchTotal(configsToRun.length)
     setShowBatchModal(true)
+    let successfulResults = 0
+    let failureMessage: string | null = null
 
     const canUseCompareEndpoint =
       files.length === 1 && (files[0].language === 'c' || files[0].language === 'cpp')
@@ -1024,15 +1037,19 @@ function App() {
         const data = await response.json()
 
         if (response.ok && data.configs) {
-          setBatchResults(
-            configsToRun
-              .filter(cfg => data.configs[cfg])
-              .map(cfg => ({ config: cfg, result: data.configs[cfg] as CacheResult }))
-          )
+          const nextResults = configsToRun
+            .filter(cfg => data.configs[cfg])
+            .map(cfg => ({ config: cfg, result: data.configs[cfg] as CacheResult }))
+          setBatchResults(nextResults)
           setBatchRunning(false)
+          if (nextResults.length === 0) {
+            setBatchError('Hardware comparison returned no profile results.')
+          }
           return
         }
-      } catch {
+        failureMessage = readApiFailureMessage(data, `Hardware comparison failed with HTTP ${response.status}`)
+      } catch (err) {
+        failureMessage = err instanceof Error ? err.message : 'Hardware comparison request failed'
         // Fall back to per-config analysis below.
       }
     }
@@ -1050,14 +1067,23 @@ function App() {
           body: JSON.stringify(payload)
         })
         const data = await response.json()
-        if (data.levels) {
+        if (response.ok && data.levels) {
+          successfulResults += 1
           setBatchResults(prev => [...prev, { config: cfg, result: data as CacheResult }])
+        } else if (!failureMessage) {
+          failureMessage = readApiFailureMessage(data, `No result returned for ${cfg}.`)
         }
-      } catch {
+      } catch (err) {
+        if (!failureMessage) {
+          failureMessage = err instanceof Error ? err.message : `No result returned for ${cfg}.`
+        }
         // Skip failed configs
       }
     }
     setBatchRunning(false)
+    if (successfulResults === 0) {
+      setBatchError(failureMessage || `No hardware comparison results were produced for ${configsToRun.length} profiles.`)
+    }
   }, [files, makeHardwarePayload, runHardwareConfigIds])
 
   const openExperimentModal = useCallback(() => {
@@ -1405,6 +1431,7 @@ function App() {
         <Suspense fallback={null}>
           <BatchResultsModal
             results={batchResults}
+            error={batchError}
             running={batchRunning}
             total={batchTotal}
             onExportCSV={() => exportBatchResultsAsCSV(batchResults)}
