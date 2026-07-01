@@ -27,8 +27,8 @@ Already in place:
   source comparisons.
 - Workload snapshots include stable manifest and source-file hashes in catalog,
   verification, and history outputs.
-- Workload verification can emit compact benchmark-history JSON artifacts and
-  standalone HTML trend reports in CI.
+- Workload verification can emit compact benchmark-history JSON artifacts,
+  standalone HTML trend reports, and a GitHub Pages workload dashboard in CI.
 - Workload verification covers branch behavior, prefetch policy, vector/SIMD
   stats, memory intrinsic stats, atomic builtin stats, hash-table probing,
   contiguous allocation locality, sequential/binary search locality,
@@ -42,8 +42,9 @@ Known gaps:
 
 - Workload catalog still needs threaded real-world kernels before it can act as
   a broad regression corpus.
-- There is no hosted persistent regression dashboard beyond downloadable CI
-  trend reports.
+- Hosted benchmark history is available through a GitHub Pages workflow, but it
+  still keeps only the latest published run unless external artifact retention
+  is added.
 - Deployment/package polish still needs hosted-release and container hardening
   beyond the local doctor/dev flow.
 - Workload history trend surfacing, deeper onboarding, and error states need
@@ -110,7 +111,7 @@ Known gaps:
 
 1. Broaden workload metadata and catalog coverage.
 2. Tune optional threaded false-sharing workload snapshots.
-3. Host benchmark-history dashboards from CI artifacts.
+3. Add longer-lived benchmark-history retention beyond the latest Pages publish.
 4. Harden deployment docs and local dev bootstrap.
 5. Polish workload/history onboarding and modal empty/error states.
 6. Add more browser-level flows for result-bearing experiment journeys.
@@ -119,5 +120,5 @@ Known gaps:
 
 - Tune threaded false-sharing examples so they can run as optional stress
   workloads without dragging down CI.
-- Publish benchmark-history HTML reports through hosted docs or Pages.
+- Add longer-lived benchmark-history retention beyond the latest Pages publish.
 - Keep committing each completed slice with validation output.

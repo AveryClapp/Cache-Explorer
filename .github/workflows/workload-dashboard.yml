@@ -1,0 +1,91 @@
+name: Workload Dashboard
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: workload-dashboard
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: Publish Workload Dashboard
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install LLVM 18
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 18
+          sudo apt-get install -y llvm-18-dev clang-18 lld-18
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            ninja-build \
+            bc \
+            jq
+
+      - name: Set up LLVM environment
+        run: |
+          echo "PATH=/usr/lib/llvm-18/bin:$PATH" >> "$GITHUB_ENV"
+          echo "LLVM_DIR=/usr/lib/llvm-18/lib/cmake/llvm" >> "$GITHUB_ENV"
+          echo "CC=/usr/lib/llvm-18/bin/clang" >> "$GITHUB_ENV"
+          echo "CXX=/usr/lib/llvm-18/bin/clang++" >> "$GITHUB_ENV"
+
+      - name: Build analysis toolchain
+        run: ./scripts/build.sh Release
+
+      - name: Verify workloads with history
+        run: |
+          mkdir -p reports/workloads
+          export CACHE_EXPLORER_WORKLOAD_HISTORY="$PWD/reports/workloads/workload-history.json"
+          ./tests/integration/test-workload-snapshots.sh
+
+      - name: Render dashboard
+        run: |
+          mkdir -p site
+          backend/scripts/cache-explore workloads --history-summary reports/workloads/workload-history*.json \
+            | tee site/workload-history-summary.txt
+          backend/scripts/cache-explore workloads --history-summary reports/workloads/workload-history*.json --json \
+            > site/workload-history-summary.json
+          backend/scripts/cache-explore workloads --history-summary reports/workloads/workload-history*.json --html \
+            > site/index.html
+          cp reports/workloads/workload-history*.json site/
+          {
+            echo "### Workload dashboard"
+            echo
+            echo "Published dashboard will be available from the GitHub Pages deployment URL."
+            echo
+            echo '```'
+            cat site/workload-history-summary.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload dashboard artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

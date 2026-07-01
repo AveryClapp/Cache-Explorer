@@ -197,6 +197,10 @@ standalone HTML trend report:
   > reports/workloads/history.html
 ```
 
+On pushes to `main`, the `Workload Dashboard` workflow publishes the latest
+HTML workload-history report to GitHub Pages when Pages is configured for
+Actions.
+
 ## Limitations
 
 - **Requires recompilation** - Can't trace pre-compiled binaries (use Intel Pin for that)
