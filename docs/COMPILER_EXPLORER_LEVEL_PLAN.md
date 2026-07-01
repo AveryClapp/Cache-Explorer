@@ -19,6 +19,7 @@ Already in place:
 - Result Fidelity remains visible for legacy or partial results that lack
   provenance, showing unknown fields instead of hiding the trust boundary.
 - Copyable local repro commands from result provenance.
+- Copyable structured diagnostics from compile/runtime error states.
 - Golden kernel tests, workload snapshot verification, profile drift checks,
   frontend build/browser smoke coverage, and server tests in CI.
 - Browser smoke covers launch paths, workload catalog controls, workload history

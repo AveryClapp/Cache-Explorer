@@ -235,7 +235,7 @@
    ══════════════════════════════════════════════════════════════════════════ */
 .error-box {
   background: var(--surface);
-  border: 1px solid var(--signal-error);
+  border: 1px solid var(--signal-critical);
   border-radius: var(--radius-md);
   padding: var(--space-4);
   margin: var(--space-4);
@@ -244,9 +244,18 @@
 .error-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--space-2);
   margin-bottom: var(--space-3);
-  color: var(--signal-error);
+  color: var(--signal-critical);
+}
+
+.error-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .error-icon {
@@ -262,7 +271,25 @@
 .error-summary {
   font-size: var(--text-sm);
   color: var(--text-secondary);
-  margin-left: auto;
+}
+
+.error-copy {
+  flex-shrink: 0;
+  padding: var(--space-1) var(--space-2);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--signal-critical) 45%, var(--border));
+  border-radius: var(--radius-sm);
+  color: var(--signal-critical);
+  font-family: var(--font-display);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.error-copy:hover,
+.error-copy:focus-visible {
+  background: color-mix(in srgb, var(--signal-critical) 12%, transparent);
+  outline: none;
 }
 
 .error-item {
@@ -294,7 +321,7 @@
 
 .error-severity.error {
   background: rgba(239, 68, 68, 0.2);
-  color: var(--signal-error);
+  color: var(--signal-critical);
 }
 
 .error-severity.warning {
@@ -322,7 +349,7 @@
 }
 
 .error-caret {
-  color: var(--signal-error);
+  color: var(--signal-critical);
 }
 
 .error-suggestion {
