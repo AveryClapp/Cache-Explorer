@@ -53,8 +53,9 @@ Known gaps:
 - The catalog covers locality, layout, prefetch, tiling, pointer chasing,
   branch behavior, vector/memcpy/atomic instrumentation, and
   hardware-profile-sensitive examples.
-- False-sharing/coherence workloads are present as examples, but still need a
-  compact always-on snapshot that finishes quickly enough for CI.
+- False-sharing/coherence reporting is fixed in the simulator and covered by
+  simulator/validation tests, but threaded CLI workloads still need runtime
+  tuning before they belong in always-on CI snapshots.
 - CI runs product-facing verification commands instead of private-only scripts.
 - Workload verifier emits structured JSON, human summaries, durations, and
   provenance for every variant.
@@ -103,7 +104,8 @@ Known gaps:
 
 ## Near-Term Leaps
 
-- Add a compact false-sharing/coherence workload snapshot.
+- Tune threaded false-sharing examples so they can run as optional stress
+  workloads without dragging down CI.
 - Publish or summarize CI benchmark-history artifacts.
 - Add a richer first-run/default workload path for new users.
 - Add browser-level regression coverage for workload browser and structured

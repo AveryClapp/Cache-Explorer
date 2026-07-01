@@ -38,7 +38,8 @@ private:
   std::unordered_set<uint64_t> prefetched_addresses;
 
   std::string make_key(std::string_view file, uint32_t line);
-  void process_line_access(const TraceEvent &event, uint64_t line_addr, bool is_write);
+  void process_line_access(const TraceEvent &event, uint64_t line_addr,
+                           uint64_t access_addr, bool is_write);
 
 public:
   MultiCoreTraceProcessor(int num_cores, const CacheConfig &l1_cfg,

@@ -17,12 +17,15 @@ std::string MultiCoreTraceProcessor::make_key(std::string_view file, uint32_t li
     return std::string(file) + ":" + std::to_string(line);
 }
 
-void MultiCoreTraceProcessor::process_line_access(const TraceEvent &event, uint64_t line_addr, bool is_write) {
+void MultiCoreTraceProcessor::process_line_access(const TraceEvent &event,
+                                                  uint64_t line_addr,
+                                                  uint64_t access_addr,
+                                                  bool is_write) {
     MultiCoreAccessResult result;
     if (is_write) {
-        result = cache.write(line_addr, event.thread_id, event.file, event.line);
+        result = cache.write(access_addr, event.thread_id, event.file, event.line);
     } else {
-        result = cache.read(line_addr, event.thread_id, event.file, event.line);
+        result = cache.read(access_addr, event.thread_id, event.file, event.line);
     }
 
     // Track prefetch usefulness
@@ -77,14 +80,16 @@ void MultiCoreTraceProcessor::process(const TraceEvent &event) {
         auto src_lines = split_access_to_cache_lines(
             {event.src_address, event.size, false}, line_size);
         for (const auto &line_access : src_lines) {
-            process_line_access(event, line_access.line_address, false);
+            process_line_access(event, line_access.line_address,
+                                line_access.access_address, false);
         }
 
         // Process dest writes
         auto dst_lines = split_access_to_cache_lines(
             {event.address, event.size, true}, line_size);
         for (const auto &line_access : dst_lines) {
-            process_line_access(event, line_access.line_address, true);
+            process_line_access(event, line_access.line_address,
+                                line_access.access_address, true);
         }
         return;
     }
@@ -97,7 +102,8 @@ void MultiCoreTraceProcessor::process(const TraceEvent &event) {
         auto lines = split_access_to_cache_lines(
             {event.address, event.size, true}, line_size);
         for (const auto &line_access : lines) {
-            process_line_access(event, line_access.line_address, true);
+            process_line_access(event, line_access.line_address,
+                                line_access.access_address, true);
         }
         return;
     }
@@ -136,7 +142,8 @@ void MultiCoreTraceProcessor::process(const TraceEvent &event) {
     }
 
     for (const auto &line_access : lines) {
-        process_line_access(event, line_access.line_address, event.is_write);
+        process_line_access(event, line_access.line_address,
+                            line_access.access_address, event.is_write);
     }
 }
 

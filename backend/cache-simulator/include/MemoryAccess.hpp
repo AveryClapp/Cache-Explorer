@@ -13,6 +13,7 @@ struct MemoryAccess {
 
 struct CacheLineAccess {
   uint64_t line_address;
+  uint64_t access_address;
   bool is_write;
 };
 
@@ -25,7 +26,8 @@ split_access_to_cache_lines(const MemoryAccess &access, int line_size) {
   uint64_t end_line = access.end_address() & line_mask;
 
   for (uint64_t line = start_line; line <= end_line; line += line_size) {
-    lines.push_back({line, access.is_write});
+    uint64_t access_address = access.address > line ? access.address : line;
+    lines.push_back({line, access_address, access.is_write});
   }
 
   return lines;

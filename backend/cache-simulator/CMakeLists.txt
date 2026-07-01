@@ -49,6 +49,9 @@ target_link_libraries(AdvancedInstrumentationTest CacheSimulator)
 add_executable(MultiCoreTLBTest tests/MultiCoreTLBTest.cpp)
 target_link_libraries(MultiCoreTLBTest CacheSimulator)
 
+add_executable(MultiCoreTraceProcessorTest tests/MultiCoreTraceProcessorTest.cpp)
+target_link_libraries(MultiCoreTraceProcessorTest CacheSimulator)
+
 add_executable(ArgParserTest tests/ArgParserTest.cpp)
 target_link_libraries(ArgParserTest CacheSimulator)
 
