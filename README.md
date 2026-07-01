@@ -233,7 +233,8 @@ the release after shipping.
 For hosted/server operation, see
 [Deployment Readiness](docs/DEPLOYMENT_READINESS.md). For the empirical ladder
 behind hardware-profile trust labels, see
-[Calibration Roadmap](docs/CALIBRATION_ROADMAP.md).
+[Calibration Roadmap](docs/CALIBRATION_ROADMAP.md). Maintainers shipping builds
+should use the [Release And Install Runbook](docs/RELEASE_INSTALL_RUNBOOK.md).
 
 ## Limitations
 

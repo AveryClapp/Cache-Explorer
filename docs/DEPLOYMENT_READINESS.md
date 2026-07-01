@@ -8,12 +8,15 @@ questions without reading source code:
 - Can this release be reproduced and trusted after it ships?
 
 This document is the production posture checklist. It complements
-`docs/COMPILER_EXPLORER_LEVEL_PLAN.md`; it is not a new architecture.
+`docs/COMPILER_EXPLORER_LEVEL_PLAN.md` and
+`docs/RELEASE_INSTALL_RUNBOOK.md`; it is not a new architecture.
 
 ## Production Defaults
 
 Recommended hosted defaults:
 
+- Start from `.env.production.example` and move real values into the deployment
+  secret/config system.
 - Run through Docker or another isolated runner; set `ENABLE_SANDBOX=1` when the
   Docker sandbox image is built and available.
 - Put the service behind a reverse proxy and set `TRUST_PROXY=1` so rate limits
@@ -99,6 +102,10 @@ npm run smoke:ui
 ```bash
 cd backend/server
 npm test
+```
+
+```bash
+./backend/scripts/cache-explore calibration
 ```
 
 After deploy:

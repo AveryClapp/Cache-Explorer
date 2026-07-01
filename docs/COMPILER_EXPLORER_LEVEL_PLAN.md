@@ -103,6 +103,8 @@ Already in place:
 - Calibration has a documented evidence ladder so profiles can be
   product-complete while making clear which fields are lab-calibrated and which
   remain modeled, estimated, metadata-only, or unsupported.
+- Install and release flow has a maintainer runbook, production environment
+  template, and calibration evidence validation gate.
 
 Known gaps:
 

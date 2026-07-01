@@ -82,6 +82,9 @@ jobs:
         run: |
           ls -la backend/scripts/cache-explore*
 
+      - name: Validate calibration evidence packets
+        run: backend/scripts/cache-explore calibration
+
       - name: Run E2E tests
         run: |
           export PATH="/usr/lib/llvm-18/bin:$PATH"
