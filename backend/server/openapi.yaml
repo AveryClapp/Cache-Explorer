@@ -20,6 +20,8 @@ tags:
     description: Code compilation and cache profiling endpoints
   - name: hardware
     description: Hardware profile catalog and model details
+  - name: workloads
+    description: Verified workload catalog and benchmark contract endpoints
   - name: sharing
     description: URL shortening and code sharing endpoints
   - name: monitoring
@@ -322,6 +324,68 @@ paths:
                 # HELP cache_explorer_errors_total Total number of errors
                 # TYPE cache_explorer_errors_total counter
                 cache_explorer_errors_total{type="compile"} 5
+
+  /api/workloads:
+    get:
+      tags:
+        - workloads
+      summary: List verified workload snapshots
+      description: |
+        Returns product-facing workload metadata used by the verified workload
+        catalog. Stress workloads are excluded by default because they can be
+        longer-running or machine-sensitive.
+      parameters:
+        - name: includeStress
+          in: query
+          required: false
+          description: Include opt-in stress workloads such as threaded false-sharing checks.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Workload catalog
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkloadCatalogResponse'
+        '500':
+          description: Failed to list workloads
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/workloads/verify:
+    get:
+      tags:
+        - workloads
+      summary: Verify workload snapshot contracts
+      description: |
+        Runs workload variants and validates their expected metric
+        relationships. Stress workloads are excluded unless explicitly
+        requested.
+      parameters:
+        - name: includeStress
+          in: query
+          required: false
+          description: Include opt-in stress workloads in verification.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Workload verification results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkloadVerificationResponse'
+        '500':
+          description: Failed to verify workloads
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /shorten:
     post:
@@ -858,6 +922,249 @@ components:
             type: string
           example:
             - Execution, SIMD, bandwidth, and dependency behavior are modeled as estimates unless marked calibrated.
+
+    WorkloadCatalogResponse:
+      type: object
+      properties:
+        workloads:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkloadSnapshot'
+
+    WorkloadSnapshot:
+      type: object
+      properties:
+        id:
+          type: string
+          example: conv2d-intel14
+        description:
+          type: string
+          example: Direct vs tiled 3x3 convolution on the Intel 14th Gen profile.
+        identity:
+          $ref: '#/components/schemas/WorkloadIdentity'
+        stress:
+          type: boolean
+          description: Whether this workload is excluded from default verification unless explicitly requested.
+          default: false
+          example: false
+        tags:
+          type: array
+          items:
+            type: string
+          example: [threaded, coherence]
+        example:
+          type: string
+          example: examples/conv2d_kernel.c
+        language:
+          type: string
+          example: c
+        optLevel:
+          type: string
+          example: "-O2"
+        config:
+          type: string
+          example: intel14
+        limit:
+          type: integer
+          example: 200000
+        prefetch:
+          type: string
+          example: stream
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkloadVariant'
+        expectedRelationships:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkloadRelationship'
+
+    WorkloadVariant:
+      type: object
+      properties:
+        id:
+          type: string
+          example: tiled
+        example:
+          type: string
+          example: examples/conv2d_kernel.c
+        optLevel:
+          type: string
+          example: "-O2"
+        config:
+          type: string
+          example: intel14
+        limit:
+          type: integer
+          example: 200000
+        prefetch:
+          type: string
+          example: stream
+        defines:
+          type: array
+          items:
+            type: string
+          example: [RUN_TILED=1]
+
+    WorkloadRelationship:
+      type: object
+      properties:
+        metric:
+          type: string
+          example: levels.l2.hitRate
+        relationship:
+          type: string
+          example: tiled > direct
+        missingValue:
+          type: number
+          nullable: true
+          example: 0
+        lastObserved:
+          type: object
+          additionalProperties:
+            type: number
+
+    WorkloadIdentity:
+      type: object
+      properties:
+        manifestPath:
+          type: string
+          example: benchmarks/workloads/conv2d-intel14.json
+        manifestSha256:
+          type: string
+          example: 3d8cf6f9a07c2785b8af423e98e7d846f7f0bd65fef0b826d0a24d51dcb1357f
+        sourceFiles:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/WorkloadFileIdentity'
+
+    WorkloadFileIdentity:
+      type: object
+      properties:
+        path:
+          type: string
+          example: examples/conv2d_kernel.c
+        exists:
+          type: boolean
+          example: true
+        sizeBytes:
+          type: integer
+          example: 4096
+        mtimeMs:
+          type: integer
+          example: 1760000000000
+        sha256:
+          type: string
+          example: 54b1b0a7c8a9d66c81b520407bdb2f0212e4a9ce660f7db92f8f7c0b7a3516d8
+        error:
+          type: string
+
+    WorkloadVerificationResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          example: true
+        summary:
+          $ref: '#/components/schemas/WorkloadVerificationSummary'
+        workloads:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkloadVerificationResult'
+
+    WorkloadVerificationSummary:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          example: true
+        workloads:
+          type: integer
+          example: 12
+        passed:
+          type: integer
+          example: 27
+        failed:
+          type: integer
+          example: 0
+        durationMs:
+          type: integer
+          example: 57460
+
+    WorkloadVerificationResult:
+      type: object
+      properties:
+        id:
+          type: string
+          example: conv2d-intel14
+        description:
+          type: string
+        identity:
+          $ref: '#/components/schemas/WorkloadIdentity'
+        ok:
+          type: boolean
+          example: true
+        durationMs:
+          type: integer
+          example: 4200
+        variants:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/WorkloadVerificationRun'
+        checks:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkloadVerificationCheck'
+
+    WorkloadVerificationRun:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          example: true
+        durationMs:
+          type: integer
+          example: 2100
+        error:
+          type: string
+        summary:
+          type: object
+          additionalProperties: true
+        provenance:
+          $ref: '#/components/schemas/ResultProvenance'
+
+    WorkloadVerificationCheck:
+      type: object
+      properties:
+        metric:
+          type: string
+          example: levels.l2.hitRate
+        relationship:
+          type: string
+          example: tiled > direct
+        leftVariant:
+          type: string
+          example: tiled
+        rightVariant:
+          type: string
+          example: direct
+        operator:
+          type: string
+          example: ">"
+        leftValue:
+          type: number
+          example: 0.472
+        rightValue:
+          type: number
+          example: 0.348
+        passed:
+          type: boolean
+          example: true
+        missingValue:
+          type: number
+          nullable: true
+        error:
+          type: string
 
     CompileRequest:
       type: object
