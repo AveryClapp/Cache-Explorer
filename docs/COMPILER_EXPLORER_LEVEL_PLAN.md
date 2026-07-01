@@ -17,8 +17,8 @@ Already in place:
 - Copyable local repro commands from result provenance.
 - Golden kernel tests, workload snapshot verification, profile drift checks,
   frontend build/browser smoke coverage, and server tests in CI.
-- Browser smoke covers launch paths, workload catalog controls, and share
-  short-link roundtrips.
+- Browser smoke covers launch paths, workload catalog controls, workload history
+  surfacing, and share short-link roundtrips.
 - Share links that preserve multi-file projects, active/main file identity, run
   settings, and experiment setup.
 - Verified workload browser in the app, backed by product-facing workload APIs,
@@ -46,6 +46,8 @@ Already in place:
   flows.
 - Local bootstrap has a doctor script plus a single dev command that can build,
   install npm dependencies, and start backend/frontend together.
+- Optional Vim editor mode is lazy-loaded so the main app bundle avoids that
+  non-default editor-mode payload.
 - Docker deployment proxies the product API surface and exposes backend/frontend
   health checks.
 - Releases publish LLVM pass checksums and the download helper verifies them
