@@ -83,6 +83,20 @@ else
   exit 1
 fi
 
+echo -n "Test: workload history artifact can be summarized... "
+if "$CACHE_EXPLORE" workloads --history-summary "$HISTORY_FILE" --json | jq -e '
+  .latest.summary.failed == 0
+  and .latest.summary.passed >= 1
+  and (.slowestWorkloads | length) >= 1
+  and (.failures | length) == 0
+' > /dev/null; then
+  echo "PASS"
+else
+  echo "FAIL"
+  "$CACHE_EXPLORE" workloads --history-summary "$HISTORY_FILE" --json | jq .
+  exit 1
+fi
+
 echo ""
 echo "========================================"
 echo "  Workload Snapshot Summary"

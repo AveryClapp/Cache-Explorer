@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { mkdir, readdir, readFile, writeFile } = require('fs/promises')
+const { mkdir, readdir, readFile, stat, writeFile } = require('fs/promises')
 const { spawnSync } = require('child_process')
 const { dirname, join, resolve } = require('path')
 
@@ -16,6 +16,8 @@ Options:
   --verify     Run variants and validate expected relationships
   --history <path>
                With --verify, write compact benchmark history JSON
+  --history-summary <path>
+               Summarize one benchmark history JSON file (repeat for multiple)
   --help       Show this help
 
 Examples:
@@ -25,7 +27,9 @@ Examples:
   cache-explore workloads conv2d-intel14 --commands
   cache-explore workloads conv2d-intel14 --verify
   cache-explore workloads --verify --json
-  cache-explore workloads --verify --history reports/workloads/history.json`)
+  cache-explore workloads --verify --history reports/workloads/history.json
+  cache-explore workloads --history-summary reports/workloads/history.json
+  cache-explore workloads --history-summary reports/workloads/*.json --json`)
 }
 
 function projectRoot() {
@@ -329,6 +333,151 @@ async function writeHistory(path, summary, results) {
   await writeFile(resolve(path), `${JSON.stringify(historyRecord(summary, results), null, 2)}\n`)
 }
 
+async function expandHistoryPath(path) {
+  const resolved = resolve(path)
+  const info = await stat(resolved)
+  if (!info.isDirectory()) return [resolved]
+
+  const entries = await readdir(resolved, { withFileTypes: true })
+  return entries
+    .filter(entry => entry.isFile() && entry.name.endsWith('.json'))
+    .map(entry => join(resolved, entry.name))
+    .sort()
+}
+
+async function loadHistoryRecords(paths) {
+  const files = []
+  for (const path of paths) {
+    files.push(...await expandHistoryPath(path))
+  }
+
+  const records = []
+  for (const file of [...new Set(files)]) {
+    const record = JSON.parse(await readFile(file, 'utf8'))
+    records.push({ file, record })
+  }
+
+  records.sort((a, b) => String(a.record.generatedAt || '').localeCompare(String(b.record.generatedAt || '')))
+  return records
+}
+
+function workloadDurationMap(record) {
+  return new Map((record.workloads || []).map(workload => [workload.id, workload.durationMs || 0]))
+}
+
+function summarizeHistoryRecords(records) {
+  const latestEntry = records[records.length - 1]
+  const previousEntry = records.length > 1 ? records[records.length - 2] : null
+  const latest = latestEntry?.record || {}
+  const previousDurations = previousEntry ? workloadDurationMap(previousEntry.record) : new Map()
+
+  const workloads = [...(latest.workloads || [])]
+  const failures = workloads.flatMap(workload => (
+    (workload.checks || [])
+      .filter(check => !check.passed)
+      .map(check => ({
+        workload: workload.id,
+        metric: check.metric,
+        relationship: check.relationship,
+        leftValue: check.leftValue,
+        rightValue: check.rightValue,
+      }))
+  ))
+  const slowestWorkloads = workloads
+    .map(workload => ({
+      id: workload.id,
+      ok: workload.ok,
+      durationMs: workload.durationMs || 0,
+      checks: (workload.checks || []).length,
+      variants: Object.keys(workload.variants || {}).length,
+    }))
+    .sort((a, b) => b.durationMs - a.durationMs)
+    .slice(0, 5)
+  const durationDeltas = workloads
+    .map(workload => {
+      const previousDurationMs = previousDurations.get(workload.id)
+      if (typeof previousDurationMs !== 'number') return null
+      const durationMs = workload.durationMs || 0
+      const deltaMs = durationMs - previousDurationMs
+      const deltaPct = previousDurationMs > 0 ? deltaMs / previousDurationMs : null
+      return {
+        id: workload.id,
+        durationMs,
+        previousDurationMs,
+        deltaMs,
+        deltaPct,
+      }
+    })
+    .filter(Boolean)
+    .sort((a, b) => Math.abs(b.deltaMs) - Math.abs(a.deltaMs))
+    .slice(0, 5)
+
+  return {
+    files: records.map(({ file, record }) => ({
+      file,
+      generatedAt: record.generatedAt,
+      ok: record.summary?.ok,
+      passed: record.summary?.passed,
+      failed: record.summary?.failed,
+      durationMs: record.summary?.durationMs,
+      git: record.git,
+    })),
+    latest: latestEntry ? {
+      file: latestEntry.file,
+      generatedAt: latest.generatedAt,
+      git: latest.git,
+      summary: latest.summary,
+    } : null,
+    failures,
+    slowestWorkloads,
+    durationDeltas,
+  }
+}
+
+function formatMs(ms) {
+  return `${Number(ms || 0).toLocaleString()}ms`
+}
+
+function printHistorySummary(summary) {
+  if (!summary.latest) {
+    console.log('No workload history records found.')
+    return
+  }
+
+  const latest = summary.latest
+  console.log(`History files: ${summary.files.length}`)
+  console.log(`Latest: ${latest.generatedAt || 'unknown'} (${latest.file})`)
+  console.log(`Summary: ${latest.summary?.passed || 0} passed, ${latest.summary?.failed || 0} failed, ${formatMs(latest.summary?.durationMs)}`)
+  if (latest.git?.sha || latest.git?.ref || latest.git?.runId) {
+    console.log(`Git: ${[latest.git.ref, latest.git.sha, latest.git.runId].filter(Boolean).join(' ')}`)
+  }
+
+  if (summary.failures.length > 0) {
+    console.log('\nFailures:')
+    for (const failure of summary.failures) {
+      console.log(`  ${failure.workload}: ${failure.metric} ${failure.relationship} (${failure.leftValue} vs ${failure.rightValue})`)
+    }
+  } else {
+    console.log('\nFailures: none')
+  }
+
+  if (summary.slowestWorkloads.length > 0) {
+    console.log('\nSlowest workloads:')
+    for (const workload of summary.slowestWorkloads) {
+      console.log(`  ${workload.id}: ${formatMs(workload.durationMs)} (${workload.variants} variants, ${workload.checks} checks)`)
+    }
+  }
+
+  if (summary.durationDeltas.length > 0) {
+    console.log('\nLargest duration changes:')
+    for (const delta of summary.durationDeltas) {
+      const sign = delta.deltaMs > 0 ? '+' : ''
+      const pct = delta.deltaPct === null ? '' : `, ${sign}${(delta.deltaPct * 100).toFixed(1)}%`
+      console.log(`  ${delta.id}: ${formatMs(delta.durationMs)} (${sign}${formatMs(delta.deltaMs)}${pct})`)
+    }
+  }
+}
+
 function printVerification(results) {
   const summary = verificationSummary(results)
 
@@ -382,6 +531,7 @@ function parseArgs(args) {
     verify: false,
     help: false,
     historyPath: '',
+    historySummaryPaths: [],
     workloadId: '',
   }
 
@@ -403,6 +553,22 @@ function parseArgs(args) {
       if (!parsed.historyPath) {
         throw new Error('--history requires a path')
       }
+    } else if (arg === '--history-summary') {
+      let consumed = 0
+      while (args[index + 1] && !args[index + 1].startsWith('-')) {
+        parsed.historySummaryPaths.push(args[index + 1])
+        index += 1
+        consumed += 1
+      }
+      if (consumed === 0) {
+        throw new Error('--history-summary requires a path')
+      }
+    } else if (arg.startsWith('--history-summary=')) {
+      const historySummaryPath = arg.slice('--history-summary='.length)
+      if (!historySummaryPath) {
+        throw new Error('--history-summary requires a path')
+      }
+      parsed.historySummaryPaths.push(historySummaryPath)
     } else if (arg.startsWith('-')) {
       throw new Error(`Unknown option: ${arg}`)
     } else if (!parsed.workloadId) {
@@ -416,7 +582,7 @@ function parseArgs(args) {
 }
 
 async function main() {
-  const { json, ids, commands, verify, help, historyPath, workloadId } = parseArgs(process.argv.slice(2))
+  const { json, ids, commands, verify, help, historyPath, historySummaryPaths, workloadId } = parseArgs(process.argv.slice(2))
 
   if (help) {
     usage()
@@ -426,6 +592,16 @@ async function main() {
   if (historyPath && !verify) {
     console.error('--history requires --verify')
     process.exitCode = 1
+    return
+  }
+  if (historySummaryPaths.length > 0) {
+    const records = await loadHistoryRecords(historySummaryPaths)
+    const summary = summarizeHistoryRecords(records)
+    if (json) {
+      console.log(JSON.stringify(summary, null, 2))
+    } else {
+      printHistorySummary(summary)
+    }
     return
   }
   const workloads = await loadWorkloads()

@@ -30,5 +30,6 @@ backend/scripts/cache-explore workloads conv2d-intel14 --commands
 backend/scripts/cache-explore workloads --verify
 backend/scripts/cache-explore workloads --verify --json
 backend/scripts/cache-explore workloads --verify --json --history reports/workloads/history.json
+backend/scripts/cache-explore workloads --history-summary reports/workloads/history.json
 tests/integration/test-workload-snapshots.sh
 ```
