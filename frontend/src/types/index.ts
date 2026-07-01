@@ -610,11 +610,21 @@ export interface DefineEntry {
   value: string
 }
 
+export interface ShareableFileState {
+  name: string
+  code: string
+  language: Language
+  isMain?: boolean
+}
+
 export interface ShareableState {
   code: string
   config: string
   optLevel: string
   language?: Language
+  files?: ShareableFileState[]
+  activeFileName?: string
+  mainFileName?: string
   defines?: DefineEntry[]
   prefetchPolicy?: PrefetchPolicy
   selectedCompiler?: string

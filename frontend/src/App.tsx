@@ -274,6 +274,14 @@ function App() {
     config,
     optLevel,
     language,
+    files: files.map(file => ({
+      name: file.name,
+      code: file.code,
+      language: file.language,
+      isMain: file.id === mainFileId,
+    })),
+    activeFileName: activeFile?.name,
+    mainFileName: files.find(file => file.id === mainFileId)?.name,
     defines,
     prefetchPolicy,
     selectedCompiler: selectedCompiler || undefined,
@@ -285,6 +293,7 @@ function App() {
     runHardwareConfigIds,
     experimentVariants,
   }), [
+    activeFileId,
     cacheSegments,
     code,
     config,
@@ -293,7 +302,9 @@ function App() {
     eventLimit,
     experimentVariants,
     fastMode,
+    files,
     language,
+    mainFileId,
     optLevel,
     prefetchPolicy,
     runHardwareConfigIds,
@@ -393,11 +404,30 @@ function App() {
 
       // Helper to apply loaded state to the first file
       const applyState = (state: ShareableState) => {
-        const lang = state.language || 'c'
-        const newFile = createFileTab(`main${getFileExtension(lang)}`, state.code, lang)
-        setFiles([newFile])
-        setActiveFileId(newFile.id)  // Must update to match new file's ID
-        setMainFileId(newFile.id)
+        const sharedFiles = Array.isArray(state.files)
+          ? state.files.filter(file => file.name && typeof file.code === 'string' && file.language)
+          : []
+
+        if (sharedFiles.length > 0) {
+          const newFiles = sharedFiles.map(file => ({
+            ...createFileTab(file.name, file.code, file.language),
+            isMain: file.isMain,
+          }))
+          const mainFile = newFiles.find(file => file.name === state.mainFileName)
+            || newFiles.find(file => file.isMain)
+            || newFiles[0]
+          const active = newFiles.find(file => file.name === state.activeFileName) || mainFile
+
+          setFiles(newFiles)
+          setActiveFileId(active.id)
+          setMainFileId(mainFile.id)
+        } else {
+          const lang = state.language || 'c'
+          const newFile = createFileTab(`main${getFileExtension(lang)}`, state.code, lang)
+          setFiles([newFile])
+          setActiveFileId(newFile.id)
+          setMainFileId(newFile.id)
+        }
         setConfig(state.config)
         setOptLevel(state.optLevel)
         if (state.defines) setDefines(state.defines)
