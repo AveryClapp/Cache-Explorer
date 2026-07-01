@@ -478,7 +478,9 @@ async function verifyWorkloadCatalogControls(url) {
   assert(workloadRequests.at(-1) === '?includeStress=1', `stress catalog request missing opt-in: ${workloadRequests.at(-1)}`)
 
   await page.getByRole('button', { name: 'Verify' }).click()
-  assert(verificationRequests.at(-1) === '?includeStress=1', `stress verification request missing opt-in: ${verificationRequests.at(-1)}`)
+  const stressVerifyParams = new URLSearchParams(verificationRequests.at(-1))
+  assert(stressVerifyParams.get('includeStress') === '1', `stress verification request missing opt-in: ${verificationRequests.at(-1)}`)
+  assert(stressVerifyParams.get('variantTimeoutMs') === '30000', `stress verification request missing timeout: ${verificationRequests.at(-1)}`)
 
   await closeModal()
   await page.unroute('**/api/workloads/verify')

@@ -21,7 +21,7 @@ interface WorkloadCatalogModalProps {
   historyLoading: boolean
   historyError: string | null
   onRefresh: () => void
-  onVerify: () => void
+  onVerify: (includeStress: boolean) => void
   onRefreshHistory: () => void
   onIncludeStressChange: (includeStress: boolean) => void
   onLoadWorkload: (workload: WorkloadSnapshot) => void
@@ -233,7 +233,7 @@ export function WorkloadCatalogModal({
                 {verification.summary.passed} passed / {verification.summary.failed} failed
               </span>
             )}
-            <button className="btn" onClick={onVerify} disabled={loading || verifying || !hasWorkloads}>
+            <button className="btn" onClick={() => onVerify(includeStress)} disabled={loading || verifying || !hasWorkloads}>
               {verifying ? 'Verifying...' : 'Verify'}
             </button>
             <button className="btn" onClick={onRefresh} disabled={loading || verifying}>Refresh</button>

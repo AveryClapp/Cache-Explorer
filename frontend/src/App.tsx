@@ -88,6 +88,7 @@ function annotationBadge(annotation: SourceAnnotation) {
 const BATCH_HARDWARE_CONFIGS = ['educational', 'intel', 'amd', 'apple']
 const HARDWARE_RUN_SET_STORAGE_KEY = 'cache-explorer-hardware-run-set'
 const HARDWARE_OPTION_VALUES = new Set(HARDWARE_OPTIONS.map(option => option.value))
+const STRESS_WORKLOAD_VARIANT_TIMEOUT_MS = 30000
 
 function hardwareConfigsOrDefault(configs: string[]) {
   return configs.length > 0 ? configs : BATCH_HARDWARE_CONFIGS
@@ -1005,12 +1006,17 @@ function App() {
     }
   }, [includeStressWorkloads])
 
-  const verifyWorkloads = useCallback(async () => {
+  const verifyWorkloads = useCallback(async (includeStress = includeStressWorkloads) => {
     setWorkloadsVerifying(true)
     setWorkloadsError(null)
     try {
-      const params = includeStressWorkloads ? '?includeStress=1' : ''
-      const response = await fetch(`${API_BASE}/api/workloads/verify${params}`)
+      const params = new URLSearchParams()
+      if (includeStress) {
+        params.set('includeStress', '1')
+        params.set('variantTimeoutMs', String(STRESS_WORKLOAD_VARIANT_TIMEOUT_MS))
+      }
+      const query = params.toString() ? `?${params.toString()}` : ''
+      const response = await fetch(`${API_BASE}/api/workloads/verify${query}`)
       const data = await response.json()
       if (!response.ok || !data.summary || !Array.isArray(data.workloads)) {
         setWorkloadsError(data.message || data.error || 'Failed to verify workloads')
