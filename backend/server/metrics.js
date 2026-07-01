@@ -177,7 +177,7 @@ export function getHealthStatus() {
   const anyError = Object.values(checks).some(v => v === 'error');
 
   return {
-    status: allOk ? 'ok' : anyError ? 'degraded' : 'ok',
+    status: allOk ? 'healthy' : anyError ? 'degraded' : 'healthy',
     uptime: Math.floor((Date.now() - startTime) / 1000),
     version: VERSION,
     checks,

@@ -13,7 +13,7 @@ const router = express.Router();
 router.get('/health', (req, res) => {
   const health = getHealthStatus();
   const dbHealthy = isDbHealthy();
-  const status = health.status === 'healthy' && dbHealthy ? 200 : 503;
+  const status = health.status === 'unhealthy' || !dbHealthy ? 503 : 200;
 
   res.status(status).json({
     ...health,

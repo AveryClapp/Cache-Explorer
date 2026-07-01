@@ -16,16 +16,20 @@ OUTPUT=$(cd "$PROJECT_ROOT/backend/server" && node --input-type=module - <<'NODE
 import { getHealthStatus } from './metrics.js';
 
 const health = getHealthStatus();
+if (!['healthy', 'degraded', 'unhealthy'].includes(health.status)) {
+  console.error(JSON.stringify(health, null, 2));
+  process.exit(1);
+}
 if (health.checks.temp_dir !== 'ok') {
   console.error(JSON.stringify(health, null, 2));
   process.exit(1);
 }
 
-console.log(health.checks.temp_dir);
+console.log(`${health.status}:${health.checks.temp_dir}`);
 NODE
 )
 
-if [[ "$(printf '%s\n' "$OUTPUT" | tail -n 1)" == "ok" ]]; then
+if [[ "$(printf '%s\n' "$OUTPUT" | tail -n 1)" == *":ok" ]]; then
   echo "PASS"
 else
   echo "FAIL"
