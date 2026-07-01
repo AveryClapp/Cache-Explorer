@@ -22,11 +22,12 @@ Already in place:
 - Verified workload browser in the app, backed by product-facing workload APIs.
 - Workload-driven experiments for same-source define variants and per-variant
   source comparisons.
+- Workload verification can emit compact benchmark-history JSON artifacts in CI.
 
 Known gaps:
 
 - Workload catalog is still too small to act as a broad regression corpus.
-- There is no hosted regression dashboard for benchmark history.
+- There is no hosted regression dashboard or trend UI for benchmark history.
 - Deployment/package polish is still developer-oriented.
 - Workload history, product onboarding, and empty/error states need another
   design pass.
@@ -88,7 +89,7 @@ Known gaps:
 1. Broaden workload metadata and catalog coverage.
 2. Add more workload snapshots for memory layout, pointer chasing, prefetch,
    false sharing, and branch behavior.
-3. Add benchmark-history artifacts or dashboards from CI.
+3. Add hosted benchmark-history dashboards or trend summaries from CI artifacts.
 4. Harden deployment docs and local dev bootstrap.
 5. Polish workload/history onboarding and modal empty/error states.
 6. Add more browser-level flows for share, workload, and experiment journeys.
@@ -97,7 +98,7 @@ Known gaps:
 
 - Add false-sharing, branch-pattern, prefetch-policy, vector, memcpy, and atomic
   workloads.
-- Emit CI benchmark-history artifacts from workload verification JSON.
+- Publish or summarize CI benchmark-history artifacts.
 - Add a guided first-run/default workload state for new users.
 - Add browser-level regression coverage for workload browser and structured
   experiment flows.
