@@ -46,6 +46,7 @@ import {
   API_BASE,
   WS_URL,
   PREFETCH_DEFAULTS,
+  CONFIG_NAMES,
   defaultCustomConfig,
 } from './constants'
 
@@ -107,6 +108,12 @@ function parseExperimentVariants(value: string) {
     .split(/\r?\n/)
     .map(variant => variant.trim())
     .filter(Boolean)
+}
+
+function formatCompactCount(value: number) {
+  if (value >= 1_000_000 && value % 1_000_000 === 0) return `${value / 1_000_000}M`
+  if (value >= 1_000 && value % 1_000 === 0) return `${value / 1_000}K`
+  return value.toLocaleString()
 }
 
 function App() {
@@ -338,6 +345,12 @@ function App() {
     localStorage.setItem(HARDWARE_RUN_SET_STORAGE_KEY, JSON.stringify(runHardwareConfigIds))
   }, [runHardwareConfigIds])
 
+  const targetSummary = useMemo(() => {
+    const hardwareName = CONFIG_NAMES[config] || config
+    const prefetchLabel = prefetchPolicy === 'none' ? 'no prefetch' : `${prefetchPolicy} prefetch`
+    const limitLabel = eventLimit > 0 ? `${formatCompactCount(eventLimit)} events` : 'full trace'
+    return `${hardwareName} / ${optLevel} / ${prefetchLabel} / ${limitLabel}`
+  }, [config, eventLimit, optLevel, prefetchPolicy])
 
   // Fetch default compiler on mount
   useEffect(() => {
@@ -1396,7 +1409,9 @@ function App() {
           onShare={handleShare}
           onExportJSON={() => result && exportAsJSON(result)}
           onExportCSV={() => result && exportAsCSV(result)}
+          targetSummary={targetSummary}
           onRun={runAnalysis}
+          onOpenHardware={openHardwareExplorer}
           onOpenWorkloads={openWorkloadCatalog}
           onOpenExperiment={openExperimentModal}
           isMobile={isMobile}

@@ -41,7 +41,9 @@ interface ResultsPanelProps {
   onShare: () => void
   onExportJSON?: () => void
   onExportCSV?: () => void
+  targetSummary: string
   onRun: () => void
+  onOpenHardware: () => void
   onOpenWorkloads: () => void
   onOpenExperiment: () => void
   isMobile: boolean
@@ -67,7 +69,9 @@ export function ResultsPanel({
   onShare,
   onExportJSON,
   onExportCSV,
+  targetSummary,
   onRun,
+  onOpenHardware,
   onOpenWorkloads,
   onOpenExperiment,
   isMobile,
@@ -198,7 +202,9 @@ export function ResultsPanel({
 
         {!result && !error && !isLoading && (
           <EmptyState
+            targetSummary={targetSummary}
             onRun={onRun}
+            onOpenHardware={onOpenHardware}
             onOpenWorkloads={onOpenWorkloads}
             onOpenExperiment={onOpenExperiment}
           />
