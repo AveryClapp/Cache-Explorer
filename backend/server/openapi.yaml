@@ -295,6 +295,12 @@ paths:
                 database: connected
                 sandbox: enabled
                 mode: production
+                sandboxStatus:
+                  configured: true
+                  available: true
+                  mode: sandbox
+                  publicMode: production
+                  runner: docker
                 config:
                   timeouts:
                     default: 60000
@@ -302,6 +308,27 @@ paths:
                     min: 5000
                   rateLimit:
                     maxRequestsPerMinute: 30
+
+  /sandbox-status:
+    get:
+      tags:
+        - monitoring
+      summary: Sandbox status endpoint
+      description: Returns the cached sandbox posture used by the server for run execution.
+      responses:
+        '200':
+          description: Sandbox posture
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SandboxStatus'
+              example:
+                configured: true
+                available: true
+                mode: sandbox
+                publicMode: production
+                runner: docker
+                message: Docker sandbox is enabled and available.
 
   /metrics:
     get:
@@ -1945,6 +1972,8 @@ components:
           enum: [production, development]
           description: Server running mode
           example: production
+        sandboxStatus:
+          $ref: '#/components/schemas/SandboxStatus'
         config:
           type: object
           properties:
@@ -1966,6 +1995,37 @@ components:
                 maxRequestsPerMinute:
                   type: integer
                   example: 30
+
+    SandboxStatus:
+      type: object
+      properties:
+        configured:
+          type: boolean
+          description: Whether sandbox mode was requested through server configuration.
+          example: true
+        available:
+          type: boolean
+          description: Whether the sandbox runner is currently available to the server.
+          example: true
+        mode:
+          type: string
+          enum: [sandbox, direct]
+          description: Execution runner selected by the server.
+          example: sandbox
+        publicMode:
+          type: string
+          enum: [production, development]
+          description: Product-facing mode label derived from sandbox availability.
+          example: production
+        runner:
+          type: string
+          enum: [docker, direct]
+          description: Runner implementation used for code execution.
+          example: docker
+        message:
+          type: string
+          description: Human-readable sandbox posture summary.
+          example: Docker sandbox is enabled and available.
 
     ShortenRequest:
       type: object

@@ -16,7 +16,6 @@ import { listHardwareProfiles, getHardwareProfile } from './hardwareProfiles.js'
 
 // Modular imports (gradually migrating to these)
 import { CONFIG } from './config.js';
-import { healthRoutes, shareRoutes, compilerRoutes } from './routes/index.js';
 import { parseCompileErrors, createErrorResponse } from './services/errorParser.js';
 import { runManagedProcess, runProcess } from './services/processRunner.js';
 import { createTempProject, cleanupTempProject, cleanupOrphanedTempDirs } from './services/tempProject.js';
@@ -307,8 +306,9 @@ const BACKEND_DIR = dirname(__dirname);
 const CACHE_EXPLORE = join(BACKEND_DIR, 'scripts', 'cache-explore');
 
 // Sandbox is disabled by default (use ENABLE_SANDBOX=1 to opt in)
+const sandboxConfigured = Boolean(process.env.ENABLE_SANDBOX);
 let sandboxAvailable = false;
-if (process.env.ENABLE_SANDBOX) {
+if (sandboxConfigured) {
   checkSandboxAvailable().then(available => {
     sandboxAvailable = available;
     if (available) {
@@ -319,6 +319,21 @@ if (process.env.ENABLE_SANDBOX) {
   });
 } else {
   console.log('Docker sandbox: DISABLED (set ENABLE_SANDBOX=1 to enable)');
+}
+
+function sandboxStatusSnapshot() {
+  return {
+    configured: sandboxConfigured,
+    available: sandboxAvailable,
+    mode: sandboxAvailable ? 'sandbox' : 'direct',
+    publicMode: sandboxAvailable ? 'production' : 'development',
+    runner: sandboxAvailable ? 'docker' : 'direct',
+    message: sandboxAvailable
+      ? 'Docker sandbox is enabled and available.'
+      : sandboxConfigured
+        ? 'Docker sandbox was requested but is unavailable.'
+        : 'Docker sandbox is disabled; set ENABLE_SANDBOX=1 to enable it.',
+  };
 }
 
 // Error handling imported from ./services/errorParser.js
@@ -1103,15 +1118,21 @@ app.post('/experiment', async (req, res) => {
 
 app.get('/health', (req, res) => {
   const health = getHealthStatus();
+  const sandboxStatus = sandboxStatusSnapshot();
   res.json({
     ...health,
-    sandbox: sandboxAvailable ? 'enabled' : 'disabled',
-    mode: sandboxAvailable ? 'production' : 'development',
+    sandbox: sandboxStatus.available ? 'enabled' : 'disabled',
+    mode: sandboxStatus.publicMode,
+    sandboxStatus,
     config: {
       timeouts: CONFIG.timeouts,
       rateLimit: CONFIG.rateLimit
     }
   });
+});
+
+app.get('/sandbox-status', (req, res) => {
+  res.json(sandboxStatusSnapshot());
 });
 
 // Prometheus metrics endpoint
