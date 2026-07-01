@@ -179,6 +179,10 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+      - name: Check frontend bundle budget
+        working-directory: frontend
+        run: npm run bundle:check
+
       - name: Set up Chrome
         uses: browser-actions/setup-chrome@v1
 
