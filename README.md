@@ -177,6 +177,15 @@ cd backend/cache-simulator/build
 ./AdvancedInstrumentationTest # 31 tests
 ```
 
+Frontend build and browser smoke:
+
+```bash
+cd frontend
+npm ci
+npm run build
+npm run smoke:ui
+```
+
 ## Limitations
 
 - **Requires recompilation** - Can't trace pre-compiled binaries (use Intel Pin for that)

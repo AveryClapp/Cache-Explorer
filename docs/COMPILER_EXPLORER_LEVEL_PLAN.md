@@ -15,8 +15,8 @@ Already in place:
 - Result provenance with source, compiler, simulator/runtime/pass hashes, and
   fidelity settings.
 - Copyable local repro commands from result provenance.
-- Golden kernel tests, workload snapshot verification, profile drift checks, and
-  server tests in CI.
+- Golden kernel tests, workload snapshot verification, profile drift checks,
+  frontend build/browser smoke coverage, and server tests in CI.
 - Share links that preserve multi-file projects, active/main file identity, run
   settings, and experiment setup.
 - Verified workload browser in the app, backed by product-facing workload APIs.
@@ -79,7 +79,7 @@ Known gaps:
 
 - UI remains responsive for million-event default runs.
 - Segment caching and fast mode remain explicit fidelity choices.
-- CI covers CLI, frontend type checks, server tests, simulator unit tests,
+- CI covers CLI, frontend type checks/browser smoke, server tests, simulator unit tests,
   profile drift, workload verification, and e2e flows.
 - Benchmark verification reports duration so regressions can become visible over
   time.
