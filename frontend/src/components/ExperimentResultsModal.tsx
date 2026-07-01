@@ -127,6 +127,11 @@ export function ExperimentResultsModal({
               </label>
               <div className="experiment-template-desc">
                 {selectedTemplate?.description || ''}
+                {selectedTemplate?.verifiedWorkloadId && (
+                  <span className="experiment-template-verified">
+                    Verified {selectedTemplate.verifiedWorkloadId}
+                  </span>
+                )}
               </div>
               <button className="btn experiment-template-apply" onClick={onApplyTemplate} disabled={running || !selectedTemplate}>
                 Apply

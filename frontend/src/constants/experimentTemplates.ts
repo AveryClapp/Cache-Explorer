@@ -11,6 +11,7 @@ export interface ExperimentTemplate {
   eventLimit?: number
   fastMode?: boolean
   cacheSegments?: boolean
+  verifiedWorkloadId?: string
 }
 
 export const EXPERIMENT_TEMPLATES: ExperimentTemplate[] = [
@@ -25,6 +26,7 @@ export const EXPERIMENT_TEMPLATES: ExperimentTemplate[] = [
     eventLimit: 1000000,
     fastMode: true,
     cacheSegments: true,
+    verifiedWorkloadId: 'conv2d-intel14',
   },
   {
     id: 'matrix-blocking',

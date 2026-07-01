@@ -442,6 +442,8 @@
   min-height: 36px;
   display: flex;
   align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
   padding: 0 var(--space-3);
   color: var(--text-secondary);
   background: var(--surface);
@@ -450,6 +452,19 @@
   font-family: var(--font-display);
   font-size: var(--text-sm);
   line-height: 1.35;
+}
+
+.experiment-template-verified {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 1px var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--signal-success) 45%, var(--border));
+  border-radius: var(--radius-sm);
+  color: var(--signal-success);
+  font-family: var(--font-code);
+  font-size: var(--text-2xs);
+  white-space: nowrap;
 }
 
 .experiment-template-apply {
