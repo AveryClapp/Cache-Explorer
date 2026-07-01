@@ -110,6 +110,13 @@ jobs:
             Release assets include `SHA256SUMS`; the download helper verifies
             binaries against it when available.
 
+            ### Verify Downloads
+            ```bash
+            sha256sum -c SHA256SUMS
+            gh attestation verify CacheProfiler-llvm18-linux-x64.so \
+              --repo AveryClapp/Cache-Explorer
+            ```
+
             ### Supported Configurations
             | LLVM Version | Linux x64 | macOS ARM64 |
             |--------------|-----------|-------------|
