@@ -62,6 +62,10 @@ A collection of C and C++ programs demonstrating various cache access patterns a
 |---------|---|-----|-------------|-------------------|
 | False Sharing | `false_sharing.c` | `false_sharing.cpp` | Adjacent data updates | Cache line ping-pong |
 
+The C false-sharing example supports `-D RUN_PADDED=1` to switch from packed
+counters to cache-line-separated counters, and `-D ITERATIONS=<n>` for shorter
+stress runs.
+
 ## Real-World Patterns
 
 | Example | C | C++ | Description | Pattern Type |
