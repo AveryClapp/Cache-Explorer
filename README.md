@@ -216,8 +216,9 @@ Actions.
 Tagged releases include pre-built LLVM pass assets, `SHA256SUMS` for download
 verification, and GitHub artifact attestations for release provenance.
 Published GHCR Docker images include BuildKit provenance attestations and SBOMs.
-Use the `Release Validation` workflow with a release tag to verify published
-pass checksums, pass attestations, and GHCR image availability after shipping.
+The `Release Validation` workflow runs when a GitHub Release is published, and
+can also be run manually with a tag to verify pass checksums, pass attestations,
+and GHCR image availability after shipping.
 
 ## Limitations
 
