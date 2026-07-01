@@ -52,26 +52,43 @@ jobs:
       - name: Build analysis toolchain
         run: ./scripts/build.sh Release
 
+      - name: Restore retained workload history
+        uses: actions/cache@v4
+        with:
+          path: reports/workloads/history-cache
+          key: workload-history-${{ github.run_id }}
+          restore-keys: |
+            workload-history-
+
       - name: Verify workloads with history
         run: |
-          mkdir -p reports/workloads
-          export CACHE_EXPLORER_WORKLOAD_HISTORY="$PWD/reports/workloads/workload-history.json"
+          mkdir -p reports/workloads/history-cache
+          export CACHE_EXPLORER_WORKLOAD_HISTORY="$PWD/reports/workloads/history-cache/workload-history-${GITHUB_RUN_ID}.json"
           ./tests/integration/test-workload-snapshots.sh
+
+      - name: Prune retained workload history
+        run: |
+          find reports/workloads/history-cache -type f -name 'workload-history*.json' \
+            -printf '%T@ %p\n' \
+            | sort -nr \
+            | awk 'NR > 30 { print $2 }' \
+            | xargs -r rm -f
+          ls -1 reports/workloads/history-cache
 
       - name: Render dashboard
         run: |
           mkdir -p site
-          backend/scripts/cache-explore workloads --history-summary reports/workloads/workload-history*.json \
+          backend/scripts/cache-explore workloads --history-summary reports/workloads/history-cache/workload-history*.json \
             | tee site/workload-history-summary.txt
-          backend/scripts/cache-explore workloads --history-summary reports/workloads/workload-history*.json --json \
+          backend/scripts/cache-explore workloads --history-summary reports/workloads/history-cache/workload-history*.json --json \
             > site/workload-history-summary.json
-          backend/scripts/cache-explore workloads --history-summary reports/workloads/workload-history*.json --html \
+          backend/scripts/cache-explore workloads --history-summary reports/workloads/history-cache/workload-history*.json --html \
             > site/index.html
-          cp reports/workloads/workload-history*.json site/
+          cp reports/workloads/history-cache/workload-history*.json site/
           {
             echo "### Workload dashboard"
             echo
-            echo "Published dashboard will be available from the GitHub Pages deployment URL."
+            echo "Published dashboard will include up to 30 retained workload-history runs when the Actions cache is available."
             echo
             echo '```'
             cat site/workload-history-summary.txt

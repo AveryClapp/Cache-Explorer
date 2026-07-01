@@ -29,6 +29,8 @@ Already in place:
   verification, and history outputs.
 - Workload verification can emit compact benchmark-history JSON artifacts,
   standalone HTML trend reports, and a GitHub Pages workload dashboard in CI.
+  The dashboard restores retained history from the Actions cache and renders up
+  to 30 recent runs.
 - Workload verification covers branch behavior, prefetch policy, vector/SIMD
   stats, memory intrinsic stats, atomic builtin stats, hash-table probing,
   contiguous allocation locality, sequential/binary search locality,
@@ -46,9 +48,8 @@ Known gaps:
 
 - Workload catalog still needs threaded real-world kernels before it can act as
   a broad regression corpus.
-- Hosted benchmark history is available through a GitHub Pages workflow, but it
-  still keeps only the latest published run unless external artifact retention
-  is added.
+- Hosted benchmark history retention is best-effort through the Actions cache;
+  durable long-term storage or release-attached history would still be stronger.
 - Deployment/package polish still needs signed/attested release artifacts beyond
   checksums, local doctor/dev flow, and Docker health checks.
 - Workload history trend surfacing, deeper onboarding, and error states need
@@ -117,7 +118,7 @@ Known gaps:
 
 1. Broaden workload metadata and catalog coverage.
 2. Tune optional threaded false-sharing workload snapshots.
-3. Add longer-lived benchmark-history retention beyond the latest Pages publish.
+3. Add durable benchmark-history storage beyond the best-effort Actions cache.
 4. Harden deployment docs and local dev bootstrap.
 5. Polish workload/history onboarding and modal empty/error states.
 6. Add more browser-level flows for result-bearing experiment journeys.
@@ -126,5 +127,5 @@ Known gaps:
 
 - Tune threaded false-sharing examples so they can run as optional stress
   workloads without dragging down CI.
-- Add longer-lived benchmark-history retention beyond the latest Pages publish.
+- Add durable benchmark-history storage beyond the best-effort Actions cache.
 - Keep committing each completed slice with validation output.
