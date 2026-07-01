@@ -230,6 +230,11 @@ can also be run manually with a tag to verify pass checksums, pass attestations,
 GHCR image availability, and attach the published workload-history archive to
 the release after shipping.
 
+For hosted/server operation, see
+[Deployment Readiness](docs/DEPLOYMENT_READINESS.md). For the empirical ladder
+behind hardware-profile trust labels, see
+[Calibration Roadmap](docs/CALIBRATION_ROADMAP.md).
+
 ## Limitations
 
 - **Requires recompilation** - Can't trace pre-compiled binaries (use Intel Pin for that)

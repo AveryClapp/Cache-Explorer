@@ -50,3 +50,14 @@ The execution engine is analytical. Branch prediction and pipeline estimates are
 useful for directional comparisons, but they are not measured runtime and they
 do not model instruction dependencies, opcode mix, port pressure, SMT, exact
 frontend decode behavior, NUMA, or OS scheduling.
+
+## Calibration Depth
+
+The model contract is the product truth boundary. The calibration ladder in
+[Calibration Roadmap](CALIBRATION_ROADMAP.md) defines when an individual field
+can move from modeled or estimated to calibrated.
+
+Cache Explorer should stay honest if a profile is only partially calibrated: the
+profile can expose calibrated cache geometry while keeping branch prediction,
+pipeline timing, memory bandwidth, SIMD, topology, or NUMA as estimated,
+metadata-only, or unsupported.

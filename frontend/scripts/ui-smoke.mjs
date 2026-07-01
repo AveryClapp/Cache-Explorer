@@ -1454,6 +1454,101 @@ async function verifyExperimentResults(url) {
   await page.unroute('**/experiment')
 }
 
+async function verifyExperimentShareReopen(url) {
+  const experimentVariants = 'direct\nshared-tiled:RUN_TILED=1'
+  const sharedState = {
+    code: '#include <stdio.h>\nint main(void) { return 0; }\n',
+    config: 'intel14',
+    optLevel: '-O2',
+    language: 'c',
+    files: [
+      {
+        name: 'experiment.c',
+        code: '#include <stdio.h>\nint main(void) { return 0; }\n',
+        language: 'c',
+        isMain: true,
+      },
+    ],
+    activeFileName: 'experiment.c',
+    mainFileName: 'experiment.c',
+    selectedCompiler: 'clang-21',
+    eventLimit: 200000,
+    cacheSegments: true,
+    runHardwareConfigIds: ['intel', 'amd'],
+    experimentVariants,
+  }
+  let experimentRequest = null
+  let shortenedState = null
+
+  await page.route('**/s/smoke-experiment-seed', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ state: sharedState }),
+    })
+  })
+  await page.route('**/s/smoke-experiment-roundtrip', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ state: shortenedState }),
+    })
+  })
+  await page.route('**/shorten', async route => {
+    shortenedState = route.request().postDataJSON().state
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ id: 'smoke-experiment-roundtrip' }),
+    })
+  })
+  await page.route('**/experiment', async route => {
+    experimentRequest = route.request().postDataJSON()
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(mockExperimentResult()),
+    })
+  })
+
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await page.goto(`${url}?s=smoke-experiment-seed`, { waitUntil: 'domcontentloaded' })
+  await page.getByRole('button', { name: 'Experiment', exact: true }).click()
+
+  let modal = page.locator('.experiment-modal')
+  await assertVisible(modal.getByText('Hardware Experiment', { exact: true }), 'shared experiment modal')
+  assert(await modal.locator('textarea').inputValue() === experimentVariants, 'shared experiment variants should restore before run')
+  await assertVisible(modal.getByText('intel', { exact: true }), 'shared experiment intel chip')
+  await assertVisible(modal.getByText('amd', { exact: true }), 'shared experiment amd chip')
+
+  await modal.getByRole('button', { name: 'Run', exact: true }).click()
+  await assertVisible(modal.getByText('Overall', { exact: true }), 'shared experiment result')
+  assert(experimentRequest?.variants?.includes('direct'), `shared experiment request missing direct variant: ${JSON.stringify(experimentRequest?.variants)}`)
+  assert(experimentRequest?.variants?.includes('shared-tiled:RUN_TILED=1'), `shared experiment request missing shared variant: ${JSON.stringify(experimentRequest?.variants)}`)
+  assert(experimentRequest?.configs?.join(',') === 'intel,amd', `shared experiment configs mismatch: ${JSON.stringify(experimentRequest?.configs)}`)
+  assert(experimentRequest?.limit === 200000, `shared experiment limit mismatch: ${experimentRequest?.limit}`)
+
+  await closeModal()
+  await page.getByRole('button', { name: 'Share', exact: true }).click()
+  await assertVisible(page.getByText('Link copied!', { exact: true }), 'experiment share copied toast')
+  await page.waitForFunction(() => window.__copiedText?.includes('?s=smoke-experiment-roundtrip'), null, { timeout: 5000 })
+  assert(shortenedState?.experimentVariants === experimentVariants, `shortened experiment variants mismatch: ${shortenedState?.experimentVariants}`)
+  assert(shortenedState?.runHardwareConfigIds?.join(',') === 'intel,amd', `shortened experiment run set mismatch: ${JSON.stringify(shortenedState?.runHardwareConfigIds)}`)
+
+  const copiedUrl = await page.evaluate(() => window.__copiedText)
+  await page.goto(copiedUrl, { waitUntil: 'domcontentloaded' })
+  await page.getByRole('button', { name: 'Experiment', exact: true }).click()
+  modal = page.locator('.experiment-modal')
+  await assertVisible(modal.getByText('Hardware Experiment', { exact: true }), 'reopened experiment modal')
+  assert(await modal.locator('textarea').inputValue() === experimentVariants, 'short-link experiment variants should restore')
+
+  await closeModal()
+  await page.unroute('**/experiment')
+  await page.unroute('**/shorten')
+  await page.unroute('**/s/smoke-experiment-roundtrip')
+  await page.unroute('**/s/smoke-experiment-seed')
+}
+
 async function cleanup() {
   if (browser) await browser.close().catch(() => {})
   if (previewProcess) {
@@ -1523,6 +1618,7 @@ try {
   await runSmokeStep('edit run compare share reopen', () => verifyEditRunCompareShareReopen(url))
   await runSmokeStep('workload catalog', () => verifyWorkloadCatalogControls(url))
   await runSmokeStep('experiment results', () => verifyExperimentResults(url))
+  await runSmokeStep('experiment share reopen', () => verifyExperimentShareReopen(url))
   await runSmokeStep('share round trip', () => verifyShareRoundTrip(url))
   await runSmokeStep('socket close fallback', () => verifySocketCloseFallback(url))
   console.log(`UI smoke passed (${url})`)

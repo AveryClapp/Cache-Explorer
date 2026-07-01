@@ -30,7 +30,8 @@ Already in place:
 - Browser smoke covers launch paths, workload catalog controls, workload history
   surfacing, result-bearing trust UI, legacy trust fallbacks, dirty socket
   recovery, result-bearing hardware comparison, edited code run/compare/share
-  reopen roundtrips, verified workload-to-experiment handoff, and share
+  reopen roundtrips, result-bearing experiment runs, verified
+  workload-to-experiment handoff, experiment share/reopen roundtrips, and share
   short-link roundtrips.
 - Share links that preserve multi-file projects, active/main file identity, run
   settings, and experiment setup.
@@ -84,6 +85,9 @@ Already in place:
   cannot silently fall back to browser defaults.
 - Docker deployment proxies the product API surface and exposes backend/frontend
   health checks.
+- Deployment readiness is documented as an operator contract covering production
+  defaults, health/readiness, sandbox posture, rate limits, release cadence,
+  first-week observability, and stress-safe tuning.
 - Expensive HTTP product routes enforce the same configured request window as
   WebSocket runs, while health and metrics stay probe-friendly.
 - Releases publish LLVM pass checksums and the download helper verifies them
@@ -96,16 +100,19 @@ Already in place:
   dispatched manually for a tag. It verifies pass checksums, pass attestations,
   GHCR image availability, and attaches a published workload-history archive to
   the release.
+- Calibration has a documented evidence ladder so profiles can be
+  product-complete while making clear which fields are lab-calibrated and which
+  remain modeled, estimated, metadata-only, or unsupported.
 
 Known gaps:
 
-- Threaded false-sharing has a default smoke workload, but heavier threaded
-  stress and real-world kernels still need runtime tuning before joining default
-  CI.
+- Threaded false-sharing has a default smoke workload. Heavier threaded stress
+  remains opt-in and should be tuned only on a dedicated machine before it is
+  considered for default CI.
 - Hosted benchmark history retention is backed by the published Pages dashboard,
   the Actions cache, and release-attached workload-history archives.
-- Deployment/package polish still needs release-cadence tuning once real usage
-  patterns are visible.
+- Deployment/package polish now has a readiness contract; release cadence and
+  production defaults still need adjustment from real hosted usage.
 - Deeper onboarding still needs another design pass; API-side workload error
   diagnostics and in-app workload history surfacing are in place.
 - On 2026-07-01, `false-sharing-stress-intel` timed out at 30 seconds per
@@ -175,18 +182,20 @@ Known gaps:
 ## Implementation Path
 
 1. Broaden workload metadata and catalog coverage.
-2. Tune optional threaded false-sharing stress workloads until they can join
-   default CI or remain clearly labeled as stress-only coverage.
+2. Keep optional threaded stress workloads labeled and excluded from default
+   coverage until dedicated-machine tuning proves they are safe.
 3. Add external benchmark-history archival only if Pages plus release-attached
    archives are not enough.
-4. Harden deployment docs and local dev bootstrap.
+4. Use the deployment readiness contract to tune hosted defaults from real usage.
 5. Polish onboarding and modal empty/error states around first-run workflows.
-6. Add more browser-level flows for result-bearing experiment journeys.
+6. Keep adding browser-level flows for result-bearing experiment journeys.
 
 ## Near-Term Leaps
 
-- Tune threaded false-sharing stress workloads and real-world threaded kernels
-  until they are fast enough for default CI, or keep them explicitly opt-in.
+- Watch hosted health, rate-limit, sandbox, timeout, cache-size, and workload
+  history signals before changing production defaults.
+- Expand empirical calibration by collecting evidence packets for one subsystem
+  at a time, starting with cache hierarchy and TLB behavior.
 - Add external benchmark-history archival only if Pages plus release-attached
   archives are not enough.
 - Keep committing each completed slice with validation output.
