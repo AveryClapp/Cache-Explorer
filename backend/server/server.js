@@ -20,6 +20,7 @@ import { healthRoutes, shareRoutes, compilerRoutes } from './routes/index.js';
 import { parseCompileErrors, createErrorResponse } from './services/errorParser.js';
 import { runManagedProcess, runProcess } from './services/processRunner.js';
 import { createTempProject, cleanupTempProject, cleanupOrphanedTempDirs } from './services/tempProject.js';
+import { workloadProcessErrorResponse } from './services/workloadErrors.js';
 import { ConnectionResourceTracker, connectionResources, getOrCreateTracker, removeTracker } from './middleware/resourceTracker.js';
 
 // CONFIG is now imported from ./config.js
@@ -166,53 +167,6 @@ function httpError(status, message, type = 'validation_error') {
   error.statusCode = status;
   error.type = type;
   return error;
-}
-
-function firstNonEmptyLine(value) {
-  return String(value || '')
-    .split(/\r?\n/)
-    .map(line => line.trim())
-    .find(Boolean);
-}
-
-function truncateDetail(value, maxLength = 4000) {
-  const text = String(value || '').trim();
-  if (text.length <= maxLength) return text;
-  return `${text.slice(0, maxLength)}...`;
-}
-
-function workloadProcessErrorResponse(err, fallback) {
-  const stdout = truncateDetail(err?.stdout);
-  const stderr = truncateDetail(err?.stderr);
-  const output = stderr || stdout || err?.message || '';
-  let parsed = null;
-
-  if (stdout) {
-    try {
-      parsed = JSON.parse(stdout);
-    } catch {
-      parsed = null;
-    }
-  }
-
-  const parsedMessage = parsed?.message || parsed?.error || parsed?.summary;
-  const detail = parsed?.details || parsed?.raw || output;
-  const message = err?.timeout
-    ? `${fallback}: command timed out after ${Math.round((err.timeoutMs || 0) / 1000)}s`
-    : parsedMessage
-      ? `${fallback}: ${parsedMessage}`
-      : firstNonEmptyLine(output)
-        ? `${fallback}: ${firstNonEmptyLine(output)}`
-        : fallback;
-
-  return {
-    error: fallback,
-    message,
-    type: parsed?.type || (err?.timeout ? 'timeout' : 'workload_error'),
-    exitCode: err?.exitCode,
-    timeout: err?.timeout || undefined,
-    details: detail || undefined,
-  };
 }
 
 function isStructuredVariant(variant) {
