@@ -30,6 +30,8 @@ Already in place:
   traversal locality.
 - Empty result state routes users into run, verified workload, and experiment
   flows.
+- Local bootstrap has a doctor script plus a single dev command that can build,
+  install npm dependencies, and start backend/frontend together.
 
 Known gaps:
 
@@ -37,7 +39,8 @@ Known gaps:
   it can act as a broad regression corpus.
 - There is no hosted persistent regression dashboard beyond downloadable CI
   trend reports.
-- Deployment/package polish is still developer-oriented.
+- Deployment/package polish still needs hosted-release and container hardening
+  beyond the local doctor/dev flow.
 - Workload history trend surfacing, deeper onboarding, and error states need
   another design pass.
 

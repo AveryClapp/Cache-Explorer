@@ -37,6 +37,7 @@ git clone https://github.com/AveryClapp/cache-explorer.git
 cd cache-explorer
 
 # Build if needed, install npm deps if needed, then run backend + frontend
+./scripts/doctor.sh
 ./scripts/dev.sh
 # Open the frontend URL it prints
 ```
@@ -127,6 +128,7 @@ git clone https://github.com/AveryClapp/cache-explorer.git
 cd cache-explorer
 
 # Start the full local product
+./scripts/doctor.sh
 ./scripts/dev.sh
 ```
 
