@@ -61,6 +61,7 @@
   .btn-compare,
   .btn-export,
   .btn-hardware-compare,
+  .btn-workloads,
   .btn-explore,
   .btn-experiment,
   .btn-primary,
@@ -215,6 +216,7 @@
 
   .btn-compare,
   .btn-hardware-compare,
+  .btn-workloads,
   .btn-explore,
   .btn-experiment,
   .btn-export {
@@ -470,6 +472,130 @@
 .experiment-template-apply {
   min-width: 84px;
   min-height: 36px;
+}
+
+.workload-modal {
+  max-width: min(1040px, calc(100vw - 32px));
+}
+
+.workload-modal-content {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.workload-summary-chip,
+.workload-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-code);
+  font-size: var(--text-2xs);
+  white-space: nowrap;
+}
+
+.workload-summary-chip.ok,
+.workload-status.ok,
+.workload-check.ok {
+  color: var(--signal-success);
+  border-color: color-mix(in srgb, var(--signal-success) 45%, var(--border));
+}
+
+.workload-summary-chip.fail,
+.workload-status.fail,
+.workload-check.fail {
+  color: var(--signal-critical);
+  border-color: color-mix(in srgb, var(--signal-critical) 45%, var(--border));
+}
+
+.workload-list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.workload-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-4);
+  align-items: start;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.workload-row-main {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.workload-row-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.workload-name {
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.workload-description,
+.workload-meta {
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+}
+
+.workload-meta,
+.workload-variants,
+.workload-checks {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.workload-meta span {
+  padding-right: var(--space-2);
+  border-right: 1px solid var(--border);
+}
+
+.workload-meta span:last-child {
+  border-right: 0;
+}
+
+.workload-variants code,
+.workload-check {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--elevated);
+  color: var(--text-secondary);
+  font-family: var(--font-code);
+  font-size: var(--text-2xs);
+}
+
+.workload-row-actions {
+  display: grid;
+  justify-items: end;
+  gap: var(--space-2);
+}
+
+.workload-duration {
+  color: var(--text-muted);
+  font-family: var(--font-code);
+  font-size: var(--text-2xs);
 }
 
 .experiment-field {

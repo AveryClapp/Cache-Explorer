@@ -13,6 +13,7 @@ interface HeaderProps {
   onClearBaseline: () => void;
   onCompareHardware: () => void;
   onExploreHardware: () => void;
+  onOpenWorkloads: () => void;
   onRunExperiment: () => void;
   onRun: () => void;
   onCancel: () => void;
@@ -41,6 +42,7 @@ export function Header({
   onClearBaseline,
   onCompareHardware,
   onExploreHardware,
+  onOpenWorkloads,
   onRunExperiment,
   onRun,
   onCancel,
@@ -90,6 +92,16 @@ export function Header({
             title="Compare hardware presets"
           >
             Hardware
+          </button>
+        )}
+
+        {!isLoading && (
+          <button
+            onClick={onOpenWorkloads}
+            className="btn-workloads"
+            title="Open verified workloads"
+          >
+            Workloads
           </button>
         )}
 

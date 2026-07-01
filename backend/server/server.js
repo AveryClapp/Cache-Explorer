@@ -868,6 +868,36 @@ app.get('/api/compilers', (req, res) => {
   }
 });
 
+app.get('/api/workloads', async (req, res) => {
+  incCounter('requests', { type: 'workloads' });
+  try {
+    const result = await runProcess(CACHE_EXPLORE, ['workloads', '--json'], {
+      timeout: CONFIG.timeouts.compilation,
+      maxOutputBuffer: CONFIG.memory.maxOutputBuffer,
+    });
+    res.json(JSON.parse(result.stdout.trim()));
+  } catch (err) {
+    console.error('Failed to list workloads:', err);
+    incCounter('errors', { type: 'workloads' });
+    res.status(500).json({ error: 'Failed to list workloads' });
+  }
+});
+
+app.get('/api/workloads/verify', async (req, res) => {
+  incCounter('requests', { type: 'workloads_verify' });
+  try {
+    const result = await runProcess(CACHE_EXPLORE, ['workloads', '--verify', '--json'], {
+      timeout: CONFIG.timeouts.max,
+      maxOutputBuffer: CONFIG.memory.maxOutputBuffer,
+    });
+    res.json(JSON.parse(result.stdout.trim()));
+  } catch (err) {
+    console.error('Failed to verify workloads:', err);
+    incCounter('errors', { type: 'workloads_verify' });
+    res.status(500).json({ error: 'Failed to verify workloads' });
+  }
+});
+
 // ============================================================================
 // Link Shortener (SQLite-backed)
 // ============================================================================

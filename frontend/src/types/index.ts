@@ -533,6 +533,79 @@ export interface HardwareExperimentResult {
   }>
 }
 
+export interface WorkloadVariant {
+  id: string
+  example?: string
+  optLevel?: string
+  config?: string
+  limit?: number
+  defines?: string[]
+}
+
+export interface WorkloadRelationship {
+  metric: string
+  relationship: string
+  lastObserved?: Record<string, number>
+}
+
+export interface WorkloadSnapshot {
+  id: string
+  description: string
+  example: string
+  language?: Language
+  optLevel?: string
+  config: string
+  limit?: number
+  variants: WorkloadVariant[]
+  expectedRelationships: WorkloadRelationship[]
+}
+
+export interface WorkloadVerificationCheck {
+  metric: string
+  relationship: string
+  leftVariant: string
+  rightVariant: string
+  operator: string
+  leftValue?: number
+  rightValue?: number
+  passed: boolean
+  error?: string
+}
+
+export interface WorkloadVerificationRun {
+  ok: boolean
+  durationMs: number
+  error?: string
+  summary?: {
+    events?: number
+    estimatedCycles?: number
+    primaryBottleneck?: string
+    hitRates?: ExperimentHitRates
+  }
+  provenance?: ResultProvenance
+}
+
+export interface WorkloadVerificationResult {
+  id: string
+  description: string
+  ok: boolean
+  durationMs: number
+  variants: Record<string, WorkloadVerificationRun>
+  checks: WorkloadVerificationCheck[]
+}
+
+export interface WorkloadVerificationResponse {
+  ok: boolean
+  summary: {
+    ok: boolean
+    workloads: number
+    passed: number
+    failed: number
+    durationMs: number
+  }
+  workloads: WorkloadVerificationResult[]
+}
+
 export interface OptimizationSuggestion {
   type: string
   severity: 'high' | 'medium' | 'low'

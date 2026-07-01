@@ -13,6 +13,7 @@ import {
   BatchResultsModal,
   ExperimentResultsModal,
   HardwareExplorerModal,
+  WorkloadCatalogModal,
   ResultsPanel,
   EditorPanel,
 } from './components'
@@ -32,6 +33,8 @@ import type {
   PrefetchPolicy,
   SourceAnnotation,
   ShareableState,
+  WorkloadSnapshot,
+  WorkloadVerificationResponse,
 } from './types'
 
 // Constants
@@ -261,6 +264,12 @@ function App() {
   const [hardwareProfilesError, setHardwareProfilesError] = useState<string | null>(null)
   const [selectedHardwareProfileId, setSelectedHardwareProfileId] = useState('')
   const [runHardwareConfigIds, setRunHardwareConfigIds] = useState<string[]>(readStoredHardwareRunSet)
+  const [showWorkloadCatalog, setShowWorkloadCatalog] = useState(false)
+  const [workloads, setWorkloads] = useState<WorkloadSnapshot[]>([])
+  const [workloadsLoading, setWorkloadsLoading] = useState(false)
+  const [workloadsVerifying, setWorkloadsVerifying] = useState(false)
+  const [workloadsError, setWorkloadsError] = useState<string | null>(null)
+  const [workloadVerification, setWorkloadVerification] = useState<WorkloadVerificationResponse | null>(null)
   const [batchTotal, setBatchTotal] = useState(BATCH_HARDWARE_CONFIGS.length)
   const commandInputRef = useRef<HTMLInputElement>(null)
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
@@ -879,6 +888,72 @@ function App() {
     setShowExperimentModal(true)
   }, [])
 
+  const loadWorkloads = useCallback(async () => {
+    setWorkloadsLoading(true)
+    setWorkloadsError(null)
+    try {
+      const response = await fetch(`${API_BASE}/api/workloads`)
+      const data = await response.json()
+      if (!response.ok || !Array.isArray(data.workloads)) {
+        setWorkloadsError(data.message || data.error || 'Failed to load workloads')
+        return
+      }
+      setWorkloads(data.workloads as WorkloadSnapshot[])
+    } catch (err) {
+      setWorkloadsError(err instanceof Error ? err.message : 'Failed to load workloads')
+    } finally {
+      setWorkloadsLoading(false)
+    }
+  }, [])
+
+  const verifyWorkloads = useCallback(async () => {
+    setWorkloadsVerifying(true)
+    setWorkloadsError(null)
+    try {
+      const response = await fetch(`${API_BASE}/api/workloads/verify`)
+      const data = await response.json()
+      if (!response.ok || !data.summary || !Array.isArray(data.workloads)) {
+        setWorkloadsError(data.message || data.error || 'Failed to verify workloads')
+        return
+      }
+      setWorkloadVerification(data as WorkloadVerificationResponse)
+    } catch (err) {
+      setWorkloadsError(err instanceof Error ? err.message : 'Failed to verify workloads')
+    } finally {
+      setWorkloadsVerifying(false)
+    }
+  }, [])
+
+  const openWorkloadCatalog = useCallback(() => {
+    setShowWorkloadCatalog(true)
+    if (workloads.length === 0 && !workloadsLoading) {
+      void loadWorkloads()
+    }
+  }, [loadWorkloads, workloads.length, workloadsLoading])
+
+  const exampleKeyForPath = useCallback((examplePath: string) => {
+    const base = examplePath.split('/').pop()?.replace(/\.(c|cpp|cc|cxx|rs|zig)$/, '')
+    if (!base) return null
+    if (Object.prototype.hasOwnProperty.call(EXAMPLES, base)) return base
+    if (base === 'cache_blocking' && EXAMPLES.blocking) return 'blocking'
+    return null
+  }, [])
+
+  const loadWorkload = useCallback((workload: WorkloadSnapshot) => {
+    const exampleKey = exampleKeyForPath(workload.example)
+    if (exampleKey) loadExampleByKey(exampleKey)
+    setConfig(workload.config)
+    if (workload.optLevel) setOptLevel(workload.optLevel)
+    if (typeof workload.limit === 'number') setEventLimit(workload.limit)
+    if (workload.variants.every(variant => !variant.example || variant.example === workload.example)) {
+      setExperimentVariants(workload.variants.map(variant => {
+        const defines = (variant.defines || []).join(',')
+        return defines ? `${variant.id}:${defines}` : variant.id
+      }).join('\n'))
+    }
+    setShowWorkloadCatalog(false)
+  }, [exampleKeyForPath, loadExampleByKey])
+
   const applyExperimentTemplate = useCallback(() => {
     const template = EXPERIMENT_TEMPLATES.find(item => item.id === selectedExperimentTemplateId)
     if (!template) return
@@ -1014,6 +1089,7 @@ function App() {
     { id: 'batch-analyze', icon: '@', label: 'Compare hardware presets', action: runBatchAnalysis, category: 'actions' },
     { id: 'hardware-experiment', icon: '@', label: 'Open hardware experiment', action: openExperimentModal, category: 'actions' },
     { id: 'hardware-explorer', icon: '@', label: 'Open hardware explorer', action: openHardwareExplorer, category: 'actions' },
+    { id: 'workloads', icon: '@', label: 'Open verified workloads', action: openWorkloadCatalog, category: 'actions' },
     // Settings (:)
     { id: 'vim', icon: ':', label: vimMode ? 'Disable Vim mode' : 'Enable Vim mode', action: () => setVimMode(!vimMode), category: 'settings' },
     { id: 'lang-c', icon: ':', label: 'Language: C', action: () => updateActiveLanguage('c'), category: 'settings' },
@@ -1026,7 +1102,7 @@ function App() {
     { id: 'limit-1m', icon: '*', label: 'Event limit: 1M', action: () => setEventLimit(1000000), category: 'config' },
     { id: 'limit-5m', icon: '*', label: 'Event limit: 5M', action: () => setEventLimit(5000000), category: 'config' },
     { id: 'limit-none', icon: '*', label: 'Event limit: None', action: () => setEventLimit(0), category: 'config' },
-  ], [isLoading, activeFileId, vimMode, diffMode, baselineResult, config, files, result, code, handleShare, updateActiveLanguage, setBaselineFromHook, clearBaselineHook, runBatchAnalysis, openExperimentModal, openHardwareExplorer])
+  ], [isLoading, activeFileId, vimMode, diffMode, baselineResult, config, files, result, code, handleShare, updateActiveLanguage, setBaselineFromHook, clearBaselineHook, runBatchAnalysis, openExperimentModal, openHardwareExplorer, openWorkloadCatalog])
 
   // Command palette handlers
   const handleCommandSelect = useCallback((cmd: CommandItem) => {
@@ -1109,6 +1185,21 @@ function App() {
         />
       )}
 
+      {/* Verified Workloads Modal */}
+      {showWorkloadCatalog && (
+        <WorkloadCatalogModal
+          workloads={workloads}
+          verification={workloadVerification}
+          loading={workloadsLoading}
+          verifying={workloadsVerifying}
+          error={workloadsError}
+          onRefresh={loadWorkloads}
+          onVerify={verifyWorkloads}
+          onLoadWorkload={loadWorkload}
+          onClose={() => setShowWorkloadCatalog(false)}
+        />
+      )}
+
       {/* Header - hidden in embed mode */}
       {!isEmbedMode && (
         <Header
@@ -1124,6 +1215,7 @@ function App() {
           onClearBaseline={() => { clearBaselineHook(); setBaselineCode(null) }}
           onCompareHardware={runBatchAnalysis}
           onExploreHardware={openHardwareExplorer}
+          onOpenWorkloads={openWorkloadCatalog}
           onRunExperiment={openExperimentModal}
           onRun={runAnalysis}
           onCancel={cancelAnalysis}
