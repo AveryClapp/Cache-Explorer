@@ -40,10 +40,16 @@ Runs `cache-explore workloads --verify --json` against benchmark snapshots from 
 - Tiled Conv2D improves modeled Intel 14th Gen L2 locality versus direct Conv2D
 - Row-major matrix traversal improves locality versus column-major traversal
 - Sequential array scanning has lower modeled average latency than pointer chasing
+- Intel stream prefetching reduces modeled cycles and L2 misses for a sequential scan
 
 These snapshots are executable benchmark metadata: example path, config, optimization level, variants, metric relationships, timing, and result provenance live together.
 
-### 5. Master Runner (`run-all-tests.sh`)
+### 5. Structured Experiments (`test-structured-experiment.sh`)
+Starts a temporary backend and validates `/experiment` with structured variants:
+- Per-variant source code for row-major versus column-major kernels
+- Per-variant prefetch policy for disabled versus stream prefetching
+
+### 6. Master Runner (`run-all-tests.sh`)
 Runs all test suites and provides overall pass/fail summary.
 
 ## Running Tests
@@ -60,6 +66,7 @@ cd tests/integration
 ./test-features.sh     # Core features
 ./test-golden-kernels.sh  # Directional workload relationships
 ./test-workload-snapshots.sh  # Snapshot-driven benchmark relationships
+./test-structured-experiment.sh  # Structured /experiment variants
 ../../backend/scripts/cache-explore workloads --verify --json  # Product verifier
 ```
 
@@ -83,6 +90,7 @@ Tests run automatically on:
   - Complex enough to exercise cache behavior
   - Deterministic results
 - `../../benchmarks/workloads/conv2d-intel14.json` - Conv2D direct/tiled benchmark relationship
+- `../../benchmarks/workloads/prefetch-stream-intel.json` - Prefetch policy benchmark relationship
 
 ## Adding New Tests
 
