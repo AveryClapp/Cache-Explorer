@@ -175,6 +175,10 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Check CSS design tokens
+        working-directory: frontend
+        run: npm run tokens:check
+
       - name: Build frontend
         working-directory: frontend
         run: npm run build

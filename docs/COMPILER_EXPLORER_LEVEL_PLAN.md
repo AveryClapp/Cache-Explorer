@@ -68,6 +68,8 @@ Already in place:
   the enforced frontend bundle budget.
 - Frontend CI checks the built bundle budget after Vite build, tracking main app
   JS/CSS, Monaco JS/CSS, and lazy product modal chunks separately.
+- Frontend CI also verifies CSS design-token usage so stale component styles
+  cannot silently fall back to browser defaults.
 - Docker deployment proxies the product API surface and exposes backend/frontend
   health checks.
 - Releases publish LLVM pass checksums and the download helper verifies them
