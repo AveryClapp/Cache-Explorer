@@ -120,6 +120,77 @@
   border-left: 2px solid var(--border);
 }
 
+.provenance-contract {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.provenance-contract-bucket {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: 48px;
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.provenance-contract-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-family: var(--font-code);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.provenance-contract-copy {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.provenance-contract-label {
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.provenance-contract-desc {
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: var(--text-2xs);
+  overflow-wrap: anywhere;
+}
+
+.provenance-contract-bucket.modeled .provenance-contract-count {
+  color: var(--signal-success);
+}
+
+.provenance-contract-bucket.estimated .provenance-contract-count {
+  color: var(--signal-warning);
+}
+
+.provenance-contract-bucket.metadata .provenance-contract-count {
+  color: var(--signal-info);
+}
+
+.provenance-contract-bucket.unsupported .provenance-contract-count {
+  color: var(--signal-critical);
+}
+
 .provenance-repro {
   display: grid;
   gap: var(--space-2);
@@ -174,6 +245,10 @@
 @media (max-width: 720px) {
   .provenance-grid {
     grid-template-columns: 1fr;
+  }
+
+  .provenance-contract {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

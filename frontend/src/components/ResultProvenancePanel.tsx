@@ -11,6 +11,7 @@ import {
   formatSourceLabel,
   formatTrustLabel,
   provenanceClass,
+  summarizeModelContract,
 } from '../utils/provenance'
 
 interface ResultProvenancePanelProps {
@@ -24,6 +25,7 @@ export function ResultProvenancePanel({ result }: ResultProvenancePanelProps) {
 
   const caveats = provenance.caveats.slice(0, 3)
   const reproCommand = buildReproCommand(result)
+  const modelContract = summarizeModelContract(result.profile)
 
   const copyReproCommand = async () => {
     if (!reproCommand) return
@@ -78,6 +80,23 @@ export function ResultProvenancePanel({ result }: ResultProvenancePanelProps) {
           <div className="provenance-caveats">
             {caveats.map(caveat => (
               <span key={caveat}>{caveat}</span>
+            ))}
+          </div>
+        )}
+        {modelContract.length > 0 && (
+          <div className="provenance-contract" aria-label="Hardware model contract summary">
+            {modelContract.map(bucket => (
+              <div
+                className={`provenance-contract-bucket ${bucket.key}`}
+                key={bucket.key}
+                title={bucket.fields.join(', ')}
+              >
+                <span className="provenance-contract-count">{bucket.count}</span>
+                <span className="provenance-contract-copy">
+                  <span className="provenance-contract-label">{bucket.label}</span>
+                  <span className="provenance-contract-desc">{bucket.description}</span>
+                </span>
+              </div>
             ))}
           </div>
         )}

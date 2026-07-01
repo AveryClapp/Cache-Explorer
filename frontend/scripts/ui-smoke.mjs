@@ -341,6 +341,130 @@ async function verifyWorkloadCatalogControls(url) {
   await page.unroute('**/api/workloads')
 }
 
+function mockCacheLevel(hits, misses) {
+  const total = hits + misses
+  return {
+    hits,
+    misses,
+    total,
+    hitRate: total > 0 ? hits / total : 0,
+    missRate: total > 0 ? misses / total : 0,
+  }
+}
+
+function mockContractField(subsystem, status, drivesSimulation) {
+  return {
+    subsystem,
+    status,
+    drivesSimulation,
+    resultSurface: [],
+    description: `${subsystem} ${status}`,
+  }
+}
+
+function mockResultWithContract() {
+  const modelContract = {
+    version: 1,
+    statusTerms: {},
+    fields: {
+      cacheHierarchy: mockContractField('cache hierarchy', 'modeled', true),
+      cacheTiming: mockContractField('cache timing', 'estimated', true),
+      simd: mockContractField('simd', 'metadata-only', false),
+      numa: mockContractField('numa', 'unsupported', false),
+    },
+  }
+
+  return {
+    config: 'intel14',
+    events: 100000,
+    cacheConfig: {
+      l1d: { sizeKB: 48, assoc: 12, lineSize: 64, sets: 64 },
+      l1i: { sizeKB: 32, assoc: 8, lineSize: 64, sets: 64 },
+      l2: { sizeKB: 2048, assoc: 16, lineSize: 64, sets: 2048 },
+      l3: { sizeKB: 36864, assoc: 12, lineSize: 64, sets: 49152 },
+    },
+    levels: {
+      l1d: mockCacheLevel(94000, 6000),
+      l2: mockCacheLevel(5200, 800),
+      l3: mockCacheLevel(700, 100),
+    },
+    hotLines: [],
+    profile: {
+      id: 'intel14',
+      displayName: 'Intel 14th Gen',
+      vendor: 'Intel',
+      architecture: 'x86_64',
+      class: 'desktop',
+      modelConfidence: 'calibrated',
+      modelContract,
+    },
+    provenance: {
+      resultKind: 'simulated',
+      executor: 'direct-dev',
+      hardwareProfile: {
+        id: 'intel14',
+        displayName: 'Intel 14th Gen',
+        modelConfidence: 'calibrated',
+        validationConfidence: 'calibrated',
+      },
+      fidelity: {
+        trace: 'full',
+        sampleRate: 1,
+        eventLimit: 1000000,
+        fastMode: false,
+        cacheSegments: true,
+        prefetch: 'stream',
+      },
+      source: {
+        path: 'main.c',
+        language: 'c',
+        config: 'intel14',
+        optLevel: '-O0',
+      },
+      toolchain: {
+        compiler: {
+          command: 'clang',
+          version: 'clang 21.0.0',
+          optLevel: '-O0',
+        },
+        simulator: {
+          path: '/tmp/cache-sim',
+          sha256: 'abc123def4567890',
+        },
+      },
+      caveats: ['Cycles and bottlenecks are simulator estimates, not wall-clock measurements.'],
+    },
+  }
+}
+
+async function verifyResultTrustPanel(url) {
+  await page.route('**/compile', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(mockResultWithContract()),
+    })
+  })
+
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await page.goto(url, { waitUntil: 'domcontentloaded' })
+  await page.getByRole('button', { name: 'Execute' }).click()
+
+  const panel = page.locator('.result-provenance-panel')
+  await assertVisible(panel.getByText('Result Fidelity', { exact: true }), 'result fidelity panel')
+  await assertVisible(panel.getByText('Modeled', { exact: true }), 'modeled contract bucket')
+  await assertVisible(panel.getByText('1 drive simulation', { exact: true }), 'modeled contract count')
+  await assertVisible(panel.getByText('Estimated', { exact: true }), 'estimated contract bucket')
+  await assertVisible(panel.getByText('1 drive cycle estimates', { exact: true }), 'estimated contract count')
+  await assertVisible(panel.getByText('Metadata', { exact: true }), 'metadata contract bucket')
+  await assertVisible(panel.getByText('1 display only', { exact: true }), 'metadata contract count')
+  await assertVisible(panel.getByText('Unsupported', { exact: true }), 'unsupported contract bucket')
+  await assertVisible(panel.getByText('1 not modeled', { exact: true }), 'unsupported contract count')
+  await assertVisible(panel.getByText('Repro Command', { exact: true }), 'repro command')
+
+  await page.unroute('**/compile')
+}
+
 async function verifyShareRoundTrip(url) {
   const sharedState = {
     code: '#include <stdio.h>\nint main(void) { return 0; }\n',
@@ -693,6 +817,7 @@ try {
   })
 
   await runSmokeStep('launch surface', () => verifyLaunchSurface(url))
+  await runSmokeStep('result trust panel', () => verifyResultTrustPanel(url))
   await runSmokeStep('workload catalog', () => verifyWorkloadCatalogControls(url))
   await runSmokeStep('experiment results', () => verifyExperimentResults(url))
   await runSmokeStep('share round trip', () => verifyShareRoundTrip(url))

@@ -1,4 +1,4 @@
-import type { CacheResult, ResultProvenance } from '../types'
+import type { CacheResult, HardwareModelContractField, HardwareProfile, ResultProvenance } from '../types'
 
 function titleize(value: string | undefined) {
   if (!value) return 'Unknown'
@@ -74,6 +74,75 @@ export function formatSourceLabel(provenance: ResultProvenance | undefined) {
   if (!source) return 'Unknown'
   const path = source.path ? source.path.split('/').pop() || source.path : 'source'
   return [path, source.language, source.optLevel].filter(Boolean).join(' / ')
+}
+
+export interface ModelContractBucket {
+  key: 'modeled' | 'estimated' | 'metadata' | 'unsupported'
+  label: string
+  count: number
+  description: string
+  fields: string[]
+}
+
+function contractFieldLabel(id: string, field: HardwareModelContractField) {
+  return titleize(field.subsystem || id)
+}
+
+export function summarizeModelContract(profile: HardwareProfile | undefined): ModelContractBucket[] {
+  const contractFields = Object.entries(profile?.modelContract?.fields || {})
+  if (contractFields.length === 0) return []
+
+  const buckets: ModelContractBucket[] = [
+    {
+      key: 'modeled',
+      label: 'Modeled',
+      count: 0,
+      description: 'drive simulation',
+      fields: [],
+    },
+    {
+      key: 'estimated',
+      label: 'Estimated',
+      count: 0,
+      description: 'drive cycle estimates',
+      fields: [],
+    },
+    {
+      key: 'metadata',
+      label: 'Metadata',
+      count: 0,
+      description: 'display only',
+      fields: [],
+    },
+    {
+      key: 'unsupported',
+      label: 'Unsupported',
+      count: 0,
+      description: 'not modeled',
+      fields: [],
+    },
+  ]
+
+  for (const [id, field] of contractFields) {
+    let bucket = buckets[0]
+    if (field.status === 'unsupported') {
+      bucket = buckets[3]
+    } else if (field.status === 'metadata-only' || !field.drivesSimulation) {
+      bucket = buckets[2]
+    } else if (field.status === 'estimated') {
+      bucket = buckets[1]
+    }
+
+    bucket.count += 1
+    bucket.fields.push(contractFieldLabel(id, field))
+  }
+
+  return buckets
+    .filter(bucket => bucket.count > 0)
+    .map(bucket => ({
+      ...bucket,
+      description: `${bucket.count} ${bucket.description}`,
+    }))
 }
 
 function shellQuote(value: string | number) {
