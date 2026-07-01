@@ -14,11 +14,13 @@ Already in place:
 - Hardware comparison and experiment modes.
 - Result provenance with source, compiler, simulator/runtime/pass hashes, and
   fidelity settings.
+- Result Fidelity surfaces the hardware model contract as modeled, estimated,
+  metadata-only, and unsupported buckets directly in the result panel.
 - Copyable local repro commands from result provenance.
 - Golden kernel tests, workload snapshot verification, profile drift checks,
   frontend build/browser smoke coverage, and server tests in CI.
 - Browser smoke covers launch paths, workload catalog controls, workload history
-  surfacing, and share short-link roundtrips.
+  surfacing, result-bearing trust UI, and share short-link roundtrips.
 - Share links that preserve multi-file projects, active/main file identity, run
   settings, and experiment setup.
 - Verified workload browser in the app, backed by product-facing workload APIs,
@@ -43,6 +45,8 @@ Already in place:
   false-sharing stress manifest remains excluded from default CI verification.
 - Workload catalog and verification API errors include structured details,
   timeout state, exit codes, and truncated subprocess diagnostics when available.
+- Workload verification has a bounded per-variant timeout so stress workloads
+  fail clearly instead of hanging CI or product API requests.
 - Empty result state routes users into run, verified workload, and experiment
   flows.
 - Local bootstrap has a doctor script plus a single dev command that can build,
