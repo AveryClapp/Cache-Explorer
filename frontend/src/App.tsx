@@ -952,8 +952,13 @@ function App() {
   }, [exampleKeyForPath])
 
   const sourceVariantsForWorkload = useCallback((workload: WorkloadSnapshot): ExperimentVariantSource[] | null => {
-    const hasVariantSpecificSources = workload.variants.some(variant => variant.example && variant.example !== workload.example)
-    if (!hasVariantSpecificSources) return null
+    const needsStructuredVariants = workload.variants.some(variant =>
+      (variant.example && variant.example !== workload.example)
+      || Boolean(variant.prefetch)
+      || Boolean(variant.optLevel)
+      || typeof variant.limit === 'number'
+    )
+    if (!needsStructuredVariants) return null
 
     const sourceVariants = workload.variants.map(variant => {
       const example = exampleForPath(variant.example || workload.example)
@@ -963,6 +968,8 @@ function App() {
         id: variant.id,
         language: example.language,
         optLevel: variant.optLevel || workload.optLevel,
+        limit: variant.limit ?? workload.limit,
+        prefetch: variant.prefetch,
         defines: variant.defines || [],
       }
       if (example.files && example.files.length > 0) {
@@ -983,6 +990,7 @@ function App() {
     setConfig(workload.config)
     setSelectedHardwareProfileId(workload.config)
     setRunHardwareConfigIds([workload.config])
+    setPrefetchPolicy((workload.prefetch as PrefetchPolicy | undefined) || PREFETCH_DEFAULTS[workload.config] || 'none')
     if (workload.optLevel) setOptLevel(workload.optLevel)
     if (typeof workload.limit === 'number') setEventLimit(workload.limit)
     setExperimentVariants(workload.variants.map(variant => {
@@ -993,7 +1001,7 @@ function App() {
     const sourceVariants = sourceVariantsForWorkload(workload)
     if (sourceVariants) {
       setExperimentVariantSources(sourceVariants)
-      setExperimentVariantSourceLabel(`Multi-source ${workload.id}`)
+      setExperimentVariantSourceLabel(`Variant set ${workload.id}`)
     } else {
       setExperimentVariantSources(null)
       setExperimentVariantSourceLabel(null)

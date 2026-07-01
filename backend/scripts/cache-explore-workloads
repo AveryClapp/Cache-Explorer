@@ -78,6 +78,9 @@ function commandForVariant(workload, variant) {
     args.push('-D', define)
   }
 
+  const prefetch = variant.prefetch || workload.prefetch
+  if (prefetch) args.push('--prefetch', prefetch)
+
   args.push('--config', variant.config || workload.config)
   const limit = variant.limit ?? workload.limit
   if (limit) args.push('--limit', String(limit))
@@ -94,6 +97,9 @@ function argsForVariant(workload, variant) {
   for (const define of variant.defines || []) {
     args.push('-D', define)
   }
+
+  const prefetch = variant.prefetch || workload.prefetch
+  if (prefetch) args.push('--prefetch', prefetch)
 
   args.push('--config', variant.config || workload.config)
   const limit = variant.limit ?? workload.limit

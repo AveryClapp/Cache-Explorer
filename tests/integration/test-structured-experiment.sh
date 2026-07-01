@@ -39,32 +39,36 @@ done
 OUTPUT=$(cd "$PROJECT_ROOT" && TEST_PORT="$PORT" node --input-type=module <<'NODE'
 import { readFileSync } from 'fs'
 
+async function postExperiment(body) {
+  const response = await fetch(`http://127.0.0.1:${process.env.TEST_PORT}/experiment`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const data = await response.json()
+  if (!response.ok) {
+    console.error(JSON.stringify(data, null, 2))
+    process.exit(1)
+  }
+  return data
+}
+
 const row = readFileSync('examples/matrix_row.c', 'utf8')
 const column = readFileSync('examples/matrix_col.c', 'utf8')
-const response = await fetch(`http://127.0.0.1:${process.env.TEST_PORT}/experiment`, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    language: 'c',
-    optLevel: '-O0',
-    configs: ['educational'],
-    limit: 200000,
-    variants: [
-      { id: 'row', code: row, language: 'c', optLevel: '-O0' },
-      { id: 'column', code: column, language: 'c', optLevel: '-O0' },
-    ],
-  }),
+const data = await postExperiment({
+  language: 'c',
+  optLevel: '-O0',
+  configs: ['educational'],
+  limit: 200000,
+  variants: [
+    { id: 'row', code: row, language: 'c', optLevel: '-O0' },
+    { id: 'column', code: column, language: 'c', optLevel: '-O0' },
+  ],
 })
-
-const data = await response.json()
-if (!response.ok) {
-  console.error(JSON.stringify(data, null, 2))
-  process.exit(1)
-}
 
 const rowSummary = data.summary?.find(item => item.variant === 'row')
 const columnSummary = data.summary?.find(item => item.variant === 'column')
-const ok = data.baselineVariant === 'row'
+const sourceOk = data.baselineVariant === 'row'
   && data.variants?.row?.configs?.educational
   && data.variants?.column?.configs?.educational
   && rowSummary?.estimatedCycles > 0
@@ -72,17 +76,49 @@ const ok = data.baselineVariant === 'row'
   && typeof columnSummary?.cycleDelta === 'number'
   && data.provenance?.resultKind === 'hardware-experiment'
 
-if (!ok) {
+if (!sourceOk) {
   console.error(JSON.stringify(data, null, 2))
   process.exit(1)
 }
 
+const prefetchSource = readFileSync('examples/prefetch_friendly.c', 'utf8')
+const prefetchData = await postExperiment({
+  language: 'c',
+  optLevel: '-O2',
+  configs: ['intel'],
+  limit: 100000,
+  variants: [
+    { id: 'none', code: prefetchSource, language: 'c', optLevel: '-O2', prefetch: 'none' },
+    { id: 'stream', code: prefetchSource, language: 'c', optLevel: '-O2', prefetch: 'stream' },
+  ],
+})
+
+const noneSummary = prefetchData.summary?.find(item => item.variant === 'none')
+const streamSummary = prefetchData.summary?.find(item => item.variant === 'stream')
+const prefetchOk = prefetchData.variants?.none?.configs?.intel?.provenance?.fidelity?.prefetch === 'none'
+  && prefetchData.variants?.stream?.configs?.intel?.provenance?.fidelity?.prefetch === 'stream'
+  && noneSummary?.estimatedCycles > 0
+  && streamSummary?.estimatedCycles > 0
+  && streamSummary.estimatedCycles < noneSummary.estimatedCycles
+
+if (!prefetchOk) {
+  console.error(JSON.stringify(prefetchData, null, 2))
+  process.exit(1)
+}
+
 console.log(JSON.stringify({
-  baseline: data.baselineVariant,
-  rows: data.summary.length,
-  rowCycles: rowSummary.estimatedCycles,
-  columnCycles: columnSummary.estimatedCycles,
-  columnDelta: columnSummary.cycleDelta,
+  sourceVariants: {
+    baseline: data.baselineVariant,
+    rows: data.summary.length,
+    rowCycles: rowSummary.estimatedCycles,
+    columnCycles: columnSummary.estimatedCycles,
+    columnDelta: columnSummary.cycleDelta,
+  },
+  prefetchVariants: {
+    baseline: prefetchData.baselineVariant,
+    noneCycles: noneSummary.estimatedCycles,
+    streamCycles: streamSummary.estimatedCycles,
+  },
 }))
 NODE
 )

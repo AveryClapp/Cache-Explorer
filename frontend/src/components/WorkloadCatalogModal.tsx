@@ -25,6 +25,14 @@ function formatValue(value: number | undefined) {
   return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(3)
 }
 
+function variantLabel(workload: WorkloadSnapshot, variant: WorkloadSnapshot['variants'][number]) {
+  const details = [
+    variant.prefetch ? `pf:${variant.prefetch}` : null,
+    variant.optLevel && variant.optLevel !== workload.optLevel ? variant.optLevel : null,
+  ].filter(Boolean)
+  return details.length > 0 ? `${variant.id} (${details.join(', ')})` : variant.id
+}
+
 export function WorkloadCatalogModal({
   workloads,
   verification,
@@ -86,7 +94,7 @@ export function WorkloadCatalogModal({
                     </div>
                     <div className="workload-variants">
                       {workload.variants.map(variant => (
-                        <code key={variant.id}>{variant.id}</code>
+                        <code key={variant.id}>{variantLabel(workload, variant)}</code>
                       ))}
                     </div>
                     <div className="workload-checks">

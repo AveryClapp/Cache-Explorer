@@ -539,6 +539,7 @@ export interface WorkloadVariant {
   optLevel?: string
   config?: string
   limit?: number
+  prefetch?: string
   defines?: string[]
 }
 
@@ -556,6 +557,7 @@ export interface WorkloadSnapshot {
   optLevel?: string
   config: string
   limit?: number
+  prefetch?: string
   variants: WorkloadVariant[]
   expectedRelationships: WorkloadRelationship[]
 }
@@ -617,6 +619,8 @@ export interface ExperimentVariantSource {
   }>
   language?: Language
   optLevel?: string
+  limit?: number
+  prefetch?: string
   defines?: string[]
 }
 

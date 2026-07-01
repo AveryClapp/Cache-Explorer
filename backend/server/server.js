@@ -208,6 +208,8 @@ function normalizeStructuredVariant(variant) {
     files,
     language,
     optLevel: typeof variant.optLevel === 'string' ? variant.optLevel : undefined,
+    prefetch: typeof variant.prefetch === 'string' ? variant.prefetch : undefined,
+    limit: typeof variant.limit === 'number' ? variant.limit : undefined,
   };
 }
 
@@ -861,14 +863,16 @@ app.post('/experiment', async (req, res) => {
         }
 
         const VALID_PREFETCH_POLICIES = ['none', 'next', 'next-line', 'stream', 'stride', 'adaptive', 'intel'];
-        const prefetchToUse = prefetch && VALID_PREFETCH_POLICIES.includes(prefetch) ? prefetch : 'none';
+        const variantPrefetch = variant.prefetch || prefetch;
+        const prefetchToUse = variantPrefetch && VALID_PREFETCH_POLICIES.includes(variantPrefetch) ? variantPrefetch : 'none';
         args.push('--prefetch', prefetchToUse);
 
         if (sampleRate > 1) {
           args.push('--sample', String(sampleRate));
         }
-        if (eventLimit > 0) {
-          args.push('--limit', String(eventLimit));
+        const variantEventLimit = variant.limit ?? eventLimit;
+        if (variantEventLimit > 0) {
+          args.push('--limit', String(variantEventLimit));
         }
         if (fastMode) {
           args.push('--fast');
@@ -899,10 +903,10 @@ app.post('/experiment', async (req, res) => {
             attachResultProvenance(configResult, {
               config: configName,
               sampleRate,
-              eventLimit,
+              eventLimit: variantEventLimit,
               fastMode,
               segmentCaching,
-              prefetch: prefetch || 'none',
+              prefetch: prefetchToUse,
               sandbox: false,
             });
           }

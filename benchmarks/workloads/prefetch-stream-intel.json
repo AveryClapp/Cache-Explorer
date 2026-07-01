@@ -1,0 +1,37 @@
+{
+  "id": "prefetch-stream-intel",
+  "description": "Sequential scan with Intel stream prefetching disabled vs enabled.",
+  "example": "examples/prefetch_friendly.c",
+  "language": "c",
+  "optLevel": "-O2",
+  "config": "intel",
+  "limit": 100000,
+  "variants": [
+    {
+      "id": "none",
+      "prefetch": "none"
+    },
+    {
+      "id": "stream",
+      "prefetch": "stream"
+    }
+  ],
+  "expectedRelationships": [
+    {
+      "metric": "timing.totalCycles",
+      "relationship": "stream < none",
+      "lastObserved": {
+        "none": 3752294,
+        "stream": 1596179
+      }
+    },
+    {
+      "metric": "levels.l2.misses",
+      "relationship": "stream < none",
+      "lastObserved": {
+        "none": 16669,
+        "stream": 5612
+      }
+    }
+  ]
+}
