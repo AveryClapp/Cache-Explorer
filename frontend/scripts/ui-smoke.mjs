@@ -624,6 +624,132 @@ function mockLegacyResultWithContract() {
   return result
 }
 
+function mockComparisonResult({
+  config,
+  displayName,
+  modelConfidence,
+  validationConfidence,
+  hitRate,
+  cycles,
+  bottleneck,
+  line,
+}) {
+  const misses = Math.round((1 - hitRate) * 1000)
+  const hits = 1000 - misses
+  return {
+    config,
+    events: 100000,
+    levels: {
+      l1d: mockCacheLevel(hits, misses),
+      l2: mockCacheLevel(900, 100),
+      l3: mockCacheLevel(950, 50),
+    },
+    hotLines: [],
+    profile: {
+      id: config,
+      displayName,
+      vendor: displayName.split(' ')[0],
+      architecture: 'x86_64',
+      class: 'desktop',
+      modelConfidence,
+    },
+    summary: {
+      primaryBottleneck: bottleneck,
+      estimatedCycles: cycles,
+      confidence: 'medium',
+      topSource: {
+        file: 'examples/conv2d_kernel.c',
+        line,
+        subsystem: 'memory',
+        cycles: Math.round(cycles * 0.4),
+      },
+    },
+    provenance: {
+      resultKind: 'hardware-comparison',
+      executor: 'direct-dev',
+      hardwareProfile: {
+        id: config,
+        displayName,
+        modelConfidence,
+        validationConfidence,
+      },
+      fidelity: {
+        trace: 'full',
+        sampleRate: 1,
+        eventLimit: 1000000,
+        fastMode: false,
+        cacheSegments: false,
+        prefetch: 'none',
+      },
+      source: {
+        path: 'main.c',
+        language: 'c',
+        config,
+        optLevel: '-O0',
+      },
+      toolchain: {
+        compiler: {
+          command: 'clang',
+          version: 'clang 21.0.0',
+          optLevel: '-O0',
+        },
+        simulator: {
+          path: 'cache-sim',
+          sha256: 'abc123def4567890',
+        },
+      },
+      caveats: [],
+    },
+  }
+}
+
+function mockComparisonResponse() {
+  return {
+    configs: {
+      educational: mockComparisonResult({
+        config: 'educational',
+        displayName: 'Educational',
+        modelConfidence: 'educational',
+        validationConfidence: 'modeled',
+        hitRate: 0.84,
+        cycles: 160000,
+        bottleneck: 'memory',
+        line: 21,
+      }),
+      intel: mockComparisonResult({
+        config: 'intel',
+        displayName: 'Intel 14th Gen',
+        modelConfidence: 'empirical',
+        validationConfidence: 'empirical',
+        hitRate: 0.95,
+        cycles: 120000,
+        bottleneck: 'balanced',
+        line: 42,
+      }),
+      amd: mockComparisonResult({
+        config: 'amd',
+        displayName: 'AMD Zen 4',
+        modelConfidence: 'simulated',
+        validationConfidence: 'modeled',
+        hitRate: 0.89,
+        cycles: 135000,
+        bottleneck: 'branch',
+        line: 48,
+      }),
+      apple: mockComparisonResult({
+        config: 'apple',
+        displayName: 'Apple M3',
+        modelConfidence: 'estimated',
+        validationConfidence: 'modeled',
+        hitRate: 0.92,
+        cycles: 125000,
+        bottleneck: 'frontend',
+        line: 57,
+      }),
+    },
+  }
+}
+
 async function verifyResultTrustPanel(url) {
   await page.route('**/compile', async route => {
     await route.fulfill({
@@ -673,6 +799,46 @@ async function verifyLegacyResultTrustPanel(url) {
   assert(await panel.getByText('Repro Command', { exact: true }).count() === 0, 'legacy result should not show repro command')
 
   await page.unroute('**/compile')
+}
+
+async function verifyHardwareComparison(url) {
+  let compareRequest = null
+  await page.route('**/compare', async route => {
+    compareRequest = route.request().postDataJSON()
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(mockComparisonResponse()),
+    })
+  })
+
+  await page.evaluate(() => {
+    localStorage.removeItem('cache-explorer-hardware-run-set')
+  })
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await page.goto(url, { waitUntil: 'domcontentloaded' })
+  await page.getByRole('button', { name: 'Hardware', exact: true }).click()
+
+  const modal = page.locator('.batch-modal').filter({ hasText: 'Hardware Comparison' })
+  await assertVisible(modal.getByText('Hardware Comparison', { exact: true }), 'hardware comparison modal')
+  await assertVisible(modal.getByText('Educational', { exact: true }), 'comparison educational row')
+  await assertVisible(modal.getByText('Intel 14th Gen', { exact: true }), 'comparison intel row')
+  await assertVisible(modal.getByText('AMD Zen 4', { exact: true }), 'comparison amd row')
+  await assertVisible(modal.getByText('Apple M3', { exact: true }), 'comparison apple row')
+  await assertVisible(modal.getByText('Full / Empirical', { exact: true }), 'comparison empirical trust')
+  await assertVisible(modal.getByText('Full / Simulated', { exact: true }), 'comparison simulated trust')
+  await assertVisible(modal.getByText('120,000', { exact: true }), 'comparison cycles')
+  await assertVisible(modal.getByText('95.0%', { exact: true }), 'comparison hit rate')
+  await assertVisible(modal.getByText('conv2d_kernel.c:42', { exact: true }), 'comparison source location')
+  assert(await modal.getByRole('button', { name: 'Export CSV' }).isEnabled(), 'comparison CSV export should enable')
+  assert(await modal.getByRole('button', { name: 'Export JSON' }).isEnabled(), 'comparison JSON export should enable')
+
+  assert(compareRequest?.configs?.join(',') === 'educational,intel,amd,apple', `comparison configs mismatch: ${JSON.stringify(compareRequest?.configs)}`)
+  assert(compareRequest?.limit === 1000000, `comparison request should preserve default event limit, got ${compareRequest?.limit}`)
+  assert(compareRequest?.language === 'c', `comparison request should include language, got ${compareRequest?.language}`)
+
+  await closeModal()
+  await page.unroute('**/compare')
 }
 
 async function verifySocketCloseFallback(url) {
@@ -1075,6 +1241,9 @@ try {
     args: ['--no-sandbox', '--disable-dev-shm-usage'],
   })
   page = await browser.newPage()
+  page.on('pageerror', error => {
+    console.error(`[pageerror] ${error.stack || error.message}`)
+  })
   await page.addInitScript(() => {
     window.__copiedText = ''
     Object.defineProperty(navigator, 'clipboard', {
@@ -1090,6 +1259,7 @@ try {
   await runSmokeStep('launch surface', () => verifyLaunchSurface(url))
   await runSmokeStep('result trust panel', () => verifyResultTrustPanel(url))
   await runSmokeStep('legacy result trust panel', () => verifyLegacyResultTrustPanel(url))
+  await runSmokeStep('hardware comparison', () => verifyHardwareComparison(url))
   await runSmokeStep('workload catalog', () => verifyWorkloadCatalogControls(url))
   await runSmokeStep('experiment results', () => verifyExperimentResults(url))
   await runSmokeStep('share round trip', () => verifyShareRoundTrip(url))
