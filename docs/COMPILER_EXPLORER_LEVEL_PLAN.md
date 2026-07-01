@@ -37,9 +37,10 @@ Already in place:
 - Workload verification covers branch behavior, prefetch policy, vector/SIMD
   stats, memory intrinsic stats, atomic builtin stats, hash-table probing,
   contiguous allocation locality, sequential/binary search locality,
-  sort-pattern locality, and image-stencil traversal locality.
-- Workload metadata supports opt-in stress workloads; threaded false sharing has
-  an explicit stress manifest that is excluded from default CI verification.
+  sort-pattern locality, image-stencil traversal locality, and a default-safe
+  threaded false-sharing smoke case.
+- Workload metadata supports opt-in stress workloads; the heavier threaded
+  false-sharing stress manifest remains excluded from default CI verification.
 - Workload catalog and verification API errors include structured details,
   timeout state, exit codes, and truncated subprocess diagnostics when available.
 - Empty result state routes users into run, verified workload, and experiment
@@ -63,8 +64,9 @@ Already in place:
 
 Known gaps:
 
-- Workload catalog has an opt-in threaded false-sharing stress workload, but
-  threaded real-world kernels still need runtime tuning before joining default CI.
+- Threaded false-sharing has a default smoke workload, but heavier threaded
+  stress and real-world kernels still need runtime tuning before joining default
+  CI.
 - Hosted benchmark history retention is backed by the published Pages dashboard,
   the Actions cache, and release-attached workload-history archives.
 - Deployment/package polish still needs release-cadence tuning once real usage
@@ -91,8 +93,9 @@ Known gaps:
   pointer chasing, branch behavior, vector/memcpy/atomic instrumentation, and
   hardware-profile-sensitive examples.
 - False-sharing/coherence reporting is fixed in the simulator and covered by
-  simulator/validation tests. Threaded stress workloads are explicit and opt-in
-  until runtime tuning makes them suitable for always-on CI snapshots.
+  simulator/validation tests plus a default workload smoke. Threaded stress
+  workloads are explicit and opt-in until runtime tuning makes them suitable for
+  always-on CI snapshots.
 - CI runs product-facing verification commands instead of private-only scripts.
 - Workload verifier emits structured JSON, human summaries, durations, and
   provenance for every variant.
@@ -134,7 +137,7 @@ Known gaps:
 ## Implementation Path
 
 1. Broaden workload metadata and catalog coverage.
-2. Tune optional threaded false-sharing workload snapshots until they can join
+2. Tune optional threaded false-sharing stress workloads until they can join
    default CI or remain clearly labeled as stress-only coverage.
 3. Add external benchmark-history archival only if Pages plus release-attached
    archives are not enough.
@@ -144,8 +147,8 @@ Known gaps:
 
 ## Near-Term Leaps
 
-- Tune threaded false-sharing stress workloads until they are fast enough for
-  default CI, or keep them explicitly opt-in.
+- Tune threaded false-sharing stress workloads and real-world threaded kernels
+  until they are fast enough for default CI, or keep them explicitly opt-in.
 - Add external benchmark-history archival only if Pages plus release-attached
   archives are not enough.
 - Keep committing each completed slice with validation output.

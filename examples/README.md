@@ -66,6 +66,18 @@ The C false-sharing example supports `-D RUN_PADDED=1` to switch from packed
 counters to cache-line-separated counters, and `-D ITERATIONS=<n>` for shorter
 stress runs.
 
+A bounded workload smoke is included in the default catalog:
+
+```bash
+./backend/scripts/cache-explore workloads false-sharing-smoke-intel --verify
+```
+
+The heavier false-sharing stress manifest remains opt-in:
+
+```bash
+./backend/scripts/cache-explore workloads false-sharing-stress-intel --verify --include-stress
+```
+
 ## Real-World Patterns
 
 | Example | C | C++ | Description | Pattern Type |

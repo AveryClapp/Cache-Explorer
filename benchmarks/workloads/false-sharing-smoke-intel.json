@@ -1,0 +1,32 @@
+{
+  "id": "false-sharing-smoke-intel",
+  "description": "Tiny threaded packed-versus-padded counter smoke test for coherence and false-sharing reporting.",
+  "example": "examples/false_sharing.c",
+  "language": "c",
+  "optLevel": "-O1",
+  "config": "intel",
+  "limit": 200,
+  "tags": ["threaded", "coherence", "false-sharing", "smoke"],
+  "variants": [
+    {
+      "id": "packed",
+      "defines": ["ITERATIONS=1"]
+    },
+    {
+      "id": "padded",
+      "defines": ["ITERATIONS=1", "RUN_PADDED=1"]
+    }
+  ],
+  "expectedRelationships": [
+    {
+      "metric": "coherence.falseSharingEvents",
+      "relationship": "packed > padded",
+      "missingValue": 0
+    },
+    {
+      "metric": "coherence.invalidations",
+      "relationship": "packed > padded",
+      "missingValue": 0
+    }
+  ]
+}
