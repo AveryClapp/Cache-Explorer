@@ -104,7 +104,7 @@ export function WorkloadCatalogModal({
                   <div className="workload-row-actions">
                     {status && <span className="workload-duration">{status.durationMs.toLocaleString()}ms</span>}
                     <button className="btn" onClick={() => onLoadWorkload(workload)}>
-                      Open
+                      Experiment
                     </button>
                   </div>
                 </div>

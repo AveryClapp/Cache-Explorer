@@ -8,6 +8,7 @@ interface ExperimentResultsModalProps {
   running: boolean
   error: string | null
   variantsText: string
+  variantSourceLabel?: string | null
   hardwareConfigIds: string[]
   templates: ExperimentTemplate[]
   selectedTemplateId: string
@@ -80,6 +81,7 @@ export function ExperimentResultsModal({
   running,
   error,
   variantsText,
+  variantSourceLabel,
   hardwareConfigIds,
   templates,
   selectedTemplateId,
@@ -141,7 +143,10 @@ export function ExperimentResultsModal({
 
           <div className="experiment-controls">
             <label className="experiment-field">
-              <span>Variants</span>
+              <span className="experiment-field-heading">
+                <span>Variants</span>
+                {variantSourceLabel && <span className="experiment-source-chip">{variantSourceLabel}</span>}
+              </span>
               <textarea
                 value={variantsText}
                 onChange={event => onVariantsTextChange(event.target.value)}

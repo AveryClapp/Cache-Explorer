@@ -1,11 +1,17 @@
 import type { PrefetchPolicy, CustomCacheConfig } from '../types'
 
 // API Configuration
-export const API_BASE = import.meta.env.PROD ? '' : 'http://localhost:3001'
+const DEV_HOST = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : 'localhost'
+const DEV_HTTP_PROTOCOL = typeof window !== 'undefined' ? window.location.protocol : 'http:'
+const DEV_WS_PROTOCOL = DEV_HTTP_PROTOCOL === 'https:' ? 'wss:' : 'ws:'
+
+export const API_BASE = import.meta.env.PROD
+  ? ''
+  : import.meta.env.VITE_API_BASE || `${DEV_HTTP_PROTOCOL}//${DEV_HOST}:3001`
 
 export const WS_URL = import.meta.env.PROD
   ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`
-  : 'ws://localhost:3001/ws'
+  : import.meta.env.VITE_WS_URL || `${DEV_WS_PROTOCOL}//${DEV_HOST}:3001/ws`
 
 // Default prefetch policies for hardware presets (based on real hardware behavior)
 export const PREFETCH_DEFAULTS: Record<string, PrefetchPolicy> = {

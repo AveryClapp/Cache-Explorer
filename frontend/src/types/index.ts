@@ -606,6 +606,20 @@ export interface WorkloadVerificationResponse {
   workloads: WorkloadVerificationResult[]
 }
 
+export interface ExperimentVariantSource {
+  id: string
+  code?: string
+  files?: Array<{
+    name: string
+    code: string
+    language: Language
+    isMain?: boolean
+  }>
+  language?: Language
+  optLevel?: string
+  defines?: string[]
+}
+
 export interface OptimizationSuggestion {
   type: string
   severity: 'high' | 'medium' | 'low'

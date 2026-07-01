@@ -33,6 +33,7 @@ import type {
   PrefetchPolicy,
   SourceAnnotation,
   ShareableState,
+  ExperimentVariantSource,
   WorkloadSnapshot,
   WorkloadVerificationResponse,
 } from './types'
@@ -131,6 +132,8 @@ function App() {
     setFiles(prev => prev.map(f =>
       f.id === activeFileId ? { ...f, code: newCode } : f
     ))
+    setExperimentVariantSources(null)
+    setExperimentVariantSourceLabel(null)
   }, [activeFileId])
 
   const updateActiveLanguage = useCallback((newLang: Language) => {
@@ -171,6 +174,8 @@ function App() {
   const loadExampleByKey = useCallback((exampleKey: string) => {
     const example = EXAMPLES[exampleKey]
     if (!example) return
+    setExperimentVariantSources(null)
+    setExperimentVariantSourceLabel(null)
 
     if (example.files && example.files.length > 0) {
       const newFiles = example.files.map(file => ({
@@ -257,6 +262,8 @@ function App() {
   const [experimentRunning, setExperimentRunning] = useState(false)
   const [experimentError, setExperimentError] = useState<string | null>(null)
   const [experimentVariants, setExperimentVariants] = useState('direct\ntiled:RUN_TILED=1')
+  const [experimentVariantSources, setExperimentVariantSources] = useState<ExperimentVariantSource[] | null>(null)
+  const [experimentVariantSourceLabel, setExperimentVariantSourceLabel] = useState<string | null>(null)
   const [selectedExperimentTemplateId, setSelectedExperimentTemplateId] = useState(EXPERIMENT_TEMPLATES[0]?.id || '')
   const [hardwareProfiles, setHardwareProfiles] = useState<HardwareProfile[]>([])
   const [showHardwareExplorer, setShowHardwareExplorer] = useState(false)
@@ -939,26 +946,71 @@ function App() {
     return null
   }, [])
 
+  const exampleForPath = useCallback((examplePath: string) => {
+    const key = exampleKeyForPath(examplePath)
+    return key ? EXAMPLES[key] : null
+  }, [exampleKeyForPath])
+
+  const sourceVariantsForWorkload = useCallback((workload: WorkloadSnapshot): ExperimentVariantSource[] | null => {
+    const hasVariantSpecificSources = workload.variants.some(variant => variant.example && variant.example !== workload.example)
+    if (!hasVariantSpecificSources) return null
+
+    const sourceVariants = workload.variants.map(variant => {
+      const example = exampleForPath(variant.example || workload.example)
+      if (!example) return null
+
+      const source: ExperimentVariantSource = {
+        id: variant.id,
+        language: example.language,
+        optLevel: variant.optLevel || workload.optLevel,
+        defines: variant.defines || [],
+      }
+      if (example.files && example.files.length > 0) {
+        source.files = example.files
+      } else {
+        source.code = example.code
+      }
+      return source
+    })
+
+    if (sourceVariants.some(variant => !variant)) return null
+    return sourceVariants as ExperimentVariantSource[]
+  }, [exampleForPath])
+
   const loadWorkload = useCallback((workload: WorkloadSnapshot) => {
     const exampleKey = exampleKeyForPath(workload.example)
     if (exampleKey) loadExampleByKey(exampleKey)
     setConfig(workload.config)
+    setSelectedHardwareProfileId(workload.config)
+    setRunHardwareConfigIds([workload.config])
     if (workload.optLevel) setOptLevel(workload.optLevel)
     if (typeof workload.limit === 'number') setEventLimit(workload.limit)
-    if (workload.variants.every(variant => !variant.example || variant.example === workload.example)) {
-      setExperimentVariants(workload.variants.map(variant => {
-        const defines = (variant.defines || []).join(',')
-        return defines ? `${variant.id}:${defines}` : variant.id
-      }).join('\n'))
+    setExperimentVariants(workload.variants.map(variant => {
+      const defines = (variant.defines || []).join(',')
+      return defines ? `${variant.id}:${defines}` : variant.id
+    }).join('\n'))
+
+    const sourceVariants = sourceVariantsForWorkload(workload)
+    if (sourceVariants) {
+      setExperimentVariantSources(sourceVariants)
+      setExperimentVariantSourceLabel(`Multi-source ${workload.id}`)
+    } else {
+      setExperimentVariantSources(null)
+      setExperimentVariantSourceLabel(null)
     }
+    setExperimentResult(null)
+    setExperimentError(null)
     setShowWorkloadCatalog(false)
-  }, [exampleKeyForPath, loadExampleByKey])
+    setShowExperimentModal(true)
+  }, [exampleKeyForPath, loadExampleByKey, sourceVariantsForWorkload])
 
   const applyExperimentTemplate = useCallback(() => {
     const template = EXPERIMENT_TEMPLATES.find(item => item.id === selectedExperimentTemplateId)
     if (!template) return
 
     setExperimentVariants(template.variants.join('\n'))
+    setExperimentVariantSources(null)
+    setExperimentVariantSourceLabel(null)
     if (template.exampleKey) loadExampleByKey(template.exampleKey)
     if (template.optLevel) setOptLevel(template.optLevel)
     if (template.prefetchPolicy) setPrefetchPolicy(template.prefetchPolicy)
@@ -1042,7 +1094,7 @@ function App() {
   }, [])
 
   const runExperimentAnalysis = useCallback(async () => {
-    const variants = parseExperimentVariants(experimentVariants)
+    const variants = experimentVariantSources || parseExperimentVariants(experimentVariants)
     if (variants.length === 0) {
       setExperimentError('Add at least one variant')
       return
@@ -1075,7 +1127,7 @@ function App() {
     } finally {
       setExperimentRunning(false)
     }
-  }, [experimentVariants, makeHardwarePayload, runHardwareConfigIds])
+  }, [experimentVariantSources, experimentVariants, makeHardwarePayload, runHardwareConfigIds])
 
   const commands: CommandItem[] = useMemo(() => [
     // Actions (@)
@@ -1153,10 +1205,15 @@ function App() {
           running={experimentRunning}
           error={experimentError}
           variantsText={experimentVariants}
+          variantSourceLabel={experimentVariantSourceLabel}
           hardwareConfigIds={hardwareConfigsOrDefault(runHardwareConfigIds)}
           templates={EXPERIMENT_TEMPLATES}
           selectedTemplateId={selectedExperimentTemplateId}
-          onVariantsTextChange={setExperimentVariants}
+          onVariantsTextChange={(value) => {
+            setExperimentVariants(value)
+            setExperimentVariantSources(null)
+            setExperimentVariantSourceLabel(null)
+          }}
           onTemplateChange={setSelectedExperimentTemplateId}
           onApplyTemplate={applyExperimentTemplate}
           onRun={runExperimentAnalysis}

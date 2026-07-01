@@ -161,6 +161,74 @@ function aggregateProvenance(existing = {}, next) {
   };
 }
 
+function httpError(status, message, type = 'validation_error') {
+  const error = new Error(message);
+  error.statusCode = status;
+  error.type = type;
+  return error;
+}
+
+function isStructuredVariant(variant) {
+  return variant && typeof variant === 'object' && !Array.isArray(variant);
+}
+
+function normalizeStructuredVariant(variant) {
+  const id = String(variant.id || variant.name || '').trim();
+  if (!/^[A-Za-z0-9_.-]+$/.test(id)) {
+    throw httpError(400, `Invalid variant id: ${id || '(empty)'}`);
+  }
+
+  const defines = Array.isArray(variant.defines)
+    ? variant.defines.map(item => String(item).trim()).filter(Boolean)
+    : [];
+  for (const define of defines) {
+    if (!/^[A-Za-z0-9_=,.-]+$/.test(define)) {
+      throw httpError(400, `Invalid define for variant ${id}: ${define}`);
+    }
+  }
+
+  const language = variant.language || undefined;
+  if (language && language !== 'c' && language !== 'cpp') {
+    throw httpError(422, 'Hardware experiment endpoint currently supports C and C++ inputs', 'unsupported');
+  }
+
+  const files = Array.isArray(variant.files) ? variant.files : undefined;
+  if (files && files.length === 0) {
+    throw httpError(400, `Variant ${id} files cannot be empty`);
+  }
+  if (files && files.length > 1) {
+    throw httpError(422, 'Hardware experiment endpoint currently supports single-file C/C++ inputs', 'unsupported');
+  }
+
+  return {
+    id,
+    spec: defines.length > 0 ? `${id}:${defines.join(',')}` : id,
+    defines,
+    code: typeof variant.code === 'string' ? variant.code : undefined,
+    files,
+    language,
+    optLevel: typeof variant.optLevel === 'string' ? variant.optLevel : undefined,
+  };
+}
+
+function estimatedCyclesFromExperimentRow(row, result, config) {
+  const value = row?.estimatedCycles;
+  if (typeof value === 'number' && value > 0) return value;
+  const fallback = result?.configs?.[config]?.timing?.totalCycles;
+  return typeof fallback === 'number' ? fallback : 0;
+}
+
+function topSourceFromExperimentRow(row) {
+  const topSource = row?.topSource;
+  if (!topSource || typeof topSource !== 'object') return undefined;
+  if (!topSource.file || !topSource.line) return undefined;
+  return {
+    file: topSource.file,
+    line: topSource.line,
+    subsystem: topSource.subsystem,
+  };
+}
+
 function createCacheExploreStderrTransformer(ws, progressState) {
   let pending = '';
 
@@ -688,12 +756,14 @@ app.post('/experiment', async (req, res) => {
     timeout: requestedTimeout
   } = req.body;
 
+  const rawVariantList = Array.isArray(variants) ? variants : [variants];
+  const structuredVariantMode = rawVariantList.some(isStructuredVariant);
   const inputFiles = files || (code ? code : null);
-  if (!inputFiles) {
+  if (!inputFiles && !structuredVariantMode) {
     return res.status(400).json({ error: 'No code provided', type: 'validation_error' });
   }
 
-  if (Array.isArray(inputFiles) && inputFiles.length > 1) {
+  if (inputFiles && Array.isArray(inputFiles) && inputFiles.length > 1) {
     return res.status(422).json({
       type: 'unsupported',
       message: 'Hardware experiment endpoint currently supports single-file C/C++ inputs'
@@ -707,14 +777,37 @@ app.post('/experiment', async (req, res) => {
     });
   }
 
-  const variantList = Array.isArray(variants) ? variants : [String(variants)];
+  const variantList = rawVariantList;
   if (variantList.length === 0) {
     return res.status(400).json({ error: 'At least one variant is required', type: 'validation_error' });
   }
 
-  for (const variant of variantList) {
-    if (typeof variant !== 'string' || !/^[A-Za-z0-9_.-]+(?::[A-Za-z0-9_=,.-]+)?$/.test(variant)) {
-      return res.status(400).json({ error: `Invalid variant spec: ${variant}`, type: 'validation_error' });
+  if (!structuredVariantMode) {
+    for (const variant of variantList) {
+      if (typeof variant !== 'string' || !/^[A-Za-z0-9_.-]+(?::[A-Za-z0-9_=,.-]+)?$/.test(variant)) {
+        return res.status(400).json({ error: `Invalid variant spec: ${variant}`, type: 'validation_error' });
+      }
+    }
+  } else if (!variantList.every(isStructuredVariant)) {
+    return res.status(400).json({
+      error: 'Structured experiment variants cannot be mixed with string variants',
+      type: 'validation_error'
+    });
+  } else {
+    try {
+      variantList.forEach(normalizeStructuredVariant);
+    } catch (err) {
+      const status = err.statusCode || 400;
+      return res.status(status).json({
+        error: err.message,
+        type: err.type || 'validation_error',
+      });
+    }
+    if (!inputFiles && variantList.some(variant => !variant.code && !variant.files)) {
+      return res.status(400).json({
+        error: 'Structured experiment variants need source code, files, or a top-level source fallback',
+        type: 'validation_error',
+      });
     }
   }
 
@@ -733,8 +826,144 @@ app.post('/experiment', async (req, res) => {
   );
 
   let tempDir, mainFile;
+  const tempDirs = [];
 
   try {
+    if (structuredVariantMode) {
+      const structuredVariants = variantList.map(normalizeStructuredVariant);
+      const experimentVariants = {};
+      const flatSummary = [];
+      const baselineCycles = new Map();
+      const baselineVariant = structuredVariants[0]?.id;
+
+      for (const [index, variant] of structuredVariants.entries()) {
+        const variantInputFiles = variant.files || (variant.code ? variant.code : inputFiles);
+        if (!variantInputFiles) {
+          throw httpError(400, `No source provided for variant ${variant.id}`);
+        }
+
+        const project = await createTempProject(variantInputFiles, variant.language || language);
+        tempDirs.push(project.tempDir);
+        const variantMainFile = project.mainFile;
+        const variantOptLevel = variant.optLevel || optLevel;
+        const args = ['compare', variantMainFile, '--configs', configList, variantOptLevel, '--json'];
+
+        if (defines && Array.isArray(defines)) {
+          for (const def of defines) {
+            if (def.name && def.name.trim()) {
+              const defineStr = def.value ? `${def.name}=${def.value}` : def.name;
+              args.push('-D', defineStr);
+            }
+          }
+        }
+        for (const define of variant.defines) {
+          args.push('-D', define);
+        }
+
+        const VALID_PREFETCH_POLICIES = ['none', 'next', 'next-line', 'stream', 'stride', 'adaptive', 'intel'];
+        const prefetchToUse = prefetch && VALID_PREFETCH_POLICIES.includes(prefetch) ? prefetch : 'none';
+        args.push('--prefetch', prefetchToUse);
+
+        if (sampleRate > 1) {
+          args.push('--sample', String(sampleRate));
+        }
+        if (eventLimit > 0) {
+          args.push('--limit', String(eventLimit));
+        }
+        if (fastMode) {
+          args.push('--fast');
+        }
+        if (segmentCaching) {
+          args.push('--cache-segments');
+        }
+        if (req.body.compiler) {
+          const compiler = getCompiler(req.body.compiler);
+          if (compiler && compiler.path) {
+            args.push('--compiler', compiler.path);
+          }
+        }
+
+        const result = await runProcess(CACHE_EXPLORE, args, {
+          timeout,
+          maxOutputBuffer: CONFIG.memory.maxOutputBuffer,
+          mainFile: variantMainFile,
+        });
+
+        const json = JSON.parse(result.stdout.trim());
+        const configsByName = json.configs;
+        if (configsByName && typeof configsByName === 'object') {
+          for (const configResult of Object.values(configsByName)) {
+            stripCacheState(configResult);
+          }
+          for (const [configName, configResult] of Object.entries(configsByName)) {
+            attachResultProvenance(configResult, {
+              config: configName,
+              sampleRate,
+              eventLimit,
+              fastMode,
+              segmentCaching,
+              prefetch: prefetch || 'none',
+              sandbox: false,
+            });
+          }
+        }
+
+        experimentVariants[variant.id] = json;
+        for (const row of json.summary || []) {
+          const configName = row.config;
+          const cycles = estimatedCyclesFromExperimentRow(row, json, configName);
+          if (index === 0) {
+            baselineCycles.set(configName, cycles);
+          }
+          const base = baselineCycles.get(configName);
+          const cycleDelta = typeof cycles === 'number' && typeof base === 'number' ? cycles - base : null;
+          const cycleDeltaPercent = cycleDelta !== null && base ? cycleDelta / base : null;
+
+          flatSummary.push({
+            variant: variant.id,
+            variantSpec: variant.spec,
+            config: configName,
+            profile: row.profile,
+            primaryBottleneck: row.primaryBottleneck,
+            estimatedCycles: cycles,
+            cycleDelta,
+            cycleDeltaPercent,
+            confidence: row.confidence,
+            bottleneckShare: row.bottleneckShare,
+            topSource: topSourceFromExperimentRow(row),
+            hitRates: row.hitRates,
+            events: row.events,
+          });
+        }
+      }
+
+      const json = {
+        source: 'variant-sources',
+        baselineVariant,
+        summary: flatSummary,
+        variants: experimentVariants,
+      };
+      json.provenance = aggregateProvenance({}, {
+        resultKind: 'hardware-experiment',
+        executor: 'direct-dev',
+        configs: configList.split(','),
+        variants: structuredVariants.map(variant => variant.spec),
+        fidelity: {
+          trace: sampleRate > 1 ? 'sampled' : 'full',
+          sampleRate,
+          eventLimit,
+          fastMode,
+          cacheSegments: segmentCaching,
+          prefetch: prefetch || 'none',
+        },
+        caveats: ['Variant deltas compare simulator estimates relative to the first variant for each hardware profile.'],
+      });
+
+      recordDuration('compilation_duration', (Date.now() - startTime) / 1000);
+      res.json(json);
+      return;
+    }
+
     const project = await createTempProject(inputFiles, language);
     tempDir = project.tempDir;
     mainFile = project.mainFile;
@@ -827,10 +1056,16 @@ app.post('/experiment', async (req, res) => {
     incCounter('errors', { type: 'experiment' });
     console.error('HTTP experiment error:', err);
     const parsed = createErrorResponse(err, mainFile);
-    res.status(400).json(parsed);
+    res.status(err.statusCode || 400).json({
+      ...parsed,
+      type: err.type || parsed.type,
+    });
   } finally {
     if (tempDir) {
       await cleanupTempProject(tempDir);
+    }
+    for (const dir of tempDirs) {
+      await cleanupTempProject(dir);
     }
   }
 });
