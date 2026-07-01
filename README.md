@@ -28,6 +28,8 @@ git clone https://github.com/AveryClapp/cache-explorer.git
 cd cache-explorer
 docker-compose up --build
 # Open http://localhost:8080
+# Check health with: docker compose ps
+# Product health is proxied at http://localhost:8080/health
 ```
 
 ### From Source

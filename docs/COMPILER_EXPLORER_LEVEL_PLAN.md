@@ -37,6 +37,8 @@ Already in place:
   flows.
 - Local bootstrap has a doctor script plus a single dev command that can build,
   install npm dependencies, and start backend/frontend together.
+- Docker deployment proxies the product API surface and exposes backend/frontend
+  health checks.
 
 Known gaps:
 
@@ -45,8 +47,8 @@ Known gaps:
 - Hosted benchmark history is available through a GitHub Pages workflow, but it
   still keeps only the latest published run unless external artifact retention
   is added.
-- Deployment/package polish still needs hosted-release and container hardening
-  beyond the local doctor/dev flow.
+- Deployment/package polish still needs hosted-release hardening beyond the
+  local doctor/dev flow and Docker health checks.
 - Workload history trend surfacing, deeper onboarding, and error states need
   another design pass.
 
