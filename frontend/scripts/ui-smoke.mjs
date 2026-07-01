@@ -152,13 +152,22 @@ async function layoutMetrics() {
       width: Math.round(element.getBoundingClientRect().width),
       height: Math.round(element.getBoundingClientRect().height),
     }))
+    const trustItems = Array.from(document.querySelectorAll('.empty-state-trust-item')).map(element => ({
+      text: element.textContent?.replace(/\s+/g, ' ').trim(),
+      overflow: element.scrollWidth > element.clientWidth || element.scrollHeight > element.clientHeight,
+      width: Math.round(element.getBoundingClientRect().width),
+      height: Math.round(element.getBoundingClientRect().height),
+    }))
 
     return {
       target: document.querySelector('.empty-state-target')?.textContent?.trim(),
       pathCount: paths.length,
       pathOverflow: paths.some(path => path.overflow),
+      trustCount: trustItems.length,
+      trustOverflow: trustItems.some(item => item.overflow),
       emptyScrollDelta: empty ? empty.scrollHeight - empty.clientHeight : null,
       paths,
+      trustItems,
     }
   })
 }
@@ -237,14 +246,18 @@ async function verifyLaunchSurface(url) {
   assert(!environmentLayout.overflow, `environment status overflows: ${JSON.stringify(environmentLayout)}`)
   await assertVisible(page.getByText('Choose a run path', { exact: true }), 'launch heading')
   await assertVisible(page.getByText('Current target', { exact: true }), 'target label')
+  await assertVisible(page.getByText('Trust packet', { exact: true }), 'launch trust packet label')
+  await assertVisible(page.getByText('Compiler / profile / fidelity', { exact: true }), 'launch trust packet value')
   await assertVisible(page.getByRole('button', { name: 'Share', exact: true }), 'launch share action')
   await assertVisible(page.getByRole('button', { name: /Run buffer/ }), 'run buffer path')
 
   const desktopLayout = await layoutMetrics()
   assert(desktopLayout.pathCount === 4, `expected 4 launch paths, saw ${desktopLayout.pathCount}`)
+  assert(desktopLayout.trustCount === 3, `expected 3 launch trust items, saw ${desktopLayout.trustCount}`)
   assert(desktopLayout.target?.includes('Educational'), `unexpected target summary: ${desktopLayout.target}`)
   assert(desktopLayout.target?.includes('1M events'), `target summary should use compact limit: ${desktopLayout.target}`)
   assert(!desktopLayout.pathOverflow, `desktop launch paths overflow: ${JSON.stringify(desktopLayout.paths)}`)
+  assert(!desktopLayout.trustOverflow, `desktop launch trust strip overflows: ${JSON.stringify(desktopLayout.trustItems)}`)
   assert((desktopLayout.emptyScrollDelta ?? 0) <= maxLayoutScrollDelta, `desktop launch surface scrolls by ${desktopLayout.emptyScrollDelta}px`)
 
   await page.getByRole('button', { name: /Hardware map/ }).click()
@@ -269,7 +282,9 @@ async function verifyLaunchSurface(url) {
 
   const mobileLayout = await layoutMetrics()
   assert(mobileLayout.pathCount === 4, `expected 4 mobile launch paths, saw ${mobileLayout.pathCount}`)
+  assert(mobileLayout.trustCount === 3, `expected 3 mobile launch trust items, saw ${mobileLayout.trustCount}`)
   assert(!mobileLayout.pathOverflow, `mobile launch paths overflow: ${JSON.stringify(mobileLayout.paths)}`)
+  assert(!mobileLayout.trustOverflow, `mobile launch trust strip overflows: ${JSON.stringify(mobileLayout.trustItems)}`)
   assert((mobileLayout.emptyScrollDelta ?? 0) <= maxLayoutScrollDelta, `mobile launch surface scrolls by ${mobileLayout.emptyScrollDelta}px`)
 
   await page.unroute('**/profiles')
@@ -964,6 +979,86 @@ async function verifyHardwareComparisonEmptyState(url) {
   await page.unroute('**/compare')
 }
 
+async function replaceEditorText(text) {
+  await page.locator('.monaco-editor textarea').first().waitFor({ state: 'attached', timeout: 10000 })
+  await page.locator('.monaco-editor').first().click()
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A')
+  await page.keyboard.insertText(text)
+}
+
+async function verifyEditRunCompareShareReopen(url) {
+  const editedCode = [
+    '#include <stdio.h>',
+    'int main(void) {',
+    '  int EDIT_RUN_MARKER = 42;',
+    '  return EDIT_RUN_MARKER;',
+    '}',
+    '',
+  ].join('\n')
+  let compilePayload = null
+  let comparePayload = null
+  let shortenedState = null
+
+  await page.route('**/compile', async route => {
+    compilePayload = route.request().postDataJSON()
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(mockResultWithContract()),
+    })
+  })
+  await page.route('**/compare', async route => {
+    comparePayload = route.request().postDataJSON()
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(mockComparisonResponse()),
+    })
+  })
+  await page.route('**/shorten', async route => {
+    shortenedState = route.request().postDataJSON().state
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ id: 'smoke-edit-run' }),
+    })
+  })
+  await page.route('**/s/smoke-edit-run', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ state: shortenedState }),
+    })
+  })
+
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await page.goto(url, { waitUntil: 'domcontentloaded' })
+  await replaceEditorText(editedCode)
+  await page.getByRole('button', { name: 'Execute' }).click()
+
+  await assertVisible(page.locator('.result-provenance-panel').getByText('Result Fidelity', { exact: true }), 'edited run result fidelity')
+  assert(compilePayload?.code?.includes('EDIT_RUN_MARKER'), `edited compile payload missing marker: ${compilePayload?.code}`)
+
+  await page.getByRole('button', { name: 'Hardware', exact: true }).click()
+  await assertVisible(page.locator('.batch-modal').filter({ hasText: 'Hardware Comparison' }), 'edited comparison modal')
+  assert(comparePayload?.code?.includes('EDIT_RUN_MARKER'), `edited compare payload missing marker: ${comparePayload?.code}`)
+  await closeModal()
+
+  await page.getByRole('button', { name: 'Share', exact: true }).click()
+  await assertVisible(page.getByText('Link copied!', { exact: true }), 'edited run share toast')
+  await page.waitForFunction(() => window.__copiedText?.includes('?s=smoke-edit-run'), null, { timeout: 5000 })
+  assert(shortenedState?.files?.[0]?.code?.includes('EDIT_RUN_MARKER'), 'shortened edited state should include edited source')
+
+  const copiedUrl = await page.evaluate(() => window.__copiedText)
+  await page.goto(copiedUrl, { waitUntil: 'domcontentloaded' })
+  await assertVisible(page.locator('.view-line').filter({ hasText: 'EDIT_RUN_MARKER' }).first(), 'reopened edited source marker')
+
+  await page.unroute('**/s/smoke-edit-run')
+  await page.unroute('**/shorten')
+  await page.unroute('**/compare')
+  await page.unroute('**/compile')
+}
+
 async function verifySocketCloseFallback(url) {
   let compilePayload = null
 
@@ -1425,6 +1520,7 @@ try {
   await runSmokeStep('legacy result trust panel', () => verifyLegacyResultTrustPanel(url))
   await runSmokeStep('hardware comparison', () => verifyHardwareComparison(url))
   await runSmokeStep('hardware comparison empty state', () => verifyHardwareComparisonEmptyState(url))
+  await runSmokeStep('edit run compare share reopen', () => verifyEditRunCompareShareReopen(url))
   await runSmokeStep('workload catalog', () => verifyWorkloadCatalogControls(url))
   await runSmokeStep('experiment results', () => verifyExperimentResults(url))
   await runSmokeStep('share round trip', () => verifyShareRoundTrip(url))

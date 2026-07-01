@@ -29,8 +29,9 @@ Already in place:
   frontend build/browser smoke coverage, and server tests in CI.
 - Browser smoke covers launch paths, workload catalog controls, workload history
   surfacing, result-bearing trust UI, legacy trust fallbacks, dirty socket
-  recovery, result-bearing hardware comparison, verified workload-to-experiment
-  handoff, and share short-link roundtrips.
+  recovery, result-bearing hardware comparison, edited code run/compare/share
+  reopen roundtrips, verified workload-to-experiment handoff, and share
+  short-link roundtrips.
 - Share links that preserve multi-file projects, active/main file identity, run
   settings, and experiment setup.
 - Share is available from the workbench before a result exists, so code and run
@@ -66,7 +67,7 @@ Already in place:
 - Workload verification has a bounded per-variant timeout so stress workloads
   fail clearly instead of hanging CI or product API requests.
 - Empty result state routes users into run, verified workload, and experiment
-  flows.
+  flows, with compact first-step, trust-packet, and reproducibility cues.
 - Hardware comparison ends in an explicit no-result/error state when compare
   and fallback runs produce no profile results.
 - The workbench header surfaces backend health, direct/sandbox execution mode,
