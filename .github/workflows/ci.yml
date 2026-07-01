@@ -96,12 +96,32 @@ jobs:
           ./tests/integration/test-golden-kernels.sh
           ./tests/integration/test-workload-snapshots.sh
 
+      - name: Summarize workload benchmark history
+        if: always()
+        run: |
+          if compgen -G "reports/workloads/workload-history*.json" > /dev/null; then
+            backend/scripts/cache-explore workloads --history-summary reports/workloads/workload-history*.json \
+              | tee reports/workloads/workload-history-summary.txt
+            backend/scripts/cache-explore workloads --history-summary reports/workloads/workload-history*.json --json \
+              > reports/workloads/workload-history-summary.json
+            {
+              echo "### Workload benchmark history"
+              echo '```'
+              cat reports/workloads/workload-history-summary.txt
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No workload benchmark history was generated."
+          fi
+
       - name: Upload workload benchmark history
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: workload-benchmark-history
-          path: reports/workloads/*.json
+          path: |
+            reports/workloads/*.json
+            reports/workloads/*.txt
           if-no-files-found: ignore
 
   server:
