@@ -236,6 +236,8 @@ function App() {
   const wsRef = useRef<WebSocket | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const longRunTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const analysisActiveRef = useRef(false)
+  const fallbackStartedRef = useRef(false)
   const [customConfig, setCustomConfig] = useState<CustomCacheConfig>(defaultCustomConfig)
   const [defines, setDefines] = useState<DefineEntry[]>([])
   const [exampleLangFilter, setExampleLangFilter] = useState<ExampleLangFilter>('all')
@@ -715,6 +717,8 @@ function App() {
   }, [result])
 
   const cancelAnalysis = useCallback(() => {
+    analysisActiveRef.current = false
+    fallbackStartedRef.current = false
     if (wsRef.current) {
       wsRef.current.close()
       wsRef.current = null
@@ -747,6 +751,8 @@ function App() {
     // Cancel any ongoing analysis
     cancelAnalysis()
 
+    analysisActiveRef.current = true
+    fallbackStartedRef.current = false
     setStage('connecting')
     setError(null)
     setResult(null)
@@ -794,6 +800,8 @@ function App() {
         setLongRunning(false)
         clearProgress()
         setResult(msg.data as CacheResult)
+        analysisActiveRef.current = false
+        fallbackStartedRef.current = false
         setStage('idle')
         wsRef.current = null
         ws.close()
@@ -805,6 +813,8 @@ function App() {
         setLongRunning(false)
         clearProgress()
         setError(msg as ErrorResult)
+        analysisActiveRef.current = false
+        fallbackStartedRef.current = false
         setStage('idle')
         wsRef.current = null
         ws.close()
@@ -812,10 +822,20 @@ function App() {
     }
 
     ws.onerror = () => fallbackToHttp()
-    ws.onclose = (e) => { if (!e.wasClean && stage !== 'idle') fallbackToHttp() }
+    ws.onclose = (e) => { if (!e.wasClean && analysisActiveRef.current) fallbackToHttp() }
 
     const fallbackToHttp = async () => {
+      if (fallbackStartedRef.current || !analysisActiveRef.current) return
+      fallbackStartedRef.current = true
+      const currentWs = wsRef.current
       wsRef.current = null
+      if (currentWs) {
+        try {
+          currentWs.close()
+        } catch {
+          // Ignore sockets that are already closing.
+        }
+      }
       setStage('compiling')
       clearProgress()
 
@@ -838,6 +858,7 @@ function App() {
         if (prefetchPolicy !== 'none') payload.prefetch = prefetchPolicy
         if (sampleRate > 1) payload.sample = sampleRate
         payload.limit = eventLimit
+        if (selectedCompiler) payload.compiler = selectedCompiler
         if (fastMode) payload.fast = true
         if (cacheSegments) payload.cacheSegments = true
 
@@ -860,6 +881,8 @@ function App() {
         setError({ type: 'server_error', message: err instanceof Error ? err.message : 'Connection failed' })
       } finally {
         abortControllerRef.current = null
+        analysisActiveRef.current = false
+        fallbackStartedRef.current = false
         if (longRunTimeoutRef.current) {
           clearTimeout(longRunTimeoutRef.current)
           longRunTimeoutRef.current = null

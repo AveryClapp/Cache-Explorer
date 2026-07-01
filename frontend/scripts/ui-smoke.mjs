@@ -562,6 +562,64 @@ async function verifyResultTrustPanel(url) {
   await page.unroute('**/compile')
 }
 
+async function verifySocketCloseFallback(url) {
+  let compilePayload = null
+
+  await page.addInitScript(() => {
+    window.__cacheExplorerSocketPayloads = []
+
+    class DirtyCloseSocket {
+      constructor(socketUrl) {
+        this.url = socketUrl
+        this.readyState = 0
+
+        setTimeout(() => {
+          this.readyState = 1
+          this.onopen?.({ type: 'open' })
+
+          setTimeout(() => {
+            this.readyState = 3
+            this.onclose?.({ type: 'close', wasClean: false, code: 1006, reason: 'smoke dirty close' })
+          }, 0)
+        }, 0)
+      }
+
+      send(payload) {
+        window.__cacheExplorerSocketPayloads.push(payload)
+      }
+
+      close() {
+        this.readyState = 3
+        this.onclose?.({ type: 'close', wasClean: true, code: 1000, reason: 'client closed' })
+      }
+    }
+
+    window.WebSocket = DirtyCloseSocket
+  })
+
+  await page.route('**/compile', async route => {
+    compilePayload = route.request().postDataJSON()
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(mockResultWithContract()),
+    })
+  })
+
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await page.goto(url, { waitUntil: 'domcontentloaded' })
+  await page.getByRole('button', { name: 'Execute' }).click()
+
+  await assertVisible(page.locator('.result-provenance-panel').getByText('Result Fidelity', { exact: true }), 'fallback result fidelity panel')
+  assert(compilePayload?.config === 'educational', `fallback compile config mismatch: ${JSON.stringify(compilePayload)}`)
+  assert(compilePayload?.limit === 1000000, `fallback compile limit mismatch: ${JSON.stringify(compilePayload)}`)
+
+  const socketPayloads = await page.evaluate(() => window.__cacheExplorerSocketPayloads || [])
+  assert(socketPayloads.length === 1, `expected one socket payload before fallback, saw ${socketPayloads.length}`)
+
+  await page.unroute('**/compile')
+}
+
 async function verifyShareRoundTrip(url) {
   const sharedState = {
     code: '#include <stdio.h>\nint main(void) { return 0; }\n',
@@ -918,6 +976,7 @@ try {
   await runSmokeStep('workload catalog', () => verifyWorkloadCatalogControls(url))
   await runSmokeStep('experiment results', () => verifyExperimentResults(url))
   await runSmokeStep('share round trip', () => verifyShareRoundTrip(url))
+  await runSmokeStep('socket close fallback', () => verifySocketCloseFallback(url))
   console.log(`UI smoke passed (${url})`)
 } catch (error) {
   if (page) {
