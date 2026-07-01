@@ -186,6 +186,15 @@ npm run build
 npm run smoke:ui
 ```
 
+Workload verification can also write benchmark-history artifacts and render a
+standalone HTML trend report:
+
+```bash
+./backend/scripts/cache-explore workloads --verify --json --history reports/workloads/history.json
+./backend/scripts/cache-explore workloads --history-summary reports/workloads/history.json --html \
+  > reports/workloads/history.html
+```
+
 ## Limitations
 
 - **Requires recompilation** - Can't trace pre-compiled binaries (use Intel Pin for that)

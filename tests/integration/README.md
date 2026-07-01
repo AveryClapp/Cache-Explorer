@@ -46,6 +46,7 @@ Runs `cache-explore workloads --verify --json` against benchmark snapshots from 
   through product workload verification
 
 These snapshots are executable benchmark metadata: example path, config, optimization level, variants, metric relationships, timing, and result provenance live together.
+The suite also validates that the generated history artifact can render a standalone HTML trend report for CI downloads.
 
 ### 5. Structured Experiments (`test-structured-experiment.sh`)
 Starts a temporary backend and validates `/experiment` with structured variants:
@@ -72,6 +73,7 @@ cd tests/integration
 ./test-structured-experiment.sh  # Structured /experiment variants
 ../../backend/scripts/cache-explore workloads --verify --json  # Product verifier
 ../../backend/scripts/cache-explore workloads --verify --json --history reports/workloads/history.json
+../../backend/scripts/cache-explore workloads --history-summary reports/workloads/history.json --html > reports/workloads/history.html
 ```
 
 ### From Project Root

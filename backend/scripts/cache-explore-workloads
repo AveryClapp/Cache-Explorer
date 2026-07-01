@@ -18,6 +18,7 @@ Options:
                With --verify, write compact benchmark history JSON
   --history-summary <path>
                Summarize one benchmark history JSON file (repeat for multiple)
+  --html       With --history-summary, output a standalone HTML trend report
   --help       Show this help
 
 Examples:
@@ -29,7 +30,8 @@ Examples:
   cache-explore workloads --verify --json
   cache-explore workloads --verify --history reports/workloads/history.json
   cache-explore workloads --history-summary reports/workloads/history.json
-  cache-explore workloads --history-summary reports/workloads/*.json --json`)
+  cache-explore workloads --history-summary reports/workloads/*.json --json
+  cache-explore workloads --history-summary reports/workloads/*.json --html > report.html`)
 }
 
 function projectRoot() {
@@ -438,6 +440,166 @@ function formatMs(ms) {
   return `${Number(ms || 0).toLocaleString()}ms`
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function formatIso(value) {
+  if (!value) return 'unknown'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return date.toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, 'Z')
+}
+
+function buildWorkloadTrendRows(records) {
+  const workloadIds = [...new Set(records.flatMap(({ record }) => (
+    (record.workloads || []).map(workload => workload.id)
+  )))].sort()
+  const latestRecords = records.slice(-5)
+
+  return workloadIds.map(id => {
+    const durations = latestRecords.map(({ record }) => {
+      const workload = (record.workloads || []).find(item => item.id === id)
+      return workload ? workload.durationMs || 0 : null
+    })
+    const latestDuration = [...durations].reverse().find(value => typeof value === 'number')
+    return { id, durations, latestDuration }
+  }).sort((a, b) => (b.latestDuration || 0) - (a.latestDuration || 0))
+}
+
+function percent(value) {
+  if (typeof value !== 'number') return ''
+  const sign = value > 0 ? '+' : ''
+  return `${sign}${(value * 100).toFixed(1)}%`
+}
+
+function printHistoryHtmlReport(summary, records) {
+  const latest = summary.latest
+  const status = latest?.summary?.failed > 0 ? 'failing' : 'passing'
+  const trendRows = buildWorkloadTrendRows(records)
+  const maxDuration = Math.max(
+    1,
+    ...trendRows.flatMap(row => row.durations.filter(value => typeof value === 'number')),
+    ...summary.files.map(file => file.durationMs || 0),
+  )
+  const runRows = summary.files.map(file => `
+        <tr>
+          <td>${escapeHtml(formatIso(file.generatedAt))}</td>
+          <td><span class="status ${file.failed > 0 ? 'fail' : 'ok'}">${file.failed > 0 ? 'failed' : 'passed'}</span></td>
+          <td>${Number(file.passed || 0).toLocaleString()}</td>
+          <td>${Number(file.failed || 0).toLocaleString()}</td>
+          <td>${formatMs(file.durationMs)}</td>
+          <td>${escapeHtml([file.git?.ref, file.git?.sha, file.git?.runId].filter(Boolean).join(' ') || '-')}</td>
+        </tr>`).join('')
+  const slowRows = summary.slowestWorkloads.map(workload => `
+        <tr>
+          <td>${escapeHtml(workload.id)}</td>
+          <td>${formatMs(workload.durationMs)}</td>
+          <td>${workload.variants}</td>
+          <td>${workload.checks}</td>
+          <td><span class="status ${workload.ok ? 'ok' : 'fail'}">${workload.ok ? 'passed' : 'failed'}</span></td>
+        </tr>`).join('')
+  const deltaRows = summary.durationDeltas.map(delta => `
+        <tr>
+          <td>${escapeHtml(delta.id)}</td>
+          <td>${formatMs(delta.previousDurationMs)}</td>
+          <td>${formatMs(delta.durationMs)}</td>
+          <td class="${delta.deltaMs > 0 ? 'warn' : delta.deltaMs < 0 ? 'good' : ''}">${delta.deltaMs > 0 ? '+' : ''}${formatMs(delta.deltaMs)}</td>
+          <td class="${delta.deltaMs > 0 ? 'warn' : delta.deltaMs < 0 ? 'good' : ''}">${percent(delta.deltaPct)}</td>
+        </tr>`).join('')
+  const failureRows = summary.failures.map(failure => `
+        <tr>
+          <td>${escapeHtml(failure.workload)}</td>
+          <td>${escapeHtml(failure.metric)}</td>
+          <td>${escapeHtml(failure.relationship)}</td>
+          <td>${escapeHtml(`${failure.leftValue} vs ${failure.rightValue}`)}</td>
+        </tr>`).join('')
+  const trendHeader = records.slice(-5).map(({ record }) => (
+    `<th>${escapeHtml(formatIso(record.generatedAt).split(' ')[0])}</th>`
+  )).join('')
+  const trendBody = trendRows.map(row => `
+        <tr>
+          <td>${escapeHtml(row.id)}</td>
+          ${row.durations.map(value => {
+            if (typeof value !== 'number') return '<td class="empty">-</td>'
+            const width = Math.max(2, Math.round((value / maxDuration) * 100))
+            return `<td><span class="bar" style="--w:${width}%"></span><span>${formatMs(value)}</span></td>`
+          }).join('')}
+        </tr>`).join('')
+
+  console.log(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cache Explorer Workload History</title>
+  <style>
+    :root { color-scheme: dark; --bg:#161616; --panel:#202020; --line:#363636; --text:#f0f0f0; --muted:#9ca3af; --ok:#5eead4; --fail:#fb7185; --warn:#fbbf24; --accent:#7dd3fc; }
+    body { margin:0; background:var(--bg); color:var(--text); font:14px/1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    main { max-width:1180px; margin:0 auto; padding:32px 20px 48px; }
+    h1, h2 { margin:0; font-family:Inter, ui-sans-serif, system-ui, sans-serif; letter-spacing:0; }
+    h1 { font-size:28px; }
+    h2 { margin-top:28px; font-size:16px; }
+    .lede { color:var(--muted); margin:8px 0 24px; }
+    .cards { display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:12px; }
+    .card, section { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px; }
+    .label { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:0; }
+    .value { display:block; margin-top:6px; font-size:20px; color:var(--text); }
+    .status { display:inline-flex; padding:2px 8px; border:1px solid var(--line); border-radius:999px; font-size:12px; }
+    .passing { color:var(--ok); }
+    .status.ok { color:var(--ok); border-color:var(--ok); }
+    .status.fail, .failing { color:var(--fail); border-color:var(--fail); }
+    table { width:100%; border-collapse:collapse; margin-top:12px; }
+    th, td { padding:9px 8px; border-bottom:1px solid var(--line); text-align:left; vertical-align:middle; }
+    th { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:0; }
+    td { overflow-wrap:anywhere; }
+    .good { color:var(--ok); }
+    .warn { color:var(--warn); }
+    .empty { color:var(--muted); }
+    .bar { display:inline-block; width:var(--w); min-width:2px; height:8px; margin-right:8px; border-radius:999px; background:var(--accent); vertical-align:middle; }
+    @media (max-width: 760px) { main { padding:20px 12px 36px; } table { display:block; overflow-x:auto; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Cache Explorer Workload History</h1>
+    <p class="lede">Generated from benchmark-history artifacts. Use this report to spot failing workload contracts and runtime drift.</p>
+    <div class="cards">
+      <div class="card"><span class="label">Status</span><span class="value ${status}">${status}</span></div>
+      <div class="card"><span class="label">History Files</span><span class="value">${summary.files.length}</span></div>
+      <div class="card"><span class="label">Latest Checks</span><span class="value">${latest?.summary?.passed || 0} / ${latest?.summary?.failed || 0}</span></div>
+      <div class="card"><span class="label">Latest Duration</span><span class="value">${formatMs(latest?.summary?.durationMs)}</span></div>
+    </div>
+    <section>
+      <h2>Run History</h2>
+      <table><thead><tr><th>Generated</th><th>Status</th><th>Passed</th><th>Failed</th><th>Duration</th><th>Git</th></tr></thead><tbody>${runRows || '<tr><td colspan="6">No history records.</td></tr>'}</tbody></table>
+    </section>
+    <section>
+      <h2>Slowest Workloads</h2>
+      <table><thead><tr><th>Workload</th><th>Duration</th><th>Variants</th><th>Checks</th><th>Status</th></tr></thead><tbody>${slowRows || '<tr><td colspan="5">No workloads.</td></tr>'}</tbody></table>
+    </section>
+    <section>
+      <h2>Largest Duration Changes</h2>
+      <table><thead><tr><th>Workload</th><th>Previous</th><th>Latest</th><th>Delta</th><th>Percent</th></tr></thead><tbody>${deltaRows || '<tr><td colspan="5">Need at least two history records.</td></tr>'}</tbody></table>
+    </section>
+    <section>
+      <h2>Per-Workload Trend</h2>
+      <table><thead><tr><th>Workload</th>${trendHeader}</tr></thead><tbody>${trendBody || '<tr><td>No workload trend data.</td></tr>'}</tbody></table>
+    </section>
+    <section>
+      <h2>Failures</h2>
+      <table><thead><tr><th>Workload</th><th>Metric</th><th>Relationship</th><th>Observed</th></tr></thead><tbody>${failureRows || '<tr><td colspan="4">No failing checks in latest history.</td></tr>'}</tbody></table>
+    </section>
+  </main>
+</body>
+</html>`)
+}
+
 function printHistorySummary(summary) {
   if (!summary.latest) {
     console.log('No workload history records found.')
@@ -529,6 +691,7 @@ function parseArgs(args) {
     ids: false,
     commands: false,
     verify: false,
+    html: false,
     help: false,
     historyPath: '',
     historySummaryPaths: [],
@@ -541,6 +704,7 @@ function parseArgs(args) {
     else if (arg === '--ids') parsed.ids = true
     else if (arg === '--commands') parsed.commands = true
     else if (arg === '--verify') parsed.verify = true
+    else if (arg === '--html') parsed.html = true
     else if (arg === '--help' || arg === '-h') parsed.help = true
     else if (arg === '--history') {
       if (!args[index + 1] || args[index + 1].startsWith('-')) {
@@ -582,7 +746,7 @@ function parseArgs(args) {
 }
 
 async function main() {
-  const { json, ids, commands, verify, help, historyPath, historySummaryPaths, workloadId } = parseArgs(process.argv.slice(2))
+  const { json, ids, commands, verify, html, help, historyPath, historySummaryPaths, workloadId } = parseArgs(process.argv.slice(2))
 
   if (help) {
     usage()
@@ -594,10 +758,22 @@ async function main() {
     process.exitCode = 1
     return
   }
+  if (html && json) {
+    console.error('--html cannot be combined with --json')
+    process.exitCode = 1
+    return
+  }
+  if (html && historySummaryPaths.length === 0) {
+    console.error('--html requires --history-summary')
+    process.exitCode = 1
+    return
+  }
   if (historySummaryPaths.length > 0) {
     const records = await loadHistoryRecords(historySummaryPaths)
     const summary = summarizeHistoryRecords(records)
-    if (json) {
+    if (html) {
+      printHistoryHtmlReport(summary, records)
+    } else if (json) {
       console.log(JSON.stringify(summary, null, 2))
     } else {
       printHistorySummary(summary)

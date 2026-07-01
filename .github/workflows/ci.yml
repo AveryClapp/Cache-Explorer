@@ -104,11 +104,15 @@ jobs:
               | tee reports/workloads/workload-history-summary.txt
             backend/scripts/cache-explore workloads --history-summary reports/workloads/workload-history*.json --json \
               > reports/workloads/workload-history-summary.json
+            backend/scripts/cache-explore workloads --history-summary reports/workloads/workload-history*.json --html \
+              > reports/workloads/workload-history-report.html
             {
               echo "### Workload benchmark history"
               echo '```'
               cat reports/workloads/workload-history-summary.txt
               echo '```'
+              echo
+              echo "HTML trend report is available in the workload-benchmark-history artifact."
             } >> "$GITHUB_STEP_SUMMARY"
           else
             echo "No workload benchmark history was generated."
@@ -122,6 +126,7 @@ jobs:
           path: |
             reports/workloads/*.json
             reports/workloads/*.txt
+            reports/workloads/*.html
           if-no-files-found: ignore
 
   server:

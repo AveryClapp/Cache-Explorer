@@ -22,7 +22,8 @@ Already in place:
 - Verified workload browser in the app, backed by product-facing workload APIs.
 - Workload-driven experiments for same-source define variants and per-variant
   source comparisons.
-- Workload verification can emit compact benchmark-history JSON artifacts in CI.
+- Workload verification can emit compact benchmark-history JSON artifacts and
+  standalone HTML trend reports in CI.
 - Workload verification covers branch behavior, prefetch policy, vector/SIMD
   stats, memory intrinsic stats, atomic builtin stats, and image-stencil
   traversal locality.
@@ -33,7 +34,8 @@ Known gaps:
 
 - Workload catalog still needs more sorting, search, hashing, and threaded
   real-world kernels before it can act as a broad regression corpus.
-- There is no hosted regression dashboard or trend UI for benchmark history.
+- There is no hosted persistent regression dashboard beyond downloadable CI
+  trend reports.
 - Deployment/package polish is still developer-oriented.
 - Workload history trend surfacing, deeper onboarding, and error states need
   another design pass.
@@ -82,8 +84,8 @@ Known gaps:
 - Segment caching and fast mode remain explicit fidelity choices.
 - CI covers CLI, frontend type checks/browser smoke, server tests, simulator unit tests,
   profile drift, workload verification, and e2e flows.
-- Benchmark verification reports duration so regressions can become visible over
-  time.
+- Benchmark verification reports duration and downloadable trend summaries so
+  regressions can become visible over time.
 
 ### 6. Deployment Polish
 
@@ -98,7 +100,7 @@ Known gaps:
 1. Broaden workload metadata and catalog coverage.
 2. Add more workload snapshots for memory layout, pointer chasing, prefetch,
    false sharing, and branch behavior.
-3. Add hosted benchmark-history dashboards or trend summaries from CI artifacts.
+3. Host benchmark-history dashboards from CI artifacts.
 4. Harden deployment docs and local dev bootstrap.
 5. Polish workload/history onboarding and modal empty/error states.
 6. Add more browser-level flows for share, workload, and experiment journeys.
@@ -108,5 +110,5 @@ Known gaps:
 - Tune threaded false-sharing examples so they can run as optional stress
   workloads without dragging down CI.
 - Add more real kernels for sorting, search, hashing, and allocation patterns.
-- Add a benchmark-history trend surface in the app or hosted docs.
+- Publish benchmark-history HTML reports through hosted docs or Pages.
 - Keep committing each completed slice with validation output.

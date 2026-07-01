@@ -7,15 +7,24 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CACHE_EXPLORE="$PROJECT_ROOT/backend/scripts/cache-explore"
 HISTORY_FILE="${CACHE_EXPLORER_WORKLOAD_HISTORY:-}"
+HISTORY_REPORT_FILE="${CACHE_EXPLORER_WORKLOAD_HISTORY_REPORT:-}"
 SHOULD_CLEAN_HISTORY=0
+SHOULD_CLEAN_HISTORY_REPORT=0
 if [[ -z "$HISTORY_FILE" ]]; then
   HISTORY_FILE="$(mktemp "${TMPDIR:-/tmp}/cache-explorer-workload-history.XXXXXX")"
   SHOULD_CLEAN_HISTORY=1
+fi
+if [[ -z "$HISTORY_REPORT_FILE" ]]; then
+  HISTORY_REPORT_FILE="$(mktemp "${TMPDIR:-/tmp}/cache-explorer-workload-history.XXXXXX.html")"
+  SHOULD_CLEAN_HISTORY_REPORT=1
 fi
 
 cleanup() {
   if [[ "$SHOULD_CLEAN_HISTORY" == "1" ]]; then
     rm -f "$HISTORY_FILE"
+  fi
+  if [[ "$SHOULD_CLEAN_HISTORY_REPORT" == "1" ]]; then
+    rm -f "$HISTORY_REPORT_FILE"
   fi
 }
 trap cleanup EXIT
@@ -109,6 +118,17 @@ if "$CACHE_EXPLORE" workloads --history-summary "$HISTORY_FILE" --json | jq -e '
 else
   echo "FAIL"
   "$CACHE_EXPLORE" workloads --history-summary "$HISTORY_FILE" --json | jq .
+  exit 1
+fi
+
+echo -n "Test: workload history artifact can render an HTML report... "
+if "$CACHE_EXPLORE" workloads --history-summary "$HISTORY_FILE" --html > "$HISTORY_REPORT_FILE" \
+  && grep -q "Cache Explorer Workload History" "$HISTORY_REPORT_FILE" \
+  && grep -q "Per-Workload Trend" "$HISTORY_REPORT_FILE"; then
+  echo "PASS"
+else
+  echo "FAIL"
+  cat "$HISTORY_REPORT_FILE" || true
   exit 1
 fi
 
