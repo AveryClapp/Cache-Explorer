@@ -1,0 +1,37 @@
+{
+  "id": "branch-pattern-intel",
+  "description": "Predictable loop branch vs alternating data branch on the Intel profile.",
+  "example": "examples/branch_patterns.c",
+  "language": "c",
+  "optLevel": "-O2",
+  "config": "intel",
+  "limit": 25000,
+  "variants": [
+    {
+      "id": "predictable",
+      "defines": []
+    },
+    {
+      "id": "alternating",
+      "defines": ["RUN_ALTERNATING=1"]
+    }
+  ],
+  "expectedRelationships": [
+    {
+      "metric": "execution.pipeline.cycles",
+      "relationship": "alternating > predictable",
+      "lastObserved": {
+        "predictable": 12843,
+        "alternating": 15968
+      }
+    },
+    {
+      "metric": "summary.estimatedCycles",
+      "relationship": "alternating > predictable",
+      "lastObserved": {
+        "predictable": 12843,
+        "alternating": 15968
+      }
+    }
+  ]
+}
