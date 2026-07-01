@@ -60,6 +60,34 @@ jobs:
           restore-keys: |
             workload-history-
 
+      - name: Restore published workload history
+        env:
+          CACHE_EXPLORER_DASHBOARD_BASE_URL: ${{ vars.CACHE_EXPLORER_DASHBOARD_BASE_URL }}
+        run: |
+          mkdir -p reports/workloads/history-cache
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          repo="${GITHUB_REPOSITORY#*/}"
+          pages_base="${CACHE_EXPLORER_DASHBOARD_BASE_URL:-https://${owner}.github.io/${repo}}"
+          pages_base="${pages_base%/}"
+          echo "Restoring published workload history from ${pages_base}"
+
+          if ! curl -fsSL "${pages_base}/workload-history-index.json" -o /tmp/workload-history-index.json; then
+            echo "No published workload history index found."
+            exit 0
+          fi
+
+          jq -r '.files[]?.file // empty' /tmp/workload-history-index.json \
+            | while IFS= read -r file; do
+                case "$file" in
+                  workload-history*.json)
+                    curl -fsSL "${pages_base}/${file}" \
+                      -o "reports/workloads/history-cache/${file}" \
+                      || echo "Could not restore ${file}"
+                    ;;
+                esac
+              done
+          ls -1 reports/workloads/history-cache || true
+
       - name: Verify workloads with history
         run: |
           mkdir -p reports/workloads/history-cache
@@ -85,10 +113,33 @@ jobs:
           backend/scripts/cache-explore workloads --history-summary reports/workloads/history-cache/workload-history*.json --html \
             > site/index.html
           cp reports/workloads/history-cache/workload-history*.json site/
+          node <<'NODE'
+          const { readdirSync, readFileSync, writeFileSync } = require('fs')
+          const files = readdirSync('site')
+            .filter(file => /^workload-history.*\.json$/.test(file))
+            .sort()
+          const history = files.map(file => {
+            const record = JSON.parse(readFileSync(`site/${file}`, 'utf8'))
+            return {
+              file,
+              generatedAt: record.generatedAt,
+              ok: record.summary?.ok,
+              passed: record.summary?.passed,
+              failed: record.summary?.failed,
+              durationMs: record.summary?.durationMs,
+              git: record.git,
+            }
+          })
+          writeFileSync('site/workload-history-index.json', `${JSON.stringify({
+            schemaVersion: 1,
+            generatedAt: new Date().toISOString(),
+            files: history,
+          }, null, 2)}\n`)
+          NODE
           {
             echo "### Workload dashboard"
             echo
-            echo "Published dashboard will include up to 30 retained workload-history runs when the Actions cache is available."
+            echo "Published dashboard will include up to 30 retained workload-history runs restored from Pages and the Actions cache."
             echo
             echo '```'
             cat site/workload-history-summary.txt

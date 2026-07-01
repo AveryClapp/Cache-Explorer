@@ -29,8 +29,8 @@ Already in place:
   verification, and history outputs.
 - Workload verification can emit compact benchmark-history JSON artifacts,
   standalone HTML trend reports, and a GitHub Pages workload dashboard in CI.
-  The dashboard restores retained history from the Actions cache and renders up
-  to 30 recent runs.
+  The dashboard restores retained history from the published Pages site and the
+  Actions cache, publishes a history index, and renders up to 30 recent runs.
 - Workload verification covers branch behavior, prefetch policy, vector/SIMD
   stats, memory intrinsic stats, atomic builtin stats, hash-table probing,
   contiguous allocation locality, sequential/binary search locality,
@@ -55,8 +55,9 @@ Known gaps:
 
 - Workload catalog still needs threaded real-world kernels before it can act as
   a broad regression corpus.
-- Hosted benchmark history retention is best-effort through the Actions cache;
-  durable long-term storage or release-attached history would still be stronger.
+- Hosted benchmark history retention is backed by the published Pages dashboard
+  plus the Actions cache; release-attached or external long-term storage would
+  still be stronger.
 - Deployment/package polish still needs release-cadence tuning once real usage
   patterns are visible.
 - Workload history trend surfacing, deeper onboarding, and error states need
@@ -125,7 +126,8 @@ Known gaps:
 
 1. Broaden workload metadata and catalog coverage.
 2. Tune optional threaded false-sharing workload snapshots.
-3. Add durable benchmark-history storage beyond the best-effort Actions cache.
+3. Add release-attached or external benchmark-history archival if Pages
+   retention is not enough.
 4. Harden deployment docs and local dev bootstrap.
 5. Polish workload/history onboarding and modal empty/error states.
 6. Add more browser-level flows for result-bearing experiment journeys.
@@ -134,5 +136,6 @@ Known gaps:
 
 - Tune threaded false-sharing examples so they can run as optional stress
   workloads without dragging down CI.
-- Add durable benchmark-history storage beyond the best-effort Actions cache.
+- Add release-attached or external benchmark-history archival if Pages retention
+  is not enough.
 - Keep committing each completed slice with validation output.

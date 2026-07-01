@@ -209,9 +209,10 @@ standalone HTML trend report:
 ```
 
 On pushes to `main`, the `Workload Dashboard` workflow restores retained
-workload-history JSON from the Actions cache, keeps the latest 30 runs, and
-publishes an HTML trend report to GitHub Pages when Pages is configured for
-Actions.
+workload-history JSON from the published Pages dashboard and the Actions cache,
+keeps the latest 30 runs, and publishes an HTML trend report plus a
+`workload-history-index.json` manifest to GitHub Pages when Pages is configured
+for Actions.
 
 Tagged releases include pre-built LLVM pass assets, `SHA256SUMS` for download
 verification, and GitHub artifact attestations for release provenance.
