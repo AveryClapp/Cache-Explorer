@@ -343,6 +343,180 @@ async function verifyShareRoundTrip(url) {
   await page.unroute('**/s/smoke-seed')
 }
 
+function mockExperimentProvenance(profile) {
+  return {
+    resultKind: 'hardware-experiment',
+    executor: 'direct-dev',
+    hardwareProfile: {
+      id: profile.id,
+      displayName: profile.displayName,
+      modelConfidence: profile.modelConfidence,
+      validationConfidence: profile.validationConfidence,
+    },
+    fidelity: {
+      trace: 'full',
+      sampleRate: 1,
+      eventLimit: 100000,
+      fastMode: false,
+      cacheSegments: true,
+      prefetch: 'none',
+    },
+    source: {
+      path: 'examples/conv2d_kernel.c',
+      language: 'c',
+      config: profile.id,
+      optLevel: '-O2',
+    },
+    toolchain: {
+      compiler: {
+        command: 'clang',
+        version: 'clang 21.0.0',
+        optLevel: '-O2',
+      },
+      simulator: {
+        path: 'cache-sim',
+        sha256: 'abc123def4567890',
+      },
+    },
+    caveats: [],
+  }
+}
+
+function mockExperimentResult() {
+  const intel = {
+    id: 'intel',
+    displayName: 'Intel 14th Gen',
+    modelConfidence: 'empirical',
+    validationConfidence: 'empirical',
+  }
+  const amd = {
+    id: 'amd',
+    displayName: 'AMD Zen 4',
+    modelConfidence: 'simulated',
+    validationConfidence: 'modeled',
+  }
+
+  return {
+    source: 'examples/conv2d_kernel.c',
+    baselineVariant: 'direct',
+    summary: [
+      {
+        variant: 'direct',
+        variantSpec: 'direct',
+        config: 'intel',
+        profile: intel,
+        primaryBottleneck: 'L2 misses',
+        estimatedCycles: 120000,
+        cycleDelta: null,
+        cycleDeltaPercent: null,
+        topSource: { file: 'examples/conv2d_kernel.c', line: 42, subsystem: 'memory' },
+        hitRates: { l1d: 0.82 },
+        events: 100000,
+      },
+      {
+        variant: 'tiled',
+        variantSpec: 'tiled:RUN_TILED=1',
+        config: 'intel',
+        profile: intel,
+        primaryBottleneck: 'Compute',
+        estimatedCycles: 90000,
+        cycleDelta: -30000,
+        cycleDeltaPercent: -0.25,
+        topSource: { file: 'examples/conv2d_kernel.c', line: 57, subsystem: 'compute' },
+        hitRates: { l1d: 0.91 },
+        events: 100000,
+      },
+      {
+        variant: 'direct',
+        variantSpec: 'direct',
+        config: 'amd',
+        profile: amd,
+        primaryBottleneck: 'L1D misses',
+        estimatedCycles: 110000,
+        cycleDelta: null,
+        cycleDeltaPercent: null,
+        topSource: { file: 'examples/conv2d_kernel.c', line: 42, subsystem: 'memory' },
+        hitRates: { l1d: 0.88 },
+        events: 100000,
+      },
+      {
+        variant: 'tiled',
+        variantSpec: 'tiled:RUN_TILED=1',
+        config: 'amd',
+        profile: amd,
+        primaryBottleneck: 'L3 misses',
+        estimatedCycles: 115000,
+        cycleDelta: 5000,
+        cycleDeltaPercent: 0.045,
+        topSource: { file: 'examples/conv2d_kernel.c', line: 61, subsystem: 'memory' },
+        hitRates: { l1d: 0.86 },
+        events: 100000,
+      },
+    ],
+    variants: {
+      direct: {
+        source: 'direct',
+        summary: [],
+        configs: {
+          intel: { config: 'intel', events: 100000, provenance: mockExperimentProvenance(intel) },
+          amd: { config: 'amd', events: 100000, provenance: mockExperimentProvenance(amd) },
+        },
+      },
+      tiled: {
+        source: 'tiled:RUN_TILED=1',
+        summary: [],
+        configs: {
+          intel: { config: 'intel', events: 100000, provenance: mockExperimentProvenance(intel) },
+          amd: { config: 'amd', events: 100000, provenance: mockExperimentProvenance(amd) },
+        },
+      },
+    },
+  }
+}
+
+async function verifyExperimentResults(url) {
+  let experimentRequest = null
+  await page.route('**/experiment', async route => {
+    experimentRequest = route.request().postDataJSON()
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(mockExperimentResult()),
+    })
+  })
+
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await page.goto(url, { waitUntil: 'domcontentloaded' })
+  await page.getByRole('button', { name: 'Experiment', exact: true }).click()
+
+  const modal = page.locator('.experiment-modal')
+  await assertVisible(modal.getByText('Hardware Experiment', { exact: true }), 'experiment modal')
+  await modal.getByRole('button', { name: 'Run', exact: true }).click()
+
+  await assertVisible(modal.getByText('Overall', { exact: true }), 'experiment overall winner label')
+  await assertVisible(modal.getByText('tiled', { exact: true }).first(), 'experiment tiled winner')
+  await assertVisible(modal.getByText('205,000 cycles', { exact: true }), 'experiment overall cycles')
+  await assertVisible(modal.getByText('Intel 14th Gen', { exact: true }).first(), 'experiment intel winner')
+  await assertVisible(modal.getByText('AMD Zen 4', { exact: true }).first(), 'experiment amd winner')
+  await assertVisible(modal.getByText('-30,000 (-25.0%)', { exact: true }).first(), 'experiment improvement delta')
+  await assertVisible(modal.getByText('+5,000 (4.5%)', { exact: true }), 'experiment regression delta')
+  await assertVisible(modal.getByText('91.0%', { exact: true }), 'experiment hit-rate cell')
+  await assertVisible(modal.getByText('conv2d_kernel.c:57', { exact: true }), 'experiment top-source cell')
+  await assertVisible(modal.getByText('Full / Empirical', { exact: true }).first(), 'experiment empirical trust label')
+  await assertVisible(modal.getByText('Full / Simulated', { exact: true }).first(), 'experiment simulated trust label')
+  assert(await modal.getByRole('button', { name: 'Export CSV' }).isEnabled(), 'experiment CSV export should enable after results')
+  assert(await modal.getByRole('button', { name: 'Export JSON' }).isEnabled(), 'experiment JSON export should enable after results')
+
+  assert(experimentRequest?.variants?.includes('direct'), 'experiment request should include direct variant')
+  assert(experimentRequest?.variants?.includes('tiled:RUN_TILED=1'), 'experiment request should include tiled variant')
+  assert(experimentRequest?.configs?.includes('intel'), 'experiment request should include Intel config')
+  assert(experimentRequest?.configs?.includes('amd'), 'experiment request should include AMD config')
+  assert(experimentRequest?.limit === 1000000, `experiment request should preserve default event limit, got ${experimentRequest?.limit}`)
+
+  await closeModal()
+  await page.unroute('**/experiment')
+}
+
 async function cleanup() {
   if (browser) await browser.close().catch(() => {})
   if (previewProcess) {
@@ -387,6 +561,7 @@ try {
 
   await verifyLaunchSurface(url)
   await verifyWorkloadCatalogControls(url)
+  await verifyExperimentResults(url)
   await verifyShareRoundTrip(url)
   console.log(`UI smoke passed (${url})`)
 } catch (error) {
