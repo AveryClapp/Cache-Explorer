@@ -746,11 +746,12 @@ export interface CompileError {
 }
 
 export interface ErrorResult {
-  type: 'compile_error' | 'linker_error' | 'runtime_error' | 'timeout' | 'unknown_error' | 'validation_error' | 'server_error'
+  type: 'compile_error' | 'linker_error' | 'runtime_error' | 'timeout' | 'unknown_error' | 'validation_error' | 'server_error' | 'rate_limit'
   errors?: CompileError[]
   summary?: string
   message?: string
   suggestion?: string
+  retryAfter?: number
   raw?: string
   error?: string
 }

@@ -23,6 +23,8 @@ Already in place:
   provenance, showing unknown fields instead of hiding the trust boundary.
 - Copyable local repro commands from result provenance.
 - Copyable structured diagnostics from compile/runtime error states.
+- Rate-limit responses are represented as first-class frontend/API errors with
+  retry-after metadata.
 - Golden kernel tests, workload snapshot verification, profile drift checks,
   frontend build/browser smoke coverage, and server tests in CI.
 - Browser smoke covers launch paths, workload catalog controls, workload history

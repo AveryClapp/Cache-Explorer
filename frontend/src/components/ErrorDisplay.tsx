@@ -1,25 +1,5 @@
 import { useMemo, useState } from 'react'
-
-interface CompileError {
-  line: number
-  column: number
-  severity: 'error' | 'warning'
-  message: string
-  suggestion?: string
-  notes?: string[]
-  sourceLine?: string
-  caret?: string
-}
-
-interface ErrorResult {
-  type: 'compile_error' | 'linker_error' | 'runtime_error' | 'timeout' | 'unknown_error' | 'validation_error' | 'server_error'
-  errors?: CompileError[]
-  summary?: string
-  message?: string
-  suggestion?: string
-  raw?: string
-  error?: string
-}
+import type { ErrorResult } from '../types'
 
 interface ErrorDisplayProps {
   error: ErrorResult
@@ -31,6 +11,7 @@ function diagnosticText(error: ErrorResult) {
     error.summary ? `summary: ${error.summary}` : '',
     error.message ? `message: ${error.message}` : '',
     error.suggestion ? `suggestion: ${error.suggestion}` : '',
+    error.retryAfter ? `retryAfter: ${error.retryAfter}s` : '',
   ].filter(Boolean)
 
   for (const item of error.errors || []) {
@@ -57,7 +38,8 @@ export function ErrorDisplay({ error }: ErrorDisplayProps) {
     timeout: 'Timeout',
     unknown_error: 'Error',
     validation_error: 'Invalid Request',
-    server_error: 'Server Error'
+    server_error: 'Server Error',
+    rate_limit: 'Rate Limited',
   }
 
   const icons: Record<string, string> = {
@@ -67,7 +49,8 @@ export function ErrorDisplay({ error }: ErrorDisplayProps) {
     timeout: '\u23F1',
     unknown_error: '\u2753',
     validation_error: '\u26A0',
-    server_error: '\u26A0'
+    server_error: '\u26A0',
+    rate_limit: '!',
   }
 
   const copyDiagnostics = async () => {
@@ -130,6 +113,11 @@ export function ErrorDisplay({ error }: ErrorDisplayProps) {
           {error.suggestion && (
             <div className="error-suggestion">
               <span className="suggestion-icon">{'\u{1F4A1}'}</span> {error.suggestion}
+            </div>
+          )}
+          {error.retryAfter && (
+            <div className="error-suggestion">
+              Retry after {error.retryAfter}s.
             </div>
           )}
         </div>
