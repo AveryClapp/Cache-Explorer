@@ -21,6 +21,7 @@ import { parseCompileErrors, createErrorResponse } from './services/errorParser.
 import { runManagedProcess, runProcess } from './services/processRunner.js';
 import { createTempProject, cleanupTempProject, cleanupOrphanedTempDirs } from './services/tempProject.js';
 import { workloadProcessErrorResponse } from './services/workloadErrors.js';
+import { loadWorkloadHistory } from './services/workloadHistory.js';
 import { ConnectionResourceTracker, connectionResources, getOrCreateTracker, removeTracker } from './middleware/resourceTracker.js';
 
 // CONFIG is now imported from ./config.js
@@ -167,36 +168,6 @@ function httpError(status, message, type = 'validation_error') {
   error.statusCode = status;
   error.type = type;
   return error;
-}
-
-function workloadHistoryUnavailable(reason, message, extra = {}) {
-  return {
-    available: false,
-    reason,
-    message,
-    ...extra,
-  };
-}
-
-async function fetchJsonWithTimeout(url, timeoutMs) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(url, { signal: controller.signal });
-    if (response.status === 404) {
-      return workloadHistoryUnavailable(
-        'not_found',
-        'No published workload history summary was found',
-        { source: 'dashboard', url },
-      );
-    }
-    if (!response.ok) {
-      throw new Error(`History summary request failed with HTTP ${response.status}`);
-    }
-    return await response.json();
-  } finally {
-    clearTimeout(timeout);
-  }
 }
 
 function isStructuredVariant(variant) {
@@ -1159,37 +1130,13 @@ app.get('/api/workloads', async (req, res) => {
 
 app.get('/api/workloads/history', async (req, res) => {
   incCounter('requests', { type: 'workloads_history' });
-  const summaryPath = CONFIG.workloads.historySummaryPath;
-  const dashboardBaseUrl = CONFIG.workloads.dashboardBaseUrl;
 
   try {
-    if (summaryPath) {
-      const data = JSON.parse(await readFile(summaryPath, 'utf8'));
-      res.json({
-        available: true,
-        source: 'local',
-        path: summaryPath,
-        ...data,
-      });
-      return;
-    }
-
-    if (dashboardBaseUrl) {
-      const url = `${dashboardBaseUrl}/workload-history-summary.json`;
-      const data = await fetchJsonWithTimeout(url, CONFIG.workloads.historyFetchTimeoutMs);
-      res.json(data.available === false ? data : {
-        available: true,
-        source: 'dashboard',
-        url,
-        ...data,
-      });
-      return;
-    }
-
-    res.json(workloadHistoryUnavailable(
-      'not_configured',
-      'Published workload history is not configured for this server',
-    ));
+    res.json(await loadWorkloadHistory({
+      summaryPath: CONFIG.workloads.historySummaryPath,
+      dashboardBaseUrl: CONFIG.workloads.dashboardBaseUrl,
+      timeoutMs: CONFIG.workloads.historyFetchTimeoutMs,
+    }));
   } catch (err) {
     console.error('Failed to load workload history:', err);
     incCounter('errors', { type: 'workloads_history' });
