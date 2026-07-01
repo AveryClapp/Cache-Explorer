@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "bundle:check": "node scripts/check-bundle-budget.mjs",
+    "diagnostics:check": "node scripts/check-error-diagnostics.mjs",
     "tokens:check": "node scripts/check-css-tokens.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
