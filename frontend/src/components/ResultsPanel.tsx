@@ -41,6 +41,9 @@ interface ResultsPanelProps {
   onShare: () => void
   onExportJSON?: () => void
   onExportCSV?: () => void
+  onRun: () => void
+  onOpenWorkloads: () => void
+  onOpenExperiment: () => void
   isMobile: boolean
   mobilePane: 'editor' | 'results'
 }
@@ -64,6 +67,9 @@ export function ResultsPanel({
   onShare,
   onExportJSON,
   onExportCSV,
+  onRun,
+  onOpenWorkloads,
+  onOpenExperiment,
   isMobile,
   mobilePane,
 }: ResultsPanelProps) {
@@ -190,7 +196,13 @@ export function ResultsPanel({
 
         {isLoading && <LoadingState stage={stage} longRunning={longRunning} />}
 
-        {!result && !error && !isLoading && <EmptyState />}
+        {!result && !error && !isLoading && (
+          <EmptyState
+            onRun={onRun}
+            onOpenWorkloads={onOpenWorkloads}
+            onOpenExperiment={onOpenExperiment}
+          />
+        )}
       </div>
     </div>
   )

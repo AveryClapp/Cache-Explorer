@@ -1396,6 +1396,9 @@ function App() {
           onShare={handleShare}
           onExportJSON={() => result && exportAsJSON(result)}
           onExportCSV={() => result && exportAsCSV(result)}
+          onRun={runAnalysis}
+          onOpenWorkloads={openWorkloadCatalog}
+          onOpenExperiment={openExperimentModal}
           isMobile={isMobile}
           mobilePane={mobilePane}
         />

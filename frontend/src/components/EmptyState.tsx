@@ -1,4 +1,10 @@
-export function EmptyState() {
+interface EmptyStateProps {
+  onRun: () => void
+  onOpenWorkloads: () => void
+  onOpenExperiment: () => void
+}
+
+export function EmptyState({ onRun, onOpenWorkloads, onOpenExperiment }: EmptyStateProps) {
   return (
     <div className="empty-state">
       <div className="empty-state-logo">
@@ -8,10 +14,12 @@ export function EmptyState() {
       </div>
       <div className="empty-state-title">Ready to Analyze</div>
       <div className="empty-state-desc">
-        Write or paste C/C++ code in the editor, then execute to visualize cache behavior.
+        Start from the current buffer, a verified workload, or an experiment.
       </div>
-      <div className="empty-state-shortcut">
-        Press <kbd>⌘</kbd>+<kbd>Enter</kbd> to run
+      <div className="empty-state-actions">
+        <button className="btn-primary empty-state-run" onClick={onRun}>Run</button>
+        <button className="btn" onClick={onOpenWorkloads}>Workloads</button>
+        <button className="btn" onClick={onOpenExperiment}>Experiment</button>
       </div>
     </div>
   )
