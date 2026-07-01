@@ -36,15 +36,9 @@ docker-compose up --build
 git clone https://github.com/AveryClapp/cache-explorer.git
 cd cache-explorer
 
-# Build (requires LLVM 18, CMake, Ninja)
-cd backend/cache-simulator && mkdir -p build && cd build && cmake .. -G Ninja && ninja && cd ../../..
-cd backend/llvm-pass && mkdir -p build && cd build && cmake .. -G Ninja -DLLVM_DIR=$(llvm-config --cmakedir) && ninja && cd ../../..
-cd backend/runtime && mkdir -p build && cd build && cmake .. -G Ninja && ninja && cd ../../..
-
-# Run
-cd backend/server && npm install && node server.js &
-cd frontend && npm install && npm run dev
-# Open http://localhost:5173
+# Build if needed, install npm deps if needed, then run backend + frontend
+./scripts/dev.sh
+# Open the frontend URL it prints
 ```
 
 ### CLI Only
@@ -132,21 +126,8 @@ sudo apt install cmake ninja-build nodejs npm
 git clone https://github.com/AveryClapp/cache-explorer.git
 cd cache-explorer
 
-# Build everything
-cd backend/cache-simulator && mkdir -p build && cd build
-cmake .. -G Ninja && ninja && cd ../../..
-
-cd backend/llvm-pass && mkdir -p build && cd build
-cmake .. -G Ninja -DLLVM_DIR=$(llvm-config --cmakedir) && ninja && cd ../../..
-
-cd backend/runtime && mkdir -p build && cd build
-cmake .. -G Ninja && ninja && cd ../../..
-
-# Start the server
-cd backend/server && npm install && node server.js &
-
-# Start the frontend
-cd frontend && npm install && npm run dev
+# Start the full local product
+./scripts/dev.sh
 ```
 
 ## CLI Usage
@@ -192,8 +173,8 @@ cd backend/cache-simulator/build
 ./MESICoherenceTest     # 19 tests
 ./MultiCorePrefetchTest # 18 tests
 ./MultiCoreTLBTest      # 8 tests
+./MultiCoreTraceProcessorTest # 2 tests
 ./AdvancedInstrumentationTest # 31 tests
-# Total: 123 tests
 ```
 
 ## Limitations
