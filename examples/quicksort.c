@@ -2,7 +2,9 @@
 // Good cache behavior due to working on smaller and smaller partitions
 #include <stdio.h>
 
+#ifndef N
 #define N 10000
+#endif
 
 int arr[N];
 
@@ -34,13 +36,29 @@ void quicksort(int low, int high) {
     }
 }
 
+void insertion_sort(void) {
+    for (int i = 1; i < N; i++) {
+        int key = arr[i];
+        int j = i - 1;
+        while (j >= 0 && arr[j] > key) {
+            arr[j + 1] = arr[j];
+            j--;
+        }
+        arr[j + 1] = key;
+    }
+}
+
 int main() {
     // Initialize with reverse sorted (worst case for naive quicksort)
     for (int i = 0; i < N; i++) {
         arr[i] = N - i;
     }
 
+#ifdef RUN_INSERTION_SORT
+    insertion_sort();
+#else
     quicksort(0, N - 1);
+#endif
 
     // Verify sorted
     int sorted = 1;

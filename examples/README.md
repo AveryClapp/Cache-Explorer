@@ -157,3 +157,9 @@ Run any example with Cache Explorer:
    ./backend/scripts/cache-explore examples/memory_pool.c -O2 --config intel --limit 200000
    ./backend/scripts/cache-explore workloads hash-probe-intel --verify
    ```
+
+8. **Search and Sort Patterns**
+   ```bash
+   ./backend/scripts/cache-explore workloads search-pattern-intel --verify
+   ./backend/scripts/cache-explore workloads sort-pattern-intel --verify
+   ```

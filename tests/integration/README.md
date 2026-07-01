@@ -43,6 +43,8 @@ Runs `cache-explore workloads --verify --json` against benchmark snapshots from 
 - Intel stream prefetching reduces modeled cycles and L2 misses for a sequential scan
 - Alternating data branches cost more modeled execution cycles than a predictable loop branch
 - Hash-table probing has worse modeled L1D locality than contiguous pool traversal
+- Sequential string search has better modeled locality than binary-search probes
+- Adjacent insertion-sort shifts have better modeled L1D locality than the capped quicksort partition trace
 - Vector/SIMD, memory intrinsic, and atomic builtin advanced stats remain observable
   through product workload verification
 

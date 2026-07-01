@@ -1,0 +1,45 @@
+{
+  "id": "search-pattern-intel",
+  "description": "Sequential string scan vs binary-search probes on the Intel profile.",
+  "example": "examples/string_search.c",
+  "language": "c",
+  "optLevel": "-O2",
+  "config": "intel",
+  "limit": 100000,
+  "variants": [
+    {
+      "id": "linear",
+      "example": "examples/string_search.c"
+    },
+    {
+      "id": "binary",
+      "example": "examples/binary_search.c"
+    }
+  ],
+  "expectedRelationships": [
+    {
+      "metric": "levels.l1d.hitRate",
+      "relationship": "linear > binary",
+      "lastObserved": {
+        "linear": 0.976,
+        "binary": 0.916
+      }
+    },
+    {
+      "metric": "levels.l1d.misses",
+      "relationship": "linear < binary",
+      "lastObserved": {
+        "linear": 572,
+        "binary": 5610
+      }
+    },
+    {
+      "metric": "timing.totalCycles",
+      "relationship": "linear < binary",
+      "lastObserved": {
+        "linear": 453856,
+        "binary": 1596179
+      }
+    }
+  ]
+}

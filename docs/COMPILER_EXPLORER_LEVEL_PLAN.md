@@ -29,7 +29,8 @@ Already in place:
   standalone HTML trend reports in CI.
 - Workload verification covers branch behavior, prefetch policy, vector/SIMD
   stats, memory intrinsic stats, atomic builtin stats, hash-table probing,
-  contiguous allocation locality, and image-stencil traversal locality.
+  contiguous allocation locality, sequential/binary search locality,
+  sort-pattern locality, and image-stencil traversal locality.
 - Empty result state routes users into run, verified workload, and experiment
   flows.
 - Local bootstrap has a doctor script plus a single dev command that can build,
@@ -106,8 +107,7 @@ Known gaps:
 ## Implementation Path
 
 1. Broaden workload metadata and catalog coverage.
-2. Add more workload snapshots for memory layout, pointer chasing, prefetch,
-   false sharing, and branch behavior.
+2. Tune optional threaded false-sharing workload snapshots.
 3. Host benchmark-history dashboards from CI artifacts.
 4. Harden deployment docs and local dev bootstrap.
 5. Polish workload/history onboarding and modal empty/error states.
@@ -117,6 +117,5 @@ Known gaps:
 
 - Tune threaded false-sharing examples so they can run as optional stress
   workloads without dragging down CI.
-- Add more real kernels for sorting and search patterns.
 - Publish benchmark-history HTML reports through hosted docs or Pages.
 - Keep committing each completed slice with validation output.

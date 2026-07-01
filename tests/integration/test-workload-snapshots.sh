@@ -108,6 +108,25 @@ else
   exit 1
 fi
 
+echo -n "Test: search and sort pattern workloads remain covered... "
+if echo "$OUTPUT" | jq -e '
+  (any(.workloads[]; .id == "search-pattern-intel"
+    and (.checks | length) >= 3
+    and all(.checks[]; .passed == true)
+    and any(.checks[]; .metric == "levels.l1d.hitRate" and .leftVariant == "linear" and .rightVariant == "binary" and .leftValue > .rightValue)
+    and any(.checks[]; .metric == "timing.totalCycles" and .leftVariant == "linear" and .rightVariant == "binary" and .leftValue < .rightValue)))
+  and (any(.workloads[]; .id == "sort-pattern-intel"
+    and (.checks | length) >= 2
+    and all(.checks[]; .passed == true)
+    and any(.checks[]; .metric == "levels.l1d.hitRate" and .leftVariant == "insertion" and .rightVariant == "quicksort" and .leftValue > .rightValue)))
+' > /dev/null; then
+  echo "PASS"
+else
+  echo "FAIL"
+  echo "$OUTPUT" | jq .
+  exit 1
+fi
+
 echo -n "Test: workload verifier emits benchmark history artifact... "
 if jq -e '
   .schemaVersion == 1

@@ -1,0 +1,36 @@
+{
+  "id": "sort-pattern-intel",
+  "description": "Recursive quicksort partitioning vs adjacent insertion-sort shifts on the Intel profile.",
+  "example": "examples/quicksort.c",
+  "language": "c",
+  "optLevel": "-O2",
+  "config": "intel",
+  "limit": 100000,
+  "variants": [
+    {
+      "id": "quicksort"
+    },
+    {
+      "id": "insertion",
+      "defines": ["RUN_INSERTION_SORT=1"]
+    }
+  ],
+  "expectedRelationships": [
+    {
+      "metric": "levels.l1d.hitRate",
+      "relationship": "insertion > quicksort",
+      "lastObserved": {
+        "quicksort": 0.99,
+        "insertion": 0.996
+      }
+    },
+    {
+      "metric": "levels.l1d.misses",
+      "relationship": "insertion < quicksort",
+      "lastObserved": {
+        "quicksort": 320,
+        "insertion": 142
+      }
+    }
+  ]
+}
