@@ -63,8 +63,8 @@ Already in place:
   non-default editor-mode payload.
 - Product modals are lazy-loaded, keeping the first-load workbench chunk under
   the enforced frontend bundle budget.
-- Frontend CI checks the built bundle budget after Vite build, tracking the main
-  app chunk, Monaco chunk, and lazy product modal chunks separately.
+- Frontend CI checks the built bundle budget after Vite build, tracking main app
+  JS/CSS, Monaco JS/CSS, and lazy product modal chunks separately.
 - Docker deployment proxies the product API surface and exposes backend/frontend
   health checks.
 - Releases publish LLVM pass checksums and the download helper verifies them

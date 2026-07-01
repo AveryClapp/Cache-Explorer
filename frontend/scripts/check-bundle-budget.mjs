@@ -16,10 +16,24 @@ const budgets = [
     required: true,
   },
   {
+    label: 'app css',
+    pattern: /^index-[\w-]+\.css$/,
+    maxBytes: 120 * 1024,
+    maxGzipBytes: 20 * 1024,
+    required: true,
+  },
+  {
     label: 'monaco editor',
     pattern: /^monaco-[\w-]+\.js$/,
     maxBytes: 2700 * 1024,
     maxGzipBytes: 700 * 1024,
+    required: true,
+  },
+  {
+    label: 'monaco css',
+    pattern: /^monaco-[\w-]+\.css$/,
+    maxBytes: 180 * 1024,
+    maxGzipBytes: 30 * 1024,
     required: true,
   },
   {
@@ -64,7 +78,7 @@ if (!existsSync(assetsDir)) {
   process.exit(1)
 }
 
-const assets = readdirSync(assetsDir).filter(file => file.endsWith('.js')).sort()
+const assets = readdirSync(assetsDir).sort()
 let failed = false
 
 console.log('Bundle budget report')
