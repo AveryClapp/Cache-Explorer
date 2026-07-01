@@ -19,25 +19,34 @@
   --panel: #252526;
   --surface: #2d2d2d;
   --elevated: #3c3c3c;
+  --bg-panel: var(--panel);
+  --bg-elevated: var(--elevated);
+  --bg-hover: var(--surface);
   --border: #404040;
   --border-glow: #505050;
+  --border-active: var(--phosphor-dim);
+  --border-bright: var(--border-glow);
+  --border-light: var(--border-glow);
 
   /* ─── Accent Teal (Logo L1) ─── */
   --phosphor: #4ec9b0;
   --phosphor-dim: #3ba992;
   --phosphor-glow: transparent;
   --phosphor-subtle: rgba(78, 201, 176, 0.1);
+  --accent: var(--phosphor);
 
   /* ─── Text Hierarchy ─── */
   --text-bright: #e8eaed;
   --text-primary: #b8bcc4;
   --text-secondary: #6b7280;
   --text-muted: #404550;
+  --text-dim: var(--text-muted);
 
   /* ─── Semantic Signals (Logo Colors) ─── */
   --signal-excellent: #4ec9b0;  /* L1 teal */
   --signal-good: #b5cea8;       /* L2 green */
   --signal-success: #b5cea8;
+  --success: var(--signal-success);
   --signal-warning: #dcdcaa;    /* L3 yellow */
   --signal-critical: #f14c4c;
   --signal-info: #4ec9b0;       /* L1 teal */
@@ -53,6 +62,7 @@
   --font-display: 'JetBrains Mono', monospace;
   --font-body: 'IBM Plex Mono', monospace;
   --font-code: 'JetBrains Mono', monospace;
+  --font-mono: var(--font-code);
 
   /* ─── Type Scale ─── */
   --text-2xs: 0.625rem;   /* 10px */
