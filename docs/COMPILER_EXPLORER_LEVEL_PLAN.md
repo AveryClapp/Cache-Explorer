@@ -24,14 +24,15 @@ Already in place:
   source comparisons.
 - Workload verification can emit compact benchmark-history JSON artifacts in CI.
 - Workload verification covers branch behavior, prefetch policy, vector/SIMD
-  stats, memory intrinsic stats, and atomic builtin stats.
+  stats, memory intrinsic stats, atomic builtin stats, and image-stencil
+  traversal locality.
 - Empty result state routes users into run, verified workload, and experiment
   flows.
 
 Known gaps:
 
-- Workload catalog still needs more real-world kernels before it can act as a
-  broad regression corpus.
+- Workload catalog still needs more sorting, search, hashing, and threaded
+  real-world kernels before it can act as a broad regression corpus.
 - There is no hosted regression dashboard or trend UI for benchmark history.
 - Deployment/package polish is still developer-oriented.
 - Workload history trend surfacing, deeper onboarding, and error states need
@@ -50,8 +51,8 @@ Known gaps:
 ### 2. Executable Workload Catalog
 
 - Workload metadata supports same-source and per-variant-source comparisons.
-- The catalog covers locality, layout, prefetch, tiling, pointer chasing,
-  branch behavior, vector/memcpy/atomic instrumentation, and
+- The catalog covers locality, layout, image stencils, prefetch, tiling,
+  pointer chasing, branch behavior, vector/memcpy/atomic instrumentation, and
   hardware-profile-sensitive examples.
 - False-sharing/coherence reporting is fixed in the simulator and covered by
   simulator/validation tests, but threaded CLI workloads still need runtime
@@ -106,8 +107,6 @@ Known gaps:
 
 - Tune threaded false-sharing examples so they can run as optional stress
   workloads without dragging down CI.
-- Publish or summarize CI benchmark-history artifacts.
-- Add a richer first-run/default workload path for new users.
-- Add browser-level regression coverage for workload browser and structured
-  experiment flows.
+- Add more real kernels for sorting, search, hashing, and allocation patterns.
+- Add a benchmark-history trend surface in the app or hosted docs.
 - Keep committing each completed slice with validation output.

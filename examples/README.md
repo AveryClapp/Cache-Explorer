@@ -66,7 +66,7 @@ A collection of C and C++ programs demonstrating various cache access patterns a
 
 | Example | C | C++ | Description | Pattern Type |
 |---------|---|-----|-------------|--------------|
-| Image Blur | `image_blur.c` | - | 3x3 box blur | 2D stencil access |
+| Image Blur | `image_blur.c` | - | 3x3 box blur with row/column traversal variants | 2D stencil access |
 | String Search | `string_search.c` | - | Substring search | Sequential scan |
 | Quicksort | `quicksort.c` | `quicksort.cpp` | Divide and conquer sort | Recursive partitioning |
 
@@ -143,3 +143,10 @@ Run any example with Cache Explorer:
    visible for the same run.
    Experiment mode repeats that single-trace comparison for each named variant
    and adds per-profile cycle deltas against the first variant.
+
+6. **Image Blur Traversal**
+   ```bash
+   ./backend/scripts/cache-explore examples/image_blur.c -O2 --config intel --limit 100000
+   ./backend/scripts/cache-explore examples/image_blur.c -O2 -D RUN_COLUMN_MAJOR=1 --config intel --limit 100000
+   ./backend/scripts/cache-explore workloads image-blur-stencil-intel --verify
+   ```

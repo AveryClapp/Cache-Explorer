@@ -924,7 +924,7 @@ int main() {
   },
   image_blur: {
     name: 'Image Blur',
-    description: '2D stencil access pattern',
+    description: '2D stencil with row/column traversal variants',
     language: 'c',
     code: `// Image Blur - 2D Stencil Pattern
 #include <stdio.h>
@@ -934,9 +934,21 @@ int main() {
 unsigned char input[HEIGHT][WIDTH];
 unsigned char output[HEIGHT][WIDTH];
 
-void blur() {
+static void blur_row_major(void) {
     for (int y = 1; y < HEIGHT - 1; y++) {
         for (int x = 1; x < WIDTH - 1; x++) {
+            int sum = 0;
+            for (int dy = -1; dy <= 1; dy++)
+                for (int dx = -1; dx <= 1; dx++)
+                    sum += input[y + dy][x + dx];
+            output[y][x] = sum / 9;
+        }
+    }
+}
+
+static void blur_column_major(void) {
+    for (int x = 1; x < WIDTH - 1; x++) {
+        for (int y = 1; y < HEIGHT - 1; y++) {
             int sum = 0;
             for (int dy = -1; dy <= 1; dy++)
                 for (int dx = -1; dx <= 1; dx++)
@@ -951,7 +963,11 @@ int main() {
         for (int x = 0; x < WIDTH; x++)
             input[y][x] = (x + y) % 256;
 
-    blur();
+#ifdef RUN_COLUMN_MAJOR
+    blur_column_major();
+#else
+    blur_row_major();
+#endif
 
     int sum = 0;
     for (int y = 0; y < HEIGHT; y++)

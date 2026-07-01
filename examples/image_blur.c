@@ -8,12 +8,27 @@
 unsigned char input[HEIGHT][WIDTH];
 unsigned char output[HEIGHT][WIDTH];
 
-// 3x3 box blur
-void blur() {
+// 3x3 box blur with row-major traversal.
+static void blur_row_major(void) {
     for (int y = 1; y < HEIGHT - 1; y++) {
         for (int x = 1; x < WIDTH - 1; x++) {
             int sum = 0;
             // Access 3x3 neighborhood
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dx = -1; dx <= 1; dx++) {
+                    sum += input[y + dy][x + dx];
+                }
+            }
+            output[y][x] = sum / 9;
+        }
+    }
+}
+
+// Same stencil, but column-major traversal fights the image's row-major layout.
+static void blur_column_major(void) {
+    for (int x = 1; x < WIDTH - 1; x++) {
+        for (int y = 1; y < HEIGHT - 1; y++) {
+            int sum = 0;
             for (int dy = -1; dy <= 1; dy++) {
                 for (int dx = -1; dx <= 1; dx++) {
                     sum += input[y + dy][x + dx];
@@ -33,7 +48,11 @@ int main() {
     }
 
     // Apply blur
-    blur();
+#ifdef RUN_COLUMN_MAJOR
+    blur_column_major();
+#else
+    blur_row_major();
+#endif
 
     // Checksum
     int sum = 0;

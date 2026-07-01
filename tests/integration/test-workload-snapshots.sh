@@ -67,6 +67,21 @@ else
   exit 1
 fi
 
+echo -n "Test: image blur stencil workload remains covered... "
+if echo "$OUTPUT" | jq -e '
+  any(.workloads[]; .id == "image-blur-stencil-intel"
+    and (.checks | length) >= 2
+    and all(.checks[]; .passed == true)
+    and any(.checks[]; .metric == "levels.l1d.hitRate" and .leftVariant == "row" and .rightVariant == "column" and .leftValue > .rightValue)
+    and any(.checks[]; .metric == "levels.l1d.misses" and .leftVariant == "row" and .rightVariant == "column" and .leftValue < .rightValue))
+' > /dev/null; then
+  echo "PASS"
+else
+  echo "FAIL"
+  echo "$OUTPUT" | jq .
+  exit 1
+fi
+
 echo -n "Test: workload verifier emits benchmark history artifact... "
 if jq -e '
   .schemaVersion == 1

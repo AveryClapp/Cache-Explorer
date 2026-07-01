@@ -1,0 +1,36 @@
+{
+  "id": "image-blur-stencil-intel",
+  "description": "Row-major vs column-major traversal of a 3x3 image blur stencil on the Intel profile.",
+  "example": "examples/image_blur.c",
+  "language": "c",
+  "optLevel": "-O2",
+  "config": "intel",
+  "limit": 100000,
+  "variants": [
+    {
+      "id": "row"
+    },
+    {
+      "id": "column",
+      "defines": ["RUN_COLUMN_MAJOR=1"]
+    }
+  ],
+  "expectedRelationships": [
+    {
+      "metric": "levels.l1d.misses",
+      "relationship": "row < column",
+      "lastObserved": {
+        "row": 2409,
+        "column": 15371
+      }
+    },
+    {
+      "metric": "levels.l1d.hitRate",
+      "relationship": "row > column",
+      "lastObserved": {
+        "row": 0.961,
+        "column": 0.702
+      }
+    }
+  ]
+}
