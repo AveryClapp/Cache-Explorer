@@ -219,7 +219,8 @@ verification, and GitHub artifact attestations for release provenance.
 Published GHCR Docker images include BuildKit provenance attestations and SBOMs.
 The `Release Validation` workflow runs when a GitHub Release is published, and
 can also be run manually with a tag to verify pass checksums, pass attestations,
-and GHCR image availability after shipping.
+GHCR image availability, and attach the published workload-history archive to
+the release after shipping.
 
 ## Limitations
 

@@ -11,7 +11,7 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: write
   attestations: read
   packages: read
 
@@ -84,3 +84,43 @@ jobs:
               exit 1
             fi
           done
+
+      - name: Archive published workload history
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ env.RELEASE_TAG }}
+          REPO: ${{ github.repository }}
+          CACHE_EXPLORER_DASHBOARD_BASE_URL: ${{ vars.CACHE_EXPLORER_DASHBOARD_BASE_URL }}
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          repo_name="${GITHUB_REPOSITORY#*/}"
+          pages_base="${CACHE_EXPLORER_DASHBOARD_BASE_URL:-https://${owner}.github.io/${repo_name}}"
+          pages_base="${pages_base%/}"
+          archive_dir="workload-history-${TAG}"
+          archive_file="${archive_dir}.tar.gz"
+          mkdir -p "$archive_dir"
+
+          echo "Fetching workload history from ${pages_base}"
+          if ! curl -fsSL "${pages_base}/workload-history-index.json" -o "${archive_dir}/workload-history-index.json"; then
+            echo "No published workload history index found; skipping release history archive."
+            exit 0
+          fi
+
+          export ARCHIVE_DIR="$archive_dir"
+          node <<'NODE' > /tmp/workload-history-files.txt
+          const { readFileSync } = require('fs')
+          const index = JSON.parse(readFileSync(`${process.env.ARCHIVE_DIR}/workload-history-index.json`, 'utf8'))
+          for (const entry of index.files || []) {
+            if (/^workload-history.*\.json$/.test(entry.file || '')) {
+              console.log(entry.file)
+            }
+          }
+          NODE
+
+          while IFS= read -r file; do
+            [ -n "$file" ] || continue
+            curl -fsSL "${pages_base}/${file}" -o "${archive_dir}/${file}"
+          done < /tmp/workload-history-files.txt
+
+          tar -czf "$archive_file" "$archive_dir"
+          gh release upload "$TAG" "$archive_file" --repo "$REPO" --clobber

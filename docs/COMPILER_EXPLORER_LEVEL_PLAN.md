@@ -51,15 +51,15 @@ Already in place:
 - GitHub Release notes include checksum and attestation verification commands.
 - Release validation runs when a GitHub Release is published, and can also be
   dispatched manually for a tag. It verifies pass checksums, pass attestations,
-  and GHCR image availability.
+  GHCR image availability, and attaches a published workload-history archive to
+  the release.
 
 Known gaps:
 
 - Workload catalog has an opt-in threaded false-sharing stress workload, but
   threaded real-world kernels still need runtime tuning before joining default CI.
-- Hosted benchmark history retention is backed by the published Pages dashboard
-  plus the Actions cache; release-attached or external long-term storage would
-  still be stronger.
+- Hosted benchmark history retention is backed by the published Pages dashboard,
+  the Actions cache, and release-attached workload-history archives.
 - Deployment/package polish still needs release-cadence tuning once real usage
   patterns are visible.
 - Workload history trend surfacing, deeper onboarding, and error states need
@@ -129,8 +129,8 @@ Known gaps:
 1. Broaden workload metadata and catalog coverage.
 2. Tune optional threaded false-sharing workload snapshots until they can join
    default CI or remain clearly labeled as stress-only coverage.
-3. Add release-attached or external benchmark-history archival if Pages
-   retention is not enough.
+3. Add external benchmark-history archival only if Pages plus release-attached
+   archives are not enough.
 4. Harden deployment docs and local dev bootstrap.
 5. Polish workload/history onboarding and modal empty/error states.
 6. Add more browser-level flows for result-bearing experiment journeys.
@@ -139,6 +139,6 @@ Known gaps:
 
 - Tune threaded false-sharing stress workloads until they are fast enough for
   default CI, or keep them explicitly opt-in.
-- Add release-attached or external benchmark-history archival if Pages retention
-  is not enough.
+- Add external benchmark-history archival only if Pages plus release-attached
+  archives are not enough.
 - Keep committing each completed slice with validation output.
