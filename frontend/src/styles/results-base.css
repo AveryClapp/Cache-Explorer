@@ -30,6 +30,8 @@
 
 .results-actions {
   display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: var(--space-2);
 }
 
@@ -43,4 +45,3 @@
   overflow-y: auto;
   padding: var(--space-4);
 }
-

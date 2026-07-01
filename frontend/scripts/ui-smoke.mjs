@@ -175,6 +175,7 @@ async function verifyLaunchSurface(url) {
   assert(!environmentLayout.overflow, `environment status overflows: ${JSON.stringify(environmentLayout)}`)
   await assertVisible(page.getByText('Choose a run path', { exact: true }), 'launch heading')
   await assertVisible(page.getByText('Current target', { exact: true }), 'target label')
+  await assertVisible(page.getByRole('button', { name: 'Share', exact: true }), 'launch share action')
   await assertVisible(page.getByRole('button', { name: /Run buffer/ }), 'run buffer path')
 
   const desktopLayout = await layoutMetrics()
@@ -1051,6 +1052,13 @@ async function verifyShareRoundTrip(url) {
     page.getByText('Shared hardware run set skipped unavailable profiles "future-gpu".', { exact: true }),
     'missing run-set notice',
   )
+  await page.getByRole('button', { name: 'Share', exact: true }).click()
+  await assertVisible(page.getByText('Link copied!', { exact: true }), 'empty-state share copied toast')
+  await page.waitForFunction(() => window.__copiedText?.includes('?s=smoke-share'), null, { timeout: 5000 })
+  assert(shortenedState?.config === 'educational', `empty-state share should use resolved hardware config, got ${shortenedState?.config}`)
+  assert(shortenedState?.selectedCompiler === 'clang-21', `empty-state share should use resolved compiler, got ${shortenedState?.selectedCompiler}`)
+  assert(shortenedState?.runHardwareConfigIds?.join(',') === 'intel,amd', `empty-state share run set mismatch: ${JSON.stringify(shortenedState?.runHardwareConfigIds)}`)
+
   await page.getByRole('button', { name: 'Hardware', exact: true }).click()
   await assertVisible(page.locator('.batch-modal').filter({ hasText: 'Hardware Comparison' }), 'restored hardware comparison modal')
   assert(restoredCompareRequest?.configs?.join(',') === 'intel,amd', `restored comparison configs mismatch: ${JSON.stringify(restoredCompareRequest?.configs)}`)

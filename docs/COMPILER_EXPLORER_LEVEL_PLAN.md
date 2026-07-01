@@ -28,6 +28,8 @@ Already in place:
   handoff, and share short-link roundtrips.
 - Share links that preserve multi-file projects, active/main file identity, run
   settings, and experiment setup.
+- Share is available from the workbench before a result exists, so code and run
+  settings can be handed off from the first-run state.
 - Shared hardware profiles and run sets normalize known profile aliases and warn
   when unavailable profiles are skipped or replaced.
 - Verified workload browser in the app, backed by product-facing workload APIs,

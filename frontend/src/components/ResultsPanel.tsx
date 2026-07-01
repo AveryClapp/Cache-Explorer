@@ -83,19 +83,21 @@ export function ResultsPanel({
     <div className={`results-panel${isMobile && mobilePane !== 'results' ? ' mobile-hidden' : ''}`}>
       <div className="results-header">
         <span className="results-title">Analysis Results</span>
-        {result && (
-          <div className="results-actions">
-            <button className="btn btn-small" onClick={onExportJSON} title="Download JSON">
-              JSON
-            </button>
-            <button className="btn btn-small" onClick={onExportCSV} title="Download CSV">
-              CSV
-            </button>
-            <button className="btn btn-small" onClick={onShare} title="Copy link">
-              {copied ? 'Copied!' : 'Share'}
-            </button>
-          </div>
-        )}
+        <div className="results-actions">
+          {result && (
+            <>
+              <button className="btn btn-small" onClick={onExportJSON} title="Download JSON">
+                JSON
+              </button>
+              <button className="btn btn-small" onClick={onExportCSV} title="Download CSV">
+                CSV
+              </button>
+            </>
+          )}
+          <button className="btn btn-small" onClick={onShare} title="Copy link">
+            {copied ? 'Copied!' : 'Share'}
+          </button>
+        </div>
       </div>
       <div className="results-scroll">
         {error && <ErrorDisplay error={error} />}
