@@ -515,6 +515,18 @@
   gap: var(--space-3);
 }
 
+.workload-empty {
+  min-height: 160px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+}
+
 .workload-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

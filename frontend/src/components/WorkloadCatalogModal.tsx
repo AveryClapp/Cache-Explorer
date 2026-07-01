@@ -44,6 +44,8 @@ export function WorkloadCatalogModal({
   onLoadWorkload,
   onClose,
 }: WorkloadCatalogModalProps) {
+  const hasWorkloads = workloads.length > 0
+
   return (
     <div className="batch-modal-overlay" onClick={() => !verifying && onClose()}>
       <div className="batch-modal workload-modal" onClick={event => event.stopPropagation()}>
@@ -55,7 +57,7 @@ export function WorkloadCatalogModal({
                 {verification.summary.passed} passed / {verification.summary.failed} failed
               </span>
             )}
-            <button className="btn" onClick={onVerify} disabled={loading || verifying || workloads.length === 0}>
+            <button className="btn" onClick={onVerify} disabled={loading || verifying || !hasWorkloads}>
               {verifying ? 'Verifying...' : 'Verify'}
             </button>
             <button className="btn" onClick={onRefresh} disabled={loading || verifying}>Refresh</button>
@@ -71,7 +73,13 @@ export function WorkloadCatalogModal({
             </div>
           )}
 
-          <div className="workload-list">
+          {!loading && !verifying && !hasWorkloads && (
+            <div className="workload-empty">
+              <span>No workloads found</span>
+            </div>
+          )}
+
+          {hasWorkloads && <div className="workload-list">
             {workloads.map(workload => {
               const status = statusFor(workload, verification)
               return (
@@ -118,7 +126,7 @@ export function WorkloadCatalogModal({
                 </div>
               )
             })}
-          </div>
+          </div>}
         </div>
       </div>
     </div>
