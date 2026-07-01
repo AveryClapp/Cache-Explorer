@@ -1110,7 +1110,11 @@ app.get('/api/compilers', (req, res) => {
 app.get('/api/workloads', async (req, res) => {
   incCounter('requests', { type: 'workloads' });
   try {
-    const result = await runProcess(CACHE_EXPLORE, ['workloads', '--json'], {
+    const args = ['workloads', '--json'];
+    if (req.query.includeStress === '1' || req.query.includeStress === 'true') {
+      args.push('--include-stress');
+    }
+    const result = await runProcess(CACHE_EXPLORE, args, {
       timeout: CONFIG.timeouts.compilation,
       maxOutputBuffer: CONFIG.memory.maxOutputBuffer,
     });
@@ -1125,7 +1129,11 @@ app.get('/api/workloads', async (req, res) => {
 app.get('/api/workloads/verify', async (req, res) => {
   incCounter('requests', { type: 'workloads_verify' });
   try {
-    const result = await runProcess(CACHE_EXPLORE, ['workloads', '--verify', '--json'], {
+    const args = ['workloads', '--verify', '--json'];
+    if (req.query.includeStress === '1' || req.query.includeStress === 'true') {
+      args.push('--include-stress');
+    }
+    const result = await runProcess(CACHE_EXPLORE, args, {
       timeout: CONFIG.timeouts.max,
       maxOutputBuffer: CONFIG.memory.maxOutputBuffer,
     });

@@ -568,6 +568,8 @@ export interface WorkloadSnapshot {
   id: string
   description: string
   identity?: WorkloadIdentity
+  stress?: boolean
+  tags?: string[]
   example: string
   language?: Language
   optLevel?: string

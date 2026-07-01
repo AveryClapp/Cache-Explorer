@@ -15,6 +15,8 @@ Options:
   --ids        Output only workload ids
   --commands   Print cache-explore commands for each variant
   --verify     Run variants and validate expected relationships
+  --include-stress
+               Include stress workloads that are excluded from default CI runs
   --history <path>
                With --verify, write compact benchmark history JSON
   --history-summary <path>
@@ -111,6 +113,10 @@ function relationshipSummary(workload) {
   return (workload.expectedRelationships || [])
     .map(item => item.relationship)
     .join(', ')
+}
+
+function isStressWorkload(workload) {
+  return workload.stress === true || (workload.tags || []).includes('stress')
 }
 
 function variantSummary(workload) {
@@ -718,9 +724,10 @@ function printVerification(results) {
 }
 
 function printTable(workloads) {
-  const headers = ['ID', 'Digest', 'Example', 'Config', 'Limit', 'Variants', 'Relationships']
+  const headers = ['ID', 'Class', 'Digest', 'Example', 'Config', 'Limit', 'Variants', 'Relationships']
   const rows = workloads.map(workload => [
     workload.id,
+    isStressWorkload(workload) ? 'stress' : 'default',
     shortDigest(workload.identity?.manifestSha256),
     workload.example,
     workload.config,
@@ -746,6 +753,7 @@ function parseArgs(args) {
     ids: false,
     commands: false,
     verify: false,
+    includeStress: false,
     html: false,
     help: false,
     historyPath: '',
@@ -759,6 +767,7 @@ function parseArgs(args) {
     else if (arg === '--ids') parsed.ids = true
     else if (arg === '--commands') parsed.commands = true
     else if (arg === '--verify') parsed.verify = true
+    else if (arg === '--include-stress') parsed.includeStress = true
     else if (arg === '--html') parsed.html = true
     else if (arg === '--help' || arg === '-h') parsed.help = true
     else if (arg === '--history') {
@@ -801,7 +810,7 @@ function parseArgs(args) {
 }
 
 async function main() {
-  const { json, ids, commands, verify, html, help, historyPath, historySummaryPaths, workloadId } = parseArgs(process.argv.slice(2))
+  const { json, ids, commands, verify, includeStress, html, help, historyPath, historySummaryPaths, workloadId } = parseArgs(process.argv.slice(2))
 
   if (help) {
     usage()
@@ -835,7 +844,10 @@ async function main() {
     }
     return
   }
-  const workloads = await loadWorkloads()
+  const allWorkloads = await loadWorkloads()
+  const workloads = includeStress || workloadId
+    ? allWorkloads
+    : allWorkloads.filter(workload => !isStressWorkload(workload))
   const selected = workloadId
     ? workloads.filter(workload => workload.id === workloadId)
     : workloads

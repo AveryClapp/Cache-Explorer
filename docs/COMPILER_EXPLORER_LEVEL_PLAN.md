@@ -35,6 +35,8 @@ Already in place:
   stats, memory intrinsic stats, atomic builtin stats, hash-table probing,
   contiguous allocation locality, sequential/binary search locality,
   sort-pattern locality, and image-stencil traversal locality.
+- Workload metadata supports opt-in stress workloads; threaded false sharing has
+  an explicit stress manifest that is excluded from default CI verification.
 - Empty result state routes users into run, verified workload, and experiment
   flows.
 - Local bootstrap has a doctor script plus a single dev command that can build,
@@ -53,8 +55,8 @@ Already in place:
 
 Known gaps:
 
-- Workload catalog still needs threaded real-world kernels before it can act as
-  a broad regression corpus.
+- Workload catalog has an opt-in threaded false-sharing stress workload, but
+  threaded real-world kernels still need runtime tuning before joining default CI.
 - Hosted benchmark history retention is backed by the published Pages dashboard
   plus the Actions cache; release-attached or external long-term storage would
   still be stronger.
@@ -82,8 +84,8 @@ Known gaps:
   pointer chasing, branch behavior, vector/memcpy/atomic instrumentation, and
   hardware-profile-sensitive examples.
 - False-sharing/coherence reporting is fixed in the simulator and covered by
-  simulator/validation tests, but threaded CLI workloads still need runtime
-  tuning before they belong in always-on CI snapshots.
+  simulator/validation tests. Threaded stress workloads are explicit and opt-in
+  until runtime tuning makes them suitable for always-on CI snapshots.
 - CI runs product-facing verification commands instead of private-only scripts.
 - Workload verifier emits structured JSON, human summaries, durations, and
   provenance for every variant.
@@ -125,7 +127,8 @@ Known gaps:
 ## Implementation Path
 
 1. Broaden workload metadata and catalog coverage.
-2. Tune optional threaded false-sharing workload snapshots.
+2. Tune optional threaded false-sharing workload snapshots until they can join
+   default CI or remain clearly labeled as stress-only coverage.
 3. Add release-attached or external benchmark-history archival if Pages
    retention is not enough.
 4. Harden deployment docs and local dev bootstrap.
@@ -134,8 +137,8 @@ Known gaps:
 
 ## Near-Term Leaps
 
-- Tune threaded false-sharing examples so they can run as optional stress
-  workloads without dragging down CI.
+- Tune threaded false-sharing stress workloads until they are fast enough for
+  default CI, or keep them explicitly opt-in.
 - Add release-attached or external benchmark-history archival if Pages retention
   is not enough.
 - Keep committing each completed slice with validation output.

@@ -1,0 +1,33 @@
+{
+  "id": "false-sharing-stress-intel",
+  "description": "Packed versus cache-line-padded counters in a threaded false-sharing stress workload.",
+  "example": "examples/false_sharing.c",
+  "language": "c",
+  "optLevel": "-O1",
+  "config": "intel",
+  "limit": 20000,
+  "stress": true,
+  "tags": ["stress", "threaded", "coherence", "false-sharing"],
+  "variants": [
+    {
+      "id": "packed",
+      "defines": ["ITERATIONS=512"]
+    },
+    {
+      "id": "padded",
+      "defines": ["ITERATIONS=512", "RUN_PADDED=1"]
+    }
+  ],
+  "expectedRelationships": [
+    {
+      "metric": "coherence.falseSharingEvents",
+      "relationship": "packed > padded",
+      "missingValue": 0
+    },
+    {
+      "metric": "coherence.invalidations",
+      "relationship": "packed > padded",
+      "missingValue": 0
+    }
+  ]
+}
