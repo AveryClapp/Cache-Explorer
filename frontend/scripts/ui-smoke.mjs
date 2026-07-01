@@ -212,7 +212,7 @@ async function verifyWorkloadCatalogControls(url) {
     {
       id: 'prefetch-stream-intel',
       description: 'Sequential scan with stream prefetching enabled.',
-      example: 'examples/sequential_scan.c',
+      example: 'examples/prefetch_friendly.c',
       optLevel: '-O2',
       config: 'intel14',
       limit: 100000,
@@ -399,6 +399,7 @@ async function verifyWorkloadCatalogControls(url) {
 
   const workloadRequests = []
   const verificationRequests = []
+  let workloadExperimentRequest = null
 
   const fulfillWorkloads = route => {
     const requestUrl = new URL(route.request().url())
@@ -428,6 +429,14 @@ async function verifyWorkloadCatalogControls(url) {
   }
   await page.route('**/api/workloads/verify', fulfillVerification)
   await page.route('**/api/workloads/verify?**', fulfillVerification)
+  await page.route('**/experiment', async route => {
+    workloadExperimentRequest = route.request().postDataJSON()
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(mockExperimentResult()),
+    })
+  })
 
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto(url, { waitUntil: 'domcontentloaded' })
@@ -482,7 +491,30 @@ async function verifyWorkloadCatalogControls(url) {
   assert(stressVerifyParams.get('includeStress') === '1', `stress verification request missing opt-in: ${verificationRequests.at(-1)}`)
   assert(stressVerifyParams.get('variantTimeoutMs') === '30000', `stress verification request missing timeout: ${verificationRequests.at(-1)}`)
 
+  await page.getByLabel('Search workloads').fill('prefetch')
+  const prefetchRow = page.locator('.workload-row').filter({ hasText: 'prefetch-stream-intel' })
+  await assertVisible(prefetchRow, 'prefetch workload row before experiment load')
+  await prefetchRow.getByRole('button', { name: 'Experiment' }).click()
+
+  const experimentModal = page.locator('.experiment-modal')
+  await assertVisible(experimentModal.getByText('Hardware Experiment', { exact: true }), 'workload experiment modal')
+  await assertVisible(experimentModal.getByText('Variant set prefetch-stream-intel', { exact: true }), 'workload variant source label')
+  assert(await experimentModal.locator('textarea').inputValue() === 'prefetch-off\nprefetch-stream', 'workload variants should populate experiment textarea')
+  await assertVisible(experimentModal.getByText('intel14', { exact: true }), 'workload hardware chip')
+
+  await experimentModal.getByRole('button', { name: 'Run', exact: true }).click()
+  await assertVisible(experimentModal.getByText('Overall', { exact: true }), 'workload experiment result')
+  assert(Array.isArray(workloadExperimentRequest?.variants), 'workload experiment should submit structured variants')
+  assert(workloadExperimentRequest.variants[0]?.id === 'prefetch-off', `unexpected first workload variant: ${JSON.stringify(workloadExperimentRequest?.variants?.[0])}`)
+  assert(workloadExperimentRequest.variants[0]?.prefetch === 'none', 'prefetch-off variant should disable prefetch')
+  assert(workloadExperimentRequest.variants[1]?.id === 'prefetch-stream', `unexpected second workload variant: ${JSON.stringify(workloadExperimentRequest?.variants?.[1])}`)
+  assert(workloadExperimentRequest.variants[1]?.prefetch === 'stream', 'prefetch-stream variant should enable stream prefetch')
+  assert(workloadExperimentRequest.variants.every(variant => variant.code?.includes('Prefetch-Friendly Access Pattern')), 'structured variants should carry source code')
+  assert(workloadExperimentRequest?.configs?.length === 1 && workloadExperimentRequest.configs[0] === 'intel14', `workload experiment configs mismatch: ${JSON.stringify(workloadExperimentRequest?.configs)}`)
+  assert(workloadExperimentRequest?.limit === 100000, `workload experiment should use workload event limit, got ${workloadExperimentRequest?.limit}`)
+
   await closeModal()
+  await page.unroute('**/experiment')
   await page.unroute('**/api/workloads/verify')
   await page.unroute('**/api/workloads/verify?**')
   await page.unroute('**/api/workloads/history')
@@ -977,6 +1009,9 @@ async function verifyExperimentResults(url) {
     })
   })
 
+  await page.evaluate(() => {
+    localStorage.removeItem('cache-explorer-hardware-run-set')
+  })
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto(url, { waitUntil: 'domcontentloaded' })
   await page.getByRole('button', { name: 'Experiment', exact: true }).click()

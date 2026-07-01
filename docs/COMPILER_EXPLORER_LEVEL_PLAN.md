@@ -23,7 +23,8 @@ Already in place:
   frontend build/browser smoke coverage, and server tests in CI.
 - Browser smoke covers launch paths, workload catalog controls, workload history
   surfacing, result-bearing trust UI, legacy trust fallbacks, dirty socket
-  recovery, and share short-link roundtrips.
+  recovery, verified workload-to-experiment handoff, and share short-link
+  roundtrips.
 - Share links that preserve multi-file projects, active/main file identity, run
   settings, and experiment setup.
 - Verified workload browser in the app, backed by product-facing workload APIs,
