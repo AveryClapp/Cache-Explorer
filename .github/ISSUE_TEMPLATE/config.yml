@@ -1,8 +1,11 @@
-blank_issues_enabled: true
+blank_issues_enabled: false
 contact_links:
   - name: Questions & Discussion
-    url: https://github.com/AveryClapp/cache-explorer/discussions
-    about: Ask questions, share ideas, or discuss cache-related topics
+    url: https://github.com/AveryClapp/Cache-Explorer/discussions
+    about: Ask questions, share ideas, or discuss cache and hardware modeling.
   - name: Documentation
-    url: https://github.com/AveryClapp/cache-explorer/blob/main/CLAUDE.md
-    about: Check the detailed architecture documentation
+    url: https://github.com/AveryClapp/Cache-Explorer#readme
+    about: Start with the README, quick start, and result-reading docs.
+  - name: Security reports
+    url: https://github.com/AveryClapp/Cache-Explorer/security/advisories/new
+    about: Report vulnerabilities privately. Do not open public security issues.

@@ -27,6 +27,10 @@ Project maintainers are responsible for clarifying the standards of acceptable b
 
 Project maintainers have the right to remove, edit, or reject comments, commits, code, wiki edits, issues, and other contributions that are not aligned to this Code of Conduct.
 
+Report conduct concerns to the maintainer through the contact information on
+the GitHub profile. If the report includes sensitive private information, avoid
+posting details in public issues or discussions.
+
 ## Scope
 
 This Code of Conduct applies within all project spaces, and also applies when an individual is representing the project or its community in public spaces.

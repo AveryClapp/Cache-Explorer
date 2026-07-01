@@ -196,7 +196,17 @@ Frontend build and browser smoke:
 cd frontend
 npm ci
 npm run build
+npm run bundle:check
+npm run tokens:check
+npm run diagnostics:check
 npm run smoke:ui
+npm run visual:check
+```
+
+Calibration evidence packets can be validated without running benchmarks:
+
+```bash
+./backend/scripts/cache-explore calibration
 ```
 
 Workload verification can also write benchmark-history artifacts and render a
@@ -245,6 +255,20 @@ should use the [Release And Install Runbook](docs/RELEASE_INSTALL_RUNBOOK.md).
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+Community and maintainer docs:
+
+- [Quick Start](docs/QUICK_START.md)
+- [User Guide](docs/USER_GUIDE.md)
+- [How to Read Results](docs/HOW_TO_READ_RESULTS.md)
+- [Validation](docs/VALIDATION.md)
+- [Optimization Patterns](docs/OPTIMIZATION_PATTERNS.md)
+- [CMake Integration](docs/CMAKE_INTEGRATION.md)
+- [Support](SUPPORT.md)
+- [Security Policy](SECURITY.md)
+- [Governance](GOVERNANCE.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Changelog](CHANGELOG.md)
 
 ## License
 

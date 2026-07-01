@@ -1,192 +1,176 @@
 # Contributing to Cache Explorer
 
-Thanks for your interest in contributing! This guide will help you get started.
+Thanks for helping make Cache Explorer better. This project sits at the
+intersection of compilers, hardware modeling, and product UI, so good
+contributions are clear about both behavior and trust boundaries.
 
-## Development Setup
-
-### Prerequisites
-
-- **LLVM 17-21** (18 recommended)
-- **Node.js 18+**
-- **CMake 3.20+**
-- **Ninja** (recommended) or Make
-
-### Building from Source
+## Start Here
 
 ```bash
-# Clone the repo
 git clone https://github.com/AveryClapp/cache-explorer.git
 cd cache-explorer
 
-# Build the cache simulator
-cd backend/cache-simulator
-mkdir build && cd build
-cmake .. -G Ninja && ninja
-
-# Build the LLVM pass
-cd ../../llvm-pass
-mkdir build && cd build
-cmake .. -G Ninja -DLLVM_DIR=$(llvm-config --cmakedir) && ninja
-
-# Build the runtime library
-cd ../../runtime
-mkdir build && cd build
-cmake .. -G Ninja && ninja
-
-# Install backend dependencies
-cd ../../server && npm install
-
-# Install frontend dependencies
-cd ../../frontend && npm install
+./scripts/doctor.sh
+./scripts/dev.sh
 ```
 
-### Running Locally
+Open the frontend URL printed by `./scripts/dev.sh`.
 
-```bash
-# Terminal 1: Start backend
-cd backend/server && node server.js
+The doctor script checks the local toolchain and product entrypoints. The dev
+script builds missing native artifacts, installs Node dependencies if needed,
+and starts the backend and frontend on available local ports.
 
-# Terminal 2: Start frontend dev server
-cd frontend && npm run dev
+## Prerequisites
+
+- LLVM/Clang 17-21, with LLVM 18 recommended for broadest CI parity.
+- CMake 3.20+.
+- Ninja.
+- Node.js 18+.
+- npm.
+
+## Development Workflow
+
+1. Fork the repository.
+2. Create a branch from `main`.
+3. Keep changes focused on one behavior or cleanup area.
+4. Add or update tests for behavior changes.
+5. Run the smallest useful verification set locally.
+6. Open a pull request with the template filled out.
+
+Use Conventional Commits for commit messages:
+
+```text
+feat: add ARM cache profile
+fix: preserve timeout diagnostics
+docs: clarify calibration evidence packets
+test: add browser smoke for share round trip
+chore: update release metadata
 ```
 
-Open http://localhost:5173
+## Verification Tiers
 
-### Running Tests
+Run the tier that matches your change. More is welcome, but avoid heavy local
+stress unless the PR explicitly needs it.
+
+### Docs and Metadata
 
 ```bash
-# C++ unit tests
+git diff --check
+ruby -e 'require "yaml"; Dir[".github/**/*.yml"].each { |f| YAML.load_file(f) }; puts "yaml ok"'
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm run build
+npm run bundle:check
+npm run tokens:check
+npm run diagnostics:check
+npm run smoke:ui
+npm run visual:check
+```
+
+### Backend Server
+
+```bash
+cd backend/server
+npm test
+```
+
+### Calibration Packets
+
+```bash
+./backend/scripts/cache-explore calibration
+./backend/scripts/cache-explore calibration --json
+```
+
+### Native Simulator and Integration Tests
+
+```bash
+./scripts/build.sh
 cd backend/cache-simulator/build
 ./CacheLevelTest
 ./CacheSystemTest
 ./MESICoherenceTest
 ./MultiCorePrefetchTest
 ./MultiCoreTLBTest
+./MultiCoreTraceProcessorTest
 ./AdvancedInstrumentationTest
-
-# Frontend build check
-cd frontend && npm run build
 ```
 
-## Project Structure
+CI runs broader native, integration, workload, frontend, Docker, release, and
+dashboard checks.
 
-```
-cache-explorer/
-├── backend/
-│   ├── llvm-pass/        # LLVM instrumentation pass
-│   ├── runtime/          # Event capture library
-│   ├── cache-simulator/  # Core simulation engine (C++)
-│   └── server/           # Node.js WebSocket server
-├── frontend/             # React + TypeScript web UI
-├── docker/               # Docker configurations
-└── tests/                # E2E tests
-```
+## Safety and Performance
 
-## How to Contribute
+Cache Explorer can execute user-provided code locally. Contributions that touch
+execution paths, sandboxing, compilation, subprocess management, or temporary
+files must preserve the safety model:
 
-### Reporting Bugs
+- Keep public/untrusted execution behind sandbox-aware code paths.
+- Preserve bounded timeouts and resource cleanup.
+- Do not add stress workloads to default verification.
+- Keep stress and long empirical sweeps opt-in and documented.
+- Prefer mocked browser and metadata checks when validating UI workflows.
 
-1. Check existing issues first
-2. Use the bug report template
-3. Include:
-   - Steps to reproduce
-   - Expected vs actual behavior
-   - Your environment (OS, LLVM version, browser)
+If a change can affect laptop load, thermal behavior, or long-running compile
+loops, call that out in the PR.
 
-### Suggesting Features
+## Hardware Claims
 
-1. Check existing issues/discussions first
-2. Use the feature request template
-3. Explain the use case and why it would be valuable
+Hardware profiles should be honest about what is known.
 
-### Submitting Code
+- Use `calibrated` only when there is Level 2 or better evidence for that
+  subsystem.
+- Use `modeled` for fields consumed directly by the simulator.
+- Use `estimated` for directional analytical model inputs.
+- Use `metadata-only` for profile facts that do not affect results.
+- Use `unsupported` when the engine does not model the behavior.
 
-1. **Fork** the repository
-2. **Create a branch** from `main`:
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-3. **Make your changes** following the code style below
-4. **Run tests** to ensure nothing is broken
-5. **Commit** with a clear message:
-   ```bash
-   git commit -m "feat: add stride prefetcher visualization"
-   ```
-6. **Push** and open a Pull Request
+See:
 
-### Commit Message Format
-
-We use [Conventional Commits](https://www.conventionalcommits.org/):
-
-- `feat:` - New feature
-- `fix:` - Bug fix
-- `docs:` - Documentation only
-- `refactor:` - Code change that neither fixes a bug nor adds a feature
-- `test:` - Adding or updating tests
-- `chore:` - Maintenance tasks
-
-Examples:
-```
-feat: add ARM Cortex-A72 hardware preset
-fix: correct L2 hit rate calculation for inclusive caches
-docs: add prefetcher configuration examples
-refactor: extract useAnalysis hook from App.tsx
-```
+- [Hardware Model Contract](docs/HARDWARE_MODEL_CONTRACT.md)
+- [Calibration Roadmap](docs/CALIBRATION_ROADMAP.md)
+- [How to Read Results](docs/HOW_TO_READ_RESULTS.md)
 
 ## Code Style
 
-### C++ (Backend)
+### C++ and C
 
-- Use `clang-format` (config in repo)
-- Follow existing naming conventions:
-  - Classes: `PascalCase`
-  - Functions/methods: `snake_case`
-  - Member variables: `snake_case_` (trailing underscore)
-- Prefer `const` correctness
-- Add tests for new functionality
+- Follow the existing style in the touched module.
+- Prefer clear ownership and deterministic tests.
+- Keep simulator behavior covered by unit or golden-kernel tests.
+- Use CMake/Ninja paths already present in the repo.
 
-### TypeScript (Frontend)
+### TypeScript and React
 
-- Run `npm run build` to check for type errors
-- Use functional components with hooks
-- Prefer named exports
-- Keep components focused and small
+- Prefer existing components and CSS tokens.
+- Keep dense engineering workflows scan-friendly.
+- Use accessible names for icon-only or ambiguous controls.
+- Avoid adding new design systems or large dependencies without a strong reason.
 
 ### General
 
-- No trailing whitespace
-- End files with a newline
-- Keep lines under 100 characters when reasonable
+- Do not commit generated build outputs, local databases, or `.env` files.
+- Keep docs and comments precise about caveats.
+- Do not add `Co-Authored-By` lines to commits.
 
-## Areas for Contribution
+## Reporting Bugs
 
-### Good First Issues
+Use the bug report issue form. Include:
 
-Look for issues labeled `good first issue`:
-- Documentation improvements
-- Adding new code examples
-- UI polish and accessibility
-- Test coverage improvements
+- Exact command or UI path.
+- OS, LLVM/Clang version, Node version, browser, and hardware profile.
+- Whether the run used sandbox, direct local execution, Docker, or CI.
+- The smallest code sample that reproduces the issue.
+- Result fidelity/provenance details if the issue is accuracy-related.
 
-### Intermediate
+## Security Reports
 
-- New hardware presets
-- Additional prefetch policies
-- Frontend component refactoring
-- Performance optimizations
-
-### Advanced
-
-- New eviction policies (e.g., Hawkeye, SHiP)
-- NUMA simulation
-- Branch prediction simulation
-- Intel Pin integration for pre-compiled binaries
-
-## Questions?
-
-- Open a [Discussion](https://github.com/AveryClapp/cache-explorer/discussions)
-- Check [CLAUDE.md](./CLAUDE.md) for detailed architecture docs
+Do not open a public issue for vulnerabilities. See [SECURITY.md](SECURITY.md).
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the MIT License.
+By contributing, you agree that your contributions are licensed under the MIT
+License.

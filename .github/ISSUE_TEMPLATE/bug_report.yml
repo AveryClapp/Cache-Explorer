@@ -1,0 +1,122 @@
+name: Bug Report
+description: Report a reproducible bug in Cache Explorer.
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. Please include a small reproduction when possible.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight
+      options:
+        - label: I searched existing issues and discussions.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the bug and what you expected instead.
+      placeholder: Expected X, but Y happened.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include exact commands or UI actions.
+      placeholder: |
+        1. Run ...
+        2. Open ...
+        3. Click ...
+        4. See ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: code
+    attributes:
+      label: Minimal code sample
+      description: Paste the smallest source file that reproduces the issue, if applicable.
+      render: c
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Affected surface
+      options:
+        - Web UI
+        - CLI
+        - Backend server
+        - Cache simulator
+        - LLVM pass
+        - Runtime library
+        - Docker
+        - Release artifact
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: macOS 15.5, Ubuntu 24.04, Windows 11, etc.
+
+  - type: input
+    id: llvm
+    attributes:
+      label: LLVM/Clang version
+      placeholder: clang 18.1.8
+
+  - type: input
+    id: node
+    attributes:
+      label: Node.js version
+      placeholder: node 20.18.0
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser
+      placeholder: Chrome 126, Firefox 127, Safari 18, etc.
+
+  - type: input
+    id: hardware_profile
+    attributes:
+      label: Hardware profile
+      placeholder: educational, intel14, zen4, m3, custom, etc.
+
+  - type: dropdown
+    id: execution_mode
+    attributes:
+      label: Execution mode
+      options:
+        - Local direct
+        - Sandbox
+        - Docker
+        - CI
+        - Unknown
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Paste relevant terminal output, browser console output, screenshots, or JSON.
+      render: text
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Anything else maintainers should know?

@@ -1,0 +1,69 @@
+name: Feature Request
+description: Suggest a product, compiler, hardware, or workflow improvement.
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight
+      options:
+        - label: I searched existing issues and discussions.
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to understand or accomplish?
+      placeholder: I want to compare ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What should Cache Explorer do?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Web UI
+        - CLI
+        - Hardware Explorer
+        - Workload catalog
+        - Calibration/evidence
+        - Cache simulator
+        - LLVM pass/runtime
+        - Docker/deployment
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What have you tried or considered instead?
+
+  - type: textarea
+    id: examples
+    attributes:
+      label: Example workflow or API
+      description: Include commands, screenshots, mockups, JSON, or pseudo-code if helpful.
+      render: text
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I would be willing to implement this.
+        - label: I would be willing to test or review this.
+        - label: This may require design discussion before implementation.

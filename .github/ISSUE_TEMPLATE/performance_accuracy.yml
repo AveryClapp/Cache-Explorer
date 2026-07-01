@@ -1,0 +1,96 @@
+name: Performance or Accuracy Report
+description: Report a cache, hardware-model, calibration, or result-fidelity issue.
+title: "[Accuracy]: "
+labels: ["accuracy", "performance", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for reports where the result looks wrong, misleading, too slow, or inconsistent with hardware counters.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight
+      options:
+        - label: I searched existing issues and discussions.
+          required: true
+        - label: I understand estimates are directional unless the profile/subsystem is calibrated.
+          required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What looks wrong or surprising?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Include commands, source, workload ID, or share URL.
+      render: text
+    validations:
+      required: true
+
+  - type: input
+    id: profile
+    attributes:
+      label: Hardware profile
+      placeholder: intel14, zen4, m3, sapphirerapids, custom, etc.
+    validations:
+      required: true
+
+  - type: textarea
+    id: fidelity
+    attributes:
+      label: Evidence & Fidelity details
+      description: Paste the result trust label, caveats, model contract summary, or exported JSON snippet.
+      render: json
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected relationship
+      description: What relationship did you expect?
+      placeholder: tiled should have higher L1D hit rate than direct
+    validations:
+      required: true
+
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed relationship
+      description: What did Cache Explorer report?
+      placeholder: direct appeared faster or had fewer misses
+    validations:
+      required: true
+
+  - type: textarea
+    id: counters
+    attributes:
+      label: External measurements
+      description: Paste perf, Instruments, VTune, Cachegrind, or other hardware/profiler data if available.
+      render: text
+
+  - type: dropdown
+    id: workload_size
+    attributes:
+      label: Workload size
+      options:
+        - Small bounded repro
+        - Catalog workload
+        - Real kernel
+        - Stress workload
+        - Unknown
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, compiler, CPU, power mode, virtualization, Docker/CI/local, event limit, sample rate.
+      render: text

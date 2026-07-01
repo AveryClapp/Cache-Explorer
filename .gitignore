@@ -84,7 +84,8 @@ Thumbs.db
 # Third-party
 third_party/
 
-docs/
+# Internal planning notes
+docs/plans/
 
 # Worktrees
 .worktrees/
