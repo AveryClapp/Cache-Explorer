@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import type { Monaco } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
-import { initVimMode } from 'monaco-vim'
 import './styles/index.css'
 
 // Components
@@ -382,13 +381,25 @@ function App() {
   }
 
   useEffect(() => {
+    let cancelled = false
     if (vimMode && editorRef.current && vimStatusRef.current) {
-      vimModeRef.current = initVimMode(editorRef.current, vimStatusRef.current)
+      const editorInstance = editorRef.current
+      const statusNode = vimStatusRef.current
+      import('monaco-vim')
+        .then(({ initVimMode }) => {
+          if (cancelled || editorRef.current !== editorInstance || vimStatusRef.current !== statusNode) return
+          vimModeRef.current?.dispose()
+          vimModeRef.current = initVimMode(editorInstance, statusNode)
+        })
+        .catch(err => {
+          console.warn('Failed to initialize Vim mode:', err)
+        })
     } else if (vimModeRef.current) {
       vimModeRef.current.dispose()
       vimModeRef.current = null
     }
     return () => {
+      cancelled = true
       if (vimModeRef.current) {
         vimModeRef.current.dispose()
         vimModeRef.current = null

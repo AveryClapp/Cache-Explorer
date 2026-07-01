@@ -394,6 +394,7 @@ async function verifyShareRoundTrip(url) {
   await page.locator('.command-input').fill('share')
   await page.keyboard.press('Enter')
   await assertVisible(page.getByText('Link copied!', { exact: true }), 'share copied toast')
+  await page.waitForFunction(() => window.__copiedText?.includes('?s=smoke-share'), null, { timeout: 5000 })
 
   const copiedUrl = await page.evaluate(() => window.__copiedText)
   assert(copiedUrl?.includes('?s=smoke-share'), `unexpected copied share URL: ${copiedUrl}`)
