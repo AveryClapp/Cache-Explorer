@@ -17,6 +17,8 @@ Already in place:
 - Copyable local repro commands from result provenance.
 - Golden kernel tests, workload snapshot verification, profile drift checks,
   frontend build/browser smoke coverage, and server tests in CI.
+- Browser smoke covers launch paths, workload catalog controls, and share
+  short-link roundtrips.
 - Share links that preserve multi-file projects, active/main file identity, run
   settings, and experiment setup.
 - Verified workload browser in the app, backed by product-facing workload APIs,
@@ -111,7 +113,7 @@ Known gaps:
 3. Host benchmark-history dashboards from CI artifacts.
 4. Harden deployment docs and local dev bootstrap.
 5. Polish workload/history onboarding and modal empty/error states.
-6. Add more browser-level flows for share, workload, and experiment journeys.
+6. Add more browser-level flows for result-bearing experiment journeys.
 
 ## Near-Term Leaps
 

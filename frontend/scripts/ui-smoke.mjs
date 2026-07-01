@@ -248,6 +248,101 @@ async function verifyWorkloadCatalogControls(url) {
   await page.unroute('**/api/workloads')
 }
 
+async function verifyShareRoundTrip(url) {
+  const sharedState = {
+    code: '#include <stdio.h>\nint main(void) { return 0; }\n',
+    config: 'intel14',
+    optLevel: '-O3',
+    language: 'c',
+    files: [
+      {
+        name: 'shared.c',
+        code: '#include <stdio.h>\nint main(void) { return 0; }\n',
+        language: 'c',
+        isMain: true,
+      },
+    ],
+    activeFileName: 'shared.c',
+    mainFileName: 'shared.c',
+    defines: [{ name: 'N', value: '64' }],
+    prefetchPolicy: 'stream',
+    selectedCompiler: 'clang-21',
+    sampleRate: 4,
+    eventLimit: 100000,
+    fastMode: true,
+    cacheSegments: true,
+    runHardwareConfigIds: ['intel14', 'amd'],
+    experimentVariants: [
+      { id: 'baseline', defines: [] },
+      { id: 'tuned', defines: ['N=64'] },
+    ],
+  }
+  let shortenedState = null
+
+  await page.route('**/shorten', async route => {
+    shortenedState = route.request().postDataJSON().state
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ id: 'smoke-share' }),
+    })
+  })
+  await page.route('**/s/smoke-share', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ state: shortenedState || sharedState }),
+    })
+  })
+  await page.route('**/s/smoke-seed', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ state: sharedState }),
+    })
+  })
+
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await page.goto(`${url}?s=smoke-seed`, { waitUntil: 'domcontentloaded' })
+  await assertVisible(page.getByText('Intel 14th Gen', { exact: true }), 'shared hardware value')
+  await assertVisible(page.getByText('-O3', { exact: true }), 'shared optimization value')
+  await assertVisible(page.getByText('Stream', { exact: true }), 'shared prefetch value')
+  await assertVisible(page.getByText('Fast', { exact: true }), 'shared fast-mode value')
+  await assertVisible(page.getByText('1:4', { exact: true }), 'shared sample value')
+  await assertVisible(page.getByText('100K', { exact: true }), 'shared limit value')
+  assert(await page.locator('.toolbar-toggle').evaluate(element => element.classList.contains('active')), 'loop cache toggle should round-trip active')
+
+  await page.evaluate(() => {
+    window.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'k',
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    }))
+  })
+  await assertVisible(page.locator('.command-input'), 'command palette input')
+  await page.locator('.command-input').fill('share')
+  await page.keyboard.press('Enter')
+  await assertVisible(page.getByText('Link copied!', { exact: true }), 'share copied toast')
+
+  const copiedUrl = await page.evaluate(() => window.__copiedText)
+  assert(copiedUrl?.includes('?s=smoke-share'), `unexpected copied share URL: ${copiedUrl}`)
+  assert(shortenedState?.config === 'intel14', 'shortened state should include hardware config')
+  assert(shortenedState?.eventLimit === 100000, 'shortened state should include event limit')
+  assert(shortenedState?.cacheSegments === true, 'shortened state should include loop cache setting')
+
+  await page.goto(copiedUrl, { waitUntil: 'domcontentloaded' })
+  await assertVisible(page.getByText('Intel 14th Gen', { exact: true }), 'short-link hardware value')
+  await assertVisible(page.getByText('-O3', { exact: true }), 'short-link optimization value')
+  await assertVisible(page.getByText('Stream', { exact: true }), 'short-link prefetch value')
+  await assertVisible(page.getByText('Fast', { exact: true }), 'short-link fast-mode value')
+  await assertVisible(page.getByText('100K', { exact: true }), 'short-link limit value')
+
+  await page.unroute('**/shorten')
+  await page.unroute('**/s/smoke-share')
+  await page.unroute('**/s/smoke-seed')
+}
+
 async function cleanup() {
   if (browser) await browser.close().catch(() => {})
   if (previewProcess) {
@@ -278,9 +373,21 @@ try {
     args: ['--no-sandbox', '--disable-dev-shm-usage'],
   })
   page = await browser.newPage()
+  await page.addInitScript(() => {
+    window.__copiedText = ''
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: async text => {
+          window.__copiedText = text
+        },
+      },
+    })
+  })
 
   await verifyLaunchSurface(url)
   await verifyWorkloadCatalogControls(url)
+  await verifyShareRoundTrip(url)
   console.log(`UI smoke passed (${url})`)
 } catch (error) {
   if (page) {
