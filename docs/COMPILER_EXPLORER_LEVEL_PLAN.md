@@ -14,19 +14,22 @@ Already in place:
 - Hardware comparison and experiment modes.
 - Result provenance with source, compiler, simulator/runtime/pass hashes, and
   fidelity settings.
+- Copyable local repro commands from result provenance.
 - Golden kernel tests, workload snapshot verification, profile drift checks, and
   server tests in CI.
-- Share links that preserve single-file run settings.
+- Share links that preserve multi-file projects, active/main file identity, run
+  settings, and experiment setup.
+- Verified workload browser in the app, backed by product-facing workload APIs.
+- Workload-driven experiments for same-source define variants and per-variant
+  source comparisons.
 
 Known gaps:
 
 - Workload catalog is still too small to act as a broad regression corpus.
-- Workload variants need per-variant sources for common comparisons such as
-  row-major versus column-major kernels.
-- Multi-file projects are not fully preserved in share links.
-- The result UI does not yet expose one-click repro commands or workload badges.
 - There is no hosted regression dashboard for benchmark history.
 - Deployment/package polish is still developer-oriented.
+- Workload history, product onboarding, and empty/error states need another
+  design pass.
 
 ## Done Criteria
 
@@ -83,17 +86,19 @@ Known gaps:
 ## Implementation Path
 
 1. Broaden workload metadata and catalog coverage.
-2. Preserve full multi-file projects in share links.
-3. Add copyable repro commands to result provenance.
-4. Add more workload snapshots for memory layout, pointer chasing, prefetch,
+2. Add more workload snapshots for memory layout, pointer chasing, prefetch,
    false sharing, and branch behavior.
-5. Add benchmark-history artifacts or dashboards from CI.
-6. Harden deployment docs and local dev bootstrap.
+3. Add benchmark-history artifacts or dashboards from CI.
+4. Harden deployment docs and local dev bootstrap.
+5. Polish workload/history onboarding and modal empty/error states.
+6. Add more browser-level flows for share, workload, and experiment journeys.
 
 ## Near-Term Leaps
 
-- Extend workload variants with optional `example`, `optLevel`, `config`, and
-  `limit` overrides.
-- Add row-versus-column and sequential-versus-pointer workloads to the catalog.
-- Round-trip multi-file share state with active and main file identity.
+- Add false-sharing, branch-pattern, prefetch-policy, vector, memcpy, and atomic
+  workloads.
+- Emit CI benchmark-history artifacts from workload verification JSON.
+- Add a guided first-run/default workload state for new users.
+- Add browser-level regression coverage for workload browser and structured
+  experiment flows.
 - Keep committing each completed slice with validation output.
