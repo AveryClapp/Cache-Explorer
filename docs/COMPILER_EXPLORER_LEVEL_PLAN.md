@@ -47,6 +47,8 @@ Already in place:
   binaries have provenance in addition to checksums.
 - Published Docker images include BuildKit provenance attestations and SBOMs.
 - GitHub Release notes include checksum and attestation verification commands.
+- A manual release-validation workflow verifies published pass checksums,
+  pass attestations, and GHCR image availability for a release tag.
 
 Known gaps:
 
@@ -54,8 +56,8 @@ Known gaps:
   a broad regression corpus.
 - Hosted benchmark history retention is best-effort through the Actions cache;
   durable long-term storage or release-attached history would still be stronger.
-- Deployment/package polish still needs long-lived release validation across
-  installation surfaces.
+- Deployment/package polish still needs more automated release validation
+  scheduling once real release cadence is established.
 - Workload history trend surfacing, deeper onboarding, and error states need
   another design pass.
 

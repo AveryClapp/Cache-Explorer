@@ -1,0 +1,59 @@
+name: Release Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to validate (for example, v1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  attestations: read
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/cache-explorer
+
+jobs:
+  validate:
+    name: Validate Release Assets
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          mkdir -p release-validation
+          gh release download "$TAG" \
+            --repo "$REPO" \
+            --dir release-validation \
+            --pattern 'CacheProfiler-*.so' \
+            --pattern 'SHA256SUMS'
+          test -s release-validation/SHA256SUMS
+          ls -la release-validation
+
+      - name: Verify checksums and attestations
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          cd release-validation
+          sha256sum -c SHA256SUMS
+          for asset in CacheProfiler-*.so; do
+            gh attestation verify "$asset" --repo "$REPO"
+          done
+
+      - name: Validate published Docker images
+        env:
+          TAG: ${{ github.event.inputs.tag }}
+        run: |
+          image_tag="${TAG#v}"
+          for image in sandbox backend frontend; do
+            docker buildx imagetools inspect \
+              "${REGISTRY}/${IMAGE_PREFIX}-${image}:${image_tag}" >/dev/null
+          done
