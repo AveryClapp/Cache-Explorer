@@ -1,9 +1,9 @@
 /* ─── Section Panels ─── */
 .panel {
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 86%, var(--panel));
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-3);
   overflow: hidden;
 }
 
@@ -11,7 +11,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-2) var(--space-3);
   background: var(--elevated);
   border-bottom: 1px solid var(--border);
 }
@@ -20,13 +20,13 @@
   font-family: var(--font-display);
   font-size: var(--text-2xs);
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--text-primary);
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
 }
 
 .panel-content {
-  padding: var(--space-4);
+  padding: var(--space-3);
 }
 
 /* ─── Result Fidelity ─── */
@@ -85,7 +85,7 @@
   min-width: 0;
   display: grid;
   gap: 2px;
-  padding: var(--space-3);
+  padding: var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface);
@@ -100,7 +100,7 @@
 }
 
 .provenance-value {
-  color: var(--text-primary);
+  color: var(--text-bright);
   font-family: var(--font-display);
   font-size: var(--text-xs);
   overflow-wrap: anywhere;
@@ -108,7 +108,7 @@
 
 .provenance-caveats {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-1);
   color: var(--text-secondary);
   font-family: var(--font-display);
   font-size: var(--text-xs);
@@ -195,7 +195,7 @@
   display: grid;
   gap: var(--space-2);
   min-width: 0;
-  padding: var(--space-3);
+  padding: var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--elevated);

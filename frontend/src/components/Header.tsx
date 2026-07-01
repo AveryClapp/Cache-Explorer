@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import type { CacheResult, EnvironmentHealth, Stage } from "../types";
 
 interface HeaderProps {
@@ -118,6 +119,36 @@ export function Header({
   onRun,
   onCancel,
 }: HeaderProps) {
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const toolsMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!toolsOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (toolsMenuRef.current && !toolsMenuRef.current.contains(event.target as Node)) {
+        setToolsOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setToolsOpen(false);
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [toolsOpen]);
+
+  const runToolAction = (action: () => void) => {
+    setToolsOpen(false);
+    action();
+  };
+
   return (
     <header className="header">
       <div className="header-left">
@@ -165,43 +196,65 @@ export function Header({
         </button>
 
         {!isLoading && (
-          <button
-            onClick={onCompareHardware}
-            className="btn-hardware-compare"
-            title="Compare hardware presets"
-          >
-            Hardware
-          </button>
-        )}
-
-        {!isLoading && (
-          <button
-            onClick={onOpenWorkloads}
-            className="btn-workloads"
-            title="Open verified workloads"
-          >
-            Workloads
-          </button>
-        )}
-
-        {!isLoading && (
-          <button
-            onClick={onExploreHardware}
-            className="btn-explore"
-            title="Open hardware explorer"
-          >
-            Explore
-          </button>
-        )}
-
-        {!isLoading && (
-          <button
-            onClick={onRunExperiment}
-            className="btn-experiment"
-            title="Run hardware experiment"
-          >
-            Experiment
-          </button>
+          <div className="header-tools" ref={toolsMenuRef}>
+            <button
+              type="button"
+              className={`btn-tools${toolsOpen ? " active" : ""}`}
+              onClick={() => setToolsOpen(open => !open)}
+              title="Open hardware, workload, and experiment tools"
+              aria-label="Tools"
+              aria-haspopup="menu"
+              aria-expanded={toolsOpen}
+              aria-controls="header-tools-menu"
+            >
+              Tools
+              <span className="btn-tools-caret" aria-hidden="true">{toolsOpen ? "▲" : "▼"}</span>
+            </button>
+            {toolsOpen && (
+              <div className="header-tools-menu" id="header-tools-menu" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="header-tool-item"
+                  onClick={() => runToolAction(onCompareHardware)}
+                  aria-label="Hardware"
+                >
+                  <span className="header-tool-name">Hardware</span>
+                  <span className="header-tool-desc">Compare the selected run set.</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="header-tool-item"
+                  onClick={() => runToolAction(onOpenWorkloads)}
+                  aria-label="Workloads"
+                >
+                  <span className="header-tool-name">Workloads</span>
+                  <span className="header-tool-desc">Load verified, snapshot-backed cases.</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="header-tool-item"
+                  onClick={() => runToolAction(onExploreHardware)}
+                  aria-label="Explore"
+                >
+                  <span className="header-tool-name">Explore</span>
+                  <span className="header-tool-desc">Inspect profiles, contracts, and caveats.</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="header-tool-item"
+                  onClick={() => runToolAction(onRunExperiment)}
+                  aria-label="Experiment"
+                >
+                  <span className="header-tool-name">Experiment</span>
+                  <span className="header-tool-desc">Compare variants across hardware.</span>
+                </button>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Compare button - visible when result exists */}

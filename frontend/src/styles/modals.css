@@ -60,14 +60,16 @@
 
   .btn-compare,
   .btn-export,
-  .btn-hardware-compare,
-  .btn-workloads,
-  .btn-explore,
-  .btn-experiment,
+  .btn-tools,
   .btn-primary,
   .btn-cancel {
     padding: var(--space-2);
     font-size: var(--text-2xs);
+  }
+
+  .header-tools-menu {
+    right: 0;
+    width: min(260px, calc(100vw - var(--space-6)));
   }
 
   /* Settings toolbar mobile */
@@ -89,6 +91,17 @@
   .toolbar-more {
     width: 100%;
     margin-top: var(--space-2);
+    order: 4;
+  }
+
+  .toolbar-summary {
+    flex: 1 1 100%;
+    order: 3;
+  }
+
+  .toolbar-summary-chip {
+    flex: 1 1 calc(50% - var(--space-1));
+    justify-content: space-between;
   }
 
   .settings-toolbar-advanced {
@@ -101,6 +114,11 @@
   .toolbar-advanced-section {
     flex-direction: column;
     align-items: flex-start;
+    gap: var(--space-2);
+  }
+
+  .toolbar-run-controls {
+    width: 100%;
     gap: var(--space-2);
   }
 
@@ -215,10 +233,6 @@
   }
 
   .btn-compare,
-  .btn-hardware-compare,
-  .btn-workloads,
-  .btn-explore,
-  .btn-experiment,
   .btn-export {
     display: none;
   }

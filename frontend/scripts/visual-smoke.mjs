@@ -521,6 +521,11 @@ async function closeModal() {
   await page.getByRole('button', { name: /^Close/ }).click()
 }
 
+async function openHeaderTool(name) {
+  await page.getByRole('button', { name: 'Tools', exact: true }).click()
+  await page.getByRole('menuitem', { name, exact: true }).click()
+}
+
 async function runVisualFlow(url, outputDir) {
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto(url, { waitUntil: 'domcontentloaded' })
@@ -531,12 +536,12 @@ async function runVisualFlow(url, outputDir) {
   await page.getByText('Evidence & Fidelity', { exact: true }).waitFor({ state: 'visible', timeout: 8000 })
   await capture(outputDir, 'desktop-result')
 
-  await page.getByRole('button', { name: 'Explore', exact: true }).click()
+  await openHeaderTool('Explore')
   await page.getByText('Hardware Explorer', { exact: true }).waitFor({ state: 'visible', timeout: 8000 })
   await capture(outputDir, 'hardware-explorer')
   await closeModal()
 
-  await page.getByRole('button', { name: 'Workloads', exact: true }).click()
+  await openHeaderTool('Workloads')
   await page.getByText('Verified Workloads', { exact: true }).waitFor({ state: 'visible', timeout: 8000 })
   await page.locator('.workload-name').filter({ hasText: 'conv2d-intel14' }).waitFor({ state: 'visible', timeout: 8000 })
   await capture(outputDir, 'workload-catalog')

@@ -143,6 +143,19 @@ function workloadName(id) {
   return page.locator('.workload-row .workload-name').filter({ hasText: id })
 }
 
+async function openHeaderTool(name) {
+  await page.getByRole('button', { name: 'Tools', exact: true }).click()
+  await page.getByRole('menuitem', { name, exact: true }).click()
+}
+
+async function openAdvancedSettings() {
+  const advancedPanel = page.locator('#settings-toolbar-advanced')
+  if (!await advancedPanel.isVisible().catch(() => false)) {
+    await page.getByRole('button', { name: /Advanced/ }).click()
+  }
+  await assertVisible(advancedPanel, 'advanced settings')
+}
+
 async function layoutMetrics() {
   return page.evaluate(() => {
     const empty = document.querySelector('.empty-state')
@@ -553,7 +566,7 @@ async function verifyWorkloadCatalogControls(url) {
 
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto(url, { waitUntil: 'domcontentloaded' })
-  await page.getByRole('button', { name: 'Workloads' }).click()
+  await openHeaderTool('Workloads')
   await assertVisible(page.getByText('Verified Workloads', { exact: true }), 'workload catalog modal')
   await assertVisible(page.getByText('Published History', { exact: true }), 'published workload history')
   await assertVisible(page.getByText('passing', { exact: true }), 'history passing status')
@@ -934,7 +947,7 @@ async function verifyHardwareComparison(url) {
   })
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto(url, { waitUntil: 'domcontentloaded' })
-  await page.getByRole('button', { name: 'Hardware', exact: true }).click()
+  await openHeaderTool('Hardware')
 
   const modal = page.locator('.batch-modal').filter({ hasText: 'Hardware Comparison' })
   await assertVisible(modal.getByText('Hardware Comparison', { exact: true }), 'hardware comparison modal')
@@ -980,7 +993,7 @@ async function verifyHardwareComparisonEmptyState(url) {
   })
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto(url, { waitUntil: 'domcontentloaded' })
-  await page.getByRole('button', { name: 'Hardware', exact: true }).click()
+  await openHeaderTool('Hardware')
 
   const modal = page.locator('.batch-modal').filter({ hasText: 'Hardware Comparison' })
   await assertVisible(modal.getByText('No hardware results', { exact: true }), 'comparison empty-state title')
@@ -1054,7 +1067,7 @@ async function verifyEditRunCompareShareReopen(url) {
   await assertVisible(page.locator('.result-provenance-panel').getByText('Evidence & Fidelity', { exact: true }), 'edited run evidence and fidelity')
   assert(compilePayload?.code?.includes('EDIT_RUN_MARKER'), `edited compile payload missing marker: ${compilePayload?.code}`)
 
-  await page.getByRole('button', { name: 'Hardware', exact: true }).click()
+  await openHeaderTool('Hardware')
   await assertVisible(page.locator('.batch-modal').filter({ hasText: 'Hardware Comparison' }), 'edited comparison modal')
   assert(comparePayload?.code?.includes('EDIT_RUN_MARKER'), `edited compare payload missing marker: ${comparePayload?.code}`)
   await closeModal()
@@ -1243,7 +1256,7 @@ async function verifyShareRoundTrip(url) {
   assert(shortenedState?.selectedCompiler === 'clang-21', `empty-state share should use resolved compiler, got ${shortenedState?.selectedCompiler}`)
   assert(shortenedState?.runHardwareConfigIds?.join(',') === 'intel,amd', `empty-state share run set mismatch: ${JSON.stringify(shortenedState?.runHardwareConfigIds)}`)
 
-  await page.getByRole('button', { name: 'Hardware', exact: true }).click()
+  await openHeaderTool('Hardware')
   await assertVisible(page.locator('.batch-modal').filter({ hasText: 'Hardware Comparison' }), 'restored hardware comparison modal')
   assert(restoredCompareRequest?.configs?.join(',') === 'intel,amd', `restored comparison configs mismatch: ${JSON.stringify(restoredCompareRequest?.configs)}`)
   await closeModal()
@@ -1255,6 +1268,7 @@ async function verifyShareRoundTrip(url) {
   await assertVisible(page.getByText('Fast', { exact: true }), 'shared fast-mode value')
   await assertVisible(page.getByText('1:4', { exact: true }), 'shared sample value')
   await assertVisible(page.getByText('100K', { exact: true }), 'shared limit value')
+  await openAdvancedSettings()
   assert(await page.locator('.toolbar-toggle').evaluate(element => element.classList.contains('active')), 'loop cache toggle should round-trip active')
 
   await page.evaluate(() => {
@@ -1439,7 +1453,7 @@ async function verifyExperimentResults(url) {
   })
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto(url, { waitUntil: 'domcontentloaded' })
-  await page.getByRole('button', { name: 'Experiment', exact: true }).click()
+  await openHeaderTool('Experiment')
 
   const modal = page.locator('.experiment-modal')
   await assertVisible(modal.getByText('Hardware Experiment', { exact: true }), 'experiment modal')
@@ -1528,7 +1542,7 @@ async function verifyExperimentShareReopen(url) {
 
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto(`${url}?s=smoke-experiment-seed`, { waitUntil: 'domcontentloaded' })
-  await page.getByRole('button', { name: 'Experiment', exact: true }).click()
+  await openHeaderTool('Experiment')
 
   let modal = page.locator('.experiment-modal')
   await assertVisible(modal.getByText('Hardware Experiment', { exact: true }), 'shared experiment modal')
@@ -1552,7 +1566,7 @@ async function verifyExperimentShareReopen(url) {
 
   const copiedUrl = await page.evaluate(() => window.__copiedText)
   await page.goto(copiedUrl, { waitUntil: 'domcontentloaded' })
-  await page.getByRole('button', { name: 'Experiment', exact: true }).click()
+  await openHeaderTool('Experiment')
   modal = page.locator('.experiment-modal')
   await assertVisible(modal.getByText('Hardware Experiment', { exact: true }), 'reopened experiment modal')
   assert(await modal.locator('textarea').inputValue() === experimentVariants, 'short-link experiment variants should restore')

@@ -78,6 +78,10 @@
 }
 
 .toolbar-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
   font-family: var(--font-display);
   font-size: var(--text-xs);
   padding: var(--space-2) var(--space-3);
@@ -98,6 +102,46 @@
   background: var(--phosphor-subtle);
   border-color: var(--phosphor-dim);
   color: var(--phosphor);
+}
+
+.toolbar-more-caret {
+  color: currentColor;
+  font-size: 8px;
+  line-height: 1;
+}
+
+.toolbar-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.toolbar-summary-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 26px;
+  padding: 3px var(--space-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: var(--text-2xs);
+  line-height: 1;
+}
+
+.toolbar-summary-chip span {
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+.toolbar-summary-chip strong {
+  color: var(--text-bright);
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .toolbar-toggle {
@@ -137,6 +181,19 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
+}
+
+.run-fidelity-section {
+  align-items: flex-start;
+  width: 100%;
+}
+
+.toolbar-run-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  min-width: 0;
 }
 
 .toolbar-advanced-label {
@@ -345,4 +402,3 @@
 .custom-cache-section {
   flex-wrap: wrap;
 }
-

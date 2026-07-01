@@ -52,7 +52,7 @@
 }
 
 .metric-card {
-  animation: fadeInUp 0.4s var(--ease-out) backwards;
+  animation: none;
 }
 
 .metric-card:nth-child(1) { animation-delay: 0.05s; }

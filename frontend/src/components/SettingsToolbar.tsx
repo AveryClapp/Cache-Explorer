@@ -92,6 +92,12 @@ export function SettingsToolbar({
 
   // Determine the select value to show
   const limitSelectValue = isCustomLimit ? 'custom' : String(eventLimit)
+  const prefetchLabel = PREFETCH_OPTIONS.find(option => option.value === prefetchPolicy)?.label ?? prefetchPolicy
+  const modeLabel = FAST_MODE_OPTIONS.find(option => option.value === String(fastMode))?.label ?? (fastMode ? 'Fast' : 'Full')
+  const sampleLabel = SAMPLE_OPTIONS.find(option => option.value === String(sampleRate))?.label ?? `1:${sampleRate}`
+  const limitLabel = isCustomLimit
+    ? formatLimit(eventLimit)
+    : LIMIT_OPTIONS.find(option => option.value === String(eventLimit))?.label ?? formatLimit(eventLimit)
 
   useEffect(() => {
     if (config === 'custom') setShowMore(true)
@@ -122,119 +128,136 @@ export function SettingsToolbar({
 
         <div className="toolbar-divider" />
 
-        <div className="toolbar-group">
-          <label>Prefetch</label>
-          <StyledSelect
-            value={prefetchPolicy}
-            options={PREFETCH_OPTIONS}
-            onChange={onPrefetchChange}
-          />
-        </div>
-
-        <div className="toolbar-divider" />
-
-        <div className="toolbar-group">
-          <label title="Fast mode disables 3C miss classification for ~3x speedup">Mode</label>
-          <StyledSelect
-            value={String(fastMode)}
-            options={FAST_MODE_OPTIONS}
-            onChange={(v) => onFastModeChange(v === 'true')}
-          />
-        </div>
-
-        <div className="toolbar-divider" />
-
-        <div className="toolbar-group">
-          <button
-            className={`toolbar-toggle ${cacheSegments ? 'active' : ''}`}
-            onClick={() => onCacheSegmentsChange(!cacheSegments)}
-            title="Cache repeated loop segments — speeds up programs with tight loops (experimental)"
-            aria-pressed={cacheSegments}
-          >
-            ↺ Loop cache
-          </button>
-        </div>
-
-        <div className="toolbar-divider" />
-
-        <div className="toolbar-group">
-          <label>Sample</label>
-          <StyledSelect
-            value={String(sampleRate)}
-            options={SAMPLE_OPTIONS}
-            onChange={(v) => onSampleRateChange(parseInt(v))}
-          />
-        </div>
-
-        <div className="toolbar-divider" />
-
-        <div className="toolbar-group">
-          <label>Limit</label>
-          {customLimitMode ? (
-            <div className="limit-custom-input">
-              <input
-                ref={customLimitRef}
-                type="text"
-                placeholder="e.g. 10M, 500K"
-                value={customLimitText}
-                onChange={(e) => setCustomLimitText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const parsed = parseLimit(customLimitText)
-                    if (parsed !== null && parsed > 0) {
-                      onEventLimitChange(parsed)
-                      setCustomLimitMode(false)
-                      setCustomLimitText('')
-                    }
-                  } else if (e.key === 'Escape') {
-                    setCustomLimitMode(false)
-                    setCustomLimitText('')
-                  }
-                }}
-                onBlur={() => {
-                  const parsed = parseLimit(customLimitText)
-                  if (parsed !== null && parsed > 0) {
-                    onEventLimitChange(parsed)
-                  }
-                  setCustomLimitMode(false)
-                  setCustomLimitText('')
-                }}
-                className="define-input custom-limit"
-                aria-label="Custom event limit"
-              />
-            </div>
-          ) : (
-            <StyledSelect
-              value={limitSelectValue}
-              options={isCustomLimit
-                ? LIMIT_OPTIONS.map(o => o.value === 'custom' ? { ...o, label: formatLimit(eventLimit) } : o)
-                : LIMIT_OPTIONS
-              }
-              onChange={(v) => {
-                if (v === 'custom') {
-                  setCustomLimitMode(true)
-                  setCustomLimitText('')
-                } else {
-                  onEventLimitChange(parseInt(v))
-                }
-              }}
-            />
-          )}
+        <div className="toolbar-summary" aria-label="Run fidelity summary">
+          <span className="toolbar-summary-chip">
+            <span>Mode</span>
+            <strong>{modeLabel}</strong>
+          </span>
+          <span className="toolbar-summary-chip">
+            <span>Prefetch</span>
+            <strong>{prefetchLabel}</strong>
+          </span>
+          <span className="toolbar-summary-chip">
+            <span>Sample</span>
+            <strong>{sampleLabel}</strong>
+          </span>
+          <span className="toolbar-summary-chip">
+            <span>Limit</span>
+            <strong>{limitLabel}</strong>
+          </span>
         </div>
 
         <button
           className={`toolbar-more ${showMore ? 'active' : ''}`}
           onClick={() => setShowMore(!showMore)}
-          title="More options"
+          title="Advanced run and model options"
           aria-expanded={showMore}
           aria-controls="settings-toolbar-advanced"
         >
-          {showMore ? '▲ Less' : '▼ More'}
+          <span>{showMore ? 'Hide Advanced' : 'Advanced'}</span>
+          <span className="toolbar-more-caret" aria-hidden="true">{showMore ? '▲' : '▼'}</span>
         </button>
       </div>
 
       {showMore && (
         <div className="settings-toolbar-advanced" id="settings-toolbar-advanced">
+          <div className="toolbar-advanced-section run-fidelity-section">
+            <span className="toolbar-advanced-label">Run Fidelity:</span>
+            <div className="toolbar-run-controls">
+              <div className="toolbar-group">
+                <label>Prefetch</label>
+                <StyledSelect
+                  value={prefetchPolicy}
+                  options={PREFETCH_OPTIONS}
+                  onChange={onPrefetchChange}
+                />
+              </div>
+
+              <div className="toolbar-group">
+                <label title="Fast mode disables 3C miss classification for ~3x speedup">Mode</label>
+                <StyledSelect
+                  value={String(fastMode)}
+                  options={FAST_MODE_OPTIONS}
+                  onChange={(v) => onFastModeChange(v === 'true')}
+                />
+              </div>
+
+              <div className="toolbar-group">
+                <button
+                  className={`toolbar-toggle ${cacheSegments ? 'active' : ''}`}
+                  onClick={() => onCacheSegmentsChange(!cacheSegments)}
+                  title="Cache repeated loop segments - speeds up programs with tight loops (experimental)"
+                  aria-pressed={cacheSegments}
+                >
+                  ↺ Loop cache
+                </button>
+              </div>
+
+              <div className="toolbar-group">
+                <label>Sample</label>
+                <StyledSelect
+                  value={String(sampleRate)}
+                  options={SAMPLE_OPTIONS}
+                  onChange={(v) => onSampleRateChange(parseInt(v))}
+                />
+              </div>
+
+              <div className="toolbar-group">
+                <label>Limit</label>
+                {customLimitMode ? (
+                  <div className="limit-custom-input">
+                    <input
+                      ref={customLimitRef}
+                      type="text"
+                      placeholder="e.g. 10M, 500K"
+                      value={customLimitText}
+                      onChange={(e) => setCustomLimitText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const parsed = parseLimit(customLimitText)
+                          if (parsed !== null && parsed > 0) {
+                            onEventLimitChange(parsed)
+                            setCustomLimitMode(false)
+                            setCustomLimitText('')
+                          }
+                        } else if (e.key === 'Escape') {
+                          setCustomLimitMode(false)
+                          setCustomLimitText('')
+                        }
+                      }}
+                      onBlur={() => {
+                        const parsed = parseLimit(customLimitText)
+                        if (parsed !== null && parsed > 0) {
+                          onEventLimitChange(parsed)
+                        }
+                        setCustomLimitMode(false)
+                        setCustomLimitText('')
+                      }}
+                      className="define-input custom-limit"
+                      aria-label="Custom event limit"
+                    />
+                  </div>
+                ) : (
+                  <StyledSelect
+                    value={limitSelectValue}
+                    options={isCustomLimit
+                      ? LIMIT_OPTIONS.map(o => o.value === 'custom' ? { ...o, label: formatLimit(eventLimit) } : o)
+                      : LIMIT_OPTIONS
+                    }
+                    onChange={(v) => {
+                      if (v === 'custom') {
+                        setCustomLimitMode(true)
+                        setCustomLimitText('')
+                      } else {
+                        onEventLimitChange(parseInt(v))
+                      }
+                    }}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+
           <div className="toolbar-advanced-section">
             <span className="toolbar-advanced-label">Defines:</span>
             <div className="toolbar-defines">

@@ -2,16 +2,16 @@
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-3);
-  margin-bottom: var(--space-5);
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
 }
 
 .metric-card {
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-glow);
   border-radius: var(--radius-md);
-  padding: var(--space-4);
-  text-align: center;
+  padding: var(--space-3);
+  text-align: left;
   position: relative;
   overflow: hidden;
 }
@@ -47,18 +47,26 @@
   font-family: var(--font-display);
   font-size: var(--text-2xs);
   font-weight: 500;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.06em;
   margin-bottom: var(--space-2);
 }
 
 .metric-value {
   font-family: var(--font-display);
-  font-size: var(--text-2xl);
-  font-weight: 600;
+  font-size: var(--text-3xl);
+  font-weight: 700;
   color: var(--text-bright);
   line-height: 1;
+}
+
+.metric-card.good .metric-value {
+  color: var(--signal-good);
+}
+
+.metric-card.warning .metric-value {
+  color: var(--signal-warning);
 }
 
 .metric-card.excellent .metric-value {
@@ -151,7 +159,7 @@
 
 .metric-detail {
   font-size: var(--text-xs);
-  color: var(--text-muted);
+  color: var(--text-secondary);
   margin-top: var(--space-2);
 }
 
