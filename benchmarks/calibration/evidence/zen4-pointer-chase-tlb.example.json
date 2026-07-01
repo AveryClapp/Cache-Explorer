@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "packetId": "zen4-pointer-chase-tlb-example",
+  "profileId": "zen4",
+  "profileClass": "desktop",
+  "capturedAt": "2026-07-01T00:00:00.000Z",
+  "machine": {
+    "cpu": "AMD Zen 4 example host",
+    "vendor": "AMD",
+    "architecture": "x86_64",
+    "os": "Linux perf-compatible host",
+    "powerMode": "performance",
+    "virtualized": false,
+    "smt": "recorded"
+  },
+  "toolchain": {
+    "compiler": "clang",
+    "compilerVersion": "clang 21.0.0",
+    "cacheExplorerCommit": "example-packet",
+    "llvmPassSha256": "record-real-pass-sha256",
+    "runtimeSha256": "record-real-runtime-sha256",
+    "simulatorSha256": "record-real-simulator-sha256"
+  },
+  "workload": {
+    "id": "pointer-chase-zen4-tlb",
+    "command": "./backend/scripts/cache-explore examples/pointer_chase.c -O2 --hardware zen4 --json --limit 150000",
+    "manifestSha256": "record-real-workload-manifest-sha256",
+    "sourceSha256": "record-real-source-sha256",
+    "eventLimit": 150000,
+    "stress": false
+  },
+  "counterSource": {
+    "tool": "perf",
+    "version": "record-perf-version",
+    "counters": [
+      "dTLB-loads",
+      "dTLB-load-misses",
+      "L1-dcache-loads",
+      "L1-dcache-load-misses"
+    ]
+  },
+  "subsystems": [
+    {
+      "name": "tlb",
+      "level": 2,
+      "claim": "calibrated",
+      "notes": "Example packet shape for a single-host TLB relationship check."
+    },
+    {
+      "name": "cacheHierarchy",
+      "level": 1,
+      "claim": "modeled",
+      "notes": "Cache counters are included for context, not promoted by this packet."
+    }
+  ],
+  "measurements": [
+    {
+      "variant": "4kb-pages",
+      "hardwareCounters": {
+        "dtlbMissRate": 0.086,
+        "l1dHitRate": 0.81
+      },
+      "simulator": {
+        "dtlbMissRate": 0.079,
+        "estimatedCycles": 98000
+      },
+      "relationship": {
+        "metric": "dtlb.missRate",
+        "expected": "huge-pages < 4kb-pages",
+        "observed": "huge-pages < 4kb-pages",
+        "passed": true
+      }
+    },
+    {
+      "variant": "huge-pages",
+      "hardwareCounters": {
+        "dtlbMissRate": 0.019,
+        "l1dHitRate": 0.82
+      },
+      "simulator": {
+        "dtlbMissRate": 0.024,
+        "estimatedCycles": 76000
+      },
+      "relationship": {
+        "metric": "dtlb.missRate",
+        "expected": "huge-pages < 4kb-pages",
+        "observed": "huge-pages < 4kb-pages",
+        "passed": true
+      }
+    }
+  ],
+  "caveats": [
+    "Example packet for schema validation; replace placeholder hashes before using as promotion evidence.",
+    "Does not promote cache, branch, pipeline, SIMD, topology, prefetch, or NUMA claims."
+  ]
+}

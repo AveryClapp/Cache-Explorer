@@ -49,6 +49,19 @@ benchmarks:
 ./backend/scripts/cache-explore calibration --json benchmarks/calibration/evidence/*.json
 ```
 
+The validator also prints a subsystem coverage summary. Bundled example packets
+currently cover these claim shapes:
+
+| Packet | Profile | Promoted Claim | Purpose |
+| --- | --- | --- | --- |
+| `intel14-conv2d-cache-hierarchy-example` | `intel14` | cache hierarchy Level 2 calibrated | Shows the narrow shape for cache hit-rate promotion. |
+| `zen4-pointer-chase-tlb-example` | `zen4` | TLB Level 2 calibrated | Shows page-size/TLB relationship evidence. |
+| `m3-stream-prefetch-example` | `m3` | prefetch Level 1 modeled, bandwidth Level 1 estimated | Keeps Apple counter limits explicit. |
+| `sapphirerapids-branch-frontend-example` | `sapphirerapids` | branch/frontend Level 1 estimated | Records directional evidence without claiming predictor internals. |
+
+Example packets are schema fixtures until placeholder hashes and host metadata
+are replaced with real captured values.
+
 ## Subsystem Matrix
 
 | Subsystem | Product Status | Calibration Target |

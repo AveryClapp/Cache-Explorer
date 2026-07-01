@@ -133,6 +133,41 @@ async function bundledEvidenceFiles() {
     .sort()
 }
 
+function subsystemClaims(packet) {
+  if (!Array.isArray(packet.subsystems)) return []
+  return packet.subsystems
+    .filter(subsystem => isObject(subsystem))
+    .map(subsystem => ({
+      name: subsystem.name,
+      level: subsystem.level,
+      claim: subsystem.claim,
+    }))
+}
+
+function coverageSummary(results) {
+  const coverage = new Map()
+  for (const result of results) {
+    if (!result.ok) continue
+    for (const subsystem of result.subsystemClaims || []) {
+      const key = `${subsystem.name}:${subsystem.claim}:${subsystem.level}`
+      const current = coverage.get(key) || {
+        name: subsystem.name,
+        claim: subsystem.claim,
+        level: subsystem.level,
+        packets: 0,
+      }
+      current.packets += 1
+      coverage.set(key, current)
+    }
+  }
+  return Array.from(coverage.values())
+    .sort((a, b) => (
+      a.name.localeCompare(b.name) ||
+      b.level - a.level ||
+      a.claim.localeCompare(b.claim)
+    ))
+}
+
 async function main() {
   const args = process.argv.slice(2)
   const json = args.includes('--json')
@@ -167,6 +202,7 @@ async function main() {
         packetId: packet.packetId,
         profileId: packet.profileId,
         subsystems: Array.isArray(packet.subsystems) ? packet.subsystems.length : 0,
+        subsystemClaims: subsystemClaims(packet),
         measurements: Array.isArray(packet.measurements) ? packet.measurements.length : 0,
         errors,
       })
@@ -180,14 +216,22 @@ async function main() {
     }
   }
 
+  const coverage = coverageSummary(results)
+
   if (json) {
-    console.log(JSON.stringify({ ok: !failed, packets: results }, null, 2))
+    console.log(JSON.stringify({ ok: !failed, packets: results, coverage }, null, 2))
   } else {
     for (const result of results) {
       const status = result.ok ? 'ok  ' : 'fail'
       console.log(`${status} ${result.file}`)
       for (const error of result.errors) {
         console.log(`     ${error}`)
+      }
+    }
+    if (coverage.length > 0) {
+      console.log('coverage')
+      for (const item of coverage) {
+        console.log(`     ${item.name}: ${item.claim} L${item.level} (${item.packets} packet${item.packets === 1 ? '' : 's'})`)
       }
     }
   }

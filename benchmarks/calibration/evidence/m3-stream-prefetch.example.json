@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "packetId": "m3-stream-prefetch-example",
+  "profileId": "m3",
+  "profileClass": "mobile-workstation",
+  "capturedAt": "2026-07-01T00:00:00.000Z",
+  "machine": {
+    "cpu": "Apple M3 example host",
+    "vendor": "Apple",
+    "architecture": "arm64",
+    "os": "macOS performance-sample host",
+    "powerMode": "plugged-in",
+    "virtualized": false,
+    "smt": "not-applicable"
+  },
+  "toolchain": {
+    "compiler": "clang",
+    "compilerVersion": "Apple clang example",
+    "cacheExplorerCommit": "example-packet",
+    "llvmPassSha256": "record-real-pass-sha256",
+    "runtimeSha256": "record-real-runtime-sha256",
+    "simulatorSha256": "record-real-simulator-sha256"
+  },
+  "workload": {
+    "id": "stream-prefetch-m3",
+    "command": "./backend/scripts/cache-explore examples/stream_stride.c -O2 --hardware m3 --prefetch stream --json --limit 120000",
+    "manifestSha256": "record-real-workload-manifest-sha256",
+    "sourceSha256": "record-real-source-sha256",
+    "eventLimit": 120000,
+    "stress": false
+  },
+  "counterSource": {
+    "tool": "xctrace-or-powermetrics",
+    "version": "record-tool-version",
+    "counters": [
+      "cpu_cycles",
+      "instructions",
+      "memory_bandwidth",
+      "cache_miss_proxy"
+    ]
+  },
+  "subsystems": [
+    {
+      "name": "prefetch",
+      "level": 1,
+      "claim": "modeled",
+      "notes": "Apple public counter availability is limited; this packet keeps prefetch as modeled."
+    },
+    {
+      "name": "memoryBandwidth",
+      "level": 1,
+      "claim": "estimated",
+      "notes": "Bandwidth context is directional and host-mode dependent."
+    }
+  ],
+  "measurements": [
+    {
+      "variant": "linear-stream",
+      "hardwareCounters": {
+        "memoryBandwidthGBs": 78.4,
+        "cacheMissProxy": 0.041
+      },
+      "simulator": {
+        "l1dHitRate": 0.94,
+        "prefetchHits": 38000
+      },
+      "relationship": {
+        "metric": "prefetch.prefetchHits",
+        "expected": "linear-stream > random-stride",
+        "observed": "linear-stream > random-stride",
+        "passed": true
+      }
+    },
+    {
+      "variant": "random-stride",
+      "hardwareCounters": {
+        "memoryBandwidthGBs": 34.2,
+        "cacheMissProxy": 0.137
+      },
+      "simulator": {
+        "l1dHitRate": 0.71,
+        "prefetchHits": 4200
+      },
+      "relationship": {
+        "metric": "prefetch.prefetchHits",
+        "expected": "linear-stream > random-stride",
+        "observed": "linear-stream > random-stride",
+        "passed": true
+      }
+    }
+  ],
+  "caveats": [
+    "Example packet for schema validation; replace placeholder hashes before using as promotion evidence.",
+    "Apple counter names vary by OS and tool; this packet does not promote calibrated cache or prefetch claims."
+  ]
+}

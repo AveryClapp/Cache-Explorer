@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "packetId": "sapphirerapids-branch-frontend-example",
+  "profileId": "sapphirerapids",
+  "profileClass": "server",
+  "capturedAt": "2026-07-01T00:00:00.000Z",
+  "machine": {
+    "cpu": "Intel Xeon Sapphire Rapids example host",
+    "vendor": "Intel",
+    "architecture": "x86_64",
+    "os": "Linux perf-compatible host",
+    "powerMode": "performance",
+    "virtualized": false,
+    "smt": "recorded"
+  },
+  "toolchain": {
+    "compiler": "clang",
+    "compilerVersion": "clang 21.0.0",
+    "cacheExplorerCommit": "example-packet",
+    "llvmPassSha256": "record-real-pass-sha256",
+    "runtimeSha256": "record-real-runtime-sha256",
+    "simulatorSha256": "record-real-simulator-sha256"
+  },
+  "workload": {
+    "id": "branch-frontend-sapphirerapids",
+    "command": "./backend/scripts/cache-explore examples/branch_patterns.c -O2 --hardware sapphirerapids --json --limit 180000",
+    "manifestSha256": "record-real-workload-manifest-sha256",
+    "sourceSha256": "record-real-source-sha256",
+    "eventLimit": 180000,
+    "stress": false
+  },
+  "counterSource": {
+    "tool": "perf",
+    "version": "record-perf-version",
+    "counters": [
+      "branches",
+      "branch-misses",
+      "cycles",
+      "idq_uops_not_delivered.core"
+    ]
+  },
+  "subsystems": [
+    {
+      "name": "branchPrediction",
+      "level": 1,
+      "claim": "estimated",
+      "notes": "Checks directionality only; branch predictor internals are not promoted."
+    },
+    {
+      "name": "frontend",
+      "level": 1,
+      "claim": "estimated",
+      "notes": "Frontend counter relationship is recorded as directional context."
+    }
+  ],
+  "measurements": [
+    {
+      "variant": "predictable",
+      "hardwareCounters": {
+        "branchMissRate": 0.012,
+        "idqUopsNotDelivered": 2200
+      },
+      "simulator": {
+        "branchMissRate": 0.018,
+        "estimatedCycles": 54000
+      },
+      "relationship": {
+        "metric": "branch.missRate",
+        "expected": "predictable < unpredictable",
+        "observed": "predictable < unpredictable",
+        "passed": true
+      }
+    },
+    {
+      "variant": "unpredictable",
+      "hardwareCounters": {
+        "branchMissRate": 0.214,
+        "idqUopsNotDelivered": 8900
+      },
+      "simulator": {
+        "branchMissRate": 0.187,
+        "estimatedCycles": 87000
+      },
+      "relationship": {
+        "metric": "branch.missRate",
+        "expected": "predictable < unpredictable",
+        "observed": "predictable < unpredictable",
+        "passed": true
+      }
+    }
+  ],
+  "caveats": [
+    "Example packet for schema validation; replace placeholder hashes before using as promotion evidence.",
+    "Does not promote branch predictor internals or frontend cycle accuracy."
+  ]
+}
