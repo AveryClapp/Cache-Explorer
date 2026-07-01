@@ -3,6 +3,7 @@ import type {
   WorkloadHistoryDurationDelta,
   WorkloadHistoryResponse,
   WorkloadSnapshot,
+  WorkloadVerificationRun,
   WorkloadVerificationResponse,
 } from '../types'
 
@@ -141,6 +142,27 @@ function sortWorkloads(
 function deltaTone(delta: WorkloadHistoryDurationDelta | undefined) {
   if (!delta || delta.deltaMs === 0) return 'neutral'
   return delta.deltaMs > 0 ? 'warn' : 'good'
+}
+
+function variantRunTone(run: WorkloadVerificationRun | undefined) {
+  if (!run) return ''
+  if (run.ok) return 'ok'
+  return run.timeout ? 'timeout' : 'fail'
+}
+
+function variantRunTitle(run: WorkloadVerificationRun | undefined) {
+  if (!run) return 'Not verified'
+  const state = run.ok ? 'passed' : run.timeout ? 'timed out' : 'failed'
+  return [state, formatDuration(run.durationMs), run.error].filter(Boolean).join(' / ')
+}
+
+function variantIdsByState(
+  status: ReturnType<typeof statusFor> | undefined,
+  predicate: (run: WorkloadVerificationRun) => boolean,
+) {
+  return Object.entries(status?.variants || {})
+    .filter(([, run]) => predicate(run))
+    .map(([id]) => id)
 }
 
 export function WorkloadCatalogModal({
@@ -379,14 +401,17 @@ export function WorkloadCatalogModal({
             {visibleWorkloads.map(workload => {
               const status = statusFor(workload, verification)
               const delta = deltaByWorkload.get(workload.id)
+              const timedOutVariants = variantIdsByState(status, run => Boolean(run.timeout))
+              const failedVariants = variantIdsByState(status, run => !run.ok && !run.timeout)
+              const statusTone = status?.ok ? 'ok' : timedOutVariants.length > 0 ? 'timeout' : 'fail'
               return (
                 <div className="workload-row" key={workload.id}>
                   <div className="workload-row-main">
                     <div className="workload-row-heading">
                       <span className="workload-name">{workload.id}</span>
                       {status && (
-                        <span className={`workload-status ${status.ok ? 'ok' : 'fail'}`}>
-                          {status.ok ? 'Verified' : 'Failed'}
+                        <span className={`workload-status ${statusTone}`}>
+                          {status.ok ? 'Verified' : timedOutVariants.length > 0 ? 'Timed out' : 'Failed'}
                         </span>
                       )}
                     </div>
@@ -404,21 +429,54 @@ export function WorkloadCatalogModal({
                       )}
                     </div>
                     <div className="workload-variants">
-                      {workload.variants.map(variant => (
-                        <code key={variant.id}>{variantLabel(workload, variant)}</code>
-                      ))}
+                      {workload.variants.map(variant => {
+                        const run = status?.variants[variant.id]
+                        const tone = variantRunTone(run)
+                        return (
+                          <code
+                            className={`workload-variant ${tone}`}
+                            key={variant.id}
+                            title={variantRunTitle(run)}
+                          >
+                            <span>{variantLabel(workload, variant)}</span>
+                            {run && !run.ok && (
+                              <span className="workload-variant-state">
+                                {run.timeout ? 'timeout' : 'failed'}
+                              </span>
+                            )}
+                          </code>
+                        )
+                      })}
                     </div>
                     <div className="workload-checks">
                       {workload.expectedRelationships.map(check => {
                         const observed = status?.checks.find(item => item.metric === check.metric && item.relationship === check.relationship)
                         return (
-                          <span className={`workload-check ${observed ? (observed.passed ? 'ok' : 'fail') : ''}`} key={`${check.metric}-${check.relationship}`}>
+                          <span
+                            className={`workload-check ${observed ? (observed.passed ? 'ok' : 'fail') : ''}`}
+                            key={`${check.metric}-${check.relationship}`}
+                            title={observed?.error}
+                          >
                             {check.metric} {check.relationship}
                             {observed && ` (${formatValue(observed.leftValue)} vs ${formatValue(observed.rightValue)})`}
                           </span>
                         )
                       })}
                     </div>
+                    {(timedOutVariants.length > 0 || failedVariants.length > 0) && (
+                      <div className="workload-run-diagnostics">
+                        {timedOutVariants.length > 0 && (
+                          <span className="workload-run-diagnostic timeout">
+                            Timed out: {timedOutVariants.join(', ')}
+                          </span>
+                        )}
+                        {failedVariants.length > 0 && (
+                          <span className="workload-run-diagnostic fail">
+                            Failed: {failedVariants.join(', ')}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="workload-row-actions">
                     {status && <span className="workload-duration">{formatDuration(status.durationMs)}</span>}

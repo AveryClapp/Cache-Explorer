@@ -373,6 +373,14 @@ paths:
           schema:
             type: boolean
             default: false
+        - name: variantTimeoutMs
+          in: query
+          required: false
+          description: Per-variant verification timeout in milliseconds. Use 0 to disable the child timeout.
+          schema:
+            type: integer
+            minimum: 0
+            default: 120000
       responses:
         '200':
           description: Workload verification results

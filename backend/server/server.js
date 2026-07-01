@@ -1153,6 +1153,11 @@ app.get('/api/workloads/verify', async (req, res) => {
   incCounter('requests', { type: 'workloads_verify' });
   try {
     const args = ['workloads', '--verify', '--json'];
+    const requestedVariantTimeoutMs = Number.parseInt(req.query.variantTimeoutMs, 10);
+    const variantTimeoutMs = Number.isFinite(requestedVariantTimeoutMs) && requestedVariantTimeoutMs >= 0
+      ? Math.min(requestedVariantTimeoutMs, CONFIG.timeouts.max)
+      : CONFIG.workloads.variantTimeoutMs;
+    args.push('--variant-timeout-ms', String(variantTimeoutMs));
     if (req.query.includeStress === '1' || req.query.includeStress === 'true') {
       args.push('--include-stress');
     }

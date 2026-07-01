@@ -612,6 +612,11 @@
   border-color: color-mix(in srgb, var(--signal-critical) 45%, var(--border));
 }
 
+.workload-status.timeout {
+  color: var(--signal-warning);
+  border-color: color-mix(in srgb, var(--signal-warning) 45%, var(--border));
+}
+
 .workload-history-loading,
 .workload-history-empty {
   min-height: 44px;
@@ -841,6 +846,7 @@
 .workload-check {
   display: inline-flex;
   align-items: center;
+  gap: var(--space-1);
   min-height: 22px;
   padding: 2px var(--space-2);
   border: 1px solid var(--border);
@@ -849,6 +855,57 @@
   color: var(--text-secondary);
   font-family: var(--font-code);
   font-size: var(--text-2xs);
+}
+
+.workload-variant.ok {
+  color: var(--signal-success);
+  border-color: color-mix(in srgb, var(--signal-success) 45%, var(--border));
+}
+
+.workload-variant.timeout {
+  color: var(--signal-warning);
+  border-color: color-mix(in srgb, var(--signal-warning) 45%, var(--border));
+}
+
+.workload-variant.fail {
+  color: var(--signal-critical);
+  border-color: color-mix(in srgb, var(--signal-critical) 45%, var(--border));
+}
+
+.workload-variant-state {
+  padding-left: var(--space-1);
+  border-left: 1px solid currentColor;
+  font-size: var(--text-2xs);
+  opacity: 0.85;
+}
+
+.workload-run-diagnostics {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.workload-run-diagnostic {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--elevated);
+  font-family: var(--font-code);
+  font-size: var(--text-2xs);
+}
+
+.workload-run-diagnostic.timeout {
+  color: var(--signal-warning);
+  border-color: color-mix(in srgb, var(--signal-warning) 45%, var(--border));
+}
+
+.workload-run-diagnostic.fail {
+  color: var(--signal-critical);
+  border-color: color-mix(in srgb, var(--signal-critical) 45%, var(--border));
 }
 
 .workload-row-actions {

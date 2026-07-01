@@ -295,6 +295,90 @@ async function verifyWorkloadCatalogControls(url) {
       },
     ],
   }
+  const mockVerification = {
+    ok: false,
+    summary: {
+      ok: false,
+      workloads: 3,
+      passed: 2,
+      failed: 2,
+      durationMs: 7300,
+    },
+    workloads: [
+      {
+        id: 'conv2d-intel14',
+        description: 'Direct versus tiled Conv2D locality on Intel 14th Gen.',
+        ok: true,
+        durationMs: 4200,
+        variants: {
+          direct: { ok: true, durationMs: 1800 },
+          tiled: { ok: true, durationMs: 2400 },
+        },
+        checks: [
+          {
+            metric: 'l2.hitRate',
+            relationship: 'tiled > direct',
+            leftVariant: 'tiled',
+            rightVariant: 'direct',
+            operator: '>',
+            leftValue: 0.94,
+            rightValue: 0.72,
+            passed: true,
+          },
+        ],
+      },
+      {
+        id: 'prefetch-stream-intel',
+        description: 'Sequential scan with stream prefetching enabled.',
+        ok: false,
+        durationMs: 1900,
+        variants: {
+          'prefetch-off': { ok: true, durationMs: 700 },
+          'prefetch-stream': {
+            ok: false,
+            durationMs: 1200,
+            timeout: true,
+            error: 'cache-explore timed out after 1200ms',
+          },
+        },
+        checks: [
+          {
+            metric: 'estimatedCycles',
+            relationship: 'prefetch-stream < prefetch-off',
+            leftVariant: 'prefetch-stream',
+            rightVariant: 'prefetch-off',
+            operator: '<',
+            leftValue: 0,
+            rightValue: 0,
+            passed: false,
+            error: 'relationship values unavailable because a variant timed out',
+          },
+        ],
+      },
+      {
+        id: 'hash-probe-zen4',
+        description: 'Hash-table probe pattern on Zen 4.',
+        ok: true,
+        durationMs: 1200,
+        variants: {
+          linear: { ok: true, durationMs: 600 },
+          quadratic: { ok: true, durationMs: 600 },
+        },
+        checks: [
+          {
+            metric: 'l1d.misses',
+            relationship: 'linear < quadratic',
+            leftVariant: 'linear',
+            rightVariant: 'quadratic',
+            operator: '<',
+            leftValue: 100,
+            rightValue: 200,
+            passed: true,
+          },
+        ],
+      },
+    ],
+  }
 
   await page.route('**/api/workloads', route => route.fulfill({
     status: 200,
@@ -305,6 +389,11 @@ async function verifyWorkloadCatalogControls(url) {
     status: 200,
     contentType: 'application/json',
     body: JSON.stringify(mockHistory),
+  }))
+  await page.route('**/api/workloads/verify', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify(mockVerification),
   }))
 
   await page.setViewportSize({ width: 1280, height: 720 })
@@ -319,6 +408,13 @@ async function verifyWorkloadCatalogControls(url) {
   await assertVisible(page.getByText('-600ms', { exact: true }).first(), 'history improvement delta')
   await assertVisible(workloadName('conv2d-intel14'), 'conv2d workload row')
   await assertVisible(page.getByText('3 / 3', { exact: true }), 'workload result count')
+
+  await page.getByRole('button', { name: 'Verify' }).click()
+  await assertVisible(page.getByText('2 passed / 2 failed', { exact: true }), 'verification summary chip')
+  const timeoutRow = page.locator('.workload-row').filter({ hasText: 'prefetch-stream-intel' })
+  await assertVisible(timeoutRow.getByText('Timed out', { exact: true }), 'timed out workload status')
+  await assertVisible(timeoutRow.getByText('Timed out: prefetch-stream', { exact: true }), 'timed out workload diagnostic')
+  await assertVisible(timeoutRow.getByText('timeout', { exact: true }), 'timed out variant chip')
 
   await page.getByLabel('Search workloads').fill('prefetch')
   await assertVisible(workloadName('prefetch-stream-intel'), 'searched workload row')
@@ -337,6 +433,7 @@ async function verifyWorkloadCatalogControls(url) {
 
   await page.getByLabel('Sort workloads').selectOption('variants')
   await closeModal()
+  await page.unroute('**/api/workloads/verify')
   await page.unroute('**/api/workloads/history')
   await page.unroute('**/api/workloads')
 }
