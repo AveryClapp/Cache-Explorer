@@ -45,7 +45,7 @@ Runs `cache-explore workloads --verify --json` against benchmark snapshots from 
 - Vector/SIMD, memory intrinsic, and atomic builtin advanced stats remain observable
   through product workload verification
 
-These snapshots are executable benchmark metadata: example path, config, optimization level, variants, metric relationships, timing, and result provenance live together.
+These snapshots are executable benchmark metadata: example path, config, optimization level, variants, metric relationships, stable manifest/source hashes, timing, and result provenance live together.
 The suite also validates that the generated history artifact can render a standalone HTML trend report for CI downloads.
 
 ### 5. Structured Experiments (`test-structured-experiment.sh`)

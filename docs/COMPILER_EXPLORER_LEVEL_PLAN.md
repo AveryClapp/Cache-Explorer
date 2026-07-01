@@ -23,6 +23,8 @@ Already in place:
   with search, status filtering, hardware-target filtering, and sorting.
 - Workload-driven experiments for same-source define variants and per-variant
   source comparisons.
+- Workload snapshots include stable manifest and source-file hashes in catalog,
+  verification, and history outputs.
 - Workload verification can emit compact benchmark-history JSON artifacts and
   standalone HTML trend reports in CI.
 - Workload verification covers branch behavior, prefetch policy, vector/SIMD
@@ -35,8 +37,8 @@ Already in place:
 
 Known gaps:
 
-- Workload catalog still needs hashing and threaded real-world kernels before
-  it can act as a broad regression corpus.
+- Workload catalog still needs threaded real-world kernels before it can act as
+  a broad regression corpus.
 - There is no hosted persistent regression dashboard beyond downloadable CI
   trend reports.
 - Deployment/package polish still needs hosted-release and container hardening
@@ -57,6 +59,8 @@ Known gaps:
 ### 2. Executable Workload Catalog
 
 - Workload metadata supports same-source and per-variant-source comparisons.
+- Workload metadata includes stable manifest/source hashes for reproducible
+  catalog identity.
 - The catalog covers locality, layout, image stencils, prefetch, tiling,
   pointer chasing, branch behavior, vector/memcpy/atomic instrumentation, and
   hardware-profile-sensitive examples.

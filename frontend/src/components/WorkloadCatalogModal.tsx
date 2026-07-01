@@ -29,6 +29,10 @@ function formatValue(value: number | undefined) {
   return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(3)
 }
 
+function shortDigest(value: string | undefined) {
+  return value ? value.slice(0, 12) : ''
+}
+
 function variantLabel(workload: WorkloadSnapshot, variant: WorkloadSnapshot['variants'][number]) {
   const details = [
     variant.prefetch ? `pf:${variant.prefetch}` : null,
@@ -45,6 +49,8 @@ function searchableText(workload: WorkloadSnapshot) {
     workload.config,
     workload.optLevel,
     workload.prefetch,
+    workload.identity?.manifestSha256,
+    ...Object.values(workload.identity?.sourceFiles || {}).map(file => file.sha256),
     ...workload.variants.flatMap(variant => [
       variant.id,
       variant.example,
@@ -255,6 +261,12 @@ export function WorkloadCatalogModal({
                       <span>{workload.optLevel || '-O0'}</span>
                       <span>{formatLimit(workload.limit)} events</span>
                       <span>{workload.variants.length} variants</span>
+                      {workload.identity?.manifestSha256 && (
+                        <span title={workload.identity.manifestSha256}>manifest {shortDigest(workload.identity.manifestSha256)}</span>
+                      )}
+                      {workload.identity?.sourceFiles[workload.example]?.sha256 && (
+                        <span title={workload.identity.sourceFiles[workload.example].sha256}>source {shortDigest(workload.identity.sourceFiles[workload.example].sha256)}</span>
+                      )}
                     </div>
                     <div className="workload-variants">
                       {workload.variants.map(variant => (

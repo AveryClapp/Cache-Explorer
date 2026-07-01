@@ -2,6 +2,7 @@
 
 const { mkdir, readdir, readFile, stat, writeFile } = require('fs/promises')
 const { spawnSync } = require('child_process')
+const { createHash } = require('crypto')
 const { dirname, join, resolve } = require('path')
 
 function usage() {
@@ -39,6 +40,55 @@ function projectRoot() {
   return dirname(dirname(scriptDir))
 }
 
+function sha256(value) {
+  return createHash('sha256').update(value).digest('hex')
+}
+
+function shortDigest(value) {
+  return value ? value.slice(0, 12) : '-'
+}
+
+async function fileIdentity(path, displayPath = path) {
+  const resolved = resolve(path)
+  try {
+    const [info, contents] = await Promise.all([
+      stat(resolved),
+      readFile(resolved),
+    ])
+    return {
+      path: displayPath,
+      exists: true,
+      sizeBytes: info.size,
+      mtimeMs: Math.trunc(info.mtimeMs),
+      sha256: sha256(contents),
+    }
+  } catch (error) {
+    return {
+      path: displayPath,
+      exists: false,
+      error: error.code || error.message,
+    }
+  }
+}
+
+async function workloadIdentity(workload, file, rawManifest) {
+  const root = projectRoot()
+  const sourcePaths = [...new Set([
+    workload.example,
+    ...(workload.variants || []).map(variant => variant.example || workload.example),
+  ].filter(Boolean))]
+  const sourceFiles = Object.fromEntries(await Promise.all(sourcePaths.map(async sourcePath => [
+    sourcePath,
+    await fileIdentity(join(root, sourcePath), sourcePath),
+  ])))
+
+  return {
+    manifestPath: file.replace(`${root}/`, ''),
+    manifestSha256: sha256(rawManifest),
+    sourceFiles,
+  }
+}
+
 async function loadWorkloads() {
   const catalogDir = join(projectRoot(), 'benchmarks', 'workloads')
   const entries = await readdir(catalogDir, { withFileTypes: true })
@@ -49,7 +99,9 @@ async function loadWorkloads() {
 
   const workloads = []
   for (const file of files) {
-    const workload = JSON.parse(await readFile(file, 'utf8'))
+    const rawManifest = await readFile(file, 'utf8')
+    const workload = JSON.parse(rawManifest)
+    workload.identity = await workloadIdentity(workload, file, rawManifest)
     workloads.push(workload)
   }
   return workloads
@@ -265,6 +317,7 @@ function verifyWorkload(workload) {
   return {
     id: workload.id,
     description: workload.description,
+    identity: workload.identity,
     ok: failedVariantCount === 0 && failedCheckCount === 0,
     durationMs: Date.now() - start,
     variants,
@@ -302,6 +355,7 @@ function historyRecord(summary, results) {
     summary,
     workloads: results.map(result => ({
       id: result.id,
+      identity: result.identity,
       ok: result.ok,
       durationMs: result.durationMs,
       checks: result.checks.map(check => ({
@@ -664,9 +718,10 @@ function printVerification(results) {
 }
 
 function printTable(workloads) {
-  const headers = ['ID', 'Example', 'Config', 'Limit', 'Variants', 'Relationships']
+  const headers = ['ID', 'Digest', 'Example', 'Config', 'Limit', 'Variants', 'Relationships']
   const rows = workloads.map(workload => [
     workload.id,
+    shortDigest(workload.identity?.manifestSha256),
     workload.example,
     workload.config,
     String(workload.limit || 'full'),

@@ -549,9 +549,25 @@ export interface WorkloadRelationship {
   lastObserved?: Record<string, number>
 }
 
+export interface WorkloadFileIdentity {
+  path: string
+  exists: boolean
+  sizeBytes?: number
+  mtimeMs?: number
+  sha256?: string
+  error?: string
+}
+
+export interface WorkloadIdentity {
+  manifestPath: string
+  manifestSha256: string
+  sourceFiles: Record<string, WorkloadFileIdentity>
+}
+
 export interface WorkloadSnapshot {
   id: string
   description: string
+  identity?: WorkloadIdentity
   example: string
   language?: Language
   optLevel?: string
@@ -590,6 +606,7 @@ export interface WorkloadVerificationRun {
 export interface WorkloadVerificationResult {
   id: string
   description: string
+  identity?: WorkloadIdentity
   ok: boolean
   durationMs: number
   variants: Record<string, WorkloadVerificationRun>

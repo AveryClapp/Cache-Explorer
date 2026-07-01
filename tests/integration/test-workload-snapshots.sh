@@ -48,6 +48,8 @@ fi
 echo -n "Test: conv2d-intel14 relationship checks remain covered... "
 if echo "$OUTPUT" | jq -e '
   any(.workloads[]; .id == "conv2d-intel14"
+    and .identity.manifestSha256
+    and .identity.sourceFiles["examples/conv2d_kernel.c"].sha256
     and (.checks | length) >= 2
     and all(.checks[]; .passed == true)
     and .variants.direct.provenance.toolchain.simulator.sha256
@@ -98,7 +100,11 @@ if jq -e '
   and .summary.failed == 0
   and .summary.passed >= 1
   and (.workloads | length) >= 1
-  and all(.workloads[]; .id and (.durationMs >= 0) and (.variants | type == "object"))
+  and all(.workloads[]; .id
+    and .identity.manifestSha256
+    and (.identity.sourceFiles | type == "object")
+    and (.durationMs >= 0)
+    and (.variants | type == "object"))
 ' "$HISTORY_FILE" > /dev/null; then
   echo "PASS"
 else
