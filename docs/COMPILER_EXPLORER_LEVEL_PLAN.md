@@ -16,11 +16,14 @@ Already in place:
   fidelity settings.
 - Result Fidelity surfaces the hardware model contract as modeled, estimated,
   metadata-only, and unsupported buckets directly in the result panel.
+- Result Fidelity remains visible for legacy or partial results that lack
+  provenance, showing unknown fields instead of hiding the trust boundary.
 - Copyable local repro commands from result provenance.
 - Golden kernel tests, workload snapshot verification, profile drift checks,
   frontend build/browser smoke coverage, and server tests in CI.
 - Browser smoke covers launch paths, workload catalog controls, workload history
-  surfacing, result-bearing trust UI, and share short-link roundtrips.
+  surfacing, result-bearing trust UI, legacy trust fallbacks, dirty socket
+  recovery, and share short-link roundtrips.
 - Share links that preserve multi-file projects, active/main file identity, run
   settings, and experiment setup.
 - Verified workload browser in the app, backed by product-facing workload APIs,
@@ -45,6 +48,8 @@ Already in place:
   false-sharing stress manifest remains excluded from default CI verification.
 - The workload catalog exposes stress workloads through an explicit opt-in
   toggle and carries the same opt-in through product verification requests.
+- Stress workload verification from the UI sends a bounded per-variant timeout
+  with the opt-in request so known-heavy threaded checks fail clearly.
 - Workload catalog and verification API errors include structured details,
   timeout state, exit codes, and truncated subprocess diagnostics when available.
 - Workload verification has a bounded per-variant timeout so stress workloads
@@ -55,6 +60,10 @@ Already in place:
   install npm dependencies, and start backend/frontend together.
 - Optional Vim editor mode is lazy-loaded so the main app bundle avoids that
   non-default editor-mode payload.
+- Product modals are lazy-loaded, keeping the first-load workbench chunk under
+  the enforced frontend bundle budget.
+- Frontend CI checks the built bundle budget after Vite build, tracking the main
+  app chunk, Monaco chunk, and lazy product modal chunks separately.
 - Docker deployment proxies the product API surface and exposes backend/frontend
   health checks.
 - Releases publish LLVM pass checksums and the download helper verifies them
