@@ -165,6 +165,7 @@ export function FileManager({
                 className="tab-close"
                 onClick={(e) => handleTabClose(e, file.id)}
                 title="Close file"
+                aria-label={`Close file ${file.name}`}
               >
                 ×
               </button>
@@ -193,6 +194,7 @@ export function FileManager({
             className="tab-add-btn"
             onClick={() => setIsCreating(true)}
             title="Add new file (Ctrl+N)"
+            aria-label="Add new file"
           >
             +
           </button>

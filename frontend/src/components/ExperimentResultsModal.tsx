@@ -99,21 +99,27 @@ export function ExperimentResultsModal({
 
   return (
     <div className="batch-modal-overlay" onClick={() => !running && onClose()}>
-      <div className="batch-modal experiment-modal" onClick={event => event.stopPropagation()}>
+      <div
+        className="batch-modal experiment-modal"
+        onClick={event => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="hardware-experiment-title"
+      >
         <div className="batch-modal-header">
-          <span className="batch-modal-title">Hardware Experiment</span>
+          <span className="batch-modal-title" id="hardware-experiment-title">Hardware Experiment</span>
           <div className="batch-modal-header-actions">
             {onExportCSV && (
-              <button className="btn" onClick={onExportCSV} disabled={!result}>
+              <button className="btn" onClick={onExportCSV} disabled={!result} aria-label="Export hardware experiment as CSV">
                 Export CSV
               </button>
             )}
             {onExportJSON && (
-              <button className="btn" onClick={onExportJSON} disabled={!result}>
+              <button className="btn" onClick={onExportJSON} disabled={!result} aria-label="Export hardware experiment as JSON">
                 Export JSON
               </button>
             )}
-            <button className="batch-modal-close" onClick={onClose}>×</button>
+            <button className="batch-modal-close" onClick={onClose} aria-label="Close hardware experiment">×</button>
           </div>
         </div>
         <div className="batch-modal-content">
@@ -121,7 +127,11 @@ export function ExperimentResultsModal({
             <div className="experiment-template-bar">
               <label className="experiment-field experiment-template-field">
                 <span>Template</span>
-                <select value={selectedTemplateId} onChange={event => onTemplateChange(event.target.value)}>
+                <select
+                  value={selectedTemplateId}
+                  onChange={event => onTemplateChange(event.target.value)}
+                  aria-label="Experiment template"
+                >
                   {templates.map(template => (
                     <option value={template.id} key={template.id}>{template.name}</option>
                   ))}
@@ -152,6 +162,7 @@ export function ExperimentResultsModal({
                 onChange={event => onVariantsTextChange(event.target.value)}
                 spellCheck={false}
                 rows={3}
+                aria-label="Experiment variants"
               />
             </label>
             <div className="experiment-field experiment-hardware-field">
@@ -167,7 +178,7 @@ export function ExperimentResultsModal({
             </button>
           </div>
 
-          {error && <div className="experiment-error">{error}</div>}
+          {error && <div className="experiment-error" role="alert">{error}</div>}
 
           {running && (
             <div className="batch-loading">

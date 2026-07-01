@@ -42,14 +42,19 @@ export function ErrorDisplay({ error }: ErrorDisplayProps) {
   }
 
   return (
-    <div className="error-box">
+    <div className="error-box" role="alert" aria-live="assertive">
       <div className="error-header">
         <div className="error-heading">
           <span className="error-icon">{icons[error.type] || '\u2717'}</span>
           <span className="error-title">{titles[error.type] || 'Error'}</span>
           {error.summary && <span className="error-summary">{error.summary}</span>}
         </div>
-        <button className="error-copy" onClick={copyDiagnostics} title="Copy diagnostics">
+        <button
+          className="error-copy"
+          onClick={copyDiagnostics}
+          title="Copy diagnostics"
+          aria-label="Copy error diagnostics"
+        >
           {copied ? 'Copied' : 'Copy Diagnostics'}
         </button>
       </div>

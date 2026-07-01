@@ -146,6 +146,7 @@ export function Header({
               className="diff-mode-exit"
               onClick={() => onSetDiffMode(false)}
               title="Exit diff mode"
+              aria-label="Exit diff mode"
             >
               ×
             </button>
@@ -158,6 +159,7 @@ export function Header({
           className="btn-icon"
           onClick={onToggleTheme}
           title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
         >
           {theme === "dark" ? "☀" : "☾"}
         </button>
@@ -235,6 +237,7 @@ export function Header({
             onClick={onClearBaseline}
             className="btn-icon btn-clear-baseline"
             title="Clear baseline"
+            aria-label="Clear comparison baseline"
           >
             ×
           </button>
@@ -245,13 +248,14 @@ export function Header({
             onClick={onCancel}
             className="btn-cancel"
             title="Cancel analysis"
+            aria-label="Cancel analysis"
           >
             <span className="btn-spinner" />
             {stageText[stage]}
             <span className="cancel-x">×</span>
           </button>
         ) : (
-          <button onClick={onRun} className="btn-primary">
+          <button onClick={onRun} className="btn-primary" aria-label="Execute analysis">
             Execute
           </button>
         )}

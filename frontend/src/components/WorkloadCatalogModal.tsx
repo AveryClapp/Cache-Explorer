@@ -224,28 +224,44 @@ export function WorkloadCatalogModal({
 
   return (
     <div className="batch-modal-overlay" onClick={() => !verifying && onClose()}>
-      <div className="batch-modal workload-modal" onClick={event => event.stopPropagation()}>
+      <div
+        className="batch-modal workload-modal"
+        onClick={event => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="verified-workloads-title"
+      >
         <div className="batch-modal-header">
-          <span className="batch-modal-title">Verified Workloads</span>
+          <span className="batch-modal-title" id="verified-workloads-title">Verified Workloads</span>
           <div className="batch-modal-header-actions">
             {verification && (
               <span className={`workload-summary-chip ${verification.ok ? 'ok' : 'fail'}`}>
                 {verification.summary.passed} passed / {verification.summary.failed} failed
               </span>
             )}
-            <button className="btn" onClick={() => onVerify(includeStress)} disabled={loading || verifying || !hasWorkloads}>
+            <button
+              className="btn"
+              onClick={() => onVerify(includeStress)}
+              disabled={loading || verifying || !hasWorkloads}
+              aria-label={includeStress ? 'Verify workloads including stress cases' : 'Verify workloads without stress cases'}
+            >
               {verifying ? 'Verifying...' : 'Verify'}
             </button>
-            <button className="btn" onClick={onRefresh} disabled={loading || verifying}>Refresh</button>
-            <button className="btn" onClick={onRefreshHistory} disabled={historyLoading}>
+            <button className="btn" onClick={onRefresh} disabled={loading || verifying} aria-label="Refresh workload catalog">Refresh</button>
+            <button
+              className="btn"
+              onClick={onRefreshHistory}
+              disabled={historyLoading}
+              aria-label="Refresh published workload history"
+            >
               {historyLoading ? 'History...' : 'History'}
             </button>
-            <button className="batch-modal-close" onClick={onClose}>×</button>
+            <button className="batch-modal-close" onClick={onClose} aria-label="Close verified workloads">×</button>
           </div>
         </div>
         <div className="batch-modal-content workload-modal-content">
-          {error && <div className="experiment-error">{error}</div>}
-          {historyError && <div className="experiment-error">History unavailable: {historyError}</div>}
+          {error && <div className="experiment-error" role="alert">{error}</div>}
+          {historyError && <div className="experiment-error" role="alert">History unavailable: {historyError}</div>}
           {historyLoading && (
             <div className="workload-history-loading">
               <span className="loading-spinner" />
@@ -348,6 +364,7 @@ export function WorkloadCatalogModal({
                     className={`workload-filter-button ${statusFilter === value ? 'active' : ''}`}
                     type="button"
                     onClick={() => setStatusFilter(value)}
+                    aria-pressed={statusFilter === value}
                   >
                     {label}
                   </button>
@@ -511,7 +528,11 @@ export function WorkloadCatalogModal({
                         {formatSignedDuration(delta.deltaMs)}
                       </span>
                     )}
-                    <button className="btn" onClick={() => onLoadWorkload(workload)}>
+                    <button
+                      className="btn"
+                      onClick={() => onLoadWorkload(workload)}
+                      aria-label={`Open experiment for workload ${workload.id}`}
+                    >
                       Experiment
                     </button>
                   </div>

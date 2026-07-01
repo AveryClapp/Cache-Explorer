@@ -38,7 +38,7 @@ export function ResultProvenancePanel({ result }: ResultProvenancePanelProps) {
   return (
     <div className="panel result-provenance-panel">
       <div className="panel-header">
-        <span className="panel-title">Result Fidelity</span>
+        <span className="panel-title">Evidence & Fidelity</span>
         <span className={`provenance-chip ${provenanceClass(provenance)}`}>
           {formatTrustLabel(provenance)}
         </span>
@@ -50,11 +50,11 @@ export function ResultProvenancePanel({ result }: ResultProvenancePanelProps) {
             <span className="provenance-value">{formatHardwareLabel(provenance)}</span>
           </div>
           <div className="provenance-item">
-            <span className="provenance-label">Trace</span>
+            <span className="provenance-label">Fidelity</span>
             <span className="provenance-value">{formatFidelity(provenance)}</span>
           </div>
           <div className="provenance-item">
-            <span className="provenance-label">Confidence</span>
+            <span className="provenance-label">Model</span>
             <span className="provenance-value">{formatConfidence(provenance)}</span>
           </div>
           <div className="provenance-item">
@@ -78,7 +78,7 @@ export function ResultProvenancePanel({ result }: ResultProvenancePanelProps) {
           </div>
         </div>
         {caveats.length > 0 && (
-          <div className="provenance-caveats">
+          <div className="provenance-caveats" aria-label="Result caveats">
             {caveats.map(caveat => (
               <span key={caveat}>{caveat}</span>
             ))}
@@ -104,8 +104,14 @@ export function ResultProvenancePanel({ result }: ResultProvenancePanelProps) {
         {reproCommand && (
           <div className="provenance-repro">
             <div className="provenance-repro-header">
-              <span className="provenance-label">Repro Command</span>
-              <button type="button" className="provenance-copy" onClick={copyReproCommand}>
+              <span className="provenance-label">Local Repro Command</span>
+              <button
+                type="button"
+                className="provenance-copy"
+                onClick={copyReproCommand}
+                aria-label="Copy local reproduction command"
+                title="Copy local reproduction command"
+              >
                 {copiedCommand ? 'Copied' : 'Copy'}
               </button>
             </div>

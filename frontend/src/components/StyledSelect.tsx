@@ -90,6 +90,8 @@ export function StyledSelect({
                   className={`styled-select-option ${option.value === value ? 'selected' : ''} ${idx === highlightedIndex ? 'highlighted' : ''}`}
                   onClick={() => { onChange(option.value); setIsOpen(false) }}
                   onMouseEnter={() => setHighlightedIndex(idx)}
+                  role="option"
+                  aria-selected={option.value === value}
                 >
                   {option.value === value && <span className="check-mark">✓</span>}
                   <span className="option-content">
@@ -109,6 +111,8 @@ export function StyledSelect({
         className={`styled-select-option ${option.value === value ? 'selected' : ''} ${idx === highlightedIndex ? 'highlighted' : ''}`}
         onClick={() => { onChange(option.value); setIsOpen(false) }}
         onMouseEnter={() => setHighlightedIndex(idx)}
+        role="option"
+        aria-selected={option.value === value}
       >
         {option.value === value && <span className="check-mark">✓</span>}
         <span className="option-content">
@@ -125,13 +129,17 @@ export function StyledSelect({
       className={`styled-select ${isOpen ? 'open' : ''}`}
       tabIndex={0}
       onKeyDown={handleKeyDown}
+      role="combobox"
+      aria-expanded={isOpen}
+      aria-haspopup="listbox"
+      aria-label={placeholder}
     >
       <div className="styled-select-trigger" onClick={() => setIsOpen(!isOpen)}>
         <span className="styled-select-value">{selectedOption?.label || placeholder}</span>
         <span className="styled-select-arrow">{isOpen ? '▲' : '▼'}</span>
       </div>
       {isOpen && (
-        <div ref={listRef} className="styled-select-dropdown">
+        <div ref={listRef} className="styled-select-dropdown" role="listbox">
           {renderOptions()}
         </div>
       )}

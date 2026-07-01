@@ -149,6 +149,7 @@ export function SettingsToolbar({
             className={`toolbar-toggle ${cacheSegments ? 'active' : ''}`}
             onClick={() => onCacheSegmentsChange(!cacheSegments)}
             title="Cache repeated loop segments — speeds up programs with tight loops (experimental)"
+            aria-pressed={cacheSegments}
           >
             ↺ Loop cache
           </button>
@@ -199,6 +200,7 @@ export function SettingsToolbar({
                   setCustomLimitText('')
                 }}
                 className="define-input custom-limit"
+                aria-label="Custom event limit"
               />
             </div>
           ) : (
@@ -224,13 +226,15 @@ export function SettingsToolbar({
           className={`toolbar-more ${showMore ? 'active' : ''}`}
           onClick={() => setShowMore(!showMore)}
           title="More options"
+          aria-expanded={showMore}
+          aria-controls="settings-toolbar-advanced"
         >
           {showMore ? '▲ Less' : '▼ More'}
         </button>
       </div>
 
       {showMore && (
-        <div className="settings-toolbar-advanced">
+        <div className="settings-toolbar-advanced" id="settings-toolbar-advanced">
           <div className="toolbar-advanced-section">
             <span className="toolbar-advanced-label">Defines:</span>
             <div className="toolbar-defines">
@@ -256,6 +260,7 @@ export function SettingsToolbar({
                           onDefinesChange(newDefs)
                         }}
                         className="define-input name"
+                        aria-label={`Define ${i + 1} name`}
                       />
                       <span className="define-eq">=</span>
                       <input
@@ -268,11 +273,13 @@ export function SettingsToolbar({
                           onDefinesChange(newDefs)
                         }}
                         className="define-input value"
+                        aria-label={`Define ${i + 1} value`}
                       />
                       <button
                         className="define-remove"
                         onClick={() => onDefinesChange(defines.filter((_, j) => j !== i))}
                         title="Remove define"
+                        aria-label={`Remove define ${def.name || i + 1}`}
                       >×</button>
                     </div>
                   ))}

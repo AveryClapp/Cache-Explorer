@@ -86,15 +86,15 @@ export function ResultsPanel({
         <div className="results-actions">
           {result && (
             <>
-              <button className="btn btn-small" onClick={onExportJSON} title="Download JSON">
+              <button className="btn btn-small" onClick={onExportJSON} title="Download JSON" aria-label="Download result JSON">
                 JSON
               </button>
-              <button className="btn btn-small" onClick={onExportCSV} title="Download CSV">
+              <button className="btn btn-small" onClick={onExportCSV} title="Download CSV" aria-label="Download result CSV">
                 CSV
               </button>
             </>
           )}
-          <button className="btn btn-small" onClick={onShare} title="Copy link">
+          <button className="btn btn-small" onClick={onShare} title="Copy link" aria-label="Copy share link">
             {copied ? 'Copied!' : 'Share'}
           </button>
         </div>
@@ -138,13 +138,18 @@ export function ResultsPanel({
 
             {/* Toggle Buttons */}
             <div className="toggle-buttons" style={{ margin: 'var(--space-4) 0' }}>
-              <button className={`btn ${showDetails ? 'active' : ''}`} onClick={onToggleDetails}>
+              <button
+                className={`btn ${showDetails ? 'active' : ''}`}
+                onClick={onToggleDetails}
+                aria-expanded={showDetails}
+                aria-controls="result-detail-sections"
+              >
                 {showDetails ? '▼ Details' : '▶ Details'}
               </button>
             </div>
 
             {showDetails && (
-              <>
+              <div id="result-detail-sections">
                 <div className="details-grid">
                   <LevelDetail name="L1 Data" stats={result.levels.l1d || result.levels.l1!} />
                   {result.levels.l1i && <LevelDetail name="L1 Instruction" stats={result.levels.l1i} />}
@@ -157,7 +162,7 @@ export function ResultsPanel({
                     <TLBDetail name="Instruction TLB" stats={result.tlb.itlb} />
                   </div>
                 )}
-              </>
+              </div>
             )}
 
             {result.coherence && result.coherence.falseSharingEvents > 0 && (

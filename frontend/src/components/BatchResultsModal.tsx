@@ -47,21 +47,27 @@ export function BatchResultsModal({ results, error, running, total, onExportCSV,
 
   return (
     <div className="batch-modal-overlay" onClick={() => !running && onClose()}>
-      <div className="batch-modal" onClick={e => e.stopPropagation()}>
+      <div
+        className="batch-modal"
+        onClick={e => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="hardware-comparison-title"
+      >
         <div className="batch-modal-header">
-          <span className="batch-modal-title">Hardware Comparison</span>
+          <span className="batch-modal-title" id="hardware-comparison-title">Hardware Comparison</span>
           <div className="batch-modal-header-actions">
             {onExportCSV && (
-              <button className="btn" onClick={onExportCSV} disabled={results.length === 0}>
+              <button className="btn" onClick={onExportCSV} disabled={results.length === 0} aria-label="Export hardware comparison as CSV">
                 Export CSV
               </button>
             )}
             {onExportJSON && (
-              <button className="btn" onClick={onExportJSON} disabled={results.length === 0}>
+              <button className="btn" onClick={onExportJSON} disabled={results.length === 0} aria-label="Export hardware comparison as JSON">
                 Export JSON
               </button>
             )}
-            <button className="batch-modal-close" onClick={onClose}>×</button>
+            <button className="batch-modal-close" onClick={onClose} aria-label="Close hardware comparison">×</button>
           </div>
         </div>
         <div className="batch-modal-content">
