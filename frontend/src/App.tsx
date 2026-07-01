@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { lazy, Suspense, useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import type { Monaco } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import './styles/index.css'
@@ -6,13 +6,8 @@ import './styles/index.css'
 // Components
 import {
   Header,
-  CommandPalette,
   SettingsToolbar,
   ExamplesSidebar,
-  BatchResultsModal,
-  ExperimentResultsModal,
-  HardwareExplorerModal,
-  WorkloadCatalogModal,
   ResultsPanel,
   EditorPanel,
 } from './components'
@@ -71,6 +66,12 @@ import {
   exportExperimentAsCSV,
   exportExperimentAsJSON,
 } from './utils/export'
+
+const CommandPalette = lazy(() => import('./components/CommandPalette').then(module => ({ default: module.CommandPalette })))
+const BatchResultsModal = lazy(() => import('./components/BatchResultsModal').then(module => ({ default: module.BatchResultsModal })))
+const ExperimentResultsModal = lazy(() => import('./components/ExperimentResultsModal').then(module => ({ default: module.ExperimentResultsModal })))
+const HardwareExplorerModal = lazy(() => import('./components/HardwareExplorerModal').then(module => ({ default: module.HardwareExplorerModal })))
+const WorkloadCatalogModal = lazy(() => import('./components/WorkloadCatalogModal').then(module => ({ default: module.WorkloadCatalogModal })))
 
 function annotationClass(annotation: SourceAnnotation) {
   return `hw-${annotation.subsystem} ${annotation.severity}`
@@ -1290,93 +1291,103 @@ function App() {
   return (
     <div className={`app${isEmbedMode ? ' embed' : ''}`}>
       {/* Command Palette - hidden in embed mode */}
-      {!isEmbedMode && (
-        <CommandPalette
-          isOpen={showCommandPalette}
-          query={commandQuery}
-          selectedIndex={selectedCommandIndex}
-          onQueryChange={setCommandQuery}
-          onSelect={handleCommandSelect}
-          onClose={() => setShowCommandPalette(false)}
-          onNavigate={handleCommandNavigate}
-          inputRef={commandInputRef}
-          commands={commands}
-        />
+      {!isEmbedMode && showCommandPalette && (
+        <Suspense fallback={null}>
+          <CommandPalette
+            isOpen={showCommandPalette}
+            query={commandQuery}
+            selectedIndex={selectedCommandIndex}
+            onQueryChange={setCommandQuery}
+            onSelect={handleCommandSelect}
+            onClose={() => setShowCommandPalette(false)}
+            onNavigate={handleCommandNavigate}
+            inputRef={commandInputRef}
+            commands={commands}
+          />
+        </Suspense>
       )}
 
       {/* Batch Results Modal */}
       {showBatchModal && (
-        <BatchResultsModal
-          results={batchResults}
-          running={batchRunning}
-          total={batchTotal}
-          onExportCSV={() => exportBatchResultsAsCSV(batchResults)}
-          onExportJSON={() => exportBatchResultsAsJSON(batchResults)}
-          onClose={() => setShowBatchModal(false)}
-        />
+        <Suspense fallback={null}>
+          <BatchResultsModal
+            results={batchResults}
+            running={batchRunning}
+            total={batchTotal}
+            onExportCSV={() => exportBatchResultsAsCSV(batchResults)}
+            onExportJSON={() => exportBatchResultsAsJSON(batchResults)}
+            onClose={() => setShowBatchModal(false)}
+          />
+        </Suspense>
       )}
 
       {/* Hardware Experiment Modal */}
       {showExperimentModal && (
-        <ExperimentResultsModal
-          result={experimentResult}
-          running={experimentRunning}
-          error={experimentError}
-          variantsText={experimentVariants}
-          variantSourceLabel={experimentVariantSourceLabel}
-          hardwareConfigIds={hardwareConfigsOrDefault(runHardwareConfigIds)}
-          templates={EXPERIMENT_TEMPLATES}
-          selectedTemplateId={selectedExperimentTemplateId}
-          onVariantsTextChange={(value) => {
-            setExperimentVariants(value)
-            setExperimentVariantSources(null)
-            setExperimentVariantSourceLabel(null)
-          }}
-          onTemplateChange={setSelectedExperimentTemplateId}
-          onApplyTemplate={applyExperimentTemplate}
-          onRun={runExperimentAnalysis}
-          onExportCSV={() => experimentResult && exportExperimentAsCSV(experimentResult)}
-          onExportJSON={() => experimentResult && exportExperimentAsJSON(experimentResult)}
-          onClose={() => setShowExperimentModal(false)}
-        />
+        <Suspense fallback={null}>
+          <ExperimentResultsModal
+            result={experimentResult}
+            running={experimentRunning}
+            error={experimentError}
+            variantsText={experimentVariants}
+            variantSourceLabel={experimentVariantSourceLabel}
+            hardwareConfigIds={hardwareConfigsOrDefault(runHardwareConfigIds)}
+            templates={EXPERIMENT_TEMPLATES}
+            selectedTemplateId={selectedExperimentTemplateId}
+            onVariantsTextChange={(value) => {
+              setExperimentVariants(value)
+              setExperimentVariantSources(null)
+              setExperimentVariantSourceLabel(null)
+            }}
+            onTemplateChange={setSelectedExperimentTemplateId}
+            onApplyTemplate={applyExperimentTemplate}
+            onRun={runExperimentAnalysis}
+            onExportCSV={() => experimentResult && exportExperimentAsCSV(experimentResult)}
+            onExportJSON={() => experimentResult && exportExperimentAsJSON(experimentResult)}
+            onClose={() => setShowExperimentModal(false)}
+          />
+        </Suspense>
       )}
 
       {/* Hardware Explorer Modal */}
       {showHardwareExplorer && (
-        <HardwareExplorerModal
-          profiles={hardwareProfiles}
-          selectedId={selectedHardwareProfileId}
-          activeId={config}
-          runConfigIds={runHardwareConfigIds}
-          loading={hardwareProfilesLoading}
-          error={hardwareProfilesError}
-          onSelect={setSelectedHardwareProfileId}
-          onApply={applyHardwareProfile}
-          onToggleRunConfig={toggleRunHardwareConfig}
-          onCompareRunSet={compareHardwareRunSet}
-          onOpenExperiment={openExperimentFromExplorer}
-          onRefresh={loadHardwareProfiles}
-          onClose={() => setShowHardwareExplorer(false)}
-        />
+        <Suspense fallback={null}>
+          <HardwareExplorerModal
+            profiles={hardwareProfiles}
+            selectedId={selectedHardwareProfileId}
+            activeId={config}
+            runConfigIds={runHardwareConfigIds}
+            loading={hardwareProfilesLoading}
+            error={hardwareProfilesError}
+            onSelect={setSelectedHardwareProfileId}
+            onApply={applyHardwareProfile}
+            onToggleRunConfig={toggleRunHardwareConfig}
+            onCompareRunSet={compareHardwareRunSet}
+            onOpenExperiment={openExperimentFromExplorer}
+            onRefresh={loadHardwareProfiles}
+            onClose={() => setShowHardwareExplorer(false)}
+          />
+        </Suspense>
       )}
 
       {/* Verified Workloads Modal */}
       {showWorkloadCatalog && (
-        <WorkloadCatalogModal
-          workloads={workloads}
-          verification={workloadVerification}
-          history={workloadHistory}
-          loading={workloadsLoading}
-          verifying={workloadsVerifying}
-          error={workloadsError}
-          historyLoading={workloadHistoryLoading}
-          historyError={workloadHistoryError}
-          onRefresh={loadWorkloads}
-          onVerify={verifyWorkloads}
-          onRefreshHistory={loadWorkloadHistory}
-          onLoadWorkload={loadWorkload}
-          onClose={() => setShowWorkloadCatalog(false)}
-        />
+        <Suspense fallback={null}>
+          <WorkloadCatalogModal
+            workloads={workloads}
+            verification={workloadVerification}
+            history={workloadHistory}
+            loading={workloadsLoading}
+            verifying={workloadsVerifying}
+            error={workloadsError}
+            historyLoading={workloadHistoryLoading}
+            historyError={workloadHistoryError}
+            onRefresh={loadWorkloads}
+            onVerify={verifyWorkloads}
+            onRefreshHistory={loadWorkloadHistory}
+            onLoadWorkload={loadWorkload}
+            onClose={() => setShowWorkloadCatalog(false)}
+          />
+        </Suspense>
       )}
 
       {/* Header - hidden in embed mode */}
