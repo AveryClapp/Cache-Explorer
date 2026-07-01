@@ -8,6 +8,41 @@
   background: var(--void);
 }
 
+.environment-notices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-5);
+  background: rgba(220, 220, 170, 0.08);
+  border-bottom: 1px solid rgba(220, 220, 170, 0.22);
+  color: var(--signal-warning);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+
+.environment-notice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.environment-notice-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-family: var(--font-display);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    HEADER - Instrument Title Bar
    ══════════════════════════════════════════════════════════════════════════ */

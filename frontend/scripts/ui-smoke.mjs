@@ -11,14 +11,37 @@ const scriptDir = dirname(fileURLToPath(import.meta.url))
 const frontendDir = resolve(scriptDir, '..')
 const host = '127.0.0.1'
 const maxLayoutScrollDelta = 24
+const smokeTimeoutMs = Number(process.env.CACHE_EXPLORER_UI_SMOKE_TIMEOUT_MS || 180000)
 
 let previewProcess
 let browser
 let page
 let shuttingDown = false
+let currentStep = 'startup'
+let smokeTimer
 
 function assert(condition, message) {
   if (!condition) throw new Error(message)
+}
+
+function startSmokeTimeout() {
+  smokeTimer = setTimeout(() => {
+    console.error(`UI smoke timed out after ${smokeTimeoutMs}ms during "${currentStep}"`)
+    cleanup().finally(() => process.exit(1))
+  }, smokeTimeoutMs)
+  smokeTimer.unref?.()
+}
+
+function clearSmokeTimeout() {
+  if (smokeTimer) clearTimeout(smokeTimer)
+}
+
+async function runSmokeStep(label, action) {
+  currentStep = label
+  const startedAt = Date.now()
+  console.log(`[ui-smoke] ${label}`)
+  await action()
+  console.log(`[ui-smoke] ${label} ok (${Date.now() - startedAt}ms)`)
 }
 
 function commandPath(command) {
@@ -347,8 +370,26 @@ async function verifyShareRoundTrip(url) {
       { id: 'tuned', defines: ['N=64'] },
     ],
   }
+  const missingEnvironmentState = {
+    ...sharedState,
+    config: 'future-socket',
+    selectedCompiler: 'clang-missing',
+  }
   let shortenedState = null
 
+  await page.route('**/api/compilers', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        default: 'clang-21',
+        compilers: [
+          { id: 'clang-21', name: 'Clang', version: '21.0.0', major: 21, path: '/usr/bin/clang', source: 'mock', default: true },
+          { id: 'gcc-15', name: 'GCC', version: '15.0.0', major: 15, path: '/usr/bin/gcc', source: 'mock' },
+        ],
+      }),
+    })
+  })
   await page.route('**/shorten', async route => {
     shortenedState = route.request().postDataJSON().state
     await route.fulfill({
@@ -371,8 +412,26 @@ async function verifyShareRoundTrip(url) {
       body: JSON.stringify({ state: sharedState }),
     })
   })
+  await page.route('**/s/smoke-missing-environment', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ state: missingEnvironmentState }),
+    })
+  })
 
   await page.setViewportSize({ width: 1280, height: 720 })
+  await page.goto(`${url}?s=smoke-missing-environment`, { waitUntil: 'domcontentloaded' })
+  await assertVisible(page.getByText('Educational', { exact: true }), 'fallback hardware value')
+  await assertVisible(
+    page.getByText('Shared hardware profile "future-socket" is not available here; using educational.', { exact: true }),
+    'missing hardware notice',
+  )
+  await assertVisible(
+    page.getByText('Shared compiler "clang-missing" is not available here; using clang-21.', { exact: true }),
+    'missing compiler notice',
+  )
+
   await page.goto(`${url}?s=smoke-seed`, { waitUntil: 'domcontentloaded' })
   await assertVisible(page.getByText('Intel 14th Gen', { exact: true }), 'shared hardware value')
   await assertVisible(page.getByText('-O3', { exact: true }), 'shared optimization value')
@@ -412,6 +471,8 @@ async function verifyShareRoundTrip(url) {
   await page.unroute('**/shorten')
   await page.unroute('**/s/smoke-share')
   await page.unroute('**/s/smoke-seed')
+  await page.unroute('**/s/smoke-missing-environment')
+  await page.unroute('**/api/compilers')
 }
 
 function mockExperimentProvenance(profile) {
@@ -604,6 +665,7 @@ process.once('SIGINT', async () => {
 })
 
 try {
+  startSmokeTimeout()
   const executablePath = browserExecutable()
   assert(executablePath, 'No Chrome/Chromium executable found. Set CACHE_EXPLORER_BROWSER to a browser binary.')
 
@@ -630,10 +692,10 @@ try {
     })
   })
 
-  await verifyLaunchSurface(url)
-  await verifyWorkloadCatalogControls(url)
-  await verifyExperimentResults(url)
-  await verifyShareRoundTrip(url)
+  await runSmokeStep('launch surface', () => verifyLaunchSurface(url))
+  await runSmokeStep('workload catalog', () => verifyWorkloadCatalogControls(url))
+  await runSmokeStep('experiment results', () => verifyExperimentResults(url))
+  await runSmokeStep('share round trip', () => verifyShareRoundTrip(url))
   console.log(`UI smoke passed (${url})`)
 } catch (error) {
   if (page) {
@@ -642,5 +704,6 @@ try {
   console.error(error instanceof Error ? error.message : error)
   process.exitCode = 1
 } finally {
+  clearSmokeTimeout()
   await cleanup()
 }

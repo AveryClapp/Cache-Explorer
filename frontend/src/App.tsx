@@ -47,6 +47,7 @@ import {
   WS_URL,
   PREFETCH_DEFAULTS,
   CONFIG_NAMES,
+  HARDWARE_OPTIONS,
   defaultCustomConfig,
 } from './constants'
 
@@ -85,6 +86,7 @@ function annotationBadge(annotation: SourceAnnotation) {
 
 const BATCH_HARDWARE_CONFIGS = ['educational', 'intel', 'amd', 'apple']
 const HARDWARE_RUN_SET_STORAGE_KEY = 'cache-explorer-hardware-run-set'
+const HARDWARE_OPTION_VALUES = new Set(HARDWARE_OPTIONS.map(option => option.value))
 
 function hardwareConfigsOrDefault(configs: string[]) {
   return configs.length > 0 ? configs : BATCH_HARDWARE_CONFIGS
@@ -218,6 +220,9 @@ function App() {
   const [optLevel, setOptLevel] = useState('-O0')
   const [prefetchPolicy, setPrefetchPolicy] = useState<PrefetchPolicy>('none')
   const [selectedCompiler, setSelectedCompiler] = useState<string>('')
+  const [availableCompilers, setAvailableCompilers] = useState<string[]>([])
+  const [defaultCompilerId, setDefaultCompilerId] = useState<string>('')
+  const [environmentNotices, setEnvironmentNotices] = useState<string[]>([])
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('cache-explorer-theme')
@@ -348,6 +353,10 @@ function App() {
     localStorage.setItem(HARDWARE_RUN_SET_STORAGE_KEY, JSON.stringify(runHardwareConfigIds))
   }, [runHardwareConfigIds])
 
+  const addEnvironmentNotice = useCallback((notice: string) => {
+    setEnvironmentNotices(prev => prev.includes(notice) ? prev : [...prev, notice])
+  }, [])
+
   const targetSummary = useMemo(() => {
     const hardwareName = CONFIG_NAMES[config] || config
     const prefetchLabel = prefetchPolicy === 'none' ? 'no prefetch' : `${prefetchPolicy} prefetch`
@@ -360,16 +369,39 @@ function App() {
     fetch(`${API_BASE}/api/compilers`)
       .then(res => res.json())
       .then(data => {
-        if (data.default) {
-          setSelectedCompiler(prev => prev || data.default)
-        } else if (data.compilers && data.compilers.length > 0) {
-          setSelectedCompiler(prev => prev || data.compilers[0].id)
+        const compilerIds = Array.isArray(data.compilers)
+          ? data.compilers
+              .map((compiler: { id?: unknown }) => compiler.id)
+              .filter((id: unknown): id is string => typeof id === 'string' && id.length > 0)
+          : []
+        const fallbackCompiler = typeof data.default === 'string' && data.default.length > 0
+          ? data.default
+          : compilerIds[0] || ''
+
+        setAvailableCompilers(compilerIds)
+        if (fallbackCompiler) {
+          setDefaultCompilerId(fallbackCompiler)
+          setSelectedCompiler(prev => prev || fallbackCompiler)
         }
       })
       .catch(err => {
         console.warn('Failed to fetch compilers:', err)
       })
   }, [])
+
+  useEffect(() => {
+    if (!selectedCompiler || availableCompilers.length === 0) return
+    if (availableCompilers.includes(selectedCompiler)) return
+
+    const fallbackCompiler = defaultCompilerId && availableCompilers.includes(defaultCompilerId)
+      ? defaultCompilerId
+      : availableCompilers[0]
+    if (!fallbackCompiler || fallbackCompiler === selectedCompiler) return
+
+    const missingCompiler = selectedCompiler
+    setSelectedCompiler(fallbackCompiler)
+    addEnvironmentNotice(`Shared compiler "${missingCompiler}" is not available here; using ${fallbackCompiler}.`)
+  }, [addEnvironmentNotice, availableCompilers, defaultCompilerId, selectedCompiler])
 
   const toggleTheme = useCallback(() => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark')
@@ -472,7 +504,13 @@ function App() {
           setActiveFileId(newFile.id)
           setMainFileId(newFile.id)
         }
-        setConfig(state.config)
+        const restoredConfig = state.config || 'educational'
+        if (HARDWARE_OPTION_VALUES.has(restoredConfig)) {
+          setConfig(restoredConfig)
+        } else {
+          setConfig('educational')
+          addEnvironmentNotice(`Shared hardware profile "${restoredConfig}" is not available here; using educational.`)
+        }
         setOptLevel(state.optLevel)
         if (state.defines) setDefines(state.defines)
         if (state.prefetchPolicy) setPrefetchPolicy(state.prefetchPolicy)
@@ -509,7 +547,7 @@ function App() {
       }
     }
     loadState()
-  }, [])
+  }, [addEnvironmentNotice])
 
   // Update URL when state changes
   useEffect(() => {
@@ -1365,6 +1403,17 @@ function App() {
           onFastModeChange={setFastMode}
           onCacheSegmentsChange={setCacheSegments}
         />
+      )}
+
+      {environmentNotices.length > 0 && !isEmbedMode && (
+        <div className="environment-notices" role="status" aria-live="polite">
+          {environmentNotices.map(notice => (
+            <div className="environment-notice" key={notice}>
+              <span className="environment-notice-icon">!</span>
+              <span>{notice}</span>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Copied Toast */}
