@@ -23,12 +23,15 @@ Already in place:
 - Workload-driven experiments for same-source define variants and per-variant
   source comparisons.
 - Workload verification can emit compact benchmark-history JSON artifacts in CI.
+- Workload verification covers branch behavior, prefetch policy, vector/SIMD
+  stats, memory intrinsic stats, and atomic builtin stats.
 - Empty result state routes users into run, verified workload, and experiment
   flows.
 
 Known gaps:
 
-- Workload catalog is still too small to act as a broad regression corpus.
+- Workload catalog still needs more real-world kernels before it can act as a
+  broad regression corpus.
 - There is no hosted regression dashboard or trend UI for benchmark history.
 - Deployment/package polish is still developer-oriented.
 - Workload history trend surfacing, deeper onboarding, and error states need
@@ -48,8 +51,10 @@ Known gaps:
 
 - Workload metadata supports same-source and per-variant-source comparisons.
 - The catalog covers locality, layout, prefetch, tiling, pointer chasing,
-  false sharing, branch behavior, vector/memcpy/atomic instrumentation, and
+  branch behavior, vector/memcpy/atomic instrumentation, and
   hardware-profile-sensitive examples.
+- False-sharing/coherence workloads are present as examples, but still need a
+  compact always-on snapshot that finishes quickly enough for CI.
 - CI runs product-facing verification commands instead of private-only scripts.
 - Workload verifier emits structured JSON, human summaries, durations, and
   provenance for every variant.
@@ -98,8 +103,7 @@ Known gaps:
 
 ## Near-Term Leaps
 
-- Add false-sharing, branch-pattern, prefetch-policy, vector, memcpy, and atomic
-  workloads.
+- Add a compact false-sharing/coherence workload snapshot.
 - Publish or summarize CI benchmark-history artifacts.
 - Add a richer first-run/default workload path for new users.
 - Add browser-level regression coverage for workload browser and structured

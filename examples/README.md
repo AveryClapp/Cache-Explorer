@@ -30,6 +30,9 @@ A collection of C and C++ programs demonstrating various cache access patterns a
 | Loop Interchange | `loop_interchange.c` | - | Row vs column loop order | Row-major is cache-friendly |
 | Loop Fusion | `loop_fusion.c` | - | Combining multiple loops | Reduces cache traffic |
 | Cache Line Align | `cache_line_align.c` | - | Aligned data structures | Avoids split accesses |
+| Memory Intrinsics | `memory_intrinsics.c` | - | memset versus memcpy | Emits memory intrinsic stats |
+| Vector Width | `vector_width.c` | - | Vector extension versus scalar math | Emits SIMD load/store stats |
+| Atomic Builtin | `atomic_builtin.c` | - | Atomic builtins versus scalar access | Emits atomic operation stats |
 
 ## Execution Engine
 

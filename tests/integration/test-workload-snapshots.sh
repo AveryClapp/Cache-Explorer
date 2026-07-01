@@ -51,6 +51,22 @@ else
   exit 1
 fi
 
+echo -n "Test: advanced instrumentation workloads remain covered... "
+if echo "$OUTPUT" | jq -e '
+  (any(.workloads[]; .id == "memory-intrinsics-intel"
+    and all(.checks[]; .passed == true)))
+  and (any(.workloads[]; .id == "vector-width-intel"
+    and any(.checks[]; .metric == "advancedStats.vector.bytesLoaded" and .missingValue == 0 and .passed == true)))
+  and (any(.workloads[]; .id == "atomic-builtins-intel"
+    and any(.checks[]; .metric == "advancedStats.atomic.loads" and .missingValue == 0 and .passed == true)))
+' > /dev/null; then
+  echo "PASS"
+else
+  echo "FAIL"
+  echo "$OUTPUT" | jq .
+  exit 1
+fi
+
 echo -n "Test: workload verifier emits benchmark history artifact... "
 if jq -e '
   .schemaVersion == 1

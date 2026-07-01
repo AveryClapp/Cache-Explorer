@@ -1,0 +1,44 @@
+{
+  "id": "memory-intrinsics-intel",
+  "description": "Bulk memset-only initialization versus memset plus memcpy on the Intel profile.",
+  "example": "examples/memory_intrinsics.c",
+  "language": "c",
+  "optLevel": "-O2",
+  "config": "intel",
+  "limit": 20000,
+  "variants": [
+    {
+      "id": "fill"
+    },
+    {
+      "id": "copy",
+      "defines": ["RUN_COPY=1"]
+    }
+  ],
+  "expectedRelationships": [
+    {
+      "metric": "advancedStats.memoryIntrinsics.memcpyBytes",
+      "relationship": "copy > fill",
+      "lastObserved": {
+        "fill": 0,
+        "copy": 8192
+      }
+    },
+    {
+      "metric": "advancedStats.memoryIntrinsics.memsetCount",
+      "relationship": "fill > copy",
+      "lastObserved": {
+        "fill": 2,
+        "copy": 1
+      }
+    },
+    {
+      "metric": "timing.totalCycles",
+      "relationship": "copy > fill",
+      "lastObserved": {
+        "fill": 13880,
+        "copy": 19790
+      }
+    }
+  ]
+}

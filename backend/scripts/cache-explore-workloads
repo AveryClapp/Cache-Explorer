@@ -196,8 +196,11 @@ function evaluateRelationships(workload, variants) {
     const { leftVariant, operator, rightVariant } = parseRelationship(item.relationship)
     const left = variants[leftVariant]
     const right = variants[rightVariant]
-    const leftValue = left?.ok ? metricValue(left.result, item.metric) : undefined
-    const rightValue = right?.ok ? metricValue(right.result, item.metric) : undefined
+    const missingValue = typeof item.missingValue === 'number' ? item.missingValue : undefined
+    const leftRaw = left?.ok ? metricValue(left.result, item.metric) : undefined
+    const rightRaw = right?.ok ? metricValue(right.result, item.metric) : undefined
+    const leftValue = leftRaw ?? missingValue
+    const rightValue = rightRaw ?? missingValue
     const numeric = typeof leftValue === 'number' && typeof rightValue === 'number'
     const passed = numeric ? compareValues(leftValue, operator, rightValue) : false
 
@@ -210,6 +213,7 @@ function evaluateRelationships(workload, variants) {
       leftValue,
       rightValue,
       passed,
+      missingValue,
       error: numeric ? undefined : 'relationship values must be numeric',
     }
   })

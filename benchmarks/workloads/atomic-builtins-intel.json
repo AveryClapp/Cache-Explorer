@@ -1,0 +1,38 @@
+{
+  "id": "atomic-builtins-intel",
+  "description": "Compiler atomic builtins versus scalar loads/stores on the Intel profile.",
+  "example": "examples/atomic_builtin.c",
+  "language": "c",
+  "optLevel": "-O1",
+  "config": "intel",
+  "limit": 20000,
+  "variants": [
+    {
+      "id": "atomic"
+    },
+    {
+      "id": "scalar",
+      "defines": ["RUN_SCALAR=1"]
+    }
+  ],
+  "expectedRelationships": [
+    {
+      "metric": "advancedStats.atomic.loads",
+      "relationship": "atomic > scalar",
+      "missingValue": 0,
+      "lastObserved": {
+        "atomic": 256,
+        "scalar": 0
+      }
+    },
+    {
+      "metric": "advancedStats.atomic.rmw",
+      "relationship": "atomic > scalar",
+      "missingValue": 0,
+      "lastObserved": {
+        "atomic": 256,
+        "scalar": 0
+      }
+    }
+  ]
+}

@@ -42,6 +42,8 @@ Runs `cache-explore workloads --verify --json` against benchmark snapshots from 
 - Sequential array scanning has lower modeled average latency than pointer chasing
 - Intel stream prefetching reduces modeled cycles and L2 misses for a sequential scan
 - Alternating data branches cost more modeled execution cycles than a predictable loop branch
+- Vector/SIMD, memory intrinsic, and atomic builtin advanced stats remain observable
+  through product workload verification
 
 These snapshots are executable benchmark metadata: example path, config, optimization level, variants, metric relationships, timing, and result provenance live together.
 
@@ -156,9 +158,8 @@ Test Suites Failed: 0
 All tests passed!
 ```
 
-Individual test counts:
+Individual suite counts shift as workload coverage grows; current core counts:
 - Hardware Presets: 12 tests
 - Core Features: 13 tests
 - Golden Kernels: 3 tests
-- Workload Snapshots: 2 tests
-- **Total: 30 integration tests**
+- Workload Snapshots: 4 assertions over the executable workload catalog

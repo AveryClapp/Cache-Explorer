@@ -1,0 +1,46 @@
+{
+  "id": "vector-width-intel",
+  "description": "Explicit vector loads/stores versus scalar array math on the Intel profile.",
+  "example": "examples/vector_width.c",
+  "language": "c",
+  "optLevel": "-O1",
+  "config": "intel",
+  "limit": 20000,
+  "variants": [
+    {
+      "id": "vector"
+    },
+    {
+      "id": "scalar",
+      "defines": ["RUN_SCALAR=1"]
+    }
+  ],
+  "expectedRelationships": [
+    {
+      "metric": "advancedStats.vector.bytesLoaded",
+      "relationship": "vector > scalar",
+      "missingValue": 0,
+      "lastObserved": {
+        "vector": 8192,
+        "scalar": 0
+      }
+    },
+    {
+      "metric": "advancedStats.vector.stores",
+      "relationship": "vector > scalar",
+      "missingValue": 0,
+      "lastObserved": {
+        "vector": 256,
+        "scalar": 0
+      }
+    },
+    {
+      "metric": "timing.totalCycles",
+      "relationship": "scalar > vector",
+      "lastObserved": {
+        "vector": 29720,
+        "scalar": 45080
+      }
+    }
+  ]
+}
