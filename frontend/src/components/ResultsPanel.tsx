@@ -86,15 +86,15 @@ export function ResultsPanel({
         <div className="results-actions">
           {result && (
             <>
-              <button className="btn btn-small" onClick={onExportJSON} title="Download JSON" aria-label="Download result JSON">
+              <button className="btn btn-small" onClick={onExportJSON} title="Download JSON">
                 JSON
               </button>
-              <button className="btn btn-small" onClick={onExportCSV} title="Download CSV" aria-label="Download result CSV">
+              <button className="btn btn-small" onClick={onExportCSV} title="Download CSV">
                 CSV
               </button>
             </>
           )}
-          <button className="btn btn-small" onClick={onShare} title="Copy link" aria-label="Copy share link">
+          <button className="btn btn-small" onClick={onShare} title="Copy link">
             {copied ? 'Copied!' : 'Share'}
           </button>
         </div>

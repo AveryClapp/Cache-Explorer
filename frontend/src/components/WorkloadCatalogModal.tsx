@@ -243,16 +243,14 @@ export function WorkloadCatalogModal({
               className="btn"
               onClick={() => onVerify(includeStress)}
               disabled={loading || verifying || !hasWorkloads}
-              aria-label={includeStress ? 'Verify workloads including stress cases' : 'Verify workloads without stress cases'}
             >
               {verifying ? 'Verifying...' : 'Verify'}
             </button>
-            <button className="btn" onClick={onRefresh} disabled={loading || verifying} aria-label="Refresh workload catalog">Refresh</button>
+            <button className="btn" onClick={onRefresh} disabled={loading || verifying}>Refresh</button>
             <button
               className="btn"
               onClick={onRefreshHistory}
               disabled={historyLoading}
-              aria-label="Refresh published workload history"
             >
               {historyLoading ? 'History...' : 'History'}
             </button>
@@ -531,7 +529,6 @@ export function WorkloadCatalogModal({
                     <button
                       className="btn"
                       onClick={() => onLoadWorkload(workload)}
-                      aria-label={`Open experiment for workload ${workload.id}`}
                     >
                       Experiment
                     </button>

@@ -197,6 +197,10 @@ jobs:
         working-directory: frontend
         run: npm run smoke:ui
 
+      - name: Run visual smoke
+        working-directory: frontend
+        run: npm run visual:check
+
   vscode-extension:
     name: VS Code Extension Build
     runs-on: ubuntu-latest

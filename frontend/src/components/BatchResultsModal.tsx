@@ -58,12 +58,12 @@ export function BatchResultsModal({ results, error, running, total, onExportCSV,
           <span className="batch-modal-title" id="hardware-comparison-title">Hardware Comparison</span>
           <div className="batch-modal-header-actions">
             {onExportCSV && (
-              <button className="btn" onClick={onExportCSV} disabled={results.length === 0} aria-label="Export hardware comparison as CSV">
+              <button className="btn" onClick={onExportCSV} disabled={results.length === 0}>
                 Export CSV
               </button>
             )}
             {onExportJSON && (
-              <button className="btn" onClick={onExportJSON} disabled={results.length === 0} aria-label="Export hardware comparison as JSON">
+              <button className="btn" onClick={onExportJSON} disabled={results.length === 0}>
                 Export JSON
               </button>
             )}

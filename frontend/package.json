@@ -11,7 +11,8 @@
     "tokens:check": "node scripts/check-css-tokens.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
-    "smoke:ui": "node scripts/ui-smoke.mjs"
+    "smoke:ui": "node scripts/ui-smoke.mjs",
+    "visual:check": "node scripts/visual-smoke.mjs"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

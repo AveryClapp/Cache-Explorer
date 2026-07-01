@@ -881,7 +881,7 @@ async function verifyResultTrustPanel(url) {
   await page.getByRole('button', { name: 'Execute' }).click()
 
   const panel = page.locator('.result-provenance-panel')
-  await assertVisible(panel.getByText('Result Fidelity', { exact: true }), 'result fidelity panel')
+  await assertVisible(panel.getByText('Evidence & Fidelity', { exact: true }), 'evidence and fidelity panel')
   await assertVisible(panel.getByText('Modeled', { exact: true }), 'modeled contract bucket')
   await assertVisible(panel.getByText('1 drive simulation', { exact: true }), 'modeled contract count')
   await assertVisible(panel.getByText('Estimated', { exact: true }), 'estimated contract bucket')
@@ -890,7 +890,7 @@ async function verifyResultTrustPanel(url) {
   await assertVisible(panel.getByText('1 display only', { exact: true }), 'metadata contract count')
   await assertVisible(panel.getByText('Unsupported', { exact: true }), 'unsupported contract bucket')
   await assertVisible(panel.getByText('1 not modeled', { exact: true }), 'unsupported contract count')
-  await assertVisible(panel.getByText('Repro Command', { exact: true }), 'repro command')
+  await assertVisible(panel.getByText('Local Repro Command', { exact: true }), 'local repro command')
 
   await page.unroute('**/compile')
 }
@@ -909,11 +909,11 @@ async function verifyLegacyResultTrustPanel(url) {
   await page.getByRole('button', { name: 'Execute' }).click()
 
   const panel = page.locator('.result-provenance-panel')
-  await assertVisible(panel.getByText('Result Fidelity', { exact: true }), 'legacy result fidelity panel')
+  await assertVisible(panel.getByText('Evidence & Fidelity', { exact: true }), 'legacy evidence and fidelity panel')
   await assertVisible(panel.getByText('Legacy', { exact: true }), 'legacy fidelity chip')
   await assertVisible(panel.getByText('Provenance metadata unavailable for this result.', { exact: true }), 'legacy provenance caveat')
   await assertVisible(panel.getByText('Modeled', { exact: true }), 'legacy modeled contract bucket')
-  assert(await panel.getByText('Repro Command', { exact: true }).count() === 0, 'legacy result should not show repro command')
+  assert(await panel.getByText('Local Repro Command', { exact: true }).count() === 0, 'legacy result should not show repro command')
 
   await page.unroute('**/compile')
 }
@@ -1051,7 +1051,7 @@ async function verifyEditRunCompareShareReopen(url) {
   await replaceEditorText(editedCode)
   await page.getByRole('button', { name: 'Execute' }).click()
 
-  await assertVisible(page.locator('.result-provenance-panel').getByText('Result Fidelity', { exact: true }), 'edited run result fidelity')
+  await assertVisible(page.locator('.result-provenance-panel').getByText('Evidence & Fidelity', { exact: true }), 'edited run evidence and fidelity')
   assert(compilePayload?.code?.includes('EDIT_RUN_MARKER'), `edited compile payload missing marker: ${compilePayload?.code}`)
 
   await page.getByRole('button', { name: 'Hardware', exact: true }).click()
@@ -1122,7 +1122,7 @@ async function verifySocketCloseFallback(url) {
   await page.goto(url, { waitUntil: 'domcontentloaded' })
   await page.getByRole('button', { name: 'Execute' }).click()
 
-  await assertVisible(page.locator('.result-provenance-panel').getByText('Result Fidelity', { exact: true }), 'fallback result fidelity panel')
+  await assertVisible(page.locator('.result-provenance-panel').getByText('Evidence & Fidelity', { exact: true }), 'fallback evidence and fidelity panel')
   assert(compilePayload?.config === 'educational', `fallback compile config mismatch: ${JSON.stringify(compilePayload)}`)
   assert(compilePayload?.limit === 1000000, `fallback compile limit mismatch: ${JSON.stringify(compilePayload)}`)
 

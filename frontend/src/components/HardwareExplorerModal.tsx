@@ -188,7 +188,6 @@ export function HardwareExplorerModal({
               className="btn"
               onClick={onCompareRunSet}
               disabled={loading || runConfigIds.length === 0}
-              aria-label={`Compare ${runConfigIds.length} selected hardware profiles`}
             >
               Compare Set
             </button>
@@ -196,7 +195,6 @@ export function HardwareExplorerModal({
               className="btn"
               onClick={onOpenExperiment}
               disabled={loading || runConfigIds.length === 0}
-              aria-label={`Run experiment on ${runConfigIds.length} selected hardware profiles`}
             >
               Experiment
             </button>
@@ -204,7 +202,6 @@ export function HardwareExplorerModal({
               className="btn"
               onClick={() => selected && exportHardwareProfilesAsCSV(diffProfiles, selected)}
               disabled={loading || !selected || diffProfiles.length === 0}
-              aria-label="Export selected hardware profiles as CSV"
             >
               Export CSV
             </button>
@@ -212,7 +209,6 @@ export function HardwareExplorerModal({
               className="btn"
               onClick={() => selected && exportHardwareProfilesAsJSON(diffProfiles, selected)}
               disabled={loading || !selected || diffProfiles.length === 0}
-              aria-label="Export selected hardware profiles as JSON"
             >
               Export JSON
             </button>
@@ -220,11 +216,10 @@ export function HardwareExplorerModal({
               className="btn"
               onClick={() => selected && onApply(selected.id)}
               disabled={loading || !selected || selected.id === activeId}
-              aria-label={selected ? `Use hardware profile ${selected.displayName}` : 'Use selected hardware profile'}
             >
               Use Profile
             </button>
-            <button className="btn" onClick={onRefresh} disabled={loading} aria-label="Refresh hardware profiles">Refresh</button>
+            <button className="btn" onClick={onRefresh} disabled={loading}>Refresh</button>
             <button className="batch-modal-close" onClick={onClose} aria-label="Close hardware explorer">×</button>
           </div>
         </div>

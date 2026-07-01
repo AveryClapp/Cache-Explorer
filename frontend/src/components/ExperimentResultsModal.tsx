@@ -110,12 +110,12 @@ export function ExperimentResultsModal({
           <span className="batch-modal-title" id="hardware-experiment-title">Hardware Experiment</span>
           <div className="batch-modal-header-actions">
             {onExportCSV && (
-              <button className="btn" onClick={onExportCSV} disabled={!result} aria-label="Export hardware experiment as CSV">
+              <button className="btn" onClick={onExportCSV} disabled={!result}>
                 Export CSV
               </button>
             )}
             {onExportJSON && (
-              <button className="btn" onClick={onExportJSON} disabled={!result} aria-label="Export hardware experiment as JSON">
+              <button className="btn" onClick={onExportJSON} disabled={!result}>
                 Export JSON
               </button>
             )}

@@ -255,7 +255,7 @@ export function Header({
             <span className="cancel-x">×</span>
           </button>
         ) : (
-          <button onClick={onRun} className="btn-primary" aria-label="Execute analysis">
+          <button onClick={onRun} className="btn-primary">
             Execute
           </button>
         )}
