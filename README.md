@@ -215,6 +215,7 @@ Actions.
 
 Tagged releases include pre-built LLVM pass assets, `SHA256SUMS` for download
 verification, and GitHub artifact attestations for release provenance.
+Published GHCR Docker images include BuildKit provenance attestations and SBOMs.
 
 ## Limitations
 

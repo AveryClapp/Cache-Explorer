@@ -45,6 +45,7 @@ Already in place:
   when available, with strict verification available for CI or locked-down use.
 - Release assets are covered by GitHub artifact attestations so downloaded pass
   binaries have provenance in addition to checksums.
+- Published Docker images include BuildKit provenance attestations and SBOMs.
 
 Known gaps:
 
@@ -53,7 +54,7 @@ Known gaps:
 - Hosted benchmark history retention is best-effort through the Actions cache;
   durable long-term storage or release-attached history would still be stronger.
 - Deployment/package polish still needs fuller hosted-release hardening around
-  Docker image provenance and public release notes.
+  public release notes and long-lived release validation.
 - Workload history trend surfacing, deeper onboarding, and error states need
   another design pass.
 
