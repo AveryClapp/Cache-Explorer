@@ -90,9 +90,19 @@ jobs:
       - name: Run integration feature and snapshot gates
         run: |
           export PATH="/usr/lib/llvm-18/bin:$PATH"
+          mkdir -p reports/workloads
+          export CACHE_EXPLORER_WORKLOAD_HISTORY="$PWD/reports/workloads/workload-history.json"
           ./tests/integration/test-features.sh
           ./tests/integration/test-golden-kernels.sh
           ./tests/integration/test-workload-snapshots.sh
+
+      - name: Upload workload benchmark history
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workload-benchmark-history
+          path: reports/workloads/*.json
+          if-no-files-found: ignore
 
   server:
     name: Server Build

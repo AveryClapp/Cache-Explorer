@@ -6,13 +6,26 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CACHE_EXPLORE="$PROJECT_ROOT/backend/scripts/cache-explore"
+HISTORY_FILE="${CACHE_EXPLORER_WORKLOAD_HISTORY:-}"
+SHOULD_CLEAN_HISTORY=0
+if [[ -z "$HISTORY_FILE" ]]; then
+  HISTORY_FILE="$(mktemp "${TMPDIR:-/tmp}/cache-explorer-workload-history.XXXXXX")"
+  SHOULD_CLEAN_HISTORY=1
+fi
+
+cleanup() {
+  if [[ "$SHOULD_CLEAN_HISTORY" == "1" ]]; then
+    rm -f "$HISTORY_FILE"
+  fi
+}
+trap cleanup EXIT
 
 echo "========================================"
 echo "  Workload Snapshot Tests"
 echo "========================================"
 echo ""
 
-OUTPUT="$("$CACHE_EXPLORE" workloads --verify --json)"
+OUTPUT="$("$CACHE_EXPLORE" workloads --verify --json --history "$HISTORY_FILE")"
 
 echo -n "Test: workload verifier reports all checks passing... "
 if echo "$OUTPUT" | jq -e '.ok == true and .summary.failed == 0 and .summary.passed >= 1' > /dev/null; then
@@ -35,6 +48,22 @@ if echo "$OUTPUT" | jq -e '
 else
   echo "FAIL"
   echo "$OUTPUT" | jq .
+  exit 1
+fi
+
+echo -n "Test: workload verifier emits benchmark history artifact... "
+if jq -e '
+  .schemaVersion == 1
+  and .generatedAt
+  and .summary.failed == 0
+  and .summary.passed >= 1
+  and (.workloads | length) >= 1
+  and all(.workloads[]; .id and (.durationMs >= 0) and (.variants | type == "object"))
+' "$HISTORY_FILE" > /dev/null; then
+  echo "PASS"
+else
+  echo "FAIL"
+  cat "$HISTORY_FILE"
   exit 1
 fi
 

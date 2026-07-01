@@ -107,8 +107,18 @@ jobs:
             export CACHE_EXPLORER_CC="/opt/homebrew/opt/llvm@${{ matrix.llvm }}/bin/clang"
             export CACHE_EXPLORER_CXX="/opt/homebrew/opt/llvm@${{ matrix.llvm }}/bin/clang++"
           fi
+          mkdir -p reports/workloads
+          export CACHE_EXPLORER_WORKLOAD_HISTORY="$PWD/reports/workloads/workload-history-${{ matrix.os }}-llvm${{ matrix.llvm }}.json"
           cd tests/integration
           ./run-all-tests.sh
+
+      - name: Upload workload benchmark history
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workload-benchmark-history-${{ matrix.os }}-llvm${{ matrix.llvm }}
+          path: reports/workloads/*.json
+          if-no-files-found: ignore
 
       - name: Upload test results
         if: failure()

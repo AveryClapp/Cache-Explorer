@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { readdir, readFile } = require('fs/promises')
+const { mkdir, readdir, readFile, writeFile } = require('fs/promises')
 const { spawnSync } = require('child_process')
 const { dirname, join, resolve } = require('path')
 
@@ -14,6 +14,8 @@ Options:
   --ids        Output only workload ids
   --commands   Print cache-explore commands for each variant
   --verify     Run variants and validate expected relationships
+  --history <path>
+               With --verify, write compact benchmark history JSON
   --help       Show this help
 
 Examples:
@@ -22,7 +24,8 @@ Examples:
   cache-explore workloads conv2d-intel14 --json
   cache-explore workloads conv2d-intel14 --commands
   cache-explore workloads conv2d-intel14 --verify
-  cache-explore workloads --verify --json`)
+  cache-explore workloads --verify --json
+  cache-explore workloads --verify --history reports/workloads/history.json`)
 }
 
 function projectRoot() {
@@ -277,6 +280,51 @@ function verificationSummary(results) {
   }
 }
 
+function historyRecord(summary, results) {
+  return {
+    schemaVersion: 1,
+    generatedAt: new Date().toISOString(),
+    git: {
+      sha: process.env.GITHUB_SHA || process.env.CI_COMMIT_SHA || null,
+      ref: process.env.GITHUB_REF_NAME || process.env.GITHUB_REF || process.env.CI_COMMIT_REF_NAME || null,
+      runId: process.env.GITHUB_RUN_ID || process.env.CI_PIPELINE_ID || null,
+    },
+    summary,
+    workloads: results.map(result => ({
+      id: result.id,
+      ok: result.ok,
+      durationMs: result.durationMs,
+      checks: result.checks.map(check => ({
+        metric: check.metric,
+        relationship: check.relationship,
+        passed: check.passed,
+        leftVariant: check.leftVariant,
+        rightVariant: check.rightVariant,
+        leftValue: check.leftValue,
+        rightValue: check.rightValue,
+      })),
+      variants: Object.fromEntries(Object.entries(result.variants).map(([id, variant]) => [
+        id,
+        {
+          ok: variant.ok,
+          durationMs: variant.durationMs,
+          events: variant.summary?.events,
+          estimatedCycles: variant.summary?.estimatedCycles,
+          primaryBottleneck: variant.summary?.primaryBottleneck,
+          hitRates: variant.summary?.hitRates,
+          fidelity: variant.provenance?.fidelity,
+          hardwareProfile: variant.provenance?.hardwareProfile,
+        },
+      ])),
+    })),
+  }
+}
+
+async function writeHistory(path, summary, results) {
+  await mkdir(dirname(resolve(path)), { recursive: true })
+  await writeFile(resolve(path), `${JSON.stringify(historyRecord(summary, results), null, 2)}\n`)
+}
+
 function printVerification(results) {
   const summary = verificationSummary(results)
 
@@ -322,20 +370,60 @@ function printTable(workloads) {
   }
 }
 
+function parseArgs(args) {
+  const parsed = {
+    json: false,
+    ids: false,
+    commands: false,
+    verify: false,
+    help: false,
+    historyPath: '',
+    workloadId: '',
+  }
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index]
+    if (arg === '--json') parsed.json = true
+    else if (arg === '--ids') parsed.ids = true
+    else if (arg === '--commands') parsed.commands = true
+    else if (arg === '--verify') parsed.verify = true
+    else if (arg === '--help' || arg === '-h') parsed.help = true
+    else if (arg === '--history') {
+      if (!args[index + 1] || args[index + 1].startsWith('-')) {
+        throw new Error('--history requires a path')
+      }
+      parsed.historyPath = args[index + 1]
+      index += 1
+    } else if (arg.startsWith('--history=')) {
+      parsed.historyPath = arg.slice('--history='.length)
+      if (!parsed.historyPath) {
+        throw new Error('--history requires a path')
+      }
+    } else if (arg.startsWith('-')) {
+      throw new Error(`Unknown option: ${arg}`)
+    } else if (!parsed.workloadId) {
+      parsed.workloadId = arg
+    } else {
+      throw new Error(`Unexpected argument: ${arg}`)
+    }
+  }
+
+  return parsed
+}
+
 async function main() {
-  const args = process.argv.slice(2)
-  const json = args.includes('--json')
-  const ids = args.includes('--ids')
-  const commands = args.includes('--commands')
-  const verify = args.includes('--verify')
-  const help = args.includes('--help') || args.includes('-h')
-  const workloadId = args.find(arg => !arg.startsWith('-'))
+  const { json, ids, commands, verify, help, historyPath, workloadId } = parseArgs(process.argv.slice(2))
 
   if (help) {
     usage()
     return
   }
 
+  if (historyPath && !verify) {
+    console.error('--history requires --verify')
+    process.exitCode = 1
+    return
+  }
   const workloads = await loadWorkloads()
   const selected = workloadId
     ? workloads.filter(workload => workload.id === workloadId)
@@ -350,6 +438,9 @@ async function main() {
   if (verify) {
     const results = selected.map(verifyWorkload)
     const summary = verificationSummary(results)
+    if (historyPath) {
+      await writeHistory(historyPath, summary, results)
+    }
     if (json) {
       console.log(JSON.stringify({ ok: summary.ok, summary, workloads: results }, null, 2))
     } else {

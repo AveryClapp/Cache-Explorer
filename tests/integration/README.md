@@ -69,6 +69,7 @@ cd tests/integration
 ./test-workload-snapshots.sh  # Snapshot-driven benchmark relationships
 ./test-structured-experiment.sh  # Structured /experiment variants
 ../../backend/scripts/cache-explore workloads --verify --json  # Product verifier
+../../backend/scripts/cache-explore workloads --verify --json --history reports/workloads/history.json
 ```
 
 ### From Project Root
