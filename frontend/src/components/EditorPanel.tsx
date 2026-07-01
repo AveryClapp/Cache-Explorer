@@ -95,8 +95,12 @@ export function EditorPanel({
   const totalEvents = Math.max(0, progress?.eventsTotal ?? 0)
   const hasProgress = Boolean(progress)
   const hasTotal = totalEvents > 0
-  const displayProcessedEvents = hasTotal ? Math.min(processedEvents, totalEvents) : processedEvents
-  const progressPct = hasTotal ? clampPercent((processedEvents / totalEvents) * 100) : 0
+  const displayProcessedEvents = hasTotal
+    ? stage === 'done'
+      ? totalEvents
+      : Math.min(processedEvents, totalEvents)
+    : processedEvents
+  const progressPct = hasTotal ? clampPercent((displayProcessedEvents / totalEvents) * 100) : 0
   const statusLabel = isLoading
     ? hasTotal
       ? `${stageText[stage] || 'Processing...'} ${formatCount(displayProcessedEvents)} / ${formatCount(totalEvents)} events (${Math.round(progressPct)}%)`
