@@ -1837,5 +1837,24 @@ components:
       properties:
         error:
           type: string
-          description: Error message
+          description: Short error label
           example: An error occurred
+        message:
+          type: string
+          description: User-facing error summary with actionable context when available
+          example: "Failed to verify workloads: cache-explore exited with 1"
+        type:
+          type: string
+          description: Machine-readable error type
+          example: workload_error
+        exitCode:
+          type: integer
+          description: Child process exit code when the error came from a subprocess
+          example: 1
+        timeout:
+          type: boolean
+          description: Whether the subprocess timed out
+          example: false
+        details:
+          type: string
+          description: Truncated stderr/stdout or parsed diagnostic details

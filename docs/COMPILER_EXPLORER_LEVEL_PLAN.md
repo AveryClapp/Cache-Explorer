@@ -37,6 +37,8 @@ Already in place:
   sort-pattern locality, and image-stencil traversal locality.
 - Workload metadata supports opt-in stress workloads; threaded false sharing has
   an explicit stress manifest that is excluded from default CI verification.
+- Workload catalog and verification API errors include structured details,
+  timeout state, exit codes, and truncated subprocess diagnostics when available.
 - Empty result state routes users into run, verified workload, and experiment
   flows.
 - Local bootstrap has a doctor script plus a single dev command that can build,
@@ -62,8 +64,8 @@ Known gaps:
   the Actions cache, and release-attached workload-history archives.
 - Deployment/package polish still needs release-cadence tuning once real usage
   patterns are visible.
-- Workload history trend surfacing, deeper onboarding, and error states need
-  another design pass.
+- Workload history trend surfacing and deeper onboarding need another design
+  pass; API-side workload error diagnostics are in place.
 
 ## Done Criteria
 

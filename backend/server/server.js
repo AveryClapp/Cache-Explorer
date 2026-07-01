@@ -168,6 +168,53 @@ function httpError(status, message, type = 'validation_error') {
   return error;
 }
 
+function firstNonEmptyLine(value) {
+  return String(value || '')
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .find(Boolean);
+}
+
+function truncateDetail(value, maxLength = 4000) {
+  const text = String(value || '').trim();
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength)}...`;
+}
+
+function workloadProcessErrorResponse(err, fallback) {
+  const stdout = truncateDetail(err?.stdout);
+  const stderr = truncateDetail(err?.stderr);
+  const output = stderr || stdout || err?.message || '';
+  let parsed = null;
+
+  if (stdout) {
+    try {
+      parsed = JSON.parse(stdout);
+    } catch {
+      parsed = null;
+    }
+  }
+
+  const parsedMessage = parsed?.message || parsed?.error || parsed?.summary;
+  const detail = parsed?.details || parsed?.raw || output;
+  const message = err?.timeout
+    ? `${fallback}: command timed out after ${Math.round((err.timeoutMs || 0) / 1000)}s`
+    : parsedMessage
+      ? `${fallback}: ${parsedMessage}`
+      : firstNonEmptyLine(output)
+        ? `${fallback}: ${firstNonEmptyLine(output)}`
+        : fallback;
+
+  return {
+    error: fallback,
+    message,
+    type: parsed?.type || (err?.timeout ? 'timeout' : 'workload_error'),
+    exitCode: err?.exitCode,
+    timeout: err?.timeout || undefined,
+    details: detail || undefined,
+  };
+}
+
 function isStructuredVariant(variant) {
   return variant && typeof variant === 'object' && !Array.isArray(variant);
 }
@@ -1122,7 +1169,7 @@ app.get('/api/workloads', async (req, res) => {
   } catch (err) {
     console.error('Failed to list workloads:', err);
     incCounter('errors', { type: 'workloads' });
-    res.status(500).json({ error: 'Failed to list workloads' });
+    res.status(500).json(workloadProcessErrorResponse(err, 'Failed to list workloads'));
   }
 });
 
@@ -1141,7 +1188,7 @@ app.get('/api/workloads/verify', async (req, res) => {
   } catch (err) {
     console.error('Failed to verify workloads:', err);
     incCounter('errors', { type: 'workloads_verify' });
-    res.status(500).json({ error: 'Failed to verify workloads' });
+    res.status(500).json(workloadProcessErrorResponse(err, 'Failed to verify workloads'));
   }
 });
 
