@@ -158,6 +158,12 @@ async function layoutMetrics() {
       width: Math.round(element.getBoundingClientRect().width),
       height: Math.round(element.getBoundingClientRect().height),
     }))
+    const evidenceItems = Array.from(document.querySelectorAll('.empty-state-evidence span')).map(element => ({
+      text: element.textContent?.replace(/\s+/g, ' ').trim(),
+      overflow: element.scrollWidth > element.clientWidth || element.scrollHeight > element.clientHeight,
+      width: Math.round(element.getBoundingClientRect().width),
+      height: Math.round(element.getBoundingClientRect().height),
+    }))
 
     return {
       target: document.querySelector('.empty-state-target')?.textContent?.trim(),
@@ -165,9 +171,12 @@ async function layoutMetrics() {
       pathOverflow: paths.some(path => path.overflow),
       trustCount: trustItems.length,
       trustOverflow: trustItems.some(item => item.overflow),
+      evidenceCount: evidenceItems.length,
+      evidenceOverflow: evidenceItems.some(item => item.overflow),
       emptyScrollDelta: empty ? empty.scrollHeight - empty.clientHeight : null,
       paths,
       trustItems,
+      evidenceItems,
     }
   })
 }
@@ -248,16 +257,20 @@ async function verifyLaunchSurface(url) {
   await assertVisible(page.getByText('Current target', { exact: true }), 'target label')
   await assertVisible(page.getByText('Trust packet', { exact: true }), 'launch trust packet label')
   await assertVisible(page.getByText('Compiler / profile / fidelity', { exact: true }), 'launch trust packet value')
+  await assertVisible(page.getByText('Model contract', { exact: true }), 'launch model-contract evidence')
+  await assertVisible(page.getByText('Repro command', { exact: true }), 'launch repro evidence')
   await assertVisible(page.getByRole('button', { name: 'Share', exact: true }), 'launch share action')
   await assertVisible(page.getByRole('button', { name: /Run buffer/ }), 'run buffer path')
 
   const desktopLayout = await layoutMetrics()
   assert(desktopLayout.pathCount === 4, `expected 4 launch paths, saw ${desktopLayout.pathCount}`)
   assert(desktopLayout.trustCount === 3, `expected 3 launch trust items, saw ${desktopLayout.trustCount}`)
+  assert(desktopLayout.evidenceCount === 3, `expected 3 launch evidence items, saw ${desktopLayout.evidenceCount}`)
   assert(desktopLayout.target?.includes('Educational'), `unexpected target summary: ${desktopLayout.target}`)
   assert(desktopLayout.target?.includes('1M events'), `target summary should use compact limit: ${desktopLayout.target}`)
   assert(!desktopLayout.pathOverflow, `desktop launch paths overflow: ${JSON.stringify(desktopLayout.paths)}`)
   assert(!desktopLayout.trustOverflow, `desktop launch trust strip overflows: ${JSON.stringify(desktopLayout.trustItems)}`)
+  assert(!desktopLayout.evidenceOverflow, `desktop launch evidence overflows: ${JSON.stringify(desktopLayout.evidenceItems)}`)
   assert((desktopLayout.emptyScrollDelta ?? 0) <= maxLayoutScrollDelta, `desktop launch surface scrolls by ${desktopLayout.emptyScrollDelta}px`)
 
   await page.getByRole('button', { name: /Hardware map/ }).click()
@@ -283,8 +296,10 @@ async function verifyLaunchSurface(url) {
   const mobileLayout = await layoutMetrics()
   assert(mobileLayout.pathCount === 4, `expected 4 mobile launch paths, saw ${mobileLayout.pathCount}`)
   assert(mobileLayout.trustCount === 3, `expected 3 mobile launch trust items, saw ${mobileLayout.trustCount}`)
+  assert(mobileLayout.evidenceCount === 3, `expected 3 mobile launch evidence items, saw ${mobileLayout.evidenceCount}`)
   assert(!mobileLayout.pathOverflow, `mobile launch paths overflow: ${JSON.stringify(mobileLayout.paths)}`)
   assert(!mobileLayout.trustOverflow, `mobile launch trust strip overflows: ${JSON.stringify(mobileLayout.trustItems)}`)
+  assert(!mobileLayout.evidenceOverflow, `mobile launch evidence overflows: ${JSON.stringify(mobileLayout.evidenceItems)}`)
   assert((mobileLayout.emptyScrollDelta ?? 0) <= maxLayoutScrollDelta, `mobile launch surface scrolls by ${mobileLayout.emptyScrollDelta}px`)
 
   await page.unroute('**/profiles')

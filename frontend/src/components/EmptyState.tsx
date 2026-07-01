@@ -26,20 +26,25 @@ export function EmptyState({
         <div className="empty-state-trust-strip" aria-label="First-run trust summary">
           <div className="empty-state-trust-item">
             <span>First step</span>
-            <strong>Run buffer</strong>
+            <strong>Run current code</strong>
           </div>
           <div className="empty-state-trust-item">
             <span>Trust packet</span>
             <strong>Compiler / profile / fidelity</strong>
           </div>
           <div className="empty-state-trust-item">
-            <span>Reproduce</span>
-            <strong>Share before or after run</strong>
+            <span>Hand off</span>
+            <strong>Share exact setup</strong>
           </div>
         </div>
         <div className="empty-state-title">Choose a run path</div>
         <div className="empty-state-desc">
-          Recommended: run the active project, inspect fidelity, then share the exact setup.
+          The result includes the hardware contract, caveats, and a local repro command.
+        </div>
+        <div className="empty-state-evidence" aria-label="Result evidence preview">
+          <span>Toolchain</span>
+          <span>Model contract</span>
+          <span>Repro command</span>
         </div>
         <div className="empty-state-paths">
           <button className="empty-state-path primary" onClick={onRun}>
