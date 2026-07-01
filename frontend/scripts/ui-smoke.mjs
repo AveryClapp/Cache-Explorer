@@ -106,6 +106,10 @@ async function assertVisible(locator, label) {
   assert(await locator.isVisible(), `${label} is not visible`)
 }
 
+function workloadName(id) {
+  return page.locator('.workload-row .workload-name').filter({ hasText: id })
+}
+
 async function layoutMetrics() {
   return page.evaluate(() => {
     const empty = document.querySelector('.empty-state')
@@ -214,24 +218,89 @@ async function verifyWorkloadCatalogControls(url) {
       ],
     },
   ]
+  const mockHistory = {
+    available: true,
+    source: 'dashboard',
+    files: [
+      {
+        file: 'workload-history-100.json',
+        generatedAt: '2026-06-30T10:00:00.000Z',
+        ok: true,
+        passed: 3,
+        failed: 0,
+        durationMs: 7900,
+      },
+      {
+        file: 'workload-history-101.json',
+        generatedAt: '2026-06-30T11:00:00.000Z',
+        ok: true,
+        passed: 3,
+        failed: 0,
+        durationMs: 8500,
+      },
+    ],
+    latest: {
+      file: 'workload-history-101.json',
+      generatedAt: '2026-06-30T11:00:00.000Z',
+      summary: {
+        ok: true,
+        workloads: 3,
+        passed: 3,
+        failed: 0,
+        durationMs: 8500,
+      },
+    },
+    failures: [],
+    slowestWorkloads: [
+      { id: 'conv2d-intel14', ok: true, durationMs: 4200, checks: 1, variants: 2 },
+      { id: 'hash-probe-zen4', ok: true, durationMs: 2600, checks: 1, variants: 2 },
+    ],
+    durationDeltas: [
+      {
+        id: 'conv2d-intel14',
+        durationMs: 4200,
+        previousDurationMs: 3000,
+        deltaMs: 1200,
+        deltaPct: 0.4,
+      },
+      {
+        id: 'hash-probe-zen4',
+        durationMs: 2600,
+        previousDurationMs: 3200,
+        deltaMs: -600,
+        deltaPct: -0.1875,
+      },
+    ],
+  }
 
   await page.route('**/api/workloads', route => route.fulfill({
     status: 200,
     contentType: 'application/json',
     body: JSON.stringify({ workloads: mockWorkloads }),
   }))
+  await page.route('**/api/workloads/history', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify(mockHistory),
+  }))
 
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto(url, { waitUntil: 'domcontentloaded' })
   await page.getByRole('button', { name: 'Workloads' }).click()
   await assertVisible(page.getByText('Verified Workloads', { exact: true }), 'workload catalog modal')
-  await assertVisible(page.getByText('conv2d-intel14', { exact: true }), 'conv2d workload row')
+  await assertVisible(page.getByText('Published History', { exact: true }), 'published workload history')
+  await assertVisible(page.getByText('passing', { exact: true }), 'history passing status')
+  await assertVisible(page.getByText('2 runs', { exact: true }), 'history run count')
+  await assertVisible(page.getByText('Largest duration changes', { exact: true }), 'history duration delta label')
+  await assertVisible(page.getByText('+1.2s', { exact: true }).first(), 'history regression delta')
+  await assertVisible(page.getByText('-600ms', { exact: true }).first(), 'history improvement delta')
+  await assertVisible(workloadName('conv2d-intel14'), 'conv2d workload row')
   await assertVisible(page.getByText('3 / 3', { exact: true }), 'workload result count')
 
   await page.getByLabel('Search workloads').fill('prefetch')
-  await assertVisible(page.getByText('prefetch-stream-intel', { exact: true }), 'searched workload row')
+  await assertVisible(workloadName('prefetch-stream-intel'), 'searched workload row')
   assert(await page.getByText('1 / 3', { exact: true }).isVisible(), 'search should narrow workload count')
-  assert(await page.getByText('conv2d-intel14', { exact: true }).count() === 0, 'search should hide unmatched workloads')
+  assert(await workloadName('conv2d-intel14').count() === 0, 'search should hide unmatched workloads')
 
   await page.getByLabel('Filter workloads by hardware target').selectOption('zen4')
   await assertVisible(page.getByText('No matching workloads', { exact: true }), 'filtered empty state')
@@ -240,11 +309,12 @@ async function verifyWorkloadCatalogControls(url) {
   await assertVisible(page.getByText('3 / 3', { exact: true }), 'cleared workload result count')
 
   await page.getByLabel('Filter workloads by hardware target').selectOption('zen4')
-  await assertVisible(page.getByText('hash-probe-zen4', { exact: true }), 'target-filtered workload row')
+  await assertVisible(workloadName('hash-probe-zen4'), 'target-filtered workload row')
   assert(await page.getByText('1 / 3', { exact: true }).isVisible(), 'target filter should narrow workload count')
 
   await page.getByLabel('Sort workloads').selectOption('variants')
   await closeModal()
+  await page.unroute('**/api/workloads/history')
   await page.unroute('**/api/workloads')
 }
 
