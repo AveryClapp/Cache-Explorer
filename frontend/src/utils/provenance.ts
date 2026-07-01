@@ -1,4 +1,4 @@
-import type { ResultProvenance } from '../types'
+import type { CacheResult, ResultProvenance } from '../types'
 
 function titleize(value: string | undefined) {
   if (!value) return 'Unknown'
@@ -74,4 +74,48 @@ export function formatSourceLabel(provenance: ResultProvenance | undefined) {
   if (!source) return 'Unknown'
   const path = source.path ? source.path.split('/').pop() || source.path : 'source'
   return [path, source.language, source.optLevel].filter(Boolean).join(' / ')
+}
+
+function shellQuote(value: string | number) {
+  const text = String(value)
+  if (/^[A-Za-z0-9_./:=,@+-]+$/.test(text)) return text
+  return `'${text.replace(/'/g, `'\\''`)}'`
+}
+
+function compilerDirectory(path: string | undefined) {
+  if (!path || !path.includes('/')) return undefined
+  return path.split('/').slice(0, -1).join('/')
+}
+
+export function buildReproCommand(result: CacheResult) {
+  const provenance = result.provenance
+  const source = provenance?.source
+  if (!source) return null
+
+  const sourcePath = source.path || 'main.c'
+  const args = ['cache-explore', sourcePath]
+  const optLevel = source.optLevel || provenance?.toolchain?.compiler?.optLevel
+  if (optLevel) args.push(optLevel)
+
+  for (const define of source.defines || provenance?.toolchain?.compiler?.defines || []) {
+    args.push(define.startsWith('-D') ? define : `-D${define}`)
+  }
+
+  const compilerPath = compilerDirectory(provenance?.toolchain?.compiler?.path)
+  if (compilerPath) args.push('--compiler', compilerPath)
+
+  args.push('--config', source.config || result.config)
+
+  const fidelity = provenance?.fidelity
+  if (fidelity?.prefetch && fidelity.prefetch !== 'none') args.push('--prefetch', fidelity.prefetch)
+  if (fidelity?.prefetchDegree && fidelity.prefetchDegree > 0) {
+    args.push('--prefetch-degree', String(fidelity.prefetchDegree))
+  }
+  if (fidelity?.sampleRate && fidelity.sampleRate > 1) args.push('--sample', String(fidelity.sampleRate))
+  if (fidelity?.eventLimit && fidelity.eventLimit > 0) args.push('--limit', String(fidelity.eventLimit))
+  if (fidelity?.fastMode) args.push('--fast')
+  if (fidelity?.cacheSegments) args.push('--cache-segments')
+
+  args.push('--json')
+  return args.map(shellQuote).join(' ')
 }

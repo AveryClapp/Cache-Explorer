@@ -120,6 +120,57 @@
   border-left: 2px solid var(--border);
 }
 
+.provenance-repro {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--elevated);
+}
+
+.provenance-repro-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.provenance-repro code {
+  display: block;
+  max-height: 78px;
+  overflow: auto;
+  padding: var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-primary);
+  font-family: var(--font-code);
+  font-size: var(--text-2xs);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.provenance-copy {
+  flex: 0 0 auto;
+  min-height: 24px;
+  padding: 2px var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: var(--text-2xs);
+  cursor: pointer;
+}
+
+.provenance-copy:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+
 @media (max-width: 720px) {
   .provenance-grid {
     grid-template-columns: 1fr;

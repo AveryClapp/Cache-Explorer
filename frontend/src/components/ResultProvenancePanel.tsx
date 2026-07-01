@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import type { CacheResult } from '../types'
 import {
+  buildReproCommand,
   formatConfidence,
   formatCompilerLabel,
   formatExecutor,
@@ -16,10 +18,19 @@ interface ResultProvenancePanelProps {
 }
 
 export function ResultProvenancePanel({ result }: ResultProvenancePanelProps) {
+  const [copiedCommand, setCopiedCommand] = useState(false)
   const provenance = result.provenance
   if (!provenance) return null
 
   const caveats = provenance.caveats.slice(0, 3)
+  const reproCommand = buildReproCommand(result)
+
+  const copyReproCommand = async () => {
+    if (!reproCommand) return
+    await navigator.clipboard.writeText(reproCommand)
+    setCopiedCommand(true)
+    window.setTimeout(() => setCopiedCommand(false), 1600)
+  }
 
   return (
     <div className="panel result-provenance-panel">
@@ -68,6 +79,17 @@ export function ResultProvenancePanel({ result }: ResultProvenancePanelProps) {
             {caveats.map(caveat => (
               <span key={caveat}>{caveat}</span>
             ))}
+          </div>
+        )}
+        {reproCommand && (
+          <div className="provenance-repro">
+            <div className="provenance-repro-header">
+              <span className="provenance-label">Repro Command</span>
+              <button type="button" className="provenance-copy" onClick={copyReproCommand}>
+                {copiedCommand ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+            <code>{reproCommand}</code>
           </div>
         )}
       </div>
