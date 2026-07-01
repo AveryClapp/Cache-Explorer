@@ -77,6 +77,89 @@
   gap: var(--space-3);
 }
 
+.environment-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 28px;
+  max-width: min(42vw, 380px);
+  padding: var(--space-1) var(--space-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: var(--text-2xs);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.environment-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex: 0 0 auto;
+}
+
+.environment-status.healthy .environment-status-dot {
+  background: var(--signal-good);
+}
+
+.environment-status.degraded .environment-status-dot,
+.environment-status.checking .environment-status-dot {
+  background: var(--signal-warning);
+}
+
+.environment-status.offline .environment-status-dot {
+  background: var(--signal-critical);
+}
+
+.environment-status-main {
+  color: var(--text-bright);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.environment-status-chip,
+.environment-status-compiler {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+}
+
+.environment-status.healthy .environment-status-chip {
+  color: var(--signal-good);
+  border-color: color-mix(in srgb, var(--signal-good) 40%, var(--border));
+}
+
+.environment-status.degraded .environment-status-chip,
+.environment-status.checking .environment-status-chip {
+  color: var(--signal-warning);
+  border-color: color-mix(in srgb, var(--signal-warning) 40%, var(--border));
+}
+
+.environment-status.offline .environment-status-chip {
+  color: var(--signal-critical);
+  border-color: color-mix(in srgb, var(--signal-critical) 40%, var(--border));
+}
+
+@media (max-width: 1180px) {
+  .environment-status-compiler {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .environment-status {
+    display: none;
+  }
+}
+
 .diff-mode-badge {
   display: flex;
   align-items: center;

@@ -19,6 +19,7 @@ import type {
   ErrorResult,
   HardwareExperimentResult,
   HardwareProfile,
+  EnvironmentHealth,
   Language,
   FileTab,
   Stage,
@@ -271,6 +272,8 @@ function App() {
   const [availableCompilers, setAvailableCompilers] = useState<string[]>([])
   const [defaultCompilerId, setDefaultCompilerId] = useState<string>('')
   const [environmentNotices, setEnvironmentNotices] = useState<string[]>([])
+  const [environmentHealth, setEnvironmentHealth] = useState<EnvironmentHealth | null>(null)
+  const [environmentHealthError, setEnvironmentHealthError] = useState<string | null>(null)
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('cache-explorer-theme')
@@ -438,6 +441,30 @@ function App() {
       .catch(err => {
         console.warn('Failed to fetch compilers:', err)
       })
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    fetch(`${API_BASE}/health`)
+      .then(async response => {
+        const data = await response.json()
+        if (cancelled) return
+        if (response.ok && data.status) {
+          setEnvironmentHealth(data as EnvironmentHealth)
+          setEnvironmentHealthError(null)
+        } else {
+          setEnvironmentHealth(null)
+          setEnvironmentHealthError(data.message || data.error || `Health check failed (${response.status})`)
+        }
+      })
+      .catch(err => {
+        if (cancelled) return
+        setEnvironmentHealth(null)
+        setEnvironmentHealthError(err instanceof Error ? err.message : 'Health check unavailable')
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   useEffect(() => {
@@ -1467,6 +1494,10 @@ function App() {
           result={result}
           isLoading={isLoading}
           stage={stage}
+          environmentHealth={environmentHealth}
+          environmentHealthError={environmentHealthError}
+          selectedCompiler={selectedCompiler}
+          compilerCount={availableCompilers.length}
           onToggleTheme={toggleTheme}
           onSetDiffMode={setDiffMode}
           onSetBaseline={(r) => { setBaselineFromHook(r, config, files); setBaselineCode(code) }}

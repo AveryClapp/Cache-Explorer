@@ -162,6 +162,17 @@ async function closeModal() {
 async function verifyLaunchSurface(url) {
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto(url, { waitUntil: 'domcontentloaded' })
+  const environmentStatus = page.locator('.environment-status')
+  await assertVisible(environmentStatus.getByText('Healthy', { exact: true }), 'environment health status')
+  await assertVisible(environmentStatus.getByText('Direct', { exact: true }), 'environment sandbox status')
+  const environmentLayout = await environmentStatus.evaluate(element => {
+    const rect = element.getBoundingClientRect()
+    return {
+      overflow: element.scrollWidth > element.clientWidth || rect.right > window.innerWidth,
+      width: Math.round(rect.width),
+    }
+  })
+  assert(!environmentLayout.overflow, `environment status overflows: ${JSON.stringify(environmentLayout)}`)
   await assertVisible(page.getByText('Choose a run path', { exact: true }), 'launch heading')
   await assertVisible(page.getByText('Current target', { exact: true }), 'target label')
   await assertVisible(page.getByRole('button', { name: /Run buffer/ }), 'run buffer path')
@@ -183,6 +194,7 @@ async function verifyLaunchSurface(url) {
 
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto(url, { waitUntil: 'domcontentloaded' })
+  assert(!(await page.locator('.environment-status').isVisible()), 'environment status should collapse on mobile')
   await page.getByRole('button', { name: 'Results' }).click()
   await assertVisible(page.getByText('Choose a run path', { exact: true }), 'mobile launch heading')
 
@@ -1274,6 +1286,21 @@ try {
       },
     })
   })
+  await page.route('**/health', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      status: 'healthy',
+      sandbox: 'disabled',
+      mode: 'development',
+      version: 'ui-smoke',
+      checks: {
+        compiler: 'ok',
+        temp_dir: 'ok',
+        database: 'ok',
+      },
+    }),
+  }))
 
   await runSmokeStep('launch surface', () => verifyLaunchSurface(url))
   await runSmokeStep('result trust panel', () => verifyResultTrustPanel(url))

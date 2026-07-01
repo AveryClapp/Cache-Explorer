@@ -1,4 +1,4 @@
-import type { CacheResult, Stage } from "../types";
+import type { CacheResult, EnvironmentHealth, Stage } from "../types";
 
 interface HeaderProps {
   theme: "dark" | "light";
@@ -7,6 +7,10 @@ interface HeaderProps {
   result: CacheResult | null;
   isLoading: boolean;
   stage: Stage;
+  environmentHealth: EnvironmentHealth | null;
+  environmentHealthError: string | null;
+  selectedCompiler: string;
+  compilerCount: number;
   onToggleTheme: () => void;
   onSetDiffMode: (mode: boolean) => void;
   onSetBaseline: (result: CacheResult) => void;
@@ -29,6 +33,69 @@ const stageText: Record<Stage, string> = {
   done: "",
 };
 
+function healthTone(health: EnvironmentHealth | null, error: string | null) {
+  if (error) return "offline";
+  if (!health) return "checking";
+  if (health.status === "healthy") return "healthy";
+  if (health.status === "degraded") return "degraded";
+  return "offline";
+}
+
+function healthLabel(health: EnvironmentHealth | null, error: string | null) {
+  if (error) return "Offline";
+  if (!health) return "Checking";
+  if (health.status === "healthy") return "Healthy";
+  if (health.status === "degraded") return "Degraded";
+  return "Unhealthy";
+}
+
+function sandboxLabel(health: EnvironmentHealth | null) {
+  if (health?.sandbox === "enabled") return "Sandbox";
+  if (health?.sandbox === "disabled") return "Direct";
+  return "Mode ?";
+}
+
+function checksLabel(health: EnvironmentHealth | null) {
+  if (!health?.checks) return "";
+  return Object.entries(health.checks)
+    .map(([key, value]) => `${key}: ${value}`)
+    .join("\n");
+}
+
+function EnvironmentStatus({
+  health,
+  error,
+  selectedCompiler,
+  compilerCount,
+}: {
+  health: EnvironmentHealth | null;
+  error: string | null;
+  selectedCompiler: string;
+  compilerCount: number;
+}) {
+  const tone = healthTone(health, error);
+  const label = healthLabel(health, error);
+  const mode = sandboxLabel(health);
+  const compiler = selectedCompiler || (compilerCount > 0 ? `${compilerCount} compilers` : "Compiler ?");
+  const title = [
+    `Backend: ${label}`,
+    `Execution: ${mode}`,
+    selectedCompiler ? `Compiler: ${selectedCompiler}` : `Compilers: ${compilerCount || "unknown"}`,
+    health?.version ? `Version: ${health.version}` : "",
+    error ? `Error: ${error}` : "",
+    checksLabel(health),
+  ].filter(Boolean).join("\n");
+
+  return (
+    <div className={`environment-status ${tone}`} title={title} role="status" aria-label={`Environment ${label}`}>
+      <span className="environment-status-dot" />
+      <span className="environment-status-main">{label}</span>
+      <span className="environment-status-chip">{mode}</span>
+      <span className="environment-status-compiler">{compiler}</span>
+    </div>
+  );
+}
+
 export function Header({
   theme,
   diffMode,
@@ -36,6 +103,10 @@ export function Header({
   result,
   isLoading,
   stage,
+  environmentHealth,
+  environmentHealthError,
+  selectedCompiler,
+  compilerCount,
   onToggleTheme,
   onSetDiffMode,
   onSetBaseline,
@@ -61,6 +132,12 @@ export function Header({
       </div>
 
       <div className="header-center">
+        <EnvironmentStatus
+          health={environmentHealth}
+          error={environmentHealthError}
+          selectedCompiler={selectedCompiler}
+          compilerCount={compilerCount}
+        />
         {diffMode && baselineResult && (
           <div className="diff-mode-badge" title="Comparing against baseline">
             <span className="diff-mode-icon">⇄</span>

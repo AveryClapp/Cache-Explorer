@@ -104,6 +104,17 @@ export interface HardwareProfile {
   details?: HardwareProfileDetails
 }
 
+export interface EnvironmentHealth {
+  status: 'healthy' | 'degraded' | 'unhealthy' | string
+  sandbox?: 'enabled' | 'disabled' | string
+  mode?: 'production' | 'development' | string
+  version?: string
+  checks?: Record<string, 'ok' | 'error' | string>
+  database?: string
+  uptime?: number
+  timestamp?: string
+}
+
 export type HardwareModelStatus =
   | 'calibrated'
   | 'modeled'

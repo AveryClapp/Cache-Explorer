@@ -60,6 +60,8 @@ Already in place:
   fail clearly instead of hanging CI or product API requests.
 - Empty result state routes users into run, verified workload, and experiment
   flows.
+- The workbench header surfaces backend health, direct/sandbox execution mode,
+  and compiler availability so deployment trust is visible before a run.
 - Local bootstrap has a doctor script plus a single dev command that can build,
   install npm dependencies, and start backend/frontend together.
 - Optional Vim editor mode is lazy-loaded so the main app bundle avoids that
