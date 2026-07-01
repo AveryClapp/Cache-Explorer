@@ -39,6 +39,16 @@ Each calibration claim should be backed by a small evidence packet:
 This packet can live in benchmark history artifacts first. It can move into a
 formal calibration database later if hosted usage justifies it.
 
+The checked-in packet contract lives at
+`benchmarks/calibration/calibration-evidence.schema.json`. Example packets live
+under `benchmarks/calibration/evidence/` and can be validated without running
+benchmarks:
+
+```bash
+./backend/scripts/cache-explore calibration
+./backend/scripts/cache-explore calibration --json benchmarks/calibration/evidence/*.json
+```
+
 ## Subsystem Matrix
 
 | Subsystem | Product Status | Calibration Target |

@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cache-explorer.local/schemas/calibration-evidence.schema.json",
+  "title": "Cache Explorer Calibration Evidence Packet",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "packetId",
+    "profileId",
+    "capturedAt",
+    "machine",
+    "toolchain",
+    "workload",
+    "counterSource",
+    "subsystems",
+    "measurements",
+    "caveats"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "packetId": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_.-]+$"
+    },
+    "profileId": {
+      "type": "string"
+    },
+    "profileClass": {
+      "type": "string"
+    },
+    "capturedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "machine": {
+      "type": "object",
+      "required": ["cpu", "vendor", "architecture", "os"],
+      "additionalProperties": false,
+      "properties": {
+        "cpu": { "type": "string" },
+        "vendor": { "type": "string" },
+        "architecture": { "type": "string" },
+        "os": { "type": "string" },
+        "microcode": { "type": "string" },
+        "powerMode": { "type": "string" },
+        "virtualized": { "type": "boolean" },
+        "smt": { "type": "string" }
+      }
+    },
+    "toolchain": {
+      "type": "object",
+      "required": ["compiler", "compilerVersion", "cacheExplorerCommit"],
+      "additionalProperties": false,
+      "properties": {
+        "compiler": { "type": "string" },
+        "compilerVersion": { "type": "string" },
+        "cacheExplorerCommit": { "type": "string" },
+        "llvmPassSha256": { "type": "string" },
+        "runtimeSha256": { "type": "string" },
+        "simulatorSha256": { "type": "string" }
+      }
+    },
+    "workload": {
+      "type": "object",
+      "required": ["id", "command", "manifestSha256", "sourceSha256"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "command": { "type": "string" },
+        "manifestSha256": { "type": "string" },
+        "sourceSha256": { "type": "string" },
+        "eventLimit": { "type": "integer", "minimum": 0 },
+        "stress": { "type": "boolean" }
+      }
+    },
+    "counterSource": {
+      "type": "object",
+      "required": ["tool", "counters"],
+      "additionalProperties": false,
+      "properties": {
+        "tool": { "type": "string" },
+        "version": { "type": "string" },
+        "counters": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "subsystems": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "level", "claim"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "level": { "type": "integer", "minimum": 0, "maximum": 4 },
+          "claim": {
+            "type": "string",
+            "enum": ["metadata-only", "modeled", "estimated", "calibrated"]
+          },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+    "measurements": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["variant", "hardwareCounters", "simulator", "relationship"],
+        "additionalProperties": false,
+        "properties": {
+          "variant": { "type": "string" },
+          "hardwareCounters": { "type": "object" },
+          "simulator": { "type": "object" },
+          "relationship": {
+            "type": "object",
+            "required": ["metric", "expected", "observed", "passed"],
+            "additionalProperties": false,
+            "properties": {
+              "metric": { "type": "string" },
+              "expected": { "type": "string" },
+              "observed": { "type": "string" },
+              "passed": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
+    "caveats": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

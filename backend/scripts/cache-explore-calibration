@@ -1,0 +1,201 @@
+#!/usr/bin/env node
+
+const { readdir, readFile } = require('fs/promises')
+const { join, dirname, resolve } = require('path')
+
+function usage() {
+  console.log(`Usage: cache-explore calibration [options] [evidence.json ...]
+
+Validate calibration evidence packets without running benchmarks.
+
+Options:
+  --validate   Validate packets (default)
+  --list       List bundled evidence packets
+  --json       Emit JSON summary
+  --help       Show this help
+
+Examples:
+  cache-explore calibration
+  cache-explore calibration --list
+  cache-explore calibration benchmarks/calibration/evidence/*.json
+  cache-explore calibration --json benchmarks/calibration/evidence/*.json`)
+}
+
+function projectRoot() {
+  const scriptDir = dirname(resolve(process.argv[1]))
+  return dirname(dirname(scriptDir))
+}
+
+function isObject(value) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function requireString(errors, packet, path) {
+  const value = path.split('.').reduce((current, key) => current?.[key], packet)
+  if (typeof value !== 'string' || value.trim() === '') {
+    errors.push(`${path} must be a non-empty string`)
+  }
+}
+
+function requireArray(errors, packet, path) {
+  const value = path.split('.').reduce((current, key) => current?.[key], packet)
+  if (!Array.isArray(value) || value.length === 0) {
+    errors.push(`${path} must be a non-empty array`)
+  }
+}
+
+function validatePacket(packet) {
+  const errors = []
+  if (!isObject(packet)) return ['packet must be a JSON object']
+  if (packet.schemaVersion !== 1) errors.push('schemaVersion must be 1')
+
+  for (const path of [
+    'packetId',
+    'profileId',
+    'capturedAt',
+    'machine.cpu',
+    'machine.vendor',
+    'machine.architecture',
+    'machine.os',
+    'toolchain.compiler',
+    'toolchain.compilerVersion',
+    'toolchain.cacheExplorerCommit',
+    'workload.id',
+    'workload.command',
+    'workload.manifestSha256',
+    'workload.sourceSha256',
+    'counterSource.tool',
+  ]) {
+    requireString(errors, packet, path)
+  }
+
+  requireArray(errors, packet, 'counterSource.counters')
+  requireArray(errors, packet, 'subsystems')
+  requireArray(errors, packet, 'measurements')
+  if (!Array.isArray(packet.caveats)) errors.push('caveats must be an array')
+
+  for (const [index, subsystem] of (packet.subsystems || []).entries()) {
+    if (!isObject(subsystem)) {
+      errors.push(`subsystems[${index}] must be an object`)
+      continue
+    }
+    if (typeof subsystem.name !== 'string' || subsystem.name.trim() === '') {
+      errors.push(`subsystems[${index}].name must be a non-empty string`)
+    }
+    if (!Number.isInteger(subsystem.level) || subsystem.level < 0 || subsystem.level > 4) {
+      errors.push(`subsystems[${index}].level must be an integer from 0 to 4`)
+    }
+    if (!['metadata-only', 'modeled', 'estimated', 'calibrated'].includes(subsystem.claim)) {
+      errors.push(`subsystems[${index}].claim is not recognized`)
+    }
+    if (subsystem.claim === 'calibrated' && subsystem.level < 2) {
+      errors.push(`subsystems[${index}] cannot claim calibrated below level 2`)
+    }
+  }
+
+  for (const [index, measurement] of (packet.measurements || []).entries()) {
+    if (!isObject(measurement)) {
+      errors.push(`measurements[${index}] must be an object`)
+      continue
+    }
+    if (typeof measurement.variant !== 'string' || measurement.variant.trim() === '') {
+      errors.push(`measurements[${index}].variant must be a non-empty string`)
+    }
+    if (!isObject(measurement.hardwareCounters)) {
+      errors.push(`measurements[${index}].hardwareCounters must be an object`)
+    }
+    if (!isObject(measurement.simulator)) {
+      errors.push(`measurements[${index}].simulator must be an object`)
+    }
+    if (!isObject(measurement.relationship)) {
+      errors.push(`measurements[${index}].relationship must be an object`)
+    } else {
+      for (const key of ['metric', 'expected', 'observed']) {
+        if (typeof measurement.relationship[key] !== 'string' || measurement.relationship[key].trim() === '') {
+          errors.push(`measurements[${index}].relationship.${key} must be a non-empty string`)
+        }
+      }
+      if (typeof measurement.relationship.passed !== 'boolean') {
+        errors.push(`measurements[${index}].relationship.passed must be boolean`)
+      }
+    }
+  }
+
+  return errors
+}
+
+async function bundledEvidenceFiles() {
+  const evidenceDir = join(projectRoot(), 'benchmarks', 'calibration', 'evidence')
+  const entries = await readdir(evidenceDir, { withFileTypes: true })
+  return entries
+    .filter(entry => entry.isFile() && entry.name.endsWith('.json'))
+    .map(entry => join(evidenceDir, entry.name))
+    .sort()
+}
+
+async function main() {
+  const args = process.argv.slice(2)
+  const json = args.includes('--json')
+  const list = args.includes('--list')
+  if (args.includes('--help') || args.includes('-h')) {
+    usage()
+    return
+  }
+
+  const files = args.filter(arg => !arg.startsWith('--'))
+  const selectedFiles = files.length > 0 ? files.map(file => resolve(file)) : await bundledEvidenceFiles()
+
+  if (list) {
+    if (json) {
+      console.log(JSON.stringify({ evidence: selectedFiles }, null, 2))
+    } else {
+      for (const file of selectedFiles) console.log(file)
+    }
+    return
+  }
+
+  const results = []
+  let failed = false
+  for (const file of selectedFiles) {
+    try {
+      const packet = JSON.parse(await readFile(file, 'utf8'))
+      const errors = validatePacket(packet)
+      if (errors.length > 0) failed = true
+      results.push({
+        file,
+        ok: errors.length === 0,
+        packetId: packet.packetId,
+        profileId: packet.profileId,
+        subsystems: Array.isArray(packet.subsystems) ? packet.subsystems.length : 0,
+        measurements: Array.isArray(packet.measurements) ? packet.measurements.length : 0,
+        errors,
+      })
+    } catch (error) {
+      failed = true
+      results.push({
+        file,
+        ok: false,
+        errors: [error.message],
+      })
+    }
+  }
+
+  if (json) {
+    console.log(JSON.stringify({ ok: !failed, packets: results }, null, 2))
+  } else {
+    for (const result of results) {
+      const status = result.ok ? 'ok  ' : 'fail'
+      console.log(`${status} ${result.file}`)
+      for (const error of result.errors) {
+        console.log(`     ${error}`)
+      }
+    }
+  }
+
+  if (failed) process.exit(1)
+}
+
+main().catch(error => {
+  console.error(error.message)
+  process.exit(1)
+})

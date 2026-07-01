@@ -248,6 +248,7 @@ main_usage() {
   echo "  experiment        Compare named source variants across configs"
   echo "  profiles          List modeled hardware profiles"
   echo "  workloads         List benchmark workload snapshots"
+  echo "  calibration       Validate calibration evidence packets"
   echo "  report            Generate HTML report from analysis"
   echo "  cc/c++            Compiler wrapper for build system integration"
   echo "  build-pass        Build the LLVM pass locally for your clang version"
@@ -263,6 +264,7 @@ main_usage() {
   echo "  cache-explore experiment conv2d.c -O2 --variant direct --variant tiled:RUN_TILED=1"
   echo "  cache-explore profiles --ids"
   echo "  cache-explore workloads --ids"
+  echo "  cache-explore calibration"
   echo "  cache-explore doctor"
   echo ""
   echo "Run 'cache-explore <command> --help' for command-specific help."
@@ -302,6 +304,10 @@ case "$1" in
   workloads)
     shift
     exec "$SCRIPT_DIR/cache-explore-workloads" "$@"
+    ;;
+  calibration)
+    shift
+    exec "$SCRIPT_DIR/cache-explore-calibration" "$@"
     ;;
   report)
     shift

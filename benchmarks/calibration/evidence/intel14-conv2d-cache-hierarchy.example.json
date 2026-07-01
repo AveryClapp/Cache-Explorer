@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "packetId": "intel14-conv2d-cache-hierarchy-example",
+  "profileId": "intel14",
+  "profileClass": "client",
+  "capturedAt": "2026-07-01T00:00:00.000Z",
+  "machine": {
+    "cpu": "Intel Core 14th Gen example host",
+    "vendor": "Intel",
+    "architecture": "x86_64",
+    "os": "Linux perf-compatible host",
+    "powerMode": "performance",
+    "virtualized": false,
+    "smt": "recorded"
+  },
+  "toolchain": {
+    "compiler": "clang",
+    "compilerVersion": "clang 21.0.0",
+    "cacheExplorerCommit": "example-packet",
+    "llvmPassSha256": "record-real-pass-sha256",
+    "runtimeSha256": "record-real-runtime-sha256",
+    "simulatorSha256": "record-real-simulator-sha256"
+  },
+  "workload": {
+    "id": "conv2d-intel14",
+    "command": "./backend/scripts/cache-explore experiment examples/conv2d_kernel.c -O2 --variant direct --variant tiled:RUN_TILED=1 --configs intel14 --limit 200000",
+    "manifestSha256": "record-real-workload-manifest-sha256",
+    "sourceSha256": "record-real-source-sha256",
+    "eventLimit": 200000,
+    "stress": false
+  },
+  "counterSource": {
+    "tool": "perf",
+    "version": "record-perf-version",
+    "counters": [
+      "L1-dcache-loads",
+      "L1-dcache-load-misses",
+      "LLC-loads",
+      "LLC-load-misses"
+    ]
+  },
+  "subsystems": [
+    {
+      "name": "cacheHierarchy",
+      "level": 2,
+      "claim": "calibrated",
+      "notes": "Example packet shape for one real host and one workload family."
+    },
+    {
+      "name": "prefetch",
+      "level": 1,
+      "claim": "modeled",
+      "notes": "Prefetch behavior is not promoted by this packet."
+    }
+  ],
+  "measurements": [
+    {
+      "variant": "direct",
+      "hardwareCounters": {
+        "l1dHitRate": 0.72,
+        "llcMisses": 12000
+      },
+      "simulator": {
+        "l1dHitRate": 0.74,
+        "estimatedCycles": 120000
+      },
+      "relationship": {
+        "metric": "l1d.hitRate",
+        "expected": "tiled > direct",
+        "observed": "tiled > direct",
+        "passed": true
+      }
+    },
+    {
+      "variant": "tiled",
+      "hardwareCounters": {
+        "l1dHitRate": 0.89,
+        "llcMisses": 6400
+      },
+      "simulator": {
+        "l1dHitRate": 0.91,
+        "estimatedCycles": 90000
+      },
+      "relationship": {
+        "metric": "l1d.hitRate",
+        "expected": "tiled > direct",
+        "observed": "tiled > direct",
+        "passed": true
+      }
+    }
+  ],
+  "caveats": [
+    "Example packet for schema validation; replace placeholder hashes before using as promotion evidence.",
+    "Does not promote prefetch, branch, pipeline, SIMD, topology, or NUMA claims."
+  ]
+}
