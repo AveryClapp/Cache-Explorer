@@ -27,6 +27,8 @@ Already in place:
   handoff, and share short-link roundtrips.
 - Share links that preserve multi-file projects, active/main file identity, run
   settings, and experiment setup.
+- Shared hardware profiles and run sets normalize known profile aliases and warn
+  when unavailable profiles are skipped or replaced.
 - Verified workload browser in the app, backed by product-facing workload APIs,
   with search, status filtering, hardware-target filtering, and sorting.
 - Workload catalog can surface published benchmark history in-app through a

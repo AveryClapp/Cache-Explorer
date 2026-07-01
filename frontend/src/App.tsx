@@ -88,10 +88,58 @@ function annotationBadge(annotation: SourceAnnotation) {
 const BATCH_HARDWARE_CONFIGS = ['educational', 'intel', 'amd', 'apple']
 const HARDWARE_RUN_SET_STORAGE_KEY = 'cache-explorer-hardware-run-set'
 const HARDWARE_OPTION_VALUES = new Set(HARDWARE_OPTIONS.map(option => option.value))
+const HARDWARE_RUN_SET_VALUES = new Set(HARDWARE_OPTIONS.map(option => option.value).filter(value => value !== 'custom'))
+const HARDWARE_CONFIG_ALIASES: Record<string, string> = {
+  intel12: 'intel',
+  sapphire: 'xeon8488c',
+  zen4: 'amd',
+  m1: 'apple',
+  graviton3: 'graviton',
+  raspberry: 'rpi4',
+}
 const STRESS_WORKLOAD_VARIANT_TIMEOUT_MS = 30000
 
 function hardwareConfigsOrDefault(configs: string[]) {
-  return configs.length > 0 ? configs : BATCH_HARDWARE_CONFIGS
+  return sanitizeHardwareRunSet(configs).configs
+}
+
+function canonicalHardwareConfigId(value: unknown) {
+  if (typeof value !== 'string') return null
+  const profileId = value.trim()
+  if (!profileId) return null
+  if (HARDWARE_OPTION_VALUES.has(profileId)) return profileId
+  const alias = HARDWARE_CONFIG_ALIASES[profileId]
+  return alias && HARDWARE_OPTION_VALUES.has(alias) ? alias : null
+}
+
+function canonicalHardwareRunSetId(value: unknown) {
+  const profileId = canonicalHardwareConfigId(value)
+  return profileId && HARDWARE_RUN_SET_VALUES.has(profileId) ? profileId : null
+}
+
+function formatQuotedList(items: string[]) {
+  return items.map(item => `"${item}"`).join(', ')
+}
+
+function sanitizeHardwareRunSet(value: unknown) {
+  const rawItems = Array.isArray(value) ? value : []
+  const configs: string[] = []
+  const missing: string[] = []
+
+  for (const item of rawItems) {
+    if (typeof item !== 'string' || !item.trim()) continue
+    const canonical = canonicalHardwareRunSetId(item)
+    if (canonical) {
+      if (!configs.includes(canonical)) configs.push(canonical)
+    } else if (!missing.includes(item.trim())) {
+      missing.push(item.trim())
+    }
+  }
+
+  return {
+    configs: configs.length > 0 ? configs : BATCH_HARDWARE_CONFIGS,
+    missing,
+  }
 }
 
 function readStoredHardwareRunSet() {
@@ -99,9 +147,7 @@ function readStoredHardwareRunSet() {
   try {
     const raw = localStorage.getItem(HARDWARE_RUN_SET_STORAGE_KEY)
     const parsed = raw ? JSON.parse(raw) : null
-    if (!Array.isArray(parsed)) return BATCH_HARDWARE_CONFIGS
-    const configs = Array.from(new Set(parsed.filter(item => typeof item === 'string' && item.trim())))
-    return configs.length > 0 ? configs : BATCH_HARDWARE_CONFIGS
+    return sanitizeHardwareRunSet(parsed).configs
   } catch {
     return BATCH_HARDWARE_CONFIGS
   }
@@ -509,12 +555,13 @@ function App() {
           setActiveFileId(newFile.id)
           setMainFileId(newFile.id)
         }
-        const restoredConfig = state.config || 'educational'
-        if (HARDWARE_OPTION_VALUES.has(restoredConfig)) {
+        const sharedConfig = state.config || 'educational'
+        const restoredConfig = canonicalHardwareConfigId(sharedConfig)
+        if (restoredConfig) {
           setConfig(restoredConfig)
         } else {
           setConfig('educational')
-          addEnvironmentNotice(`Shared hardware profile "${restoredConfig}" is not available here; using educational.`)
+          addEnvironmentNotice(`Shared hardware profile "${sharedConfig}" is not available here; using educational.`)
         }
         setOptLevel(state.optLevel)
         if (state.defines) setDefines(state.defines)
@@ -526,8 +573,11 @@ function App() {
         if (typeof state.cacheSegments === 'boolean') setCacheSegments(state.cacheSegments)
         if (state.customConfig) setCustomConfig({ ...defaultCustomConfig, ...state.customConfig })
         if (Array.isArray(state.runHardwareConfigIds)) {
-          const nextRunSet = Array.from(new Set(state.runHardwareConfigIds.filter(Boolean)))
-          if (nextRunSet.length > 0) setRunHardwareConfigIds(nextRunSet)
+          const { configs, missing } = sanitizeHardwareRunSet(state.runHardwareConfigIds)
+          setRunHardwareConfigIds(configs)
+          if (missing.length > 0) {
+            addEnvironmentNotice(`Shared hardware run set skipped unavailable profiles ${formatQuotedList(missing)}.`)
+          }
         }
         if (state.experimentVariants) setExperimentVariants(state.experimentVariants)
       }
@@ -1113,10 +1163,11 @@ function App() {
   const loadWorkload = useCallback((workload: WorkloadSnapshot) => {
     const exampleKey = exampleKeyForPath(workload.example)
     if (exampleKey) loadExampleByKey(exampleKey)
-    setConfig(workload.config)
-    setSelectedHardwareProfileId(workload.config)
-    setRunHardwareConfigIds([workload.config])
-    setPrefetchPolicy((workload.prefetch as PrefetchPolicy | undefined) || PREFETCH_DEFAULTS[workload.config] || 'none')
+    const workloadConfig = canonicalHardwareConfigId(workload.config) || 'educational'
+    setConfig(workloadConfig)
+    setSelectedHardwareProfileId(workloadConfig)
+    setRunHardwareConfigIds([canonicalHardwareRunSetId(workload.config) || workloadConfig])
+    setPrefetchPolicy((workload.prefetch as PrefetchPolicy | undefined) || PREFETCH_DEFAULTS[workloadConfig] || PREFETCH_DEFAULTS[workload.config] || 'none')
     if (workload.optLevel) setOptLevel(workload.optLevel)
     if (typeof workload.limit === 'number') setEventLimit(workload.limit)
     setExperimentVariants(workload.variants.map(variant => {

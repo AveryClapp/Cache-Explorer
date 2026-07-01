@@ -932,8 +932,10 @@ async function verifyShareRoundTrip(url) {
     ...sharedState,
     config: 'future-socket',
     selectedCompiler: 'clang-missing',
+    runHardwareConfigIds: ['intel12', 'future-gpu', 'zen4', 'zen4'],
   }
   let shortenedState = null
+  let restoredCompareRequest = null
 
   await page.route('**/api/compilers', async route => {
     await route.fulfill({
@@ -977,6 +979,14 @@ async function verifyShareRoundTrip(url) {
       body: JSON.stringify({ state: missingEnvironmentState }),
     })
   })
+  await page.route('**/compare', async route => {
+    restoredCompareRequest = route.request().postDataJSON()
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(mockComparisonResponse()),
+    })
+  })
 
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto(`${url}?s=smoke-missing-environment`, { waitUntil: 'domcontentloaded' })
@@ -989,6 +999,14 @@ async function verifyShareRoundTrip(url) {
     page.getByText('Shared compiler "clang-missing" is not available here; using clang-21.', { exact: true }),
     'missing compiler notice',
   )
+  await assertVisible(
+    page.getByText('Shared hardware run set skipped unavailable profiles "future-gpu".', { exact: true }),
+    'missing run-set notice',
+  )
+  await page.getByRole('button', { name: 'Hardware', exact: true }).click()
+  await assertVisible(page.locator('.batch-modal').filter({ hasText: 'Hardware Comparison' }), 'restored hardware comparison modal')
+  assert(restoredCompareRequest?.configs?.join(',') === 'intel,amd', `restored comparison configs mismatch: ${JSON.stringify(restoredCompareRequest?.configs)}`)
+  await closeModal()
 
   await page.goto(`${url}?s=smoke-seed`, { waitUntil: 'domcontentloaded' })
   await assertVisible(page.getByText('Intel 14th Gen', { exact: true }), 'shared hardware value')
@@ -1030,6 +1048,7 @@ async function verifyShareRoundTrip(url) {
   await page.unroute('**/s/smoke-share')
   await page.unroute('**/s/smoke-seed')
   await page.unroute('**/s/smoke-missing-environment')
+  await page.unroute('**/compare')
   await page.unroute('**/api/compilers')
 }
 
