@@ -93,6 +93,21 @@ else
   exit 1
 fi
 
+echo -n "Test: hash probe workload remains covered... "
+if echo "$OUTPUT" | jq -e '
+  any(.workloads[]; .id == "hash-probe-intel"
+    and (.checks | length) >= 3
+    and all(.checks[]; .passed == true)
+    and any(.checks[]; .metric == "levels.l1d.hitRate" and .leftVariant == "hash" and .rightVariant == "contiguous" and .leftValue < .rightValue)
+    and any(.checks[]; .metric == "levels.l1d.misses" and .leftVariant == "hash" and .rightVariant == "contiguous" and .leftValue > .rightValue))
+' > /dev/null; then
+  echo "PASS"
+else
+  echo "FAIL"
+  echo "$OUTPUT" | jq .
+  exit 1
+fi
+
 echo -n "Test: workload verifier emits benchmark history artifact... "
 if jq -e '
   .schemaVersion == 1

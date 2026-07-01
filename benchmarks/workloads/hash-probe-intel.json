@@ -1,0 +1,45 @@
+{
+  "id": "hash-probe-intel",
+  "description": "Hash-table probing vs contiguous pool traversal on the Intel profile.",
+  "example": "examples/hash_table.c",
+  "language": "c",
+  "optLevel": "-O2",
+  "config": "intel",
+  "limit": 200000,
+  "variants": [
+    {
+      "id": "hash",
+      "example": "examples/hash_table.c"
+    },
+    {
+      "id": "contiguous",
+      "example": "examples/memory_pool.c"
+    }
+  ],
+  "expectedRelationships": [
+    {
+      "metric": "levels.l1d.hitRate",
+      "relationship": "hash < contiguous",
+      "lastObserved": {
+        "hash": 0.742,
+        "contiguous": 0.943
+      }
+    },
+    {
+      "metric": "levels.l1d.misses",
+      "relationship": "hash > contiguous",
+      "lastObserved": {
+        "hash": 16885,
+        "contiguous": 5088
+      }
+    },
+    {
+      "metric": "timing.totalCycles",
+      "relationship": "hash > contiguous",
+      "lastObserved": {
+        "hash": 1294816,
+        "contiguous": 1012529
+      }
+    }
+  ]
+}

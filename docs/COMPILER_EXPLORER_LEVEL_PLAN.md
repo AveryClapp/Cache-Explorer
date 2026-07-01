@@ -28,8 +28,8 @@ Already in place:
 - Workload verification can emit compact benchmark-history JSON artifacts and
   standalone HTML trend reports in CI.
 - Workload verification covers branch behavior, prefetch policy, vector/SIMD
-  stats, memory intrinsic stats, atomic builtin stats, and image-stencil
-  traversal locality.
+  stats, memory intrinsic stats, atomic builtin stats, hash-table probing,
+  contiguous allocation locality, and image-stencil traversal locality.
 - Empty result state routes users into run, verified workload, and experiment
   flows.
 - Local bootstrap has a doctor script plus a single dev command that can build,
@@ -117,6 +117,6 @@ Known gaps:
 
 - Tune threaded false-sharing examples so they can run as optional stress
   workloads without dragging down CI.
-- Add more real kernels for sorting, search, hashing, and allocation patterns.
+- Add more real kernels for sorting and search patterns.
 - Publish benchmark-history HTML reports through hosted docs or Pages.
 - Keep committing each completed slice with validation output.

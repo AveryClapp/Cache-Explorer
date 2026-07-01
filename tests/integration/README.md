@@ -42,6 +42,7 @@ Runs `cache-explore workloads --verify --json` against benchmark snapshots from 
 - Sequential array scanning has lower modeled average latency than pointer chasing
 - Intel stream prefetching reduces modeled cycles and L2 misses for a sequential scan
 - Alternating data branches cost more modeled execution cycles than a predictable loop branch
+- Hash-table probing has worse modeled L1D locality than contiguous pool traversal
 - Vector/SIMD, memory intrinsic, and atomic builtin advanced stats remain observable
   through product workload verification
 

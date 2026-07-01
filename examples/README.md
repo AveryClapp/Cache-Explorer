@@ -150,3 +150,10 @@ Run any example with Cache Explorer:
    ./backend/scripts/cache-explore examples/image_blur.c -O2 -D RUN_COLUMN_MAJOR=1 --config intel --limit 100000
    ./backend/scripts/cache-explore workloads image-blur-stencil-intel --verify
    ```
+
+7. **Hash Probe vs Contiguous Pool**
+   ```bash
+   ./backend/scripts/cache-explore examples/hash_table.c -O2 --config intel --limit 200000
+   ./backend/scripts/cache-explore examples/memory_pool.c -O2 --config intel --limit 200000
+   ./backend/scripts/cache-explore workloads hash-probe-intel --verify
+   ```
