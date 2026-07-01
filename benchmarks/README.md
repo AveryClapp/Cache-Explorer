@@ -9,6 +9,9 @@ Each workload snapshot describes:
 - variant definitions
 - expected metric relationships
 
+Variants may override `example`, `optLevel`, `config`, and `limit` when the
+relationship compares different source files or hardware settings.
+
 The integration suite runs these snapshots through `tests/integration/test-workload-snapshots.sh`.
 
 Useful commands:

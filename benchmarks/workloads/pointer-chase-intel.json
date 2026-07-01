@@ -1,0 +1,29 @@
+{
+  "id": "pointer-chase-intel",
+  "description": "Sequential array scan vs pointer chasing on the Intel profile.",
+  "example": "examples/sequential.c",
+  "language": "c",
+  "optLevel": "-O0",
+  "config": "intel",
+  "limit": 200000,
+  "variants": [
+    {
+      "id": "sequential",
+      "example": "examples/sequential.c"
+    },
+    {
+      "id": "pointer",
+      "example": "examples/pointer_chasing.c"
+    }
+  ],
+  "expectedRelationships": [
+    {
+      "metric": "timing.avgLatency",
+      "relationship": "sequential < pointer",
+      "lastObserved": {
+        "sequential": 5.18,
+        "pointer": 10.46
+      }
+    }
+  ]
+}

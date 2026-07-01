@@ -1,0 +1,36 @@
+{
+  "id": "matrix-layout-educational",
+  "description": "Row-major vs column-major matrix traversal on the educational profile.",
+  "example": "examples/matrix_row.c",
+  "language": "c",
+  "optLevel": "-O0",
+  "config": "educational",
+  "variants": [
+    {
+      "id": "row",
+      "example": "examples/matrix_row.c"
+    },
+    {
+      "id": "column",
+      "example": "examples/matrix_col.c"
+    }
+  ],
+  "expectedRelationships": [
+    {
+      "metric": "levels.l1d.misses",
+      "relationship": "row < column",
+      "lastObserved": {
+        "row": 515,
+        "column": 8185
+      }
+    },
+    {
+      "metric": "timing.totalCycles",
+      "relationship": "row < column",
+      "lastObserved": {
+        "row": 125945,
+        "column": 374445
+      }
+    }
+  ]
+}

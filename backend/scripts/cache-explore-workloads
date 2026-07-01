@@ -54,7 +54,12 @@ function relationshipSummary(workload) {
 
 function variantSummary(workload) {
   return (workload.variants || [])
-    .map(variant => variant.id)
+    .map(variant => {
+      const source = variant.example && variant.example !== workload.example
+        ? `:${variant.example.split('/').pop()}`
+        : ''
+      return `${variant.id}${source}`
+    })
     .join(', ')
 }
 
@@ -65,30 +70,34 @@ function shellQuote(value) {
 }
 
 function commandForVariant(workload, variant) {
-  const args = ['cache-explore', workload.example]
-  if (workload.optLevel) args.push(workload.optLevel)
+  const args = ['cache-explore', variant.example || workload.example]
+  const optLevel = variant.optLevel || workload.optLevel
+  if (optLevel) args.push(optLevel)
 
   for (const define of variant.defines || []) {
     args.push('-D', define)
   }
 
-  args.push('--config', workload.config)
-  if (workload.limit) args.push('--limit', String(workload.limit))
+  args.push('--config', variant.config || workload.config)
+  const limit = variant.limit ?? workload.limit
+  if (limit) args.push('--limit', String(limit))
   args.push('--json')
 
   return args.map(shellQuote).join(' ')
 }
 
 function argsForVariant(workload, variant) {
-  const args = [join(projectRoot(), workload.example)]
-  if (workload.optLevel) args.push(workload.optLevel)
+  const args = [join(projectRoot(), variant.example || workload.example)]
+  const optLevel = variant.optLevel || workload.optLevel
+  if (optLevel) args.push(optLevel)
 
   for (const define of variant.defines || []) {
     args.push('-D', define)
   }
 
-  args.push('--config', workload.config)
-  if (workload.limit) args.push('--limit', String(workload.limit))
+  args.push('--config', variant.config || workload.config)
+  const limit = variant.limit ?? workload.limit
+  if (limit) args.push('--limit', String(limit))
   args.push('--json')
 
   return args

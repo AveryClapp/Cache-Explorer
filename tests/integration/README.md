@@ -38,6 +38,8 @@ Tests directional workload relationships that should stay true:
 ### 4. Workload Snapshots (`test-workload-snapshots.sh`)
 Runs `cache-explore workloads --verify --json` against benchmark snapshots from `../../benchmarks/workloads/` and validates their expected relationships:
 - Tiled Conv2D improves modeled Intel 14th Gen L2 locality versus direct Conv2D
+- Row-major matrix traversal improves locality versus column-major traversal
+- Sequential array scanning has lower modeled average latency than pointer chasing
 
 These snapshots are executable benchmark metadata: example path, config, optimization level, variants, metric relationships, timing, and result provenance live together.
 
