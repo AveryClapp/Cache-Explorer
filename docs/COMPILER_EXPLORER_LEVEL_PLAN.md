@@ -43,6 +43,8 @@ Already in place:
   health checks.
 - Releases publish LLVM pass checksums and the download helper verifies them
   when available, with strict verification available for CI or locked-down use.
+- Release assets are covered by GitHub artifact attestations so downloaded pass
+  binaries have provenance in addition to checksums.
 
 Known gaps:
 
@@ -50,8 +52,8 @@ Known gaps:
   a broad regression corpus.
 - Hosted benchmark history retention is best-effort through the Actions cache;
   durable long-term storage or release-attached history would still be stronger.
-- Deployment/package polish still needs signed/attested release artifacts beyond
-  checksums, local doctor/dev flow, and Docker health checks.
+- Deployment/package polish still needs fuller hosted-release hardening around
+  Docker image provenance and public release notes.
 - Workload history trend surfacing, deeper onboarding, and error states need
   another design pass.
 
@@ -109,8 +111,8 @@ Known gaps:
 - One documented local command starts the full product.
 - Hosted/server deployment has health checks, cache pruning, rate limits, and
   clear sandbox status.
-- Release assets include checksum metadata and the install/download path verifies
-  it when present.
+- Release assets include checksum metadata, provenance attestations, and the
+  install/download path verifies checksums when present.
 - Docs include quick starts for web, CLI, workload verification, hardware profiles,
   and reproducible bug reports.
 

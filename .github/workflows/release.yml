@@ -61,6 +61,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
 
     steps:
       - name: Checkout code
@@ -89,6 +92,11 @@ jobs:
           else
             echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
           fi
+
+      - name: Attest release assets
+        uses: actions/attest@v4
+        with:
+          subject-checksums: ./release-assets/SHA256SUMS
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1

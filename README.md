@@ -213,8 +213,8 @@ workload-history JSON from the Actions cache, keeps the latest 30 runs, and
 publishes an HTML trend report to GitHub Pages when Pages is configured for
 Actions.
 
-Tagged releases include pre-built LLVM pass assets plus `SHA256SUMS` for
-download verification.
+Tagged releases include pre-built LLVM pass assets, `SHA256SUMS` for download
+verification, and GitHub artifact attestations for release provenance.
 
 ## Limitations
 
