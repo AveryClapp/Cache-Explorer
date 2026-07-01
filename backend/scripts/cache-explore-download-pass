@@ -11,15 +11,18 @@
 # Environment variables:
 #   CACHE_EXPLORER_CACHE_DIR  - Override cache location (default: ~/.cache/cache-explorer/passes)
 #   CACHE_EXPLORER_RELEASE    - Specific release tag (default: latest)
-#   CACHE_EXPLORER_REPO       - GitHub repo (default: placeholder/cache-explorer)
+#   CACHE_EXPLORER_REPO       - GitHub repo (default: AveryClapp/Cache-Explorer)
+#   CACHE_EXPLORER_REQUIRE_CHECKSUM
+#                            - Set to 1 to fail if SHA256SUMS is unavailable
 #
 set -e
 
 # Configuration
-DEFAULT_REPO="placeholder/cache-explorer"  # Will be updated when repo is public
+DEFAULT_REPO="AveryClapp/Cache-Explorer"
 REPO="${CACHE_EXPLORER_REPO:-$DEFAULT_REPO}"
 RELEASE="${CACHE_EXPLORER_RELEASE:-latest}"
 CACHE_DIR="${CACHE_EXPLORER_CACHE_DIR:-$HOME/.cache/cache-explorer/passes}"
+REQUIRE_CHECKSUM="${CACHE_EXPLORER_REQUIRE_CHECKSUM:-0}"
 
 # Parse optional LLVM version argument
 LLVM_VERSION_OVERRIDE="${1:-}"
@@ -159,6 +162,23 @@ get_download_url() {
 }
 
 #######################################
+# Get the checksum manifest URL for the release
+# Globals:
+#   REPO, RELEASE
+# Arguments:
+#   None
+# Outputs:
+#   Download URL
+#######################################
+get_checksum_url() {
+  if [[ "$RELEASE" == "latest" ]]; then
+    echo "https://github.com/${REPO}/releases/latest/download/SHA256SUMS"
+  else
+    echo "https://github.com/${REPO}/releases/download/${RELEASE}/SHA256SUMS"
+  fi
+}
+
+#######################################
 # Get the cache path for the pass
 # Globals:
 #   CACHE_DIR, RELEASE
@@ -179,6 +199,106 @@ get_cache_path() {
   else
     echo "${CACHE_DIR}/${RELEASE}/${filename}"
   fi
+}
+
+#######################################
+# Get the cache path for the checksum manifest
+# Globals:
+#   CACHE_DIR, RELEASE
+# Arguments:
+#   None
+# Outputs:
+#   Cache file path
+#######################################
+get_checksum_cache_path() {
+  if [[ "$RELEASE" == "latest" ]]; then
+    echo "${CACHE_DIR}/latest/SHA256SUMS"
+  else
+    echo "${CACHE_DIR}/${RELEASE}/SHA256SUMS"
+  fi
+}
+
+#######################################
+# Compute SHA-256 for a local file
+# Arguments:
+#   path - File path
+# Outputs:
+#   Hex SHA-256 digest
+#######################################
+sha256_file() {
+  local path="$1"
+
+  if command -v sha256sum &>/dev/null; then
+    sha256sum "$path" | awk '{print $1}'
+  elif command -v shasum &>/dev/null; then
+    shasum -a 256 "$path" | awk '{print $1}'
+  else
+    echo "Error: sha256sum or shasum is required for checksum verification." >&2
+    return 1
+  fi
+}
+
+#######################################
+# Verify a downloaded pass against SHA256SUMS
+# Arguments:
+#   pass_path - Downloaded pass path
+#   manifest_path - SHA256SUMS path
+# Returns:
+#   0 on success, 1 on mismatch or missing entry
+#######################################
+verify_checksum() {
+  local pass_path="$1"
+  local manifest_path="$2"
+  local filename expected actual
+
+  filename="$(basename "$pass_path")"
+  expected=$(awk -v name="$filename" '$2 == name { print $1; exit }' "$manifest_path")
+  if [[ -z "$expected" ]]; then
+    echo "Error: No checksum entry for $filename in $manifest_path" >&2
+    return 1
+  fi
+
+  if ! actual=$(sha256_file "$pass_path"); then
+    return 1
+  fi
+
+  if [[ "$actual" != "$expected" ]]; then
+    echo "Error: Checksum mismatch for $filename" >&2
+    echo "Expected: $expected" >&2
+    echo "Actual:   $actual" >&2
+    return 1
+  fi
+
+  echo "Verified checksum for $filename" >&2
+}
+
+#######################################
+# Download and verify the release checksum manifest when available
+# Arguments:
+#   pass_path - Downloaded pass path
+# Returns:
+#   0 on verified or best-effort skip, 1 on verification failure
+#######################################
+verify_downloaded_pass() {
+  local pass_path="$1"
+  local manifest_path checksum_url
+
+  manifest_path=$(get_checksum_cache_path)
+  checksum_url=$(get_checksum_url)
+  mkdir -p "$(dirname "$manifest_path")"
+
+  if ! curl -fsSL "$checksum_url" -o "$manifest_path" 2>/dev/null; then
+    rm -f "$manifest_path"
+    if [[ "$REQUIRE_CHECKSUM" == "1" ]]; then
+      echo "Error: Checksum manifest unavailable: $checksum_url" >&2
+      return 1
+    fi
+    echo "Warning: Checksum manifest unavailable; downloaded pass was not verified." >&2
+    echo "         Set CACHE_EXPLORER_REQUIRE_CHECKSUM=1 to fail closed." >&2
+    return 0
+  fi
+
+  verify_checksum "$pass_path" "$manifest_path"
 }
 
 #######################################
@@ -254,12 +374,13 @@ main() {
   echo "Downloading CacheProfiler for LLVM ${llvm_version} (${platform})..." >&2
   echo "URL: $url" >&2
 
-  if download_pass "$url" "$cache_path"; then
+  if download_pass "$url" "$cache_path" && verify_downloaded_pass "$cache_path"; then
     echo "" >&2
     echo "Downloaded successfully to: $cache_path" >&2
     echo "$cache_path"
     exit 0
   else
+    rm -f "$cache_path"
     echo "" >&2
     echo "Error: Failed to download pre-built pass." >&2
     echo "" >&2

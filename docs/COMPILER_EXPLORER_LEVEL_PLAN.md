@@ -39,6 +39,8 @@ Already in place:
   install npm dependencies, and start backend/frontend together.
 - Docker deployment proxies the product API surface and exposes backend/frontend
   health checks.
+- Releases publish LLVM pass checksums and the download helper verifies them
+  when available, with strict verification available for CI or locked-down use.
 
 Known gaps:
 
@@ -47,8 +49,8 @@ Known gaps:
 - Hosted benchmark history is available through a GitHub Pages workflow, but it
   still keeps only the latest published run unless external artifact retention
   is added.
-- Deployment/package polish still needs hosted-release hardening beyond the
-  local doctor/dev flow and Docker health checks.
+- Deployment/package polish still needs signed/attested release artifacts beyond
+  checksums, local doctor/dev flow, and Docker health checks.
 - Workload history trend surfacing, deeper onboarding, and error states need
   another design pass.
 
@@ -106,6 +108,8 @@ Known gaps:
 - One documented local command starts the full product.
 - Hosted/server deployment has health checks, cache pruning, rate limits, and
   clear sandbox status.
+- Release assets include checksum metadata and the install/download path verifies
+  it when present.
 - Docs include quick starts for web, CLI, workload verification, hardware profiles,
   and reproducible bug reports.
 

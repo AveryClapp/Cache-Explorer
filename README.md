@@ -50,6 +50,15 @@ cd cache-explorer
 ./backend/scripts/cache-explore mycode.c --config intel --json
 ```
 
+Release builds publish pre-built `CacheProfiler` LLVM passes for supported LLVM
+versions. The download helper uses the official release repo by default and
+verifies binaries against the release `SHA256SUMS` manifest when it is present:
+
+```bash
+./backend/scripts/cache-explore-download-pass 21
+CACHE_EXPLORER_REQUIRE_CHECKSUM=1 ./backend/scripts/cache-explore-download-pass 21
+```
+
 ## Features
 
 - **Source-level attribution** - See exactly which line caused each cache miss
@@ -202,6 +211,9 @@ standalone HTML trend report:
 On pushes to `main`, the `Workload Dashboard` workflow publishes the latest
 HTML workload-history report to GitHub Pages when Pages is configured for
 Actions.
+
+Tagged releases include pre-built LLVM pass assets plus `SHA256SUMS` for
+download verification.
 
 ## Limitations
 

@@ -75,6 +75,10 @@ jobs:
         run: |
           mkdir -p release-assets
           find ./artifacts -name "*.so" -exec cp {} ./release-assets/ \;
+          cd release-assets
+          sha256sum *.so | sort -k2 > SHA256SUMS
+          cat SHA256SUMS
+          cd ..
           ls -la ./release-assets/
 
       - name: Determine tag
@@ -95,6 +99,8 @@ jobs:
             ## CacheProfiler LLVM Pass
 
             Pre-built CacheProfiler.so for multiple LLVM versions and platforms.
+            Release assets include `SHA256SUMS`; the download helper verifies
+            binaries against it when available.
 
             ### Supported Configurations
             | LLVM Version | Linux x64 | macOS ARM64 |
@@ -116,7 +122,9 @@ jobs:
             ```bash
             ./backend/scripts/build-passes.sh [llvm-version] [output-dir]
             ```
-          files: ./release-assets/*.so
+          files: |
+            ./release-assets/*.so
+            ./release-assets/SHA256SUMS
           draft: false
           prerelease: false
         env:
