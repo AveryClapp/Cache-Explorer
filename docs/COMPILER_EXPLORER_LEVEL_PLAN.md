@@ -43,6 +43,8 @@ Already in place:
   threaded false-sharing smoke case.
 - Workload metadata supports opt-in stress workloads; the heavier threaded
   false-sharing stress manifest remains excluded from default CI verification.
+- The workload catalog exposes stress workloads through an explicit opt-in
+  toggle and carries the same opt-in through product verification requests.
 - Workload catalog and verification API errors include structured details,
   timeout state, exit codes, and truncated subprocess diagnostics when available.
 - Workload verification has a bounded per-variant timeout so stress workloads
@@ -77,6 +79,9 @@ Known gaps:
   patterns are visible.
 - Deeper onboarding still needs another design pass; API-side workload error
   diagnostics and in-app workload history surfacing are in place.
+- On 2026-07-01, `false-sharing-stress-intel` timed out at 30 seconds per
+  variant locally even with bounded verification. It remains stress-only until
+  the threaded instrumentation path is tuned enough for default coverage.
 
 ## Done Criteria
 

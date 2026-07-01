@@ -14,6 +14,7 @@ interface WorkloadCatalogModalProps {
   workloads: WorkloadSnapshot[]
   verification: WorkloadVerificationResponse | null
   history: WorkloadHistoryResponse | null
+  includeStress: boolean
   loading: boolean
   verifying: boolean
   error: string | null
@@ -22,6 +23,7 @@ interface WorkloadCatalogModalProps {
   onRefresh: () => void
   onVerify: () => void
   onRefreshHistory: () => void
+  onIncludeStressChange: (includeStress: boolean) => void
   onLoadWorkload: (workload: WorkloadSnapshot) => void
   onClose: () => void
 }
@@ -72,6 +74,10 @@ function shortDigest(value: string | undefined) {
   return value ? value.slice(0, 12) : ''
 }
 
+function isStressWorkload(workload: WorkloadSnapshot) {
+  return workload.stress === true || (workload.tags || []).includes('stress')
+}
+
 function variantLabel(workload: WorkloadSnapshot, variant: WorkloadSnapshot['variants'][number]) {
   const details = [
     variant.prefetch ? `pf:${variant.prefetch}` : null,
@@ -88,6 +94,8 @@ function searchableText(workload: WorkloadSnapshot) {
     workload.config,
     workload.optLevel,
     workload.prefetch,
+    workload.stress ? 'stress' : '',
+    ...(workload.tags || []),
     workload.identity?.manifestSha256,
     ...Object.values(workload.identity?.sourceFiles || {}).map(file => file.sha256),
     ...workload.variants.flatMap(variant => [
@@ -169,6 +177,7 @@ export function WorkloadCatalogModal({
   workloads,
   verification,
   history,
+  includeStress,
   loading,
   verifying,
   error,
@@ -177,6 +186,7 @@ export function WorkloadCatalogModal({
   onRefresh,
   onVerify,
   onRefreshHistory,
+  onIncludeStressChange,
   onLoadWorkload,
   onClose,
 }: WorkloadCatalogModalProps) {
@@ -343,6 +353,16 @@ export function WorkloadCatalogModal({
                   </button>
                 ))}
               </div>
+              <label className={`workload-stress-toggle ${includeStress ? 'active' : ''}`}>
+                <input
+                  type="checkbox"
+                  checked={includeStress}
+                  disabled={loading || verifying}
+                  aria-label="Include stress workloads"
+                  onChange={event => onIncludeStressChange(event.target.checked)}
+                />
+                <span>Stress</span>
+              </label>
               <select
                 className="workload-filter-select"
                 value={targetFilter}
@@ -421,6 +441,9 @@ export function WorkloadCatalogModal({
                       <span>{workload.optLevel || '-O0'}</span>
                       <span>{formatLimit(workload.limit)} events</span>
                       <span>{workload.variants.length} variants</span>
+                      {isStressWorkload(workload) && (
+                        <span className="workload-tag stress">stress</span>
+                      )}
                       {workload.identity?.manifestSha256 && (
                         <span title={workload.identity.manifestSha256}>manifest {shortDigest(workload.identity.manifestSha256)}</span>
                       )}

@@ -287,6 +287,7 @@ function App() {
   const [selectedHardwareProfileId, setSelectedHardwareProfileId] = useState('')
   const [runHardwareConfigIds, setRunHardwareConfigIds] = useState<string[]>(readStoredHardwareRunSet)
   const [showWorkloadCatalog, setShowWorkloadCatalog] = useState(false)
+  const [includeStressWorkloads, setIncludeStressWorkloads] = useState(false)
   const [workloads, setWorkloads] = useState<WorkloadSnapshot[]>([])
   const [workloadsLoading, setWorkloadsLoading] = useState(false)
   const [workloadsVerifying, setWorkloadsVerifying] = useState(false)
@@ -985,11 +986,12 @@ function App() {
     setShowExperimentModal(true)
   }, [])
 
-  const loadWorkloads = useCallback(async () => {
+  const loadWorkloads = useCallback(async (includeStress = includeStressWorkloads) => {
     setWorkloadsLoading(true)
     setWorkloadsError(null)
     try {
-      const response = await fetch(`${API_BASE}/api/workloads`)
+      const params = includeStress ? '?includeStress=1' : ''
+      const response = await fetch(`${API_BASE}/api/workloads${params}`)
       const data = await response.json()
       if (!response.ok || !Array.isArray(data.workloads)) {
         setWorkloadsError(data.message || data.error || 'Failed to load workloads')
@@ -1001,13 +1003,14 @@ function App() {
     } finally {
       setWorkloadsLoading(false)
     }
-  }, [])
+  }, [includeStressWorkloads])
 
   const verifyWorkloads = useCallback(async () => {
     setWorkloadsVerifying(true)
     setWorkloadsError(null)
     try {
-      const response = await fetch(`${API_BASE}/api/workloads/verify`)
+      const params = includeStressWorkloads ? '?includeStress=1' : ''
+      const response = await fetch(`${API_BASE}/api/workloads/verify${params}`)
       const data = await response.json()
       if (!response.ok || !data.summary || !Array.isArray(data.workloads)) {
         setWorkloadsError(data.message || data.error || 'Failed to verify workloads')
@@ -1019,7 +1022,7 @@ function App() {
     } finally {
       setWorkloadsVerifying(false)
     }
-  }, [])
+  }, [includeStressWorkloads])
 
   const loadWorkloadHistory = useCallback(async () => {
     setWorkloadHistoryLoading(true)
@@ -1048,6 +1051,12 @@ function App() {
       void loadWorkloadHistory()
     }
   }, [loadWorkloadHistory, loadWorkloads, workloadHistory, workloadHistoryLoading, workloads.length, workloadsLoading])
+
+  const updateIncludeStressWorkloads = useCallback((next: boolean) => {
+    setIncludeStressWorkloads(next)
+    setWorkloadVerification(null)
+    void loadWorkloads(next)
+  }, [loadWorkloads])
 
   const exampleKeyForPath = useCallback((examplePath: string) => {
     const base = examplePath.split('/').pop()?.replace(/\.(c|cpp|cc|cxx|rs|zig)$/, '')
@@ -1374,17 +1383,19 @@ function App() {
         <Suspense fallback={null}>
           <WorkloadCatalogModal
             workloads={workloads}
-            verification={workloadVerification}
-            history={workloadHistory}
-            loading={workloadsLoading}
+          verification={workloadVerification}
+          history={workloadHistory}
+          includeStress={includeStressWorkloads}
+          loading={workloadsLoading}
             verifying={workloadsVerifying}
             error={workloadsError}
             historyLoading={workloadHistoryLoading}
             historyError={workloadHistoryError}
             onRefresh={loadWorkloads}
-            onVerify={verifyWorkloads}
-            onRefreshHistory={loadWorkloadHistory}
-            onLoadWorkload={loadWorkload}
+          onVerify={verifyWorkloads}
+          onRefreshHistory={loadWorkloadHistory}
+          onIncludeStressChange={updateIncludeStressWorkloads}
+          onLoadWorkload={loadWorkload}
             onClose={() => setShowWorkloadCatalog(false)}
           />
         </Suspense>

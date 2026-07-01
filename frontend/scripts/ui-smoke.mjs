@@ -241,6 +241,23 @@ async function verifyWorkloadCatalogControls(url) {
       ],
     },
   ]
+  const stressWorkload = {
+    id: 'false-sharing-stress-intel',
+    description: 'Threaded false-sharing stress workload.',
+    example: 'examples/false_sharing.c',
+    optLevel: '-O1',
+    config: 'intel',
+    limit: 20000,
+    stress: true,
+    tags: ['stress', 'threaded', 'coherence', 'false-sharing'],
+    variants: [
+      { id: 'packed', defines: ['ITERATIONS=512'] },
+      { id: 'padded', defines: ['ITERATIONS=512', 'RUN_PADDED=1'] },
+    ],
+    expectedRelationships: [
+      { metric: 'coherence.falseSharingEvents', relationship: 'packed > padded' },
+    ],
+  }
   const mockHistory = {
     available: true,
     source: 'dashboard',
@@ -380,21 +397,37 @@ async function verifyWorkloadCatalogControls(url) {
     ],
   }
 
-  await page.route('**/api/workloads', route => route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify({ workloads: mockWorkloads }),
-  }))
+  const workloadRequests = []
+  const verificationRequests = []
+
+  const fulfillWorkloads = route => {
+    const requestUrl = new URL(route.request().url())
+    const includeStress = requestUrl.searchParams.get('includeStress') === '1'
+    workloadRequests.push(requestUrl.search)
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ workloads: includeStress ? [...mockWorkloads, stressWorkload] : mockWorkloads }),
+    })
+  }
+  await page.route('**/api/workloads', fulfillWorkloads)
+  await page.route('**/api/workloads?**', fulfillWorkloads)
   await page.route('**/api/workloads/history', route => route.fulfill({
     status: 200,
     contentType: 'application/json',
     body: JSON.stringify(mockHistory),
   }))
-  await page.route('**/api/workloads/verify', route => route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify(mockVerification),
-  }))
+  const fulfillVerification = route => {
+    const requestUrl = new URL(route.request().url())
+    verificationRequests.push(requestUrl.search)
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(mockVerification),
+    })
+  }
+  await page.route('**/api/workloads/verify', fulfillVerification)
+  await page.route('**/api/workloads/verify?**', fulfillVerification)
 
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto(url, { waitUntil: 'domcontentloaded' })
@@ -408,8 +441,10 @@ async function verifyWorkloadCatalogControls(url) {
   await assertVisible(page.getByText('-600ms', { exact: true }).first(), 'history improvement delta')
   await assertVisible(workloadName('conv2d-intel14'), 'conv2d workload row')
   await assertVisible(page.getByText('3 / 3', { exact: true }), 'workload result count')
+  assert(await workloadName('false-sharing-stress-intel').count() === 0, 'stress workload should be excluded by default')
 
   await page.getByRole('button', { name: 'Verify' }).click()
+  assert(verificationRequests.at(-1) === '', `default verification should not include stress: ${verificationRequests.at(-1)}`)
   await assertVisible(page.getByText('2 passed / 2 failed', { exact: true }), 'verification summary chip')
   const timeoutRow = page.locator('.workload-row').filter({ hasText: 'prefetch-stream-intel' })
   await assertVisible(timeoutRow.getByText('Timed out', { exact: true }), 'timed out workload status')
@@ -432,10 +467,25 @@ async function verifyWorkloadCatalogControls(url) {
   assert(await page.getByText('1 / 3', { exact: true }).isVisible(), 'target filter should narrow workload count')
 
   await page.getByLabel('Sort workloads').selectOption('variants')
+  await page.getByRole('button', { name: 'Clear' }).click()
+  await assertVisible(page.getByText('3 / 3', { exact: true }), 'cleared filters before stress opt-in')
+
+  await page.getByLabel('Include stress workloads').check()
+  await assertVisible(page.getByText('4 / 4', { exact: true }), 'stress-inclusive workload count')
+  await assertVisible(workloadName('false-sharing-stress-intel'), 'stress workload row')
+  const stressRow = page.locator('.workload-row').filter({ hasText: 'false-sharing-stress-intel' })
+  await assertVisible(stressRow.getByText('stress', { exact: true }), 'stress workload badge')
+  assert(workloadRequests.at(-1) === '?includeStress=1', `stress catalog request missing opt-in: ${workloadRequests.at(-1)}`)
+
+  await page.getByRole('button', { name: 'Verify' }).click()
+  assert(verificationRequests.at(-1) === '?includeStress=1', `stress verification request missing opt-in: ${verificationRequests.at(-1)}`)
+
   await closeModal()
   await page.unroute('**/api/workloads/verify')
+  await page.unroute('**/api/workloads/verify?**')
   await page.unroute('**/api/workloads/history')
   await page.unroute('**/api/workloads')
+  await page.unroute('**/api/workloads?**')
 }
 
 function mockCacheLevel(hits, misses) {

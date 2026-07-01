@@ -484,14 +484,15 @@
 }
 
 .workload-catalog-controls {
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto minmax(132px, auto) minmax(120px, auto) auto auto;
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
   align-items: center;
 }
 
 .workload-search-field {
-  min-width: 0;
+  flex: 1 1 260px;
+  min-width: min(100%, 220px);
   min-height: 36px;
   display: grid;
   grid-template-columns: 26px minmax(0, 1fr);
@@ -562,6 +563,33 @@
   background: var(--phosphor-subtle);
 }
 
+.workload-stress-toggle {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.workload-stress-toggle input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--signal-warning);
+}
+
+.workload-stress-toggle.active {
+  color: var(--signal-warning);
+  border-color: color-mix(in srgb, var(--signal-warning) 45%, var(--border));
+  background: color-mix(in srgb, var(--signal-warning) 10%, var(--surface));
+}
+
 .workload-filter-select {
   min-height: 36px;
   padding: 0 34px 0 var(--space-3);
@@ -578,7 +606,7 @@
 }
 
 .workload-result-count {
-  justify-self: end;
+  margin-left: auto;
   color: var(--text-muted);
   font-family: var(--font-code);
   font-size: var(--text-2xs);
@@ -840,6 +868,19 @@
 
 .workload-meta span:last-child {
   border-right: 0;
+}
+
+.workload-meta .workload-tag {
+  padding: 1px var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-code);
+  font-size: var(--text-2xs);
+}
+
+.workload-meta .workload-tag.stress {
+  color: var(--signal-warning);
+  border-color: color-mix(in srgb, var(--signal-warning) 45%, var(--border));
 }
 
 .workload-variants code,
@@ -1429,12 +1470,12 @@
 
 @media (max-width: 768px) {
   .workload-catalog-controls {
-    grid-template-columns: 1fr 1fr;
+    align-items: stretch;
   }
 
   .workload-search-field,
   .workload-filter-group {
-    grid-column: 1 / -1;
+    flex-basis: 100%;
   }
 
   .workload-filter-group {
@@ -1447,12 +1488,13 @@
   }
 
   .workload-filter-select,
+  .workload-stress-toggle,
   .workload-clear-filters {
     width: 100%;
   }
 
   .workload-result-count {
-    justify-self: start;
+    margin-left: 0;
   }
 
   .experiment-template-bar,
