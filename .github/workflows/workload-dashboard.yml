@@ -53,7 +53,7 @@ jobs:
         run: ./scripts/build.sh Release
 
       - name: Restore retained workload history
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: reports/workloads/history-cache
           key: workload-history-${{ github.run_id }}
