@@ -21,16 +21,16 @@
       "metric": "execution.pipeline.cycles",
       "relationship": "alternating > predictable",
       "lastObserved": {
-        "predictable": 12843,
-        "alternating": 15968
+        "predictable": 10906,
+        "alternating": 55031
       }
     },
     {
       "metric": "summary.estimatedCycles",
       "relationship": "alternating > predictable",
       "lastObserved": {
-        "predictable": 12843,
-        "alternating": 15968
+        "predictable": 10906,
+        "alternating": 55031
       }
     }
   ]
