@@ -99,7 +99,7 @@ jobs:
           subject-checksums: ./release-assets/SHA256SUMS
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.get-tag.outputs.tag }}
           name: Cache Explorer ${{ steps.get-tag.outputs.tag }}
