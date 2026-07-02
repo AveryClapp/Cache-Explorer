@@ -84,24 +84,26 @@
     min-width: 80px;
   }
 
-  .toolbar-divider {
-    display: none;
-  }
-
-  .toolbar-more {
-    width: 100%;
-    margin-top: var(--space-2);
-    order: 4;
-  }
-
-  .toolbar-summary {
+  .run-setup-capsule {
     flex: 1 1 100%;
-    order: 3;
+    min-width: 0;
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "label caret"
+      "value caret"
+      "subvalue caret";
+    row-gap: var(--space-1);
   }
 
-  .toolbar-summary-chip {
-    flex: 1 1 calc(50% - var(--space-1));
-    justify-content: space-between;
+  .run-setup-label {
+    border-right: 0;
+    padding-right: 0;
+  }
+
+  .run-setup-value,
+  .run-setup-subvalue {
+    gap: var(--space-1);
   }
 
   .settings-toolbar-advanced {
@@ -111,15 +113,30 @@
     padding: var(--space-3);
   }
 
+  .run-setup-panel {
+    display: flex;
+    flex-direction: column;
+  }
+
   .toolbar-advanced-section {
     flex-direction: column;
     align-items: flex-start;
     gap: var(--space-2);
   }
 
+  .run-setup-panel .toolbar-advanced-section,
+  .run-target-section .toolbar-run-controls,
+  .run-fidelity-section .toolbar-run-controls {
+    display: flex;
+  }
+
   .toolbar-run-controls {
     width: 100%;
     gap: var(--space-2);
+  }
+
+  .run-setup-panel .toolbar-group {
+    width: 100%;
   }
 
   .cache-config-group {

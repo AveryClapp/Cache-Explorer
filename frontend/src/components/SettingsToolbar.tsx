@@ -91,6 +91,8 @@ export function SettingsToolbar({
   const prefetchLabel = PREFETCH_OPTIONS.find(option => option.value === prefetchPolicy)?.label ?? prefetchPolicy
   const modeLabel = FAST_MODE_OPTIONS.find(option => option.value === String(fastMode))?.label ?? (fastMode ? 'Fast' : 'Full')
   const sampleLabel = SAMPLE_OPTIONS.find(option => option.value === String(sampleRate))?.label ?? `1:${sampleRate}`
+  const configLabel = HARDWARE_OPTIONS.find(option => option.value === config)?.label ?? config
+  const optLabel = OPT_LEVEL_OPTIONS.find(option => option.value === optLevel)?.label ?? optLevel
   const limitLabel = isCustomLimit
     ? formatLimit(eventLimit)
     : LIMIT_OPTIONS.find(option => option.value === String(eventLimit))?.label ?? formatLimit(eventLimit)
@@ -102,63 +104,59 @@ export function SettingsToolbar({
   return (
     <div className="settings-toolbar">
       <div className="settings-toolbar-main">
-        <div className="toolbar-group">
-          <label>Hardware</label>
-          <StyledSelect
-            value={config}
-            options={HARDWARE_OPTIONS}
-            onChange={onConfigChange}
-          />
-        </div>
-
-        <div className="toolbar-divider" />
-
-        <div className="toolbar-group">
-          <label>Opt</label>
-          <StyledSelect
-            value={optLevel}
-            options={OPT_LEVEL_OPTIONS}
-            onChange={onOptLevelChange}
-          />
-        </div>
-
-        <div className="toolbar-divider" />
-
-        <div className="toolbar-summary" aria-label="Run fidelity summary">
-          <span className="toolbar-summary-chip">
-            <span>Mode</span>
-            <strong>{modeLabel}</strong>
-          </span>
-          <span className="toolbar-summary-chip">
-            <span>Prefetch</span>
-            <strong>{prefetchLabel}</strong>
-          </span>
-          <span className="toolbar-summary-chip">
-            <span>Sample</span>
-            <strong>{sampleLabel}</strong>
-          </span>
-          <span className="toolbar-summary-chip">
-            <span>Limit</span>
-            <strong>{limitLabel}</strong>
-          </span>
-        </div>
-
         <button
-          className={`toolbar-more ${showMore ? 'active' : ''}`}
+          className={`run-setup-capsule ${showMore ? 'active' : ''}`}
           onClick={() => setShowMore(!showMore)}
-          title="Advanced run and model options"
+          title="Open run setup"
           aria-expanded={showMore}
           aria-controls="settings-toolbar-advanced"
         >
-          <span>{showMore ? 'Hide Advanced' : 'Advanced'}</span>
-          <span className="toolbar-more-caret" aria-hidden="true">{showMore ? '▲' : '▼'}</span>
+          <span className="run-setup-label">Run setup</span>
+          <span className="run-setup-value">
+            <span className="run-setup-token">{configLabel}</span>
+            <span className="run-setup-separator" aria-hidden="true">/</span>
+            <span className="run-setup-token">{optLabel}</span>
+          </span>
+          <span className="run-setup-subvalue">
+            <span className="run-setup-token">{modeLabel}</span>
+            <span className="run-setup-separator" aria-hidden="true">/</span>
+            <span className="run-setup-token">{prefetchLabel}</span>
+            <span className="run-setup-separator" aria-hidden="true">/</span>
+            <span className="run-setup-token">{sampleLabel}</span>
+            <span className="run-setup-separator" aria-hidden="true">/</span>
+            <span className="run-setup-token">{limitLabel}</span>
+          </span>
+          <span className="run-setup-caret" aria-hidden="true">{showMore ? '▲' : '▼'}</span>
         </button>
       </div>
 
       {showMore && (
-        <div className="settings-toolbar-advanced" id="settings-toolbar-advanced">
+        <div className="settings-toolbar-advanced run-setup-panel" id="settings-toolbar-advanced">
+          <div className="toolbar-advanced-section run-target-section">
+            <span className="toolbar-advanced-label">Target</span>
+            <div className="toolbar-run-controls">
+              <div className="toolbar-group">
+                <label>Hardware</label>
+                <StyledSelect
+                  value={config}
+                  options={HARDWARE_OPTIONS}
+                  onChange={onConfigChange}
+                />
+              </div>
+
+              <div className="toolbar-group">
+                <label>Opt</label>
+                <StyledSelect
+                  value={optLevel}
+                  options={OPT_LEVEL_OPTIONS}
+                  onChange={onOptLevelChange}
+                />
+              </div>
+            </div>
+          </div>
+
           <div className="toolbar-advanced-section run-fidelity-section">
-            <span className="toolbar-advanced-label">Run Fidelity:</span>
+            <span className="toolbar-advanced-label">Fidelity</span>
             <div className="toolbar-run-controls">
               <div className="toolbar-group">
                 <label>Prefetch</label>
@@ -179,6 +177,7 @@ export function SettingsToolbar({
               </div>
 
               <div className="toolbar-group">
+                <label title="Cache repeated loop segments - speeds up programs with tight loops (experimental)">Loops</label>
                 <button
                   className={`toolbar-toggle ${cacheSegments ? 'active' : ''}`}
                   onClick={() => onCacheSegmentsChange(!cacheSegments)}
@@ -256,7 +255,7 @@ export function SettingsToolbar({
 
           {config === 'custom' && (
             <div className="toolbar-advanced-section custom-cache-section">
-              <span className="toolbar-advanced-label">Cache Config:</span>
+              <span className="toolbar-advanced-label">Custom Cache</span>
               <div className="toolbar-cache-config">
                 <div className="cache-config-group">
                   <span className="cache-config-title">Line Size</span>

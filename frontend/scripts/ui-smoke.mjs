@@ -151,7 +151,7 @@ async function openHeaderTool(name) {
 async function openAdvancedSettings() {
   const advancedPanel = page.locator('#settings-toolbar-advanced')
   if (!await advancedPanel.isVisible().catch(() => false)) {
-    await page.getByRole('button', { name: /Advanced/ }).click()
+    await page.getByRole('button', { name: /Run setup|Advanced/ }).click()
   }
   await assertVisible(advancedPanel, 'advanced settings')
 }
@@ -286,10 +286,10 @@ async function verifyLaunchSurface(url) {
   assert(!desktopLayout.evidenceOverflow, `desktop launch evidence overflows: ${JSON.stringify(desktopLayout.evidenceItems)}`)
   assert((desktopLayout.emptyScrollDelta ?? 0) <= maxLayoutScrollDelta, `desktop launch surface scrolls by ${desktopLayout.emptyScrollDelta}px`)
 
-  await page.getByRole('button', { name: /Advanced/ }).click()
+  await page.getByRole('button', { name: /Run setup|Advanced/ }).click()
   await assertVisible(page.locator('#settings-toolbar-advanced'), 'launch advanced settings')
   assert(await page.getByText('Defines:', { exact: true }).count() === 0, 'advanced settings should not expose compiler defines')
-  await page.getByRole('button', { name: /Hide Advanced/ }).click()
+  await page.getByRole('button', { name: /Run setup/ }).click()
 
   await page.getByRole('button', { name: /Hardware map/ }).click()
   const hardwareModal = page.locator('.hardware-explorer-modal')
