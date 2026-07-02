@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
+project(CacheExplorerRuntime C)
 
 # Runtime library - lightweight C library for event tracking
 # Only builds if you create cache-profiler-rt.c

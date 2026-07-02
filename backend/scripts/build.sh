@@ -3,32 +3,29 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BACKEND_DIR="$(dirname "$SCRIPT_DIR")"
+JOBS="$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)"
+
+build_component() {
+    local name="$1"
+    local source_dir="$2"
+    local artifact="$3"
+
+    echo "$name"
+    cmake -S "$source_dir" -B "$source_dir/build" -DCMAKE_BUILD_TYPE=Release > /dev/null
+    cmake --build "$source_dir/build" --parallel "$JOBS" > /dev/null
+    echo "      -> $artifact"
+}
 
 echo "=== Building Cache Explorer ==="
 
 # Build LLVM pass
-echo "[1/3] Building LLVM pass..."
-cd "$BACKEND_DIR/llvm-pass"
-mkdir -p build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release > /dev/null
-make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu) > /dev/null
-echo "      -> CacheProfiler.so"
+build_component "[1/3] Building LLVM pass..." "$BACKEND_DIR/llvm-pass" "CacheProfiler.so"
 
 # Build runtime library
-echo "[2/3] Building runtime library..."
-cd "$BACKEND_DIR/runtime"
-mkdir -p build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release > /dev/null
-make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu) > /dev/null
-echo "      -> libcache-explorer-rt.a"
+build_component "[2/3] Building runtime library..." "$BACKEND_DIR/runtime" "libcache-explorer-rt.a"
 
 # Build cache simulator
-echo "[3/3] Building cache simulator..."
-cd "$BACKEND_DIR/cache-simulator"
-mkdir -p build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release > /dev/null
-make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu) > /dev/null
-echo "      -> cache-sim"
+build_component "[3/3] Building cache simulator..." "$BACKEND_DIR/cache-simulator" "cache-sim"
 
 echo ""
 echo "=== Build complete ==="

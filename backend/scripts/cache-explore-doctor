@@ -5,15 +5,33 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BACKEND_DIR="$(dirname "$SCRIPT_DIR")"
 PROJECT_ROOT="$(dirname "$BACKEND_DIR")"
 
-if [[ -f "$PROJECT_ROOT/build/backend/llvm-pass/CacheProfiler.so" ]]; then
-  PASS="$PROJECT_ROOT/build/backend/llvm-pass/CacheProfiler.so"
-  RUNTIME="$PROJECT_ROOT/build/backend/runtime/libcache-explorer-rt.a"
-  CACHE_SIM="$PROJECT_ROOT/build/backend/cache-simulator/cache-sim"
-else
-  PASS="$BACKEND_DIR/llvm-pass/build/CacheProfiler.so"
-  RUNTIME="$BACKEND_DIR/runtime/build/libcache-explorer-rt.a"
-  CACHE_SIM="$BACKEND_DIR/cache-simulator/build/cache-sim"
-fi
+select_latest_existing() {
+  local selected=""
+
+  for candidate in "$@"; do
+    if [[ -f "$candidate" ]]; then
+      if [[ -z "$selected" || "$candidate" -nt "$selected" ]]; then
+        selected="$candidate"
+      fi
+    fi
+  done
+
+  if [[ -n "$selected" ]]; then
+    echo "$selected"
+  else
+    echo "$1"
+  fi
+}
+
+PASS=$(select_latest_existing \
+  "$PROJECT_ROOT/build/backend/llvm-pass/CacheProfiler.so" \
+  "$BACKEND_DIR/llvm-pass/build/CacheProfiler.so")
+RUNTIME=$(select_latest_existing \
+  "$PROJECT_ROOT/build/backend/runtime/libcache-explorer-rt.a" \
+  "$BACKEND_DIR/runtime/build/libcache-explorer-rt.a")
+CACHE_SIM=$(select_latest_existing \
+  "$PROJECT_ROOT/build/backend/cache-simulator/cache-sim" \
+  "$BACKEND_DIR/cache-simulator/build/cache-sim")
 
 FAILURES=0
 WARNINGS=0
