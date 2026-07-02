@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
-import yaml from 'js-yaml';
+import * as yaml from 'js-yaml';
 import { checkSandboxAvailable, runInSandbox, parseSandboxError } from './sandbox.js';
 import { initDb, createShortUrl, getShortUrl, isHealthy as isDbHealthy, getDbStats } from './db.js';
 import { getCachedResult, cacheResult, startCachePruning } from './cache.js';
