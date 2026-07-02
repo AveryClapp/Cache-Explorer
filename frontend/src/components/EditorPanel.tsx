@@ -180,7 +180,13 @@ export function EditorPanel({
                 >
                   <span
                     className="analysis-progress-fill"
-                    style={hasTotal ? { width: `${progressPct}%` } : undefined}
+                    style={hasTotal
+                      ? {
+                          width: `${progressPct}%`,
+                          minWidth: progressPct > 0 ? '2px' : undefined,
+                        }
+                      : undefined
+                    }
                   />
                 </span>
               )}

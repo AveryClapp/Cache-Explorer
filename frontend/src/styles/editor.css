@@ -159,9 +159,9 @@
 
 .analysis-progress {
   position: relative;
-  width: 96px;
-  height: 4px;
-  flex: 0 0 96px;
+  width: 128px;
+  height: 5px;
+  flex: 0 0 128px;
   overflow: hidden;
   border-radius: 999px;
   background: var(--surface);
