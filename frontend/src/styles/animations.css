@@ -2,30 +2,30 @@
    LIGHT THEME
    ══════════════════════════════════════════════════════════════════════════ */
 [data-theme="light"] {
-  --void: #f5f6f8;
+  --void: #f6f5f2;
   --panel: #ffffff;
-  --surface: #f0f1f3;
-  --elevated: #e8eaed;
-  --border: #d0d4db;
-  --border-glow: #c0c4cb;
+  --surface: #f0efeb;
+  --elevated: #e5e3dd;
+  --border: #d5d2ca;
+  --border-glow: #bdb8ad;
 
-  /* Teal accent (logo L1 - darker for light bg) */
-  --phosphor: #2d9a7e;
-  --phosphor-dim: #1f7a62;
-  --phosphor-glow: rgba(45, 154, 126, 0.12);
-  --phosphor-subtle: rgba(45, 154, 126, 0.06);
+  /* Muted blue accent for light mode */
+  --phosphor: #486f9f;
+  --phosphor-dim: #34577f;
+  --phosphor-glow: rgba(72, 111, 159, 0.12);
+  --phosphor-subtle: rgba(72, 111, 159, 0.08);
+  --accent-foreground: #ffffff;
 
-  --text-bright: #1a1d21;
-  --text-primary: #3d4450;
-  --text-secondary: #6b7280;
-  --text-muted: #9ca3af;
+  --text-bright: #202226;
+  --text-primary: #414750;
+  --text-secondary: #747b86;
+  --text-muted: #9a9fa8;
 
-  /* Logo colors adjusted for light mode */
-  --signal-excellent: #2d9a7e;  /* L1 teal */
-  --signal-good: #5a8f3e;       /* L2 green */
-  --signal-warning: #a68a00;    /* L3 yellow */
-  --signal-critical: #c41e3a;
-  --signal-info: #2d9a7e;       /* L1 teal */
+  --signal-excellent: #4f8a64;
+  --signal-good: #6f8f4f;
+  --signal-warning: #9a7627;
+  --signal-critical: #b84b3f;
+  --signal-info: #486f9f;
 }
 
 [data-theme="light"] body::before {

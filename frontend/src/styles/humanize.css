@@ -1,0 +1,203 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   HUMANIZED FINISH
+
+   Keeps the dense engineering workflow, softens the generated-dashboard feel.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+button,
+.logo-title,
+.environment-status-main,
+.diff-mode-text,
+.btn-compare,
+.btn-tools,
+.btn-export,
+.header-tool-name,
+.config-label,
+.toolbar-group label,
+.toolbar-advanced-label,
+.sidebar-title,
+.results-title,
+.panel-title,
+.metric-label,
+.provenance-label,
+.provenance-contract-label,
+.empty-state-kicker,
+.empty-state-trust-item span,
+.command-group-header,
+.cache-viz-title,
+.cache-level-name,
+.detail-title,
+.detail-label,
+.hotline-label,
+.batch-modal-title,
+.workload-section-title,
+.hardware-explorer-title,
+.experiment-section-title {
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.header {
+  background: color-mix(in srgb, var(--panel) 94%, var(--void));
+}
+
+.logo-title,
+.results-title,
+.panel-title,
+.sidebar-title,
+.empty-state-title {
+  font-weight: 650;
+}
+
+.logo-layer {
+  border-width: 1.5px;
+  opacity: 0.9;
+}
+
+.logo-layer.l3 {
+  border-color: color-mix(in srgb, var(--signal-warning) 70%, var(--text-muted));
+}
+
+.logo-layer.l2 {
+  border-color: color-mix(in srgb, var(--signal-good) 70%, var(--text-muted));
+}
+
+.logo-layer.l1 {
+  border-color: color-mix(in srgb, var(--signal-info) 76%, var(--text-muted));
+}
+
+.btn,
+.btn-tools,
+.btn-compare,
+.btn-export,
+.toolbar-more,
+.toolbar-toggle,
+.language-filter-btn,
+.styled-select-trigger,
+.empty-state-path,
+.example-item,
+.panel,
+.metric-card,
+.provenance-item {
+  transition-property: background-color, border-color, color, box-shadow, transform;
+}
+
+.btn-primary {
+  color: var(--accent-foreground);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--void) 28%, transparent);
+}
+
+.btn-primary:hover {
+  filter: brightness(1.04);
+}
+
+.btn:hover,
+.btn-tools:hover,
+.btn-tools.active,
+.btn-compare:hover,
+.btn-export:hover,
+.toolbar-more:hover,
+.toolbar-toggle:hover,
+.styled-select-trigger:hover,
+.language-filter-btn:hover {
+  box-shadow: none;
+}
+
+.environment-status,
+.toolbar-summary-chip,
+.empty-state-target,
+.provenance-chip,
+.provenance-inline,
+.btn,
+.btn-tools,
+.btn-compare,
+.btn-export,
+.toolbar-more,
+.toolbar-toggle,
+.styled-select-trigger {
+  background: color-mix(in srgb, var(--surface) 88%, var(--panel));
+}
+
+.example-item.active,
+.empty-state-path.primary,
+.toolbar-more.active,
+.toolbar-toggle.active,
+.command-item.selected,
+.language-filter-btn.active {
+  background: color-mix(in srgb, var(--phosphor-subtle) 72%, var(--surface));
+  border-color: color-mix(in srgb, var(--phosphor-dim) 55%, var(--border));
+  color: var(--text-bright);
+}
+
+.example-item.active .example-name,
+.styled-select-option.selected,
+.command-item-icon,
+.command-filter-badge,
+.command-icon {
+  color: var(--phosphor);
+}
+
+.metric-grid {
+  gap: var(--space-2);
+}
+
+.metric-card {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface) 90%, var(--elevated)),
+    var(--surface)
+  );
+  border-color: color-mix(in srgb, var(--border-glow) 58%, var(--border));
+}
+
+.metric-card::before {
+  height: 1px;
+  box-shadow: none;
+}
+
+.metric-card.excellent::before,
+.cache-level.l1 .cache-bar {
+  box-shadow: none;
+}
+
+.metric-card.excellent .metric-value {
+  text-shadow: none;
+}
+
+.panel-header {
+  background: color-mix(in srgb, var(--elevated) 70%, var(--surface));
+}
+
+.panel-content,
+.result-provenance-panel .panel-content {
+  background: color-mix(in srgb, var(--panel) 18%, transparent);
+}
+
+.sidebar {
+  background: color-mix(in srgb, var(--panel) 96%, var(--void));
+}
+
+.sidebar-title::before {
+  border-color: color-mix(in srgb, var(--phosphor-dim) 65%, var(--text-muted));
+}
+
+.language-filter {
+  background: color-mix(in srgb, var(--surface) 72%, var(--panel));
+}
+
+.empty-state-logo {
+  opacity: 0.72;
+}
+
+.empty-state-evidence span,
+.provenance-chip,
+.provenance-inline {
+  color: var(--text-primary);
+}
+
+.toast {
+  font-family: var(--font-body);
+  color: var(--text-bright);
+  border-color: color-mix(in srgb, var(--phosphor-dim) 55%, var(--border));
+  box-shadow: var(--shadow-panel);
+}

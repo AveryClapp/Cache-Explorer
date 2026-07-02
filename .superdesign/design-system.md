@@ -6,13 +6,14 @@ Cache Explorer is an engineering workbench for modeling cache and hardware behav
 
 ## Visual Direction
 
-- Use the existing dark console palette.
-- Primary accent: `--phosphor` teal `#4ec9b0`.
-- Supporting signal colors: green `#b5cea8`, yellow `#dcdcaa`, red `#f14c4c`.
-- Surfaces: `--void`, `--panel`, `--surface`, and `--elevated`.
-- Typography: JetBrains Mono for display/code, IBM Plex Mono for body.
-- Radii stay compact: 2px, 4px, 6px.
+- Use a quiet graphite workspace, not a neon lab-console theme.
+- Primary accent: muted blue via `--phosphor`, used for focus, selected rows, and primary actions.
+- Supporting signal colors: sage for modeled/success, olive for good, amber for caution, softened red for critical.
+- Surfaces: `--void`, `--panel`, `--surface`, and `--elevated` should feel layered but not black-on-black.
+- Typography: system sans for UI chrome; JetBrains Mono only for code, values, and reproducible command text.
+- Radii stay compact but less severe: 3px, 6px, 8px.
 - Density is a feature. Prefer scannable rows, compact controls, tables, chips, badges, and panel headers over roomy cards.
+- Avoid generated-dashboard tells: excessive uppercase, wide letter spacing, glowing accents, and one-note teal/purple gradients.
 
 ## Layout Rules
 
