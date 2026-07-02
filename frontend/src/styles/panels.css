@@ -205,30 +205,6 @@
   letter-spacing: 0.05em;
 }
 
-.toolbar-defines {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.toolbar-define {
-  display: flex;
-  align-items: center;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 4px 8px;
-  gap: 0;
-}
-
-.define-prefix {
-  font-family: var(--font-code);
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
-  margin-right: 2px;
-}
-
 .define-input {
   font-family: var(--font-code);
   font-size: var(--text-xs);
@@ -237,94 +213,6 @@
   color: var(--text-bright);
   outline: none;
   padding: 0;
-}
-
-.define-input.name {
-  width: 50px;
-  text-transform: uppercase;
-  color: var(--phosphor);
-  font-weight: 500;
-}
-
-.define-input.value {
-  width: 60px;
-}
-
-.define-eq {
-  font-family: var(--font-code);
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
-  margin: 0 2px;
-}
-
-.define-remove {
-  font-size: 14px;
-  color: var(--text-muted);
-  margin-left: 6px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 0 4px;
-}
-
-.define-remove:hover {
-  color: var(--signal-critical);
-}
-
-.define-add {
-  font-family: var(--font-display);
-  font-size: var(--text-xs);
-  padding: 4px 8px;
-  background: transparent;
-  color: var(--phosphor);
-  border: 1px dashed var(--phosphor-dim);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-}
-
-.define-add:hover {
-  background: var(--phosphor-subtle);
-}
-
-/* Defines presets */
-.defines-empty {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.defines-presets {
-  display: flex;
-  gap: var(--space-1);
-}
-
-.define-preset {
-  font-family: var(--font-code);
-  font-size: var(--text-xs);
-  padding: 4px 10px;
-  background: var(--surface);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
-}
-
-.define-preset:hover {
-  background: var(--phosphor-subtle);
-  color: var(--phosphor);
-  border-color: var(--phosphor);
-}
-
-.define-preset.define-custom {
-  border-style: dashed;
-  background: transparent;
-  color: var(--text-secondary);
-}
-
-.define-preset.define-custom:hover {
-  background: var(--phosphor-subtle);
-  color: var(--phosphor);
 }
 
 .toolbar-cache-config {

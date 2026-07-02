@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { StyledSelect } from './StyledSelect'
-import type { DefineEntry, CustomCacheConfig } from '../types'
+import type { CustomCacheConfig } from '../types'
 import {
   HARDWARE_OPTIONS,
   OPT_LEVEL_OPTIONS,
@@ -14,7 +14,6 @@ interface SettingsToolbarProps {
   config: string
   optLevel: string
   prefetchPolicy: string
-  defines: DefineEntry[]
   customConfig: CustomCacheConfig
   eventLimit: number
   sampleRate: number
@@ -23,7 +22,6 @@ interface SettingsToolbarProps {
   onConfigChange: (c: string) => void
   onOptLevelChange: (o: string) => void
   onPrefetchChange: (p: string) => void
-  onDefinesChange: (d: DefineEntry[]) => void
   onCustomConfigChange: (c: CustomCacheConfig) => void
   onEventLimitChange: (n: number) => void
   onSampleRateChange: (n: number) => void
@@ -35,7 +33,6 @@ export function SettingsToolbar({
   config,
   optLevel,
   prefetchPolicy,
-  defines,
   customConfig,
   eventLimit,
   sampleRate,
@@ -44,7 +41,6 @@ export function SettingsToolbar({
   onConfigChange,
   onOptLevelChange,
   onPrefetchChange,
-  onDefinesChange,
   onCustomConfigChange,
   onEventLimitChange,
   onSampleRateChange,
@@ -255,63 +251,6 @@ export function SettingsToolbar({
                   />
                 )}
               </div>
-            </div>
-          </div>
-
-          <div className="toolbar-advanced-section">
-            <span className="toolbar-advanced-label">Defines:</span>
-            <div className="toolbar-defines">
-              {defines.length === 0 ? (
-                <div className="defines-presets">
-                  <button className="define-preset" onClick={() => onDefinesChange([{ name: 'N', value: '1000' }])}>N=1000</button>
-                  <button className="define-preset" onClick={() => onDefinesChange([{ name: 'SIZE', value: '256' }])}>SIZE=256</button>
-                  <button className="define-preset" onClick={() => onDefinesChange([{ name: 'BLOCK', value: '64' }])}>BLOCK=64</button>
-                  <button className="define-preset define-custom" onClick={() => onDefinesChange([{ name: '', value: '' }])}>+ Custom</button>
-                </div>
-              ) : (
-                <>
-                  {defines.map((def, i) => (
-                    <div key={i} className="toolbar-define">
-                      <span className="define-prefix">-D</span>
-                      <input
-                        type="text"
-                        placeholder="NAME"
-                        value={def.name}
-                        onChange={(e) => {
-                          const newDefs = [...defines]
-                          newDefs[i].name = e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '')
-                          onDefinesChange(newDefs)
-                        }}
-                        className="define-input name"
-                        aria-label={`Define ${i + 1} name`}
-                      />
-                      <span className="define-eq">=</span>
-                      <input
-                        type="text"
-                        placeholder="value"
-                        value={def.value}
-                        onChange={(e) => {
-                          const newDefs = [...defines]
-                          newDefs[i].value = e.target.value
-                          onDefinesChange(newDefs)
-                        }}
-                        className="define-input value"
-                        aria-label={`Define ${i + 1} value`}
-                      />
-                      <button
-                        className="define-remove"
-                        onClick={() => onDefinesChange(defines.filter((_, j) => j !== i))}
-                        title="Remove define"
-                        aria-label={`Remove define ${def.name || i + 1}`}
-                      >×</button>
-                    </div>
-                  ))}
-                  <button
-                    className="define-add"
-                    onClick={() => onDefinesChange([...defines, { name: '', value: '' }])}
-                  >+</button>
-                </>
-              )}
             </div>
           </div>
 

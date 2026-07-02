@@ -1544,7 +1544,6 @@ function App() {
           config={config}
           optLevel={optLevel}
           prefetchPolicy={prefetchPolicy}
-          defines={defines}
           customConfig={customConfig}
           eventLimit={eventLimit}
           sampleRate={sampleRate}
@@ -1556,7 +1555,6 @@ function App() {
           }}
           onOptLevelChange={setOptLevel}
           onPrefetchChange={(p) => setPrefetchPolicy(p as PrefetchPolicy)}
-          onDefinesChange={setDefines}
           onCustomConfigChange={setCustomConfig}
           onEventLimitChange={setEventLimit}
           onSampleRateChange={setSampleRate}
