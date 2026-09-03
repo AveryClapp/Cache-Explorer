@@ -8,13 +8,13 @@
     "test": "node --test services/*.test.js middleware/*.test.js"
   },
   "dependencies": {
-    "better-sqlite3": "^13.0.3",
+    "better-sqlite3": "^12.11.1",
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "js-yaml": "^5.4.1",
     "ws": "^8.21.3"
   },
   "allowScripts": {
-    "better-sqlite3@13.0.3": true
+    "better-sqlite3@12.11.1": true
   }
 }
