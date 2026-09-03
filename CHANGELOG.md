@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.7.1](https://github.com/AveryClapp/Cache-Explorer/compare/v1.7.0...v1.7.1) (2026-09-03)
+
+
+### Bug Fixes
+
+* harden LLVM package installs ([13187c8](https://github.com/AveryClapp/Cache-Explorer/commit/13187c8f48f77718d3146284d5ee12995ffbab67))
+* normalize release image references ([1b15341](https://github.com/AveryClapp/Cache-Explorer/commit/1b15341294568c19432a9d4c0a73232391396430))
+* retry LLVM signing key downloads ([fb2359d](https://github.com/AveryClapp/Cache-Explorer/commit/fb2359d21a8be2ab65d701f3586e872164f9dca4))
+* stabilize release validation and Docker builds ([#85](https://github.com/AveryClapp/Cache-Explorer/issues/85)) ([e282811](https://github.com/AveryClapp/Cache-Explorer/commit/e2828114a049222c29f39547b5f3bb07289a8159))
+
 ## [1.7.0](https://github.com/AveryClapp/Cache-Explorer/compare/v1.6.0...v1.7.0) (2026-09-03)
 
 
