@@ -389,7 +389,7 @@ function App() {
     runHardwareConfigIds,
     experimentVariants,
   }), [
-    activeFileId,
+    activeFile?.name,
     cacheSegments,
     code,
     config,
@@ -1380,7 +1380,7 @@ function App() {
     }
   }, [experimentTemplatePending, experimentVariantSources, experimentVariants, makeHardwarePayload, runHardwareConfigIds])
 
-  const commands: CommandItem[] = useMemo(() => [
+  const commands: CommandItem[] = [
     // Actions (@)
     { id: 'run', icon: '@', label: 'Run analysis', shortcut: '⌘R', action: () => { if (!isLoading) runAnalysis() }, category: 'actions' },
     { id: 'share', icon: '@', label: 'Share / Copy link', shortcut: '⌘S', action: () => { handleShare(); setCopied(true); setTimeout(() => setCopied(false), 2000) }, category: 'actions' },
@@ -1405,7 +1405,7 @@ function App() {
     { id: 'limit-1m', icon: '*', label: 'Event limit: 1M', action: () => setEventLimit(1000000), category: 'config' },
     { id: 'limit-5m', icon: '*', label: 'Event limit: 5M', action: () => setEventLimit(5000000), category: 'config' },
     { id: 'limit-none', icon: '*', label: 'Event limit: None', action: () => setEventLimit(0), category: 'config' },
-  ], [isLoading, activeFileId, vimMode, diffMode, baselineResult, config, files, result, code, handleShare, updateActiveLanguage, setBaselineFromHook, clearBaselineHook, runBatchAnalysis, openExperimentModal, openHardwareExplorer, openWorkloadCatalog])
+  ]
 
   // Command palette handlers
   const handleCommandSelect = useCallback((cmd: CommandItem) => {
@@ -1413,12 +1413,12 @@ function App() {
     setShowCommandPalette(false)
   }, [])
 
-  const handleCommandNavigate = useCallback((delta: number) => {
+  const handleCommandNavigate = (delta: number) => {
     const filtered = commandQuery
       ? commands.filter(cmd => fuzzyMatch(commandQuery, cmd.label) || fuzzyMatch(commandQuery, cmd.category || ''))
       : commands
     setSelectedCommandIndex(prev => Math.max(0, Math.min(filtered.length - 1, prev + delta)))
-  }, [commandQuery, commands])
+  }
 
   return (
     <div className={`app${isEmbedMode ? ' embed' : ''}`}>

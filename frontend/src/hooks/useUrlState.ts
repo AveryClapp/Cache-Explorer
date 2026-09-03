@@ -7,6 +7,20 @@ export function useUrlState(
   onLoadState: (state: ShareableState) => void,
   deps: [string, string, string, Language, DefineEntry[], PrefetchPolicy?, string?, number?, number?, boolean?, boolean?]
 ) {
+  const [
+    code,
+    config,
+    optLevel,
+    language,
+    defines,
+    prefetchPolicy,
+    selectedCompiler,
+    sampleRate,
+    eventLimit,
+    fastMode,
+    cacheSegments,
+  ] = deps
+
   // Load state from URL on mount
   useEffect(() => {
     const loadState = async () => {
@@ -38,19 +52,6 @@ export function useUrlState(
   // Update URL when state changes
   useEffect(() => {
     const timer = setTimeout(() => {
-      const [
-        code,
-        config,
-        optLevel,
-        language,
-        defines,
-        prefetchPolicy,
-        selectedCompiler,
-        sampleRate,
-        eventLimit,
-        fastMode,
-        cacheSegments,
-      ] = deps
       const encoded = encodeState({
         code,
         config,
@@ -67,7 +68,7 @@ export function useUrlState(
       window.history.replaceState(null, '', `${window.location.pathname}#${encoded}`)
     }, 500)
     return () => clearTimeout(timer)
-  }, deps)
+  }, [cacheSegments, code, config, defines, eventLimit, fastMode, language, optLevel, prefetchPolicy, sampleRate, selectedCompiler])
 }
 
 export async function shareUrl(state: ShareableState): Promise<string | null> {

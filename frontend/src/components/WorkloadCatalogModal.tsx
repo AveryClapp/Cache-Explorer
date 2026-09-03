@@ -197,7 +197,10 @@ export function WorkloadCatalogModal({
   const hasWorkloads = workloads.length > 0
   const historyAvailable = history?.available && history.latest
   const normalizedQuery = query.trim().toLowerCase()
-  const durationDeltas = history?.durationDeltas || []
+  const durationDeltas = useMemo(
+    () => history?.durationDeltas || [],
+    [history?.durationDeltas],
+  )
   const deltaByWorkload = useMemo(() => (
     new Map(durationDeltas.map(delta => [delta.id, delta]))
   ), [durationDeltas])
