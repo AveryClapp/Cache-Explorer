@@ -113,7 +113,7 @@
     "typescript": "^5.3.0"
   },
   "dependencies": {
-    "ws": "^8.14.0"
+    "ws": "^8.21.0"
   },
   "repository": {
     "type": "git",
