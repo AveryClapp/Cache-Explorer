@@ -21,7 +21,7 @@ export class CacheExplorerProvider implements vscode.WebviewViewProvider {
       localResourceRoots: [this._extensionUri],
     };
 
-    webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+    webviewView.webview.html = this._getHtmlForWebview();
 
     // Handle messages from the webview
     webviewView.webview.onDidReceiveMessage((data) => {
@@ -49,7 +49,7 @@ export class CacheExplorerProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private _getHtmlForWebview(webview: vscode.Webview): string {
+  private _getHtmlForWebview(): string {
     return `<!DOCTYPE html>
 <html lang="en">
 <head>

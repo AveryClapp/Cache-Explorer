@@ -105,6 +105,10 @@ CMAKE_CMD=(cmake
   -DCACHE_EXPLORER_PATH="$EFFECTIVE_BACKEND"
 )
 
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  CMAKE_CMD+=("-DCMAKE_OSX_ARCHITECTURES=$(uname -m)")
+fi
+
 if [[ -n "$INCLUDE_STL" ]]; then
   CMAKE_CMD+=(-DCACHE_EXPLORER_INCLUDE_STL=ON)
 fi

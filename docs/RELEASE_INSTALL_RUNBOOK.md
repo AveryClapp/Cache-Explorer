@@ -63,6 +63,15 @@ server tests, Docker provenance/SBOM generation, and release validation.
 
 ## Release Flow
 
+Cache Explorer uses the root Release Please manifest as the canonical product
+version. The versions in `frontend/package.json`, `backend/server/package.json`,
+`vscode-extension/package.json`, and `CMakeLists.txt` belong to those individual
+build artifacts and do not define the GitHub release version.
+
+Preview tags such as `v0.8.0-hardware-preview` must be published as GitHub
+prereleases. Stable semantic-version releases are the only releases that should
+be marked Latest.
+
 1. Merge through `main` with CI green.
 2. Let Release Please create the release PR and changelog.
 3. Review release notes for user-visible model-contract, workload, sandbox,

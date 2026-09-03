@@ -35,7 +35,7 @@ export function HotLinesPanel({ hotLines, baselineHotLines, diffMode, code, sele
 
   // Compute deltas and track matched baseline lines
   const matchedKeys = new Set<string>()
-  let hotLinesWithDelta: HotLineWithDelta[] = significantHotLines.map(h => {
+  const hotLinesWithDelta: HotLineWithDelta[] = significantHotLines.map(h => {
     const key = `${h.file}:${h.line}`
     const baseline = baselineLookup.get(key)
     if (baseline) {

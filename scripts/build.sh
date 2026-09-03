@@ -38,14 +38,35 @@ echo "Build type: $BUILD_TYPE"
 mkdir -p build
 cd build
 
+CMAKE_ARGS=(
+    ..
+    -G Ninja
+    -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
+)
+
 if LLVM_CMAKE_DIR="$(find_llvm_dir)"; then
     echo "LLVM_DIR: $LLVM_CMAKE_DIR"
-    cmake .. -G Ninja -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DLLVM_DIR="$LLVM_CMAKE_DIR"
+    CMAKE_ARGS+=("-DLLVM_DIR=$LLVM_CMAKE_DIR")
+
+    LLVM_PREFIX="${LLVM_CMAKE_DIR%/lib/cmake/llvm}"
+    if [[ -x "$LLVM_PREFIX/bin/clang" && -x "$LLVM_PREFIX/bin/clang++" ]]; then
+        echo "Compilers: $LLVM_PREFIX/bin/clang and clang++"
+        CMAKE_ARGS+=(
+            "-DCMAKE_C_COMPILER=$LLVM_PREFIX/bin/clang"
+            "-DCMAKE_CXX_COMPILER=$LLVM_PREFIX/bin/clang++"
+        )
+    fi
 else
     echo "LLVM_DIR: using CMake discovery"
-    cmake .. -G Ninja -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
 fi
 
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    HOST_ARCH="$(uname -m)"
+    echo "macOS architecture: $HOST_ARCH"
+    CMAKE_ARGS+=("-DCMAKE_OSX_ARCHITECTURES=$HOST_ARCH")
+fi
+
+cmake "${CMAKE_ARGS[@]}"
 ninja
 
 echo ""

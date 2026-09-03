@@ -81,9 +81,7 @@ export function CacheGrid({
 
   const handleMouseEnter = (
     e: React.MouseEvent,
-    line: CacheLineState | null,
-    _set: number,
-    _way: number
+    line: CacheLineState | null
   ) => {
     if (line) {
       setHoveredLine(line)
@@ -156,7 +154,7 @@ export function CacheGrid({
                     borderColor: isValid ? colors.border : '#333',
                     color: colors.text,
                   }}
-                  onMouseEnter={(e) => handleMouseEnter(e, line, set, way)}
+                  onMouseEnter={(e) => handleMouseEnter(e, line)}
                   onMouseLeave={handleMouseLeave}
                 >
                   {isValid ? state : '·'}

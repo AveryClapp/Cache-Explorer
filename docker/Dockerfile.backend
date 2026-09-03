@@ -49,6 +49,20 @@ RUN mkdir -p build && cd build && \
     cmake .. -G Ninja -DCMAKE_CXX_COMPILER=clang++-20 && \
     ninja
 
+# Build production Node dependencies separately so native modules such as
+# better-sqlite3 never need a compiler in the runtime image.
+FROM node:20-bookworm-slim AS server-deps
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    g++ \
+    make \
+    python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build/backend/server
+COPY backend/server/package.json backend/server/package-lock.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+
 # Runtime image
 FROM ubuntu:24.04
 
@@ -97,9 +111,10 @@ COPY backend/server/ ./backend/server/
 # Make scripts executable
 RUN chmod +x ./backend/scripts/*
 
-# Install Node.js dependencies
+# Copy production Node.js dependencies built with the required native toolchain.
+COPY --from=server-deps /build/backend/server/node_modules ./backend/server/node_modules
+
 WORKDIR /app/backend/server
-RUN npm ci --omit=dev
 
 # Fix ownership for non-root user
 RUN chown -R cache-explorer:cache-explorer /app

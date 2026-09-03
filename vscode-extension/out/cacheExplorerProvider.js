@@ -45,7 +45,7 @@ class CacheExplorerProvider {
             enableScripts: true,
             localResourceRoots: [this._extensionUri],
         };
-        webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+        webviewView.webview.html = this._getHtmlForWebview();
         // Handle messages from the webview
         webviewView.webview.onDidReceiveMessage((data) => {
             switch (data.type) {
@@ -69,7 +69,7 @@ class CacheExplorerProvider {
             editor.revealRange(new vscode.Range(position, position));
         }
     }
-    _getHtmlForWebview(webview) {
+    _getHtmlForWebview() {
         return `<!DOCTYPE html>
 <html lang="en">
 <head>

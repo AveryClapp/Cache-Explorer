@@ -7,7 +7,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 TEST_PROGRAM="$SCRIPT_DIR/simple-programs/matrix.c"
 CACHE_EXPLORE="$PROJECT_ROOT/backend/scripts/cache-explore"
-CACHE_SIM="$PROJECT_ROOT/backend/cache-simulator/build/cache-sim"
+CACHE_SIM="$PROJECT_ROOT/build/backend/cache-simulator/cache-sim"
+if [[ ! -x "$CACHE_SIM" ]]; then
+    CACHE_SIM="$PROJECT_ROOT/backend/cache-simulator/build/cache-sim"
+fi
 
 # Color output
 RED='\033[0;31m'

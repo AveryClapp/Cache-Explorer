@@ -10,7 +10,11 @@ import { listHardwareProfiles } from '../../backend/server/hardwareProfiles.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '../..');
-const simulator = path.join(root, 'backend/cache-simulator/build/cache-sim');
+const simulatorCandidates = [
+  path.join(root, 'build/backend/cache-simulator/cache-sim'),
+  path.join(root, 'backend/cache-simulator/build/cache-sim'),
+];
+const simulator = simulatorCandidates.find(existsSync) ?? simulatorCandidates[0];
 const trace = 'R 4096 4 profile-drift.c:1 T1\n';
 
 if (!existsSync(simulator)) {
