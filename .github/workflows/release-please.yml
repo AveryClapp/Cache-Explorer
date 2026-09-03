@@ -6,6 +6,7 @@ on:
       - main
 
 permissions:
+  actions: write
   contents: write
   pull-requests: write
 
@@ -30,4 +31,15 @@ jobs:
         if: ${{ steps.release.outputs.release_created }}
         run: |
           echo "Release created: ${{ steps.release.outputs.tag_name }}"
-          echo "This will trigger the release.yml and docker.yml workflows"
+
+      # Events created with GITHUB_TOKEN do not recursively start tag workflows.
+      # Dispatch them explicitly so every Release Please release gets assets and
+      # semver-tagged container images.
+      - name: Dispatch release builds
+        if: ${{ steps.release.outputs.release_created }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag_name }}
+        run: |
+          gh workflow run release.yml --ref "$TAG" -f tag="$TAG"
+          gh workflow run docker.yml --ref "$TAG"

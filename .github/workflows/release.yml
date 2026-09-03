@@ -60,6 +60,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     permissions:
+      actions: write
       contents: write
       id-token: write
       attestations: write
@@ -103,40 +104,6 @@ jobs:
         with:
           tag_name: ${{ steps.get-tag.outputs.tag }}
           name: Cache Explorer ${{ steps.get-tag.outputs.tag }}
-          body: |
-            ## CacheProfiler LLVM Pass
-
-            Pre-built CacheProfiler.so for multiple LLVM versions and platforms.
-            Release assets include `SHA256SUMS`; the download helper verifies
-            binaries against it when available.
-
-            ### Verify Downloads
-            ```bash
-            sha256sum -c SHA256SUMS
-            gh attestation verify CacheProfiler-llvm18-linux-x64.so \
-              --repo AveryClapp/Cache-Explorer
-            ```
-
-            ### Supported Configurations
-            | LLVM Version | Linux x64 | macOS ARM64 |
-            |--------------|-----------|-------------|
-            | 17 | :white_check_mark: | :white_check_mark: |
-            | 18 | :white_check_mark: | :white_check_mark: |
-            | 19 | :white_check_mark: | :white_check_mark: |
-            | 20 | :white_check_mark: | :white_check_mark: |
-            | 21 | :white_check_mark: | :white_check_mark: |
-
-            ### Usage
-            ```bash
-            # Download the appropriate .so for your LLVM version and platform
-            # Then use with clang:
-            clang -fpass-plugin=CacheProfiler-llvm18-linux-x64.so your_code.c
-            ```
-
-            ### Build from Source
-            ```bash
-            ./backend/scripts/build-passes.sh [llvm-version] [output-dir]
-            ```
           files: |
             ./release-assets/*.so
             ./release-assets/SHA256SUMS
@@ -144,3 +111,9 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Dispatch release validation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.get-tag.outputs.tag }}
+        run: gh workflow run release-validation.yml --ref main -f tag="$TAG"
