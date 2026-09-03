@@ -5,25 +5,19 @@
  * - Resource limits (CPU, memory, time)
  * - Network isolation
  * - Filesystem isolation
- * - Seccomp system call filtering
+ * - Docker's maintained default seccomp system call filtering
  */
 
 import { spawn } from 'child_process';
 import { writeFile, mkdir, rm } from 'fs/promises';
 import { randomUUID } from 'crypto';
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
-import { existsSync } from 'fs';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DOCKER_DIR = join(dirname(__dirname), 'docker');
-const SECCOMP_PROFILE = join(DOCKER_DIR, 'seccomp-profile.json');
+import { join } from 'path';
 
 // Sandbox configuration
 const SANDBOX_CONFIG = {
   image: 'cache-explorer-sandbox:latest',
   // Resource limits
-  memoryLimit: '256m',           // Max memory
+  memoryLimit: '512m',           // Enough for the modeled last-level cache and LLVM
   cpuQuota: 100000,              // 1 full CPU (100000/100000)
   pidLimit: 50,                  // Max processes
   timeout: 45000,                // Max execution time (ms) - compilation + execution + simulation
@@ -67,6 +61,7 @@ export async function checkSandboxAvailable() {
  * @param {boolean} options.fastMode - Fast mode (disables 3C classification)
  * @param {Object} options.customConfig - Custom cache parameters
  * @param {Array} options.defines - Preprocessor defines [{name, value}]
+ * @param {number} options.timeout - Requested timeout, capped by the sandbox maximum
  * @param {Function} options.onProgress - Progress callback
  * @returns {Promise<{stdout: string, stderr: string}>}
  */
@@ -82,8 +77,13 @@ export async function runInSandbox(options) {
     fastMode = false,
     customConfig,
     defines = [],
+    timeout = SANDBOX_CONFIG.timeout,
     onProgress
   } = options;
+  const executionTimeout = Math.min(
+    Math.max(Number(timeout) || SANDBOX_CONFIG.timeout, 1),
+    SANDBOX_CONFIG.timeout,
+  );
 
   // Create temp directory for this execution
   const execId = randomUUID();
@@ -116,11 +116,6 @@ export async function runInSandbox(options) {
       '--cap-drop', 'ALL',                              // Drop all capabilities
     ];
 
-    // Add seccomp profile if it exists
-    if (existsSync(SECCOMP_PROFILE)) {
-      dockerArgs.push('--security-opt', `seccomp=${SECCOMP_PROFILE}`);
-    }
-
     // Mount source file read-only
     dockerArgs.push('-v', `${inputFile}:/workspace/input.${ext}:ro`);
 
@@ -142,12 +137,16 @@ export async function runInSandbox(options) {
 
     // Run Docker container
     const result = await new Promise((resolve, reject) => {
-      const proc = spawn('docker', dockerArgs, {
-        timeout: SANDBOX_CONFIG.timeout
-      });
+      const proc = spawn('docker', dockerArgs);
 
       let stdout = '';
       let stderr = '';
+      let timedOut = false;
+      const timeoutHandle = setTimeout(() => {
+        timedOut = true;
+        proc.kill('SIGKILL');
+      }, executionTimeout);
+      timeoutHandle.unref?.();
 
       proc.stdout.on('data', (data) => {
         stdout += data;
@@ -167,6 +166,15 @@ export async function runInSandbox(options) {
       });
 
       proc.on('close', (exitCode) => {
+        clearTimeout(timeoutHandle);
+        if (timedOut) {
+          reject({
+            stderr: 'Execution timed out',
+            exitCode: 124,
+            timeout: true
+          });
+          return;
+        }
         if (exitCode === 0) {
           resolve({ stdout, stderr });
         } else {
@@ -175,22 +183,9 @@ export async function runInSandbox(options) {
       });
 
       proc.on('error', (err) => {
-        if (err.code === 'ETIMEDOUT') {
-          proc.kill('SIGKILL');
-          reject({
-            stderr: 'Execution timed out',
-            exitCode: 124,
-            timeout: true
-          });
-        } else {
-          reject(err);
-        }
+        clearTimeout(timeoutHandle);
+        reject(err);
       });
-
-      // Set timeout manually since spawn timeout might not work on all platforms
-      setTimeout(() => {
-        proc.kill('SIGKILL');
-      }, SANDBOX_CONFIG.timeout);
     });
 
     if (onProgress) onProgress({ stage: 'done' });

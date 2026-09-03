@@ -25,8 +25,9 @@ const budgets = [
   {
     label: 'monaco editor',
     pattern: /^monaco-[\w-]+\.js$/,
-    maxBytes: 2700 * 1024,
-    maxGzipBytes: 700 * 1024,
+    // Monaco is bundled for offline use instead of being fetched from a CDN.
+    maxBytes: 3800 * 1024,
+    maxGzipBytes: 1000 * 1024,
     required: true,
   },
   {

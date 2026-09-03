@@ -190,13 +190,15 @@ fi
 # Run instrumented binary and pipe directly to cache-sim
 echo '{"type": "progress", "stage": "running"}' >&2
 
-# Use text mode (stdout) and pipe directly to cache-sim
+# Use text mode (stdout) and pipe directly to cache-sim. The sandbox API waits
+# for completion, so emit one JSON result instead of the interactive NDJSON
+# stream used by a directly attached CLI.
 export CACHE_EXPLORER_OUTPUT="-"
 export CACHE_EXPLORER_SAMPLE_RATE="$SAMPLE_RATE"
 export CACHE_EXPLORER_MAX_EVENTS="$EVENT_LIMIT"
 
 # Build simulator arguments
-SIM_ARGS="--config $CONFIG --prefetch $PREFETCH --json --stream"
+SIM_ARGS="--config $CONFIG --prefetch $PREFETCH --json"
 if [ "$FAST_MODE" = "1" ]; then
     SIM_ARGS="$SIM_ARGS --fast"
 fi

@@ -1,6 +1,6 @@
 # Hardware Model Contract
 
-Cache Explorer profiles now expose an explicit model contract. The contract is
+Hardware Explorer Preview profiles expose an explicit model contract. The contract is
 the product boundary between hardware facts, simulator behavior, estimates, and
 profile metadata.
 
@@ -37,7 +37,7 @@ Every profile declares these contract fields:
 UI panels, exports, and docs should not imply that a field affects results unless
 its contract has `drivesSimulation: true`.
 
-This keeps Cache Explorer honest while it grows toward a Compiler Explorer-level
+This keeps Hardware Explorer honest while it grows toward a Compiler Explorer-level
 tool: users can inspect what was modeled, what was estimated, what was only
 descriptive metadata, and what is not supported yet.
 
@@ -57,7 +57,7 @@ The model contract is the product truth boundary. The calibration ladder in
 [Calibration Roadmap](CALIBRATION_ROADMAP.md) defines when an individual field
 can move from modeled or estimated to calibrated.
 
-Cache Explorer should stay honest if a profile is only partially calibrated: the
+Hardware Explorer should stay honest if a profile is only partially calibrated: the
 profile can expose calibrated cache geometry while keeping branch prediction,
 pipeline timing, memory bandwidth, SIMD, topology, or NUMA as estimated,
 metadata-only, or unsupported.

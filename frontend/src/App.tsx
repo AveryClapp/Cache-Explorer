@@ -340,6 +340,7 @@ function App() {
   const [experimentVariantSources, setExperimentVariantSources] = useState<ExperimentVariantSource[] | null>(null)
   const [experimentVariantSourceLabel, setExperimentVariantSourceLabel] = useState<string | null>(null)
   const [selectedExperimentTemplateId, setSelectedExperimentTemplateId] = useState(EXPERIMENT_TEMPLATES[0]?.id || '')
+  const [experimentTemplatePending, setExperimentTemplatePending] = useState(true)
   const [hardwareProfiles, setHardwareProfiles] = useState<HardwareProfile[]>([])
   const [showHardwareExplorer, setShowHardwareExplorer] = useState(false)
   const [hardwareProfilesLoading, setHardwareProfilesLoading] = useState(false)
@@ -616,7 +617,10 @@ function App() {
             addEnvironmentNotice(`Shared hardware run set skipped unavailable profiles ${formatQuotedList(missing)}.`)
           }
         }
-        if (state.experimentVariants) setExperimentVariants(state.experimentVariants)
+        if (state.experimentVariants) {
+          setExperimentVariants(state.experimentVariants)
+          setExperimentTemplatePending(false)
+        }
       }
 
       if (shortId) {
@@ -698,7 +702,7 @@ function App() {
       endColumn: err.column + (err.sourceLine
         ? Math.min(20, err.sourceLine.length - err.column + 1)
         : 10),
-      source: 'Cache Explorer'
+      source: 'Hardware Explorer'
     }))
 
     monaco.editor.setModelMarkers(model, 'cache-explorer', markers)
@@ -1238,6 +1242,7 @@ function App() {
     }
     setExperimentResult(null)
     setExperimentError(null)
+    setExperimentTemplatePending(false)
     setShowWorkloadCatalog(false)
     setShowExperimentModal(true)
   }, [exampleKeyForPath, loadExampleByKey, sourceVariantsForWorkload])
@@ -1255,6 +1260,9 @@ function App() {
     if (typeof template.eventLimit === 'number') setEventLimit(template.eventLimit)
     if (typeof template.fastMode === 'boolean') setFastMode(template.fastMode)
     if (typeof template.cacheSegments === 'boolean') setCacheSegments(template.cacheSegments)
+    setExperimentResult(null)
+    setExperimentError(null)
+    setExperimentTemplatePending(false)
   }, [loadExampleByKey, selectedExperimentTemplateId])
 
   const loadHardwareProfiles = useCallback(async () => {
@@ -1332,6 +1340,11 @@ function App() {
   }, [])
 
   const runExperimentAnalysis = useCallback(async () => {
+    if (experimentTemplatePending) {
+      setExperimentError('Apply the selected template before running this experiment')
+      return
+    }
+
     const variants = experimentVariantSources || parseExperimentVariants(experimentVariants)
     if (variants.length === 0) {
       setExperimentError('Add at least one variant')
@@ -1365,7 +1378,7 @@ function App() {
     } finally {
       setExperimentRunning(false)
     }
-  }, [experimentVariantSources, experimentVariants, makeHardwarePayload, runHardwareConfigIds])
+  }, [experimentTemplatePending, experimentVariantSources, experimentVariants, makeHardwarePayload, runHardwareConfigIds])
 
   const commands: CommandItem[] = useMemo(() => [
     // Actions (@)
@@ -1453,12 +1466,19 @@ function App() {
             hardwareConfigIds={hardwareConfigsOrDefault(runHardwareConfigIds)}
             templates={EXPERIMENT_TEMPLATES}
             selectedTemplateId={selectedExperimentTemplateId}
+            templatePending={experimentTemplatePending}
             onVariantsTextChange={(value) => {
               setExperimentVariants(value)
               setExperimentVariantSources(null)
               setExperimentVariantSourceLabel(null)
+              setExperimentTemplatePending(false)
             }}
-            onTemplateChange={setSelectedExperimentTemplateId}
+            onTemplateChange={(value) => {
+              setSelectedExperimentTemplateId(value)
+              setExperimentTemplatePending(true)
+              setExperimentResult(null)
+              setExperimentError(null)
+            }}
             onApplyTemplate={applyExperimentTemplate}
             onRun={runExperimentAnalysis}
             onExportCSV={() => experimentResult && exportExperimentAsCSV(experimentResult)}

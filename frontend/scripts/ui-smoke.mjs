@@ -144,8 +144,13 @@ function workloadName(id) {
 }
 
 async function openHeaderTool(name) {
-  await page.getByRole('button', { name: 'Tools', exact: true }).click()
-  await page.getByRole('menuitem', { name, exact: true }).click()
+  const navigationLabels = {
+    Hardware: 'Comparisons',
+    Explore: 'Profiles',
+    Workloads: 'Workloads',
+    Experiment: 'Experiments',
+  }
+  await page.getByRole('button', { name: navigationLabels[name] || name, exact: true }).click()
 }
 
 async function openAdvancedSettings() {
@@ -1458,11 +1463,21 @@ async function verifyExperimentResults(url) {
   })
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto(url, { waitUntil: 'domcontentloaded' })
+  await assertVisible(page.getByText('Hardware Explorer', { exact: true }).first(), 'Hardware Explorer product name')
+  await assertVisible(page.getByText('Preview', { exact: true }).first(), 'Preview badge')
+  for (const label of ['Profiles', 'Comparisons', 'Workloads', 'Experiments']) {
+    await assertVisible(page.getByRole('button', { name: label, exact: true }), `${label} primary navigation`)
+  }
   await openHeaderTool('Experiment')
 
   const modal = page.locator('.experiment-modal')
   await assertVisible(modal.getByText('Hardware Experiment', { exact: true }), 'experiment modal')
-  await modal.getByRole('button', { name: 'Run', exact: true }).click()
+  const runButton = modal.getByRole('button', { name: 'Run', exact: true })
+  assert(await runButton.isDisabled(), 'default experiment should require applying its matching template')
+  await assertVisible(modal.getByText(/Apply this template to load its matching source/), 'template apply guidance')
+  await modal.getByRole('button', { name: 'Apply', exact: true }).click()
+  assert(await runButton.isEnabled(), 'default experiment should enable after applying its template')
+  await runButton.click()
 
   await assertVisible(modal.getByText('Overall', { exact: true }), 'experiment overall winner label')
   await assertVisible(modal.getByText('tiled', { exact: true }).first(), 'experiment tiled winner')
@@ -1480,9 +1495,11 @@ async function verifyExperimentResults(url) {
 
   assert(experimentRequest?.variants?.includes('direct'), 'experiment request should include direct variant')
   assert(experimentRequest?.variants?.includes('tiled:RUN_TILED=1'), 'experiment request should include tiled variant')
-  assert(experimentRequest?.configs?.includes('intel'), 'experiment request should include Intel config')
-  assert(experimentRequest?.configs?.includes('amd'), 'experiment request should include AMD config')
-  assert(experimentRequest?.limit === 1000000, `experiment request should preserve default event limit, got ${experimentRequest?.limit}`)
+  assert(experimentRequest?.configs?.join(',') === 'educational,intel,amd,apple', `default experiment configs mismatch: ${JSON.stringify(experimentRequest?.configs)}`)
+  assert(experimentRequest?.code?.includes('Direct vs tiled 3x3 convolution kernel'), 'default experiment should load the Conv2D source before running')
+  assert(experimentRequest?.optLevel === '-O2', `default experiment should use -O2, got ${experimentRequest?.optLevel}`)
+  assert(experimentRequest?.prefetch === 'adaptive', `default experiment should use adaptive prefetch, got ${experimentRequest?.prefetch}`)
+  assert(experimentRequest?.limit === 200000, `default experiment should use the bounded 200K event limit, got ${experimentRequest?.limit}`)
 
   await closeModal()
   await page.unroute('**/experiment')

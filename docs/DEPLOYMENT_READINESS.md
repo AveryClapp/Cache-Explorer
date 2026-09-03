@@ -1,6 +1,7 @@
-# Deployment Readiness
+# Hardware Explorer Preview Deployment Readiness
 
-Cache Explorer is ready to be run as a product when operators can answer three
+Hardware Explorer is local-first. A hosted instance is ready to accept untrusted
+traffic only when operators can answer three
 questions without reading source code:
 
 - Is the service healthy enough to accept runs?
@@ -17,9 +18,11 @@ Recommended hosted defaults:
 
 - Start from `.env.production.example` and move real values into the deployment
   secret/config system.
-- Run through Docker or another isolated runner; set `ENABLE_SANDBOX=1` when the
-  Docker sandbox image is built and available.
-- Put the service behind a reverse proxy and set `TRUST_PROXY=1` so rate limits
+- Set `HARDWARE_EXPLORER_DEPLOYMENT_MODE=hosted` and
+  `HARDWARE_EXPLORER_ENABLE_SANDBOX=1`. Startup fails closed unless the Docker
+  sandbox image and daemon are available.
+- Put the service behind a reverse proxy and set
+  `HARDWARE_EXPLORER_TRUST_PROXY=1` so rate limits
   use the client-facing address rather than the proxy address.
 - Keep health and metrics probe-friendly; do not rate-limit `/health` or
   `/metrics`.
@@ -27,12 +30,26 @@ Recommended hosted defaults:
   `/experiment`, `/shorten`, `/api/share`, and workload verification.
 - Start conservative: `RATE_LIMIT_RPM=30`, `MAX_CONCURRENT_PROCESSES=5`,
   `TIMEOUT_DEFAULT=60000`, `TIMEOUT_COMPILATION=30000`, and
-  `CACHE_EXPLORER_WORKLOAD_VARIANT_TIMEOUT_MS=120000`.
+  `HARDWARE_EXPLORER_WORKLOAD_VARIANT_TIMEOUT_MS=120000`.
 - Keep stress workloads opt-in. Default verification should not include
   `--include-stress` until those workloads are tuned on a dedicated machine.
 
-The direct runner is useful for local development and CI smoke checks, but a
-public deployment should report sandbox mode before accepting untrusted code.
+The direct runner is only for trusted local development, local Docker, and CI
+smoke checks. Do not expose it to untrusted users. In Preview, `/compare` and
+`/experiment` are intentionally unavailable in hosted sandbox mode; keep the
+full multi-profile workflow local until those routes have a sandbox-capable
+runner.
+
+Build the execution image before starting a hosted server:
+
+```bash
+./docker/build-image.sh
+HARDWARE_EXPLORER_DEPLOYMENT_MODE=hosted \
+HARDWARE_EXPLORER_ENABLE_SANDBOX=1 \
+node backend/server/server.js
+```
+
+The server refuses to listen if either the image or Docker daemon is missing.
 
 ## Health Contract
 
@@ -50,6 +67,9 @@ Readiness rule:
 - `degraded` can receive probes and admin traffic, but user-facing runs should be
   treated cautiously until the failing check is understood.
 - `unhealthy` should be removed from rotation.
+
+For hosted traffic, `healthy` is insufficient by itself: `/health` must also
+report `mode: "hosted"` and `sandbox: "enabled"`.
 
 ## Release Cadence
 

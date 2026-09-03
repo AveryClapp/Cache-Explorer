@@ -12,6 +12,7 @@ interface ExperimentResultsModalProps {
   hardwareConfigIds: string[]
   templates: ExperimentTemplate[]
   selectedTemplateId: string
+  templatePending: boolean
   onVariantsTextChange: (value: string) => void
   onTemplateChange: (value: string) => void
   onApplyTemplate: () => void
@@ -85,6 +86,7 @@ export function ExperimentResultsModal({
   hardwareConfigIds,
   templates,
   selectedTemplateId,
+  templatePending,
   onVariantsTextChange,
   onTemplateChange,
   onApplyTemplate,
@@ -141,12 +143,12 @@ export function ExperimentResultsModal({
                 {selectedTemplate?.description || ''}
                 {selectedTemplate?.verifiedWorkloadId && (
                   <span className="experiment-template-verified">
-                    Verified {selectedTemplate.verifiedWorkloadId}
+                    Workload fixture {selectedTemplate.verifiedWorkloadId}
                   </span>
                 )}
               </div>
               <button className="btn experiment-template-apply" onClick={onApplyTemplate} disabled={running || !selectedTemplate}>
-                Apply
+                {templatePending ? 'Apply' : 'Applied'}
               </button>
             </div>
           )}
@@ -173,10 +175,16 @@ export function ExperimentResultsModal({
                 ))}
               </div>
             </div>
-            <button className="btn-primary experiment-run" onClick={onRun} disabled={running}>
+            <button className="btn-primary experiment-run" onClick={onRun} disabled={running || templatePending}>
               {running ? 'Running...' : 'Run'}
             </button>
           </div>
+
+          {templatePending && (
+            <div className="experiment-setup-notice" role="status">
+              Apply this template to load its matching source and run settings before running the experiment.
+            </div>
+          )}
 
           {error && <div className="experiment-error" role="alert">{error}</div>}
 

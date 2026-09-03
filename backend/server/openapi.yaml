@@ -1,13 +1,14 @@
 openapi: 3.0.3
 info:
-  title: Cache Explorer API
+  title: Hardware Explorer Preview API
   version: 1.0.0
   description: |
-    Cache Explorer is a visual cache profiler that shows how code interacts with CPU cache hierarchies.
-    This API provides endpoints for compiling and profiling C/C++/Rust code, sharing code snippets,
-    and monitoring server health.
+    Hardware Explorer is a Preview, local-first CPU performance modeling workbench for source code.
+    It is not a GPU, storage, or network model, and its cycle estimates are not cycle-accurate simulation.
+    This API provides endpoints for compiling and profiling supported source code, comparing directional
+    CPU profiles, sharing local analysis state, and monitoring server health.
   contact:
-    name: Cache Explorer
+    name: Hardware Explorer
   license:
     name: MIT
 

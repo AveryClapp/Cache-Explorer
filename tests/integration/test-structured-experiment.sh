@@ -106,6 +106,38 @@ if (!prefetchOk) {
   process.exit(1)
 }
 
+const conv2d = readFileSync('examples/conv2d_kernel.c', 'utf8')
+const defaultData = await postExperiment({
+  code: conv2d,
+  language: 'c',
+  optLevel: '-O2',
+  configs: ['educational', 'intel', 'amd', 'apple'],
+  prefetch: 'adaptive',
+  limit: 200000,
+  fast: true,
+  cacheSegments: true,
+  variants: ['direct', 'tiled:RUN_TILED=1'],
+})
+
+const defaultConfigs = ['educational', 'intel', 'amd', 'apple']
+const tiledSummary = defaultData.summary?.find(item => item.variant === 'tiled')
+const defaultOk = defaultData.baselineVariant === 'direct'
+  && defaultData.summary?.length === 8
+  && tiledSummary?.variantSpec === 'tiled:RUN_TILED=1'
+  && defaultData.provenance?.source?.variants?.includes('tiled:RUN_TILED=1')
+  && defaultConfigs.every(config => defaultData.variants?.direct?.configs?.[config])
+  && defaultConfigs.every(config => defaultData.variants?.tiled?.configs?.[config])
+  && defaultConfigs.some(config => {
+    const direct = defaultData.summary.find(item => item.variant === 'direct' && item.config === config)
+    const tiled = defaultData.summary.find(item => item.variant === 'tiled' && item.config === config)
+    return direct?.estimatedCycles !== tiled?.estimatedCycles
+  })
+
+if (!defaultOk) {
+  console.error(JSON.stringify(defaultData, null, 2))
+  process.exit(1)
+}
+
 console.log(JSON.stringify({
   sourceVariants: {
     baseline: data.baselineVariant,
@@ -118,6 +150,12 @@ console.log(JSON.stringify({
     baseline: prefetchData.baselineVariant,
     noneCycles: noneSummary.estimatedCycles,
     streamCycles: streamSummary.estimatedCycles,
+  },
+  defaultJourney: {
+    configs: defaultConfigs,
+    variants: Object.keys(defaultData.variants),
+    rows: defaultData.summary.length,
+    eventLimit: 200000,
   },
 }))
 NODE

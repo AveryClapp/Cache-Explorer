@@ -21,6 +21,7 @@ import { runManagedProcess, runProcess } from './services/processRunner.js';
 import { createTempProject, cleanupTempProject, cleanupOrphanedTempDirs } from './services/tempProject.js';
 import { workloadProcessErrorResponse } from './services/workloadErrors.js';
 import { loadWorkloadHistory } from './services/workloadHistory.js';
+import { deploymentSecurityFromEnv } from './services/deploymentMode.js';
 import {
   ConnectionResourceTracker,
   connectionResources,
@@ -305,20 +306,29 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const BACKEND_DIR = dirname(__dirname);
 const CACHE_EXPLORE = join(BACKEND_DIR, 'scripts', 'cache-explore');
 
-// Sandbox is disabled by default (use ENABLE_SANDBOX=1 to opt in)
-const sandboxConfigured = Boolean(process.env.ENABLE_SANDBOX);
+let deploymentSecurity = null;
+let sandboxConfigured = false;
 let sandboxAvailable = false;
-if (sandboxConfigured) {
-  checkSandboxAvailable().then(available => {
-    sandboxAvailable = available;
-    if (available) {
-      console.log('Docker sandbox: ENABLED (secure mode)');
-    } else {
-      console.log('Docker sandbox: UNAVAILABLE (Docker not found - run docker/build-image.sh)');
-    }
-  });
-} else {
-  console.log('Docker sandbox: DISABLED (set ENABLE_SANDBOX=1 to enable)');
+
+async function initializeExecutionMode() {
+  deploymentSecurity = deploymentSecurityFromEnv();
+  sandboxConfigured = deploymentSecurity.sandboxRequested;
+
+  if (!sandboxConfigured) {
+    console.log('Docker sandbox: DISABLED (local mode only)');
+    return;
+  }
+
+  sandboxAvailable = await checkSandboxAvailable();
+  if (sandboxAvailable) {
+    console.log('Docker sandbox: ENABLED (secure mode)');
+    return;
+  }
+
+  if (deploymentSecurity.deploymentMode === 'hosted') {
+    throw new Error('Hosted mode requires the cache-explorer-sandbox:latest image and a working Docker daemon.');
+  }
+  console.log('Docker sandbox: UNAVAILABLE (continuing in local direct mode)');
 }
 
 function sandboxStatusSnapshot() {
@@ -326,13 +336,13 @@ function sandboxStatusSnapshot() {
     configured: sandboxConfigured,
     available: sandboxAvailable,
     mode: sandboxAvailable ? 'sandbox' : 'direct',
-    publicMode: sandboxAvailable ? 'production' : 'development',
+    publicMode: deploymentSecurity.deploymentMode,
     runner: sandboxAvailable ? 'docker' : 'direct',
     message: sandboxAvailable
       ? 'Docker sandbox is enabled and available.'
       : sandboxConfigured
         ? 'Docker sandbox was requested but is unavailable.'
-        : 'Docker sandbox is disabled; set ENABLE_SANDBOX=1 to enable it.',
+        : 'Docker sandbox is disabled; direct execution is supported only for trusted local use.',
   };
 }
 
@@ -1733,21 +1743,27 @@ wss.on('connection', (ws) => {
 // Server Startup
 // ============================================================================
 
-const PORT = process.env.PORT || 3001;
+async function startServer() {
+  await initializeExecutionMode();
 
-// Initialize database and caching
-try {
-  initDb();
-  startCachePruning();
-  console.log('Database and cache initialized');
-} catch (err) {
-  console.warn('Database initialization failed, running without persistence:', err.message);
+  try {
+    initDb();
+    startCachePruning();
+    console.log('Database and cache initialized');
+  } catch (err) {
+    console.warn('Database initialization failed, running without persistence:', err.message);
+  }
+
+  server.listen(CONFIG.server.port, CONFIG.server.host, () => {
+    console.log(`Hardware Explorer Preview server running on http://${CONFIG.server.host}:${CONFIG.server.port}`);
+    console.log(`WebSocket available at ws://${CONFIG.server.host}:${CONFIG.server.port}/ws`);
+    console.log(`Deployment: ${deploymentSecurity.deploymentMode}; timeout=${CONFIG.timeouts.default}ms (max ${CONFIG.timeouts.max}ms), rate=${CONFIG.rateLimit.maxRequestsPerMinute}/min`);
+  });
 }
 
-server.listen(PORT, () => {
-  console.log(`Cache Explorer server running on http://localhost:${PORT}`);
-  console.log(`WebSocket available at ws://localhost:${PORT}/ws`);
-  console.log(`Configuration: timeout=${CONFIG.timeouts.default}ms (max ${CONFIG.timeouts.max}ms), rate=${CONFIG.rateLimit.maxRequestsPerMinute}/min`);
+startServer().catch(err => {
+  console.error(`Server startup refused: ${err.message}`);
+  process.exit(1);
 });
 
 // Graceful shutdown

@@ -3,6 +3,13 @@
  * Centralized configuration with environment variable overrides
  */
 
+function firstEnv(...names) {
+  for (const name of names) {
+    if (process.env[name] !== undefined && process.env[name] !== '') return process.env[name];
+  }
+  return undefined;
+}
+
 export const CONFIG = {
   // Timeout settings (in milliseconds)
   timeouts: {
@@ -41,22 +48,22 @@ export const CONFIG = {
 
   // Server
   server: {
-    port: parseInt(process.env.PORT) || 3001,
-    host: process.env.HOST || '0.0.0.0',
-    trustProxy: process.env.TRUST_PROXY === '1' || process.env.TRUST_PROXY === 'true',
+    port: parseInt(firstEnv('HARDWARE_EXPLORER_PORT', 'CACHE_EXPLORER_PORT', 'PORT')) || 3001,
+    host: firstEnv('HARDWARE_EXPLORER_HOST', 'CACHE_EXPLORER_HOST', 'HOST') || '0.0.0.0',
+    trustProxy: ['1', 'true'].includes(firstEnv('HARDWARE_EXPLORER_TRUST_PROXY', 'CACHE_EXPLORER_TRUST_PROXY', 'TRUST_PROXY') || ''),
   },
 
   // Paths
   paths: {
-    cacheExplore: process.env.CACHE_EXPLORE_PATH || null, // Auto-detected if null
+    cacheExplore: firstEnv('HARDWARE_EXPLORER_CLI_PATH', 'CACHE_EXPLORE_PATH') || null, // Auto-detected if null
   },
 
   // Published workload benchmark history
   workloads: {
-    dashboardBaseUrl: (process.env.CACHE_EXPLORER_DASHBOARD_BASE_URL || '').replace(/\/+$/, ''),
-    historySummaryPath: process.env.CACHE_EXPLORER_WORKLOAD_HISTORY_SUMMARY_PATH || null,
-    historyFetchTimeoutMs: parseInt(process.env.CACHE_EXPLORER_WORKLOAD_HISTORY_TIMEOUT) || 5000,
-    variantTimeoutMs: parseInt(process.env.CACHE_EXPLORER_WORKLOAD_VARIANT_TIMEOUT_MS) || 120000,
+    dashboardBaseUrl: (firstEnv('HARDWARE_EXPLORER_DASHBOARD_BASE_URL', 'CACHE_EXPLORER_DASHBOARD_BASE_URL') || '').replace(/\/+$/, ''),
+    historySummaryPath: firstEnv('HARDWARE_EXPLORER_WORKLOAD_HISTORY_SUMMARY_PATH', 'CACHE_EXPLORER_WORKLOAD_HISTORY_SUMMARY_PATH') || null,
+    historyFetchTimeoutMs: parseInt(firstEnv('HARDWARE_EXPLORER_WORKLOAD_HISTORY_TIMEOUT', 'CACHE_EXPLORER_WORKLOAD_HISTORY_TIMEOUT')) || 5000,
+    variantTimeoutMs: parseInt(firstEnv('HARDWARE_EXPLORER_WORKLOAD_VARIANT_TIMEOUT_MS', 'CACHE_EXPLORER_WORKLOAD_VARIANT_TIMEOUT_MS')) || 120000,
   },
 };
 

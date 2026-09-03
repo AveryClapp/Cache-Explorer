@@ -2,6 +2,15 @@
 set -e
 set +m  # Disable job control to suppress initialization warnings in sandboxed environments
 
+# Hardware Explorer is the product-facing name. Mirror its environment prefix
+# into the established Cache Explorer variables so existing internals and user
+# automation continue to work unchanged. The new name wins when both are set.
+while IFS= read -r hardware_var; do
+  legacy_var="CACHE_EXPLORER_${hardware_var#HARDWARE_EXPLORER_}"
+  printf -v "$legacy_var" '%s' "${!hardware_var}"
+  export "$legacy_var"
+done < <(compgen -A variable HARDWARE_EXPLORER_)
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BACKEND_DIR="$(dirname "$SCRIPT_DIR")"
 PROJECT_ROOT="$(dirname "$BACKEND_DIR")"

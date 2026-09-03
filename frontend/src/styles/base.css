@@ -7,8 +7,6 @@
 /* ══════════════════════════════════════════════════════════════════════════
    FONTS - UI uses system sans; code/data keeps one mono family.
    ══════════════════════════════════════════════════════════════════════════ */
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
-
 /* ══════════════════════════════════════════════════════════════════════════
    CSS CUSTOM PROPERTIES
    ══════════════════════════════════════════════════════════════════════════ */
@@ -61,7 +59,7 @@
   /* ─── Typography ─── */
   --font-display: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-body: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-code: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-code: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   --font-mono: var(--font-code);
 
   /* ─── Type Scale ─── */

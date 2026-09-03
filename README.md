@@ -1,21 +1,30 @@
-# Cache Explorer
+# Hardware Explorer Preview
 
 [![CI](https://github.com/AveryClapp/Cache-Explorer/actions/workflows/ci.yml/badge.svg)](https://github.com/AveryClapp/Cache-Explorer/actions/workflows/ci.yml)
 [![GitHub release](https://img.shields.io/github/v/release/AveryClapp/Cache-Explorer)](https://github.com/AveryClapp/Cache-Explorer/releases)
 [![GitHub stars](https://img.shields.io/github/stars/AveryClapp/Cache-Explorer)](https://github.com/AveryClapp/Cache-Explorer/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-> Visualize CPU cache behavior in real-time. See exactly which lines of your code cause cache misses.
+> CPU performance modeling for source code.
 
 <p align="center">
-  <img src="assets/demo.gif" width="600" alt="Demo">
+  <img src="assets/hardware-explorer-preview.png" width="900" alt="Hardware Explorer Preview workspace">
 </p>
 
-## Why Cache Explorer?
+Hardware Explorer is the Preview product name for Cache Explorer. It models CPU
+cache, TLB, prefetch, coherence, branch, and pipeline behavior from instrumented
+source. It is not a GPU, storage, or network explorer, and estimated cycles are
+not cycle-accurate CPU simulation.
+
+The product is local-first. Once dependencies and native artifacts are
+installed, the UI and analysis path run without external web assets. Optional
+pass downloads and published workload history still require network access.
+
+## Why Hardware Explorer?
 
 **Before:** "Why is my code slow?" → Guesswork, profilers, prayer
 
-**After:** Exact line-by-line cache miss attribution
+**After:** Source-attributed CPU cache evidence and repeatable directional comparisons
 
 <video src="https://github.com/user-attachments/assets/649aeef7-319c-4778-af70-9df88674da3b" controls width="600"></video>
 
@@ -63,13 +72,18 @@ CACHE_EXPLORER_REQUIRE_CHECKSUM=1 ./backend/scripts/cache-explore-download-pass 
 
 - **Source-level attribution** - See exactly which line caused each cache miss
 - **3C miss classification** - Compulsory, Capacity, Conflict breakdown
-- **MESI coherence** - Full multi-core cache coherence simulation
+- **MESI coherence model** - Multi-core trace analysis and false-sharing signals
 - **False sharing detection** - Find hidden performance killers in threaded code
 - **6 prefetch policies** - None, Next-line, Stream, Stride, Adaptive, Intel DCU
-- **14 hardware presets** - Intel, AMD, Apple Silicon, ARM, Educational
+- **14 CPU profiles** - Intel, AMD, Apple Silicon, ARM, and Educational models
 - **Hardware bottleneck summaries** - Estimated memory, branch, and front-end stalls
-- **Real-time visualization** - WebSocket streaming to interactive UI
-- **Works offline** - No cloud, no rate limits, your code stays local
+- **Live run progress** - WebSocket progress with interactive result panels
+- **Local-first and offline-capable** - Bundled frontend assets; analysis stays on the local machine by default
+
+Profile labels distinguish modeled, estimated, metadata-only, unsupported, and
+calibrated fields. The checked-in Intel, AMD, and Apple evidence packets are
+schema fixtures rather than release-grade calibration, so the product remains
+clearly labeled Preview.
 
 ## Hardware Presets
 
@@ -103,7 +117,7 @@ Source Code (.c/.cpp)
         │
         ▼
 ┌───────────────────────┐
-│  Web UI / JSON        │  Real-time visualization
+│  Web UI / JSON        │  Results, provenance, comparison
 └───────────────────────┘
 ```
 
@@ -176,6 +190,20 @@ cache-explore mycode.c -O3 --config apple
   --configs educational,intel14,zen4,m3 \
   --limit 200000
 ```
+
+The new product-facing command is an alias; existing automation remains valid:
+
+```bash
+./backend/scripts/hardware-explore examples/conv2d_kernel.c --config intel
+HARDWARE_EXPLORER_CC=/opt/llvm/bin/clang ./backend/scripts/hardware-explore code.c
+
+# Compatibility names continue to work
+CACHE_EXPLORER_CC=/opt/llvm/bin/clang ./backend/scripts/cache-explore code.c
+```
+
+`hardware-explore` and `HARDWARE_EXPLORER_*` are additive aliases. The
+`cache-explore` command, `CACHE_EXPLORER_*` variables, file formats, and existing
+integration names remain supported during the Preview rebrand.
 
 ## Running Tests
 
@@ -251,6 +279,9 @@ should use the [Release And Install Runbook](docs/RELEASE_INSTALL_RUNBOOK.md).
 - **Requires recompilation** - Can't trace pre-compiled binaries (use Intel Pin for that)
 - **No speculative execution** - All accesses treated as committed
 - **Single socket** - No NUMA simulation
+- **CPU scope only** - No GPU, storage, or network performance modeling
+- **Directional timing** - Cycle and bottleneck results are estimates, not cycle-accurate simulation
+- **Preview calibration** - Only narrow Intel Xeon cache evidence is documented; default Intel, AMD, and Apple profiles are not yet fully calibrated
 
 ## Contributing
 

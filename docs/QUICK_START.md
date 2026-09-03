@@ -1,6 +1,6 @@
-# Cache Explorer: Quick Start Guide
+# Hardware Explorer Preview: Quick Start Guide
 
-Get up and running with Cache Explorer in 5 minutes.
+Get the local-first CPU performance modeling workbench running in 5 minutes.
 
 ## Prerequisites
 
@@ -89,7 +89,9 @@ The JSON includes cache levels plus Hardware Explorer fields:
 
 ### Hardware Presets
 
-Each preset includes vendor-accurate cache specs and prefetch behavior:
+Each profile combines published CPU cache metadata with modeled prefetch
+behavior. Treat cross-profile results as directional unless its trust packet
+shows captured calibration evidence:
 
 ```bash
 # List profile IDs before scripting compare/experiment runs
@@ -98,7 +100,7 @@ Each preset includes vendor-accurate cache specs and prefetch behavior:
 # Intel 12th Gen (default)
 ./backend/scripts/cache-explore code.c --config intel
 
-# Intel Xeon (validated against real hardware)
+# Intel Xeon (historical narrow cache evidence; inspect the trust packet)
 ./backend/scripts/cache-explore code.c --config xeon8488c
 
 # AMD Zen 4
@@ -218,7 +220,7 @@ Simulate different prefetching strategies:
 
 ### Optimization Suggestions
 
-Cache Explorer provides actionable suggestions:
+Hardware Explorer provides actionable suggestions:
 
 - **Loop Tiling** - Break large loops into cache-friendly blocks
 - **Data Layout** - Use arrays instead of linked structures
@@ -301,10 +303,12 @@ By default, STL is filtered for faster compilation. To include STL analysis:
 CACHE_EXPLORER_INCLUDE_STL=1 ./backend/scripts/cache-explore code.cpp
 ```
 
-## Simulation Accuracy
+## Model Confidence
 
-Cache Explorer is validated against real Intel Xeon hardware with ±4.6% L1 and ±9.3% L2 accuracy.
-See [VALIDATION.md](VALIDATION.md) for methodology and detailed results.
+The historical Intel Xeon measurements in [VALIDATION.md](VALIDATION.md) are a
+narrow reference, not a blanket accuracy guarantee. Default Intel, AMD, and
+Apple profiles remain Preview models until their checked-in evidence packets
+contain reproducible captures instead of placeholders.
 
 ## Next Steps
 

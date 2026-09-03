@@ -1,8 +1,15 @@
 # Security Policy
 
-Cache Explorer compiles and may execute local source code. Please treat
+Hardware Explorer Preview (formerly Cache Explorer) compiles and may execute
+local source code. Please treat
 sandboxing, subprocess execution, temporary files, release artifacts, and
 downloaded binaries as security-sensitive areas.
+
+Direct execution is for trusted local use only. A hosted deployment must set
+`HARDWARE_EXPLORER_DEPLOYMENT_MODE=hosted` and
+`HARDWARE_EXPLORER_ENABLE_SANDBOX=1`; startup is refused if the sandbox image or
+Docker daemon is unavailable. Comparison and experiment endpoints are not
+offered in hosted sandbox mode yet.
 
 ## Supported Versions
 

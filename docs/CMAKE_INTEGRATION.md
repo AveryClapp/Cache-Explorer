@@ -1,6 +1,7 @@
-# CMake Integration
+# Hardware Explorer Preview CMake Integration
 
-Cache Explorer integrates with existing CMake projects through two approaches:
+Hardware Explorer integrates with existing CMake projects through the compatible
+`cache-explore` command in two ways:
 
 1. **Toolchain file** — zero changes to your `CMakeLists.txt`, works with CTest
 2. **`find_package`** — per-target control, explicit in your build system
@@ -10,7 +11,7 @@ Cache Explorer integrates with existing CMake projects through two approaches:
 ## Quick Start
 
 ```bash
-# Configure your project with Cache Explorer instrumentation
+# Configure your project with Hardware Explorer instrumentation
 cache-explore cmake /path/to/your/project
 
 # Build

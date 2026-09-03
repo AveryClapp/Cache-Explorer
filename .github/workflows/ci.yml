@@ -81,6 +81,7 @@ jobs:
       - name: Verify CLI tools exist
         run: |
           ls -la backend/scripts/cache-explore*
+          test -x backend/scripts/hardware-explore
 
       - name: Validate calibration evidence packets
         run: backend/scripts/cache-explore calibration
