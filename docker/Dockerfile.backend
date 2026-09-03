@@ -13,11 +13,18 @@ RUN apt-get update && apt-get install -y \
     lsb-release \
     software-properties-common \
     gnupg \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Install LLVM 20
-RUN apt-get update && wget -qO- https://apt.llvm.org/llvm.sh | bash -s 20
-RUN apt-get install -y llvm-20-dev clang-20 lld-20
+RUN wget -qO /etc/apt/trusted.gpg.d/apt.llvm.org.asc https://apt.llvm.org/llvm-snapshot.gpg.key \
+    && echo "deb https://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" > /etc/apt/sources.list.d/llvm.list
+RUN apt-get -o Acquire::Retries=5 update \
+    && apt-get -o Acquire::Retries=5 install -y --no-install-recommends \
+      llvm-20-dev \
+      clang-20 \
+      lld-20 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set LLVM paths
 ENV PATH="/usr/lib/llvm-20/bin:${PATH}"
@@ -74,6 +81,7 @@ RUN apt-get update && apt-get install -y \
     lsb-release \
     software-properties-common \
     gnupg \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js 20
@@ -81,8 +89,11 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs
 
 # Install LLVM 20 runtime components
-RUN apt-get update && wget -qO- https://apt.llvm.org/llvm.sh | bash -s 20
-RUN apt-get install -y clang-20
+RUN wget -qO /etc/apt/trusted.gpg.d/apt.llvm.org.asc https://apt.llvm.org/llvm-snapshot.gpg.key \
+    && echo "deb https://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" > /etc/apt/sources.list.d/llvm.list
+RUN apt-get -o Acquire::Retries=5 update \
+    && apt-get -o Acquire::Retries=5 install -y --no-install-recommends clang-20 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set LLVM paths
 ENV PATH="/usr/lib/llvm-20/bin:${PATH}"
