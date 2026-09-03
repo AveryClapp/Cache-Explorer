@@ -18,7 +18,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Add LLVM 20 repository
-RUN wget -qO /etc/apt/trusted.gpg.d/apt.llvm.org.asc https://apt.llvm.org/llvm-snapshot.gpg.key \
+RUN for attempt in 1 2 3 4 5; do \
+      wget -qO /etc/apt/trusted.gpg.d/apt.llvm.org.asc https://apt.llvm.org/llvm-snapshot.gpg.key && break; \
+      if [ "$attempt" -eq 5 ]; then exit 1; fi; \
+      sleep 5; \
+    done \
     && echo "deb https://apt.llvm.org/jammy/ llvm-toolchain-jammy-20 main" > /etc/apt/sources.list.d/llvm.list
 
 # Install build dependencies
@@ -76,7 +80,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Add LLVM 20 repository
-RUN wget -qO /etc/apt/trusted.gpg.d/apt.llvm.org.asc https://apt.llvm.org/llvm-snapshot.gpg.key \
+RUN for attempt in 1 2 3 4 5; do \
+      wget -qO /etc/apt/trusted.gpg.d/apt.llvm.org.asc https://apt.llvm.org/llvm-snapshot.gpg.key && break; \
+      if [ "$attempt" -eq 5 ]; then exit 1; fi; \
+      sleep 5; \
+    done \
     && echo "deb https://apt.llvm.org/jammy/ llvm-toolchain-jammy-20 main" > /etc/apt/sources.list.d/llvm.list
 
 # Install runtime dependencies including opt for bitcode pipeline
