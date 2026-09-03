@@ -18,6 +18,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/server/package-lock.json
+
       - name: Install LLVM (Ubuntu)
         if: runner.os == 'Linux'
         run: |
@@ -40,6 +47,10 @@ jobs:
           elif [ "$RUNNER_OS" == "macOS" ]; then
             brew install ninja cmake jq bc boost
           fi
+
+      - name: Install server dependencies
+        working-directory: backend/server
+        run: npm ci --omit=dev
 
       - name: Build cache simulator
         run: |

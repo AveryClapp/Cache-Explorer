@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import WebSocket from 'ws';
-import { CacheExplorerProvider } from './cacheExplorerProvider';
 
 export interface CacheResult {
   levels: {
@@ -40,8 +39,7 @@ interface Suggestion {
 }
 
 export async function profileCurrentFile(
-  document: vscode.TextDocument,
-  provider: CacheExplorerProvider | undefined
+  document: vscode.TextDocument
 ): Promise<CacheResult | null> {
   const config = vscode.workspace.getConfiguration('cacheExplorer');
   const serverUrl = config.get<string>('serverUrl') || 'ws://localhost:3001/ws';

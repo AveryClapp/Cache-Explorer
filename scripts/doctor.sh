@@ -104,6 +104,59 @@ find_llvm_cmake_dir() {
   return 1
 }
 
+command_exists() {
+  local candidate="$1"
+  if [[ "$candidate" == */* ]]; then
+    [[ -x "$candidate" ]]
+  else
+    command -v "$candidate" >/dev/null 2>&1
+  fi
+}
+
+is_upstream_clang() {
+  local candidate="$1"
+  command_exists "$candidate" || return 1
+  ! "$candidate" --version 2>/dev/null | head -1 | grep -qi "apple"
+}
+
+find_upstream_clang() {
+  local candidate=""
+
+  if [[ -n "${CACHE_EXPLORER_CC:-}" ]]; then
+    candidate="$CACHE_EXPLORER_CC"
+    is_upstream_clang "$candidate" && { echo "$candidate"; return 0; }
+  fi
+
+  if is_upstream_clang clang; then
+    command -v clang
+    return 0
+  fi
+
+  for version in 21 20 19 18 17; do
+    candidate="clang-$version"
+    if is_upstream_clang "$candidate"; then
+      command -v "$candidate"
+      return 0
+    fi
+  done
+
+  if has_command llvm-config; then
+    candidate="$(llvm-config --bindir 2>/dev/null)/clang"
+    is_upstream_clang "$candidate" && { echo "$candidate"; return 0; }
+  fi
+
+  if has_command brew; then
+    local formula prefix
+    for formula in llvm llvm@21 llvm@20 llvm@19 llvm@18 llvm@17; do
+      prefix="$(brew --prefix "$formula" 2>/dev/null || true)"
+      candidate="$prefix/bin/clang"
+      is_upstream_clang "$candidate" && { echo "$candidate"; return 0; }
+    done
+  fi
+
+  return 1
+}
+
 check_path() {
   local path="$1"
   local label="$2"
@@ -142,11 +195,21 @@ echo ""
 echo "Toolchain"
 require_command cmake "Install CMake 3.20+."
 require_command ninja "Install Ninja, or adjust scripts/build.sh to use another generator."
-require_command clang "Install LLVM/Clang 17-21."
 require_command node "Install Node.js 18+."
 require_command npm "Install npm."
 optional_command curl "Used for faster dev-server health checks."
 optional_command lsof "Used to find occupied dev ports."
+
+if LLVM_CLANG="$(find_upstream_clang)"; then
+  ok "upstream LLVM clang found: $LLVM_CLANG ($("$LLVM_CLANG" --version | head -1))"
+  export CACHE_EXPLORER_CC="$LLVM_CLANG"
+  LLVM_CLANG_DIR="$(dirname "$LLVM_CLANG")"
+  if [[ -x "$LLVM_CLANG_DIR/clang++" ]]; then
+    export CACHE_EXPLORER_CXX="$LLVM_CLANG_DIR/clang++"
+  fi
+else
+  fail "upstream LLVM clang missing. Apple Clang cannot load Cache Explorer LLVM passes; install LLVM 17-21."
+fi
 
 if LLVM_CMAKE_DIR="$(find_llvm_cmake_dir)"; then
   ok "LLVM CMake package found: $LLVM_CMAKE_DIR"
@@ -169,6 +232,11 @@ echo ""
 echo "Product Entrypoints"
 check_cli "hardware profiles CLI responds" profiles --ids
 check_cli "workload catalog CLI responds" workloads --ids
+if PRODUCT_DOCTOR_OUTPUT="$("$ROOT_DIR/backend/scripts/cache-explore" doctor 2>&1)"; then
+  ok "compiler, pass, simulator, and server compatibility"
+else
+  fail "product doctor failed: $(echo "$PRODUCT_DOCTOR_OUTPUT" | tail -1)"
+fi
 
 echo ""
 if [[ "$STRICT" == "1" && "$WARNINGS" -gt 0 ]]; then

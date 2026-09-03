@@ -39,7 +39,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.profileCurrentFile = profileCurrentFile;
 const vscode = __importStar(require("vscode"));
 const ws_1 = __importDefault(require("ws"));
-async function profileCurrentFile(document, provider) {
+async function profileCurrentFile(document) {
     const config = vscode.workspace.getConfiguration('cacheExplorer');
     const serverUrl = config.get('serverUrl') || 'ws://localhost:3001/ws';
     const hardwarePreset = config.get('hardwarePreset') || 'modern-desktop';

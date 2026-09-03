@@ -23,9 +23,23 @@ if(NOT CACHE_EXPLORER_PATH)
   endif()
 endif()
 
-# Set paths
-set(CACHE_EXPLORER_PASS "${CACHE_EXPLORER_PATH}/llvm-pass/build/CacheProfiler.so")
-set(CACHE_EXPLORER_RUNTIME "${CACHE_EXPLORER_PATH}/runtime/build/libcache-explorer-rt.a")
+# Set paths. Explicit CMake values take priority, followed by values exported by
+# the cache-explore wrapper, then the legacy per-component build layout.
+if(NOT CACHE_EXPLORER_PASS)
+  if(DEFINED ENV{CACHE_EXPLORER_PASS})
+    set(CACHE_EXPLORER_PASS "$ENV{CACHE_EXPLORER_PASS}")
+  else()
+    set(CACHE_EXPLORER_PASS "${CACHE_EXPLORER_PATH}/llvm-pass/build/CacheProfiler.so")
+  endif()
+endif()
+
+if(NOT CACHE_EXPLORER_RUNTIME)
+  if(DEFINED ENV{CACHE_EXPLORER_RUNTIME})
+    set(CACHE_EXPLORER_RUNTIME "$ENV{CACHE_EXPLORER_RUNTIME}")
+  else()
+    set(CACHE_EXPLORER_RUNTIME "${CACHE_EXPLORER_PATH}/runtime/build/libcache-explorer-rt.a")
+  endif()
+endif()
 set(CACHE_EXPLORER_INCLUDE "${CACHE_EXPLORER_PATH}/runtime")
 
 # Verify dependencies exist

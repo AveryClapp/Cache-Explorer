@@ -60,7 +60,7 @@ function activate(context) {
             return;
         }
         try {
-            const results = await (0, profileCommand_1.profileCurrentFile)(document, cacheExplorerProvider);
+            const results = await (0, profileCommand_1.profileCurrentFile)(document);
             if (results && cacheExplorerProvider) {
                 cacheExplorerProvider.updateResults(results);
             }
@@ -78,7 +78,7 @@ function activate(context) {
         const config = vscode.workspace.getConfiguration('cacheExplorer');
         if (config.get('autoProfile') && ['c', 'cpp', 'rust'].includes(document.languageId)) {
             try {
-                const results = await (0, profileCommand_1.profileCurrentFile)(document, cacheExplorerProvider);
+                const results = await (0, profileCommand_1.profileCurrentFile)(document);
                 if (results && cacheExplorerProvider) {
                     cacheExplorerProvider.updateResults(results);
                 }

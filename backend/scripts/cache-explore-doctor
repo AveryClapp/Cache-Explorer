@@ -67,12 +67,36 @@ check_file() {
 compiler_cmd() {
   if [[ -n "${CACHE_EXPLORER_CC:-}" ]]; then
     printf '%s\n' "$CACHE_EXPLORER_CC"
-  elif has_cmd clang; then
-    printf 'clang\n'
-  else
-    for version in 21 20 19 18 17 16 15; do
-      if has_cmd "clang-$version"; then
-        printf 'clang-%s\n' "$version"
+    return
+  fi
+
+  if has_cmd clang && ! clang --version 2>/dev/null | head -1 | grep -qi apple; then
+    command -v clang
+    return
+  fi
+
+  for version in 21 20 19 18 17; do
+    if has_cmd "clang-$version"; then
+      command -v "clang-$version"
+      return
+    fi
+  done
+
+  if has_cmd llvm-config; then
+    local llvm_clang
+    llvm_clang="$(llvm-config --bindir 2>/dev/null)/clang"
+    if [[ -x "$llvm_clang" ]]; then
+      printf '%s\n' "$llvm_clang"
+      return
+    fi
+  fi
+
+  if has_cmd brew; then
+    local formula prefix
+    for formula in llvm llvm@21 llvm@20 llvm@19 llvm@18 llvm@17; do
+      prefix="$(brew --prefix "$formula" 2>/dev/null || true)"
+      if [[ -x "$prefix/bin/clang" ]]; then
+        printf '%s\n' "$prefix/bin/clang"
         return
       fi
     done
@@ -98,6 +122,15 @@ fi
 check_file "LLVM pass" "$PASS"
 check_file "runtime library" "$RUNTIME"
 check_file "cache simulator" "$CACHE_SIM"
+
+if [[ -n "$CLANG_CMD" && -f "$PASS" ]]; then
+  if printf 'int cache_explorer_doctor_probe(void) { return 0; }\n' \
+    | "$CLANG_CMD" -x c -fpass-plugin="$PASS" -c - -o /dev/null >/dev/null 2>&1; then
+    ok "compiler can load LLVM pass"
+  else
+    fail "compiler cannot load LLVM pass; rebuild with ./scripts/build.sh using the selected upstream LLVM"
+  fi
+fi
 
 if has_cmd node; then
   ok "node: $(node --version)"

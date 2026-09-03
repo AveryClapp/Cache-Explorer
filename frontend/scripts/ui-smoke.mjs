@@ -102,12 +102,12 @@ async function waitForHttp(url) {
 }
 
 function startPreview(port) {
+  const viteCli = resolve(frontendDir, 'node_modules', 'vite', 'bin', 'vite.js')
   const child = spawn(
-    'npm',
-    ['run', 'preview', '--', '--host', host, '--port', String(port), '--strictPort'],
+    process.execPath,
+    [viteCli, 'preview', '--host', host, '--port', String(port), '--strictPort'],
     {
       cwd: frontendDir,
-      shell: process.platform === 'win32',
       stdio: ['ignore', 'pipe', 'pipe'],
     },
   )
@@ -1587,9 +1587,17 @@ async function cleanup() {
   if (browser) await browser.close().catch(() => {})
   if (previewProcess) {
     shuttingDown = true
-    previewProcess.kill('SIGTERM')
-    await delay(250)
-    if (!previewProcess.killed) previewProcess.kill('SIGKILL')
+    if (previewProcess.exitCode === null && previewProcess.signalCode === null) {
+      const exited = new Promise(resolveExit => previewProcess.once('exit', resolveExit))
+      previewProcess.kill('SIGTERM')
+      await Promise.race([exited, delay(2000)])
+      if (previewProcess.exitCode === null && previewProcess.signalCode === null) {
+        previewProcess.kill('SIGKILL')
+        await Promise.race([exited, delay(2000)])
+      }
+    }
+    previewProcess.stdout?.destroy()
+    previewProcess.stderr?.destroy()
   }
 }
 

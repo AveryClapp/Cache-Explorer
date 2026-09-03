@@ -182,6 +182,10 @@ jobs:
         working-directory: frontend
         run: npm run tokens:check
 
+      - name: Lint frontend
+        working-directory: frontend
+        run: npm run lint
+
       - name: Build frontend
         working-directory: frontend
         run: npm run build
@@ -221,3 +225,7 @@ jobs:
       - name: Compile extension
         working-directory: vscode-extension
         run: npm run compile
+
+      - name: Lint extension
+        working-directory: vscode-extension
+        run: npm run lint

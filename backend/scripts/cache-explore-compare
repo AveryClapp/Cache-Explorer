@@ -120,8 +120,8 @@ fi
 # Detect compiler
 EXT="${INPUT_FILE##*.}"
 case "$EXT" in
-  c) COMPILER="clang"; LANG="c"; BASENAME=$(basename "$INPUT_FILE" .c) ;;
-  cpp|cc|cxx|C) COMPILER="clang++"; LANG="c++"; BASENAME=$(basename "$INPUT_FILE" ."$EXT") ;;
+  c) COMPILER="${CACHE_EXPLORER_CC:-clang}"; LANG="c"; BASENAME=$(basename "$INPUT_FILE" .c) ;;
+  cpp|cc|cxx|C) COMPILER="${CACHE_EXPLORER_CXX:-clang++}"; LANG="c++"; BASENAME=$(basename "$INPUT_FILE" ."$EXT") ;;
   *) echo "Error: Unsupported extension: .$EXT"; exit 1 ;;
 esac
 

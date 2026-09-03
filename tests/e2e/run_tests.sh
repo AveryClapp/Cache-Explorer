@@ -14,6 +14,27 @@ CACHE_EXPLORE="$PROJECT_DIR/backend/scripts/cache-explore"
 EXAMPLES_DIR="$PROJECT_DIR/examples"
 TEST_CASES_DIR="$SCRIPT_DIR/cases"
 
+select_artifact() {
+  local candidate
+  for candidate in "$@"; do
+    if [[ -e "$candidate" ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  printf '%s\n' "$1"
+}
+
+PASS_PATH=$(select_artifact \
+  "$PROJECT_DIR/build/backend/llvm-pass/CacheProfiler.so" \
+  "$PROJECT_DIR/backend/llvm-pass/build/CacheProfiler.so")
+RUNTIME_PATH=$(select_artifact \
+  "$PROJECT_DIR/build/backend/runtime/libcache-explorer-rt.a" \
+  "$PROJECT_DIR/backend/runtime/build/libcache-explorer-rt.a")
+SIM_PATH=$(select_artifact \
+  "$PROJECT_DIR/build/backend/cache-simulator/cache-sim" \
+  "$PROJECT_DIR/backend/cache-simulator/build/cache-sim")
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -75,9 +96,9 @@ test_dependencies() {
   local test_name="dependencies_exist"
   if ! should_run "$test_name"; then return; fi
 
-  local pass_path="$PROJECT_DIR/backend/llvm-pass/build/CacheProfiler.so"
-  local runtime_path="$PROJECT_DIR/backend/runtime/build/libcache-explorer-rt.a"
-  local sim_path="$PROJECT_DIR/backend/cache-simulator/build/cache-sim"
+  local pass_path="$PASS_PATH"
+  local runtime_path="$RUNTIME_PATH"
+  local sim_path="$SIM_PATH"
 
   if [[ ! -f "$pass_path" ]]; then
     fail "$test_name" "LLVM pass not found: $pass_path"
@@ -524,7 +545,10 @@ test_unit_tests() {
   local test_name="unit_tests"
   if ! should_run "$test_name"; then return; fi
 
-  local test_binary="$PROJECT_DIR/backend/cache-simulator/build/CacheLevelTest"
+  local test_binary
+  test_binary=$(select_artifact \
+    "$PROJECT_DIR/build/backend/cache-simulator/CacheLevelTest" \
+    "$PROJECT_DIR/backend/cache-simulator/build/CacheLevelTest")
 
   if [[ ! -f "$test_binary" ]]; then
     skip "$test_name (test binary not built)"
