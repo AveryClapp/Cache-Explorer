@@ -71,6 +71,20 @@ void __tag_memcpy(void *dest, void *src, uint32_t size, const char *file, uint32
 void __tag_memset(void *dest, uint32_t size, const char *file, uint32_t line);
 void __tag_memmove(void *dest, void *src, uint32_t size, const char *file, uint32_t line);
 
+// Clang SanitizerCoverage callbacks used by the stock clang-cl integration.
+// The compiler supplies the access width through the callback name.
+void __sanitizer_cov_trace_pc(void);
+void __sanitizer_cov_load1(void *addr);
+void __sanitizer_cov_load2(void *addr);
+void __sanitizer_cov_load4(void *addr);
+void __sanitizer_cov_load8(void *addr);
+void __sanitizer_cov_load16(void *addr);
+void __sanitizer_cov_store1(void *addr);
+void __sanitizer_cov_store2(void *addr);
+void __sanitizer_cov_store4(void *addr);
+void __sanitizer_cov_store8(void *addr);
+void __sanitizer_cov_store16(void *addr);
+
 void __cache_explorer_init(void);
 void __cache_explorer_flush(void);
 void __cache_explorer_shutdown(void);

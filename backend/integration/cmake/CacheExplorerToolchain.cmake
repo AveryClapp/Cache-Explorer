@@ -25,20 +25,18 @@ if(NOT CACHE_EXPLORER_PATH)
   endif()
 endif()
 
-# Set paths. Explicit CMake values take priority, followed by values exported by
-# the cache-explore wrapper, then the legacy per-component build layout.
-if(NOT CACHE_EXPLORER_PASS)
-  if(DEFINED ENV{HARDWARE_EXPLORER_PASS})
-    set(CACHE_EXPLORER_PASS "$ENV{HARDWARE_EXPLORER_PASS}")
-  elseif(DEFINED ENV{CACHE_EXPLORER_PASS})
-    set(CACHE_EXPLORER_PASS "$ENV{CACHE_EXPLORER_PASS}")
-  elseif(WIN32)
-    set(CACHE_EXPLORER_PASS "${CACHE_EXPLORER_PATH}/llvm-pass/build/CacheProfiler.dll")
-    if(EXISTS "${CACHE_EXPLORER_PATH}/llvm-pass/build/Release/CacheProfiler.dll")
-      set(CACHE_EXPLORER_PASS "${CACHE_EXPLORER_PATH}/llvm-pass/build/Release/CacheProfiler.dll")
+# Set paths. Explicit CMake values take priority, followed by values exported
+# by the wrapper, then the legacy per-component build layout. Stock Windows
+# LLVM uses built-in SanitizerCoverage and does not need a loadable pass.
+if(NOT WIN32)
+  if(NOT CACHE_EXPLORER_PASS)
+    if(DEFINED ENV{HARDWARE_EXPLORER_PASS})
+      set(CACHE_EXPLORER_PASS "$ENV{HARDWARE_EXPLORER_PASS}")
+    elseif(DEFINED ENV{CACHE_EXPLORER_PASS})
+      set(CACHE_EXPLORER_PASS "$ENV{CACHE_EXPLORER_PASS}")
+    else()
+      set(CACHE_EXPLORER_PASS "${CACHE_EXPLORER_PATH}/llvm-pass/build/CacheProfiler.so")
     endif()
-  else()
-    set(CACHE_EXPLORER_PASS "${CACHE_EXPLORER_PATH}/llvm-pass/build/CacheProfiler.so")
   endif()
 endif()
 
@@ -59,7 +57,7 @@ endif()
 set(CACHE_EXPLORER_INCLUDE "${CACHE_EXPLORER_PATH}/runtime")
 
 # Verify dependencies exist
-if(NOT EXISTS "${CACHE_EXPLORER_PASS}")
+if(NOT WIN32 AND NOT EXISTS "${CACHE_EXPLORER_PASS}")
   message(FATAL_ERROR "CacheProfiler.so not found at ${CACHE_EXPLORER_PASS}")
 endif()
 
@@ -110,7 +108,7 @@ set(CMAKE_CXX_COMPILER "${CLANGXX_PATH}" CACHE STRING "C++ compiler")
 # Add instrumentation flags
 if(WIN32)
   set(CACHE_EXPLORER_FLAGS
-    "\"/clang:-fpass-plugin=${CACHE_EXPLORER_PASS}\" /Z7 /clang:-Xclang /clang:-disable-O0-optnone")
+    "/clang:-fsanitize-coverage=trace-pc,trace-loads,trace-stores,no-prune /Z7")
 else()
   set(CACHE_EXPLORER_FLAGS
     "-fpass-plugin=${CACHE_EXPLORER_PASS} -g -Xclang -disable-O0-optnone")
@@ -132,5 +130,9 @@ include_directories(SYSTEM "${CACHE_EXPLORER_INCLUDE}")
 message(STATUS "Cache Explorer Toolchain:")
 message(STATUS "  C Compiler: ${CMAKE_C_COMPILER}")
 message(STATUS "  C++ Compiler: ${CMAKE_CXX_COMPILER}")
-message(STATUS "  Pass: ${CACHE_EXPLORER_PASS}")
+if(WIN32)
+  message(STATUS "  Instrumentation: clang-cl SanitizerCoverage")
+else()
+  message(STATUS "  Pass: ${CACHE_EXPLORER_PASS}")
+endif()
 message(STATUS "  Runtime: ${CACHE_EXPLORER_RUNTIME}")

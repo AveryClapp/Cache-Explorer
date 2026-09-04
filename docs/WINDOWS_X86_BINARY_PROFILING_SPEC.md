@@ -8,7 +8,8 @@ Target: Hardware Explorer Preview
 
 Hardware Explorer will profile 32-bit Windows programs through two paths:
 
-1. `clang-cl` source instrumentation for programs that can be rebuilt.
+1. `clang-cl` built-in SanitizerCoverage instrumentation for programs that can
+   be rebuilt.
 2. Intel Pin IA-32 dynamic instrumentation for existing PE executables and
    DLLs when source is unavailable.
 
@@ -52,7 +53,7 @@ exact source-line attribution when debug information is absent.
 
 | Input | Capture path | Primary navigation | Initial status |
 |---|---|---|---|
-| Source built with `clang-cl` for Win32 | LLVM pass and Windows x86 runtime | Original file and line | First milestone |
+| Source built with `clang-cl` for Win32 | Built-in load/store instrumentation and Windows x86 runtime | Original file and line after PDB attribution | M1 capture, M2 attribution |
 | PE32 executable with PDB | Intel Pin IA-32 | Source/function when symbols resolve; otherwise pseudocode | Planned |
 | PE32 executable without PDB | Intel Pin IA-32 | Function/basic block and best-effort pseudocode | Planned |
 | Protected or anti-cheat process | None | None | Unsupported |
@@ -415,11 +416,13 @@ will be declared only after the adapter is exercised against them.
 
 ## 16. Milestones and Acceptance Criteria
 
-### M1 — Win32 `clang-cl` source capture
+### M1 — Win32 `clang-cl` capture foundation
 
 - Windows runtime builds for an i686 target.
-- LLVM pass builds as a Windows DLL and loads through `clang-cl`.
-- CMake integration chooses clang-cl-compatible flags.
+- Stock `clang-cl` instruments loads and stores through its built-in
+  SanitizerCoverage callbacks; no custom compiler or pass DLL is required.
+- CMake integration selects the clang-cl instrumentation flags and emits PDB
+  debug information for later attribution.
 - A Win32 fixture compiles, executes, emits memory events, and is analyzed by
   `cache-sim` in Windows CI.
 - macOS and Linux integrations remain green.
@@ -467,10 +470,10 @@ will be declared only after the adapter is exercised against them.
 
 ## 17. Release Gate
 
-The project may advertise **Windows x86 source capture** after M1 passes in CI.
-It may advertise **existing binary profiling** only after M2 through M4 pass.
-Ghidra and IDA integrations are advertised separately after their respective
-milestones pass.
+The project may advertise **Windows x86 capture Preview** after M1 passes in
+CI. It may advertise **source-attributed Windows x86 profiling** after M2, and
+**existing binary profiling** only after M2 through M4 pass. Ghidra and IDA
+integrations are advertised separately after their respective milestones pass.
 
 Until then, the documentation must describe each incomplete path as planned or
 experimental. None of these milestones changes the modeled/calibrated status
@@ -485,6 +488,8 @@ Decisions:
 - Use one tool-neutral hotspot bundle and two decompiler adapters.
 - Build Ghidra navigation before IDA/Hex-Rays navigation.
 - Keep binary analysis local and offline.
+- Use built-in SanitizerCoverage callbacks for stock clang-cl instead of
+  requiring an LLVM build with Windows plugin exports enabled.
 
 Questions to resolve before M3:
 

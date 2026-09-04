@@ -9,18 +9,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(LLVM REQUIRED CONFIG)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
-list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
-include(AddLLVM)
 
 # Add LLVM definitions and include directories
 include_directories(${LLVM_INCLUDE_DIRS})
 separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
 add_definitions(${LLVM_DEFINITIONS_LIST})
 
-# LLVM pass plugin. AddLLVM supplies the correct shared-library format and
-# export behavior for ELF, Mach-O, and Windows DLLs.
+# LLVM Pass - builds as a plugin (.so) that Clang can load
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/CacheExplorerPass.cpp)
-    add_llvm_pass_plugin(CacheProfiler
+    add_library(CacheProfiler MODULE
         CacheExplorerPass.cpp
     )
 
@@ -29,29 +26,24 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/CacheExplorerPass.cpp)
         ${LLVM_INCLUDE_DIRS}
     )
 
-    # LLVM passes need RTTI and exception support. clang-cl uses the MSVC-style
-    # spellings while regular Clang uses the GNU-style driver options.
-    if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
-        target_compile_options(CacheProfiler PRIVATE /GR /EHsc /W4)
-    else()
-        target_compile_options(CacheProfiler PRIVATE
-            -frtti -fexceptions
-            -Wall -Wextra
-        )
-    endif()
+    # LLVM passes need RTTI enabled
+    target_compile_options(CacheProfiler PRIVATE
+        -frtti -fexceptions
+        -Wall -Wextra
+    )
 
-    if(WIN32)
-        set(CACHE_EXPLORER_PLUGIN_SUFFIX ".dll")
-    else()
-        # Keep the existing artifact name consumed by release scripts and CLI
-        # discovery on Linux and macOS.
-        set(CACHE_EXPLORER_PLUGIN_SUFFIX ".so")
-    endif()
+    # Output: CacheProfiler.so (no lib prefix)
     set_target_properties(CacheProfiler PROPERTIES
         PREFIX ""
-        SUFFIX "${CACHE_EXPLORER_PLUGIN_SUFFIX}"
+        SUFFIX ".so"
     )
-    message(STATUS "Building LLVM pass plugin: CacheProfiler${CACHE_EXPLORER_PLUGIN_SUFFIX}")
+
+    # On macOS, use undefined dynamic lookup (symbols resolved at load time)
+    if(APPLE)
+        target_link_options(CacheProfiler PRIVATE "-undefined" "dynamic_lookup")
+    endif()
+
+    message(STATUS "Building LLVM pass: CacheProfiler.so")
 else()
     message(STATUS "Skipping LLVM pass - no CacheProfilerPass.cpp yet")
 endif()

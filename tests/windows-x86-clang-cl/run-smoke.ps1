@@ -26,33 +26,12 @@ if (-not $vsInstall) {
 Import-Module (Join-Path $vsInstall 'Common7\Tools\Microsoft.VisualStudio.DevShell.dll')
 Enter-VsDevShell -VsInstallPath $vsInstall -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64'
 
-$llvmRoot = if ($env:HARDWARE_EXPLORER_LLVM_ROOT) {
-    (Resolve-Path -LiteralPath $env:HARDWARE_EXPLORER_LLVM_ROOT).Path
-} else {
-    $discoveredClangCl = (Get-Command clang-cl -ErrorAction Stop).Source
-    Split-Path -Parent (Split-Path -Parent $discoveredClangCl)
-}
-$clangCl = Join-Path $llvmRoot 'bin\clang-cl.exe'
-if (-not (Test-Path -LiteralPath $clangCl -PathType Leaf)) {
-    throw "clang-cl.exe was not found under $llvmRoot"
-}
-$llvmCMake = Join-Path $llvmRoot 'lib\cmake\llvm'
-if (-not (Test-Path -LiteralPath (Join-Path $llvmCMake 'LLVMConfig.cmake'))) {
-    throw "LLVMConfig.cmake was not found under $llvmCMake"
-}
+$clangCl = (Get-Command clang-cl -ErrorAction Stop).Source
 
 $buildRoot = Join-Path $env:RUNNER_TEMP "hardware-explorer-x86-$([guid]::NewGuid().ToString('N'))"
-$passBuild = Join-Path $buildRoot 'pass'
 $simulatorBuild = Join-Path $buildRoot 'simulator'
 $runtimeBuild = Join-Path $buildRoot 'runtime-x86'
 $smokeBuild = Join-Path $buildRoot 'smoke-x86'
-
-Invoke-Checked cmake @(
-    '-S', (Join-Path $repositoryRoot 'backend\llvm-pass'), '-B', $passBuild,
-    '-G', 'Ninja', "-DCMAKE_C_COMPILER=$clangCl", "-DCMAKE_CXX_COMPILER=$clangCl",
-    "-DLLVM_DIR=$llvmCMake"
-)
-Invoke-Checked cmake @('--build', $passBuild)
 
 Invoke-Checked cmake @(
     '-S', (Join-Path $repositoryRoot 'backend\cache-simulator'), '-B', $simulatorBuild,
@@ -70,13 +49,12 @@ Invoke-Checked cmake @(
 Invoke-Checked cmake @('--build', $runtimeBuild)
 Invoke-Checked ctest @('--test-dir', $runtimeBuild, '--output-on-failure')
 
-$pass = Join-Path $passBuild 'CacheProfiler.dll'
 $runtime = Join-Path $runtimeBuild 'cache-explorer-rt.lib'
 Invoke-Checked cmake @(
     '-S', $PSScriptRoot, '-B', $smokeBuild, '-G', 'Ninja',
     "-DCMAKE_C_COMPILER=$clangCl", '-DCMAKE_C_COMPILER_TARGET=i686-pc-windows-msvc',
     "-DCACHE_EXPLORER_PATH=$repositoryRoot\backend",
-    "-DCACHE_EXPLORER_PASS=$pass", "-DCACHE_EXPLORER_RUNTIME=$runtime"
+    "-DCACHE_EXPLORER_RUNTIME=$runtime"
 )
 Invoke-Checked cmake @('--build', $smokeBuild)
 
@@ -95,8 +73,11 @@ if ($smokeProcess.ExitCode -ne 0) {
 }
 
 $traceLines = Get-Content -LiteralPath $trace
-if (-not ($traceLines | Where-Object { $_ -match '^[LSI] 0x[0-9a-f]+ ' })) {
-    throw 'The instrumented x86 executable did not emit cache trace events.'
+if (-not ($traceLines | Where-Object { $_ -match '^L 0x[0-9a-f]+ ' })) {
+    throw 'The instrumented x86 executable did not emit load events.'
+}
+if (-not ($traceLines | Where-Object { $_ -match '^S 0x[0-9a-f]+ ' })) {
+    throw 'The instrumented x86 executable did not emit store events.'
 }
 
 $simulator = Join-Path $simulatorBuild 'cache-sim.exe'

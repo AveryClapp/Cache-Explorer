@@ -297,6 +297,32 @@ void __tag_memmove(void *dest, void *src, uint32_t size, const char *file, uint3
                       (uint64_t)(uintptr_t)src, size, file, line);
 }
 
+// Stock Windows LLVM builds do not support loadable pass plugins. clang-cl's
+// built-in SanitizerCoverage pass can still instrument loads and stores and
+// calls these hooks without requiring a custom compiler distribution. Code
+// address and PDB symbolization are added by the versioned attribution layer;
+// until then these records are deliberately unattributed rather than assigned
+// to a misleading source line.
+void __sanitizer_cov_trace_pc(void) {}
+
+#define DEFINE_SANITIZER_COV_ACCESS(kind, tag, width)                         \
+  void __sanitizer_cov_##kind##width(void *addr) {                            \
+    tag(addr, width, "unknown", 0);                                            \
+  }
+
+DEFINE_SANITIZER_COV_ACCESS(load, __tag_mem_load, 1)
+DEFINE_SANITIZER_COV_ACCESS(load, __tag_mem_load, 2)
+DEFINE_SANITIZER_COV_ACCESS(load, __tag_mem_load, 4)
+DEFINE_SANITIZER_COV_ACCESS(load, __tag_mem_load, 8)
+DEFINE_SANITIZER_COV_ACCESS(load, __tag_mem_load, 16)
+DEFINE_SANITIZER_COV_ACCESS(store, __tag_mem_store, 1)
+DEFINE_SANITIZER_COV_ACCESS(store, __tag_mem_store, 2)
+DEFINE_SANITIZER_COV_ACCESS(store, __tag_mem_store, 4)
+DEFINE_SANITIZER_COV_ACCESS(store, __tag_mem_store, 8)
+DEFINE_SANITIZER_COV_ACCESS(store, __tag_mem_store, 16)
+
+#undef DEFINE_SANITIZER_COV_ACCESS
+
 static void initialize_runtime(void) {
   atomic_store(&ring_buffer.head, 0);
   atomic_store(&ring_buffer.tail, 0);

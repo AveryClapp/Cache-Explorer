@@ -17,7 +17,7 @@
 # Options:
 #   CACHE_EXPLORER_ENABLED    - ON/OFF to enable/disable profiling (default: ON)
 #   CACHE_EXPLORER_PATH       - Path to Cache Explorer installation
-#   CACHE_EXPLORER_PASS       - Path to CacheProfiler.so or CacheProfiler.dll
+#   CACHE_EXPLORER_PASS       - Path to CacheProfiler.so (non-Windows Clang)
 #   CACHE_EXPLORER_RUNTIME    - Path to the runtime static library
 #   CACHE_EXPLORER_INCLUDE_STL - Include STL in profiling (default: OFF)
 #
@@ -39,25 +39,32 @@ if(NOT CACHE_EXPLORER_PATH)
   endif()
 endif()
 
-# Find the LLVM pass
-if(NOT CACHE_EXPLORER_PASS)
-  if(DEFINED ENV{HARDWARE_EXPLORER_PASS})
-    set(CACHE_EXPLORER_PASS "$ENV{HARDWARE_EXPLORER_PASS}")
-  elseif(DEFINED ENV{CACHE_EXPLORER_PASS})
-    set(CACHE_EXPLORER_PASS "$ENV{CACHE_EXPLORER_PASS}")
-  elseif(WIN32)
-    set(CACHE_EXPLORER_PASS "${CACHE_EXPLORER_PATH}/llvm-pass/build/CacheProfiler.dll")
-    if(EXISTS "${CACHE_EXPLORER_PATH}/llvm-pass/build/Release/CacheProfiler.dll")
-      set(CACHE_EXPLORER_PASS "${CACHE_EXPLORER_PATH}/llvm-pass/build/Release/CacheProfiler.dll")
-    endif()
-  else()
-    set(CACHE_EXPLORER_PASS "${CACHE_EXPLORER_PATH}/llvm-pass/build/CacheProfiler.so")
-  endif()
+set(CACHE_EXPLORER_CLANG_CL OFF)
+if((CMAKE_C_COMPILER_ID MATCHES "Clang" AND
+    CMAKE_C_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC") OR
+   (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND
+    CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC"))
+  set(CACHE_EXPLORER_CLANG_CL ON)
 endif()
 
-if(NOT EXISTS "${CACHE_EXPLORER_PASS}")
-  message(FATAL_ERROR "Cache Explorer LLVM pass not found: ${CACHE_EXPLORER_PASS}
-    Please build Cache Explorer first: cd ${CACHE_EXPLORER_PATH}/llvm-pass && ./build.sh")
+# Non-Windows Clang uses the project LLVM pass. Stock Windows LLVM builds do
+# not support loadable pass plugins, so clang-cl uses built-in
+# SanitizerCoverage load/store callbacks instead.
+if(NOT CACHE_EXPLORER_CLANG_CL)
+  if(NOT CACHE_EXPLORER_PASS)
+    if(DEFINED ENV{HARDWARE_EXPLORER_PASS})
+      set(CACHE_EXPLORER_PASS "$ENV{HARDWARE_EXPLORER_PASS}")
+    elseif(DEFINED ENV{CACHE_EXPLORER_PASS})
+      set(CACHE_EXPLORER_PASS "$ENV{CACHE_EXPLORER_PASS}")
+    else()
+      set(CACHE_EXPLORER_PASS "${CACHE_EXPLORER_PATH}/llvm-pass/build/CacheProfiler.so")
+    endif()
+  endif()
+
+  if(NOT EXISTS "${CACHE_EXPLORER_PASS}")
+    message(FATAL_ERROR "Cache Explorer LLVM pass not found: ${CACHE_EXPLORER_PASS}
+      Please build Cache Explorer first: cd ${CACHE_EXPLORER_PATH}/llvm-pass && ./build.sh")
+  endif()
 endif()
 
 # Find the runtime library
@@ -90,20 +97,16 @@ endif()
 option(CACHE_EXPLORER_ENABLED "Enable cache profiling" ON)
 option(CACHE_EXPLORER_INCLUDE_STL "Profile STL code (increases overhead)" OFF)
 
-set(CACHE_EXPLORER_CLANG_CL OFF)
-if((CMAKE_C_COMPILER_ID MATCHES "Clang" AND
-    CMAKE_C_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC") OR
-   (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND
-    CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC"))
-  set(CACHE_EXPLORER_CLANG_CL ON)
-endif()
-
 # Mark as found
 set(CacheExplorer_FOUND TRUE)
 
 message(STATUS "Cache Explorer found:")
 message(STATUS "  Path: ${CACHE_EXPLORER_PATH}")
-message(STATUS "  Pass: ${CACHE_EXPLORER_PASS}")
+if(CACHE_EXPLORER_CLANG_CL)
+  message(STATUS "  Instrumentation: clang-cl SanitizerCoverage")
+else()
+  message(STATUS "  Pass: ${CACHE_EXPLORER_PASS}")
+endif()
 message(STATUS "  Runtime: ${CACHE_EXPLORER_RUNTIME}")
 message(STATUS "  Enabled: ${CACHE_EXPLORER_ENABLED}")
 
@@ -121,14 +124,12 @@ function(cache_explorer_enable_target target)
 
   message(STATUS "Enabling cache profiling for target: ${target}")
 
-  # Add compiler flags for the LLVM pass and retain line information. The
-  # /clang: escape passes native Clang options through clang-cl's MSVC driver.
+  # Retain debug information for source attribution. clang-cl uses Clang's
+  # built-in memory callbacks because stock Windows LLVM cannot load pass DLLs.
   if(CACHE_EXPLORER_CLANG_CL)
     target_compile_options(${target} PRIVATE
-      "/clang:-fpass-plugin=${CACHE_EXPLORER_PASS}"
+      /clang:-fsanitize-coverage=trace-pc,trace-loads,trace-stores,no-prune
       /Z7
-      /clang:-Xclang
-      /clang:-disable-O0-optnone
     )
   else()
     target_compile_options(${target} PRIVATE
@@ -164,10 +165,8 @@ function(cache_explorer_enable_project)
   # Set global compile/link flags
   if(CACHE_EXPLORER_CLANG_CL)
     add_compile_options(
-      "/clang:-fpass-plugin=${CACHE_EXPLORER_PASS}"
+      /clang:-fsanitize-coverage=trace-pc,trace-loads,trace-stores,no-prune
       /Z7
-      /clang:-Xclang
-      /clang:-disable-O0-optnone
     )
   else()
     add_compile_options(

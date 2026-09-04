@@ -34,6 +34,8 @@ int main(void) {
   __tag_prefetch(destination, 64, 1, "address_test.c", 10);
   __tag_memset(destination, 128, "address_test.c", 11);
   __tag_memmove(destination, source, 32, "address_test.c", 12);
+  __sanitizer_cov_load4(destination);
+  __sanitizer_cov_store8(source);
   __cache_explorer_shutdown();
   fflush(stdout);
 
@@ -49,5 +51,7 @@ int main(void) {
   assert(strstr(output, "P1 0x12340 64 address_test.c:10") != NULL);
   assert(strstr(output, "Z 0x12340 128 address_test.c:11") != NULL);
   assert(strstr(output, "O 0x12340 0x22340 32 address_test.c:12") != NULL);
+  assert(strstr(output, "L 0x12340 4 unknown:0") != NULL);
+  assert(strstr(output, "S 0x22340 8 unknown:0") != NULL);
   return 0;
 }

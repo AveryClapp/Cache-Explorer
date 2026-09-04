@@ -1,9 +1,9 @@
 # Hardware Explorer clang-cl wrapper for Windows source instrumentation.
 #
-# This wrapper adds the LLVM pass and runtime to an existing clang-cl command.
-# It preserves the normal clang-cl argument surface so it can be used anywhere
-# a build invokes the compiler directly. CMake users should prefer the module in
-# backend/integration/cmake.
+# This wrapper enables clang-cl's built-in load/store instrumentation and adds
+# the Hardware Explorer runtime to an existing command. It preserves the normal
+# clang-cl argument surface so it can be used anywhere a build invokes the
+# compiler directly. CMake users should prefer the integration module.
 
 [CmdletBinding()]
 param(
@@ -26,13 +26,6 @@ function Find-FirstExistingFile {
 
 $backendDirectory = Split-Path -Parent $PSScriptRoot
 
-$passPath = Find-FirstExistingFile @(
-    $env:HARDWARE_EXPLORER_PASS,
-    $env:CACHE_EXPLORER_PASS,
-    (Join-Path $backendDirectory 'llvm-pass\build\CacheProfiler.dll'),
-    (Join-Path $backendDirectory 'llvm-pass\build\Release\CacheProfiler.dll')
-)
-
 $runtimePath = Find-FirstExistingFile @(
     $env:HARDWARE_EXPLORER_RUNTIME,
     $env:CACHE_EXPLORER_RUNTIME,
@@ -40,9 +33,6 @@ $runtimePath = Find-FirstExistingFile @(
     (Join-Path $backendDirectory 'runtime\build\Release\cache-explorer-rt.lib')
 )
 
-if (-not $passPath) {
-    throw 'CacheProfiler.dll was not found. Build backend/llvm-pass or set HARDWARE_EXPLORER_PASS.'
-}
 if (-not $runtimePath) {
     throw 'cache-explorer-rt.lib was not found. Build backend/runtime for the target architecture or set HARDWARE_EXPLORER_RUNTIME.'
 }
@@ -57,10 +47,8 @@ $compiler = if ($env:HARDWARE_EXPLORER_CLANG_CL) {
 
 $compileOnly = $CompilerArguments -contains '/c' -or $CompilerArguments -contains '-c'
 $arguments = @(
-    "/clang:-fpass-plugin=$passPath",
+    '/clang:-fsanitize-coverage=trace-pc,trace-loads,trace-stores,no-prune',
     '/Z7',
-    '/clang:-Xclang',
-    '/clang:-disable-O0-optnone',
     "/I$($backendDirectory)\runtime"
 ) + $CompilerArguments
 
