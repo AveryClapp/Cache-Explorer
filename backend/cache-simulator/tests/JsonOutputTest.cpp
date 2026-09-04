@@ -29,6 +29,14 @@ void test_escape_mixed() {
   std::cout << "[PASS] test_escape_mixed\n";
 }
 
+void test_escape_control_characters() {
+  assert(JsonOutput::escape("line\n\tvalue\r\b\f") == "line\\n\\tvalue\\r\\b\\f");
+  std::string with_control = "prefix";
+  with_control.push_back('\x01');
+  assert(JsonOutput::escape(with_control) == "prefix\\u0001");
+  std::cout << "[PASS] test_escape_control_characters\n";
+}
+
 void test_coherence_state_char() {
   assert(std::string(JsonOutput::coherence_state_char(CoherenceState::Modified)) == "M");
   assert(std::string(JsonOutput::coherence_state_char(CoherenceState::Exclusive)) == "E");
@@ -335,6 +343,12 @@ void test_write_stream_start() {
   assert(json.find("\"type\":\"start\"") != std::string::npos);
   assert(json.find("\"config\":\"intel\"") != std::string::npos);
   assert(json.find("\"multicore\":true") != std::string::npos);
+
+  std::ostringstream escaped_out;
+  JsonOutput::write_stream_start(escaped_out, "bad\"name\n", false);
+  const std::string escaped = escaped_out.str();
+  assert(escaped.find("\"config\":\"bad\\\"name\\n\"") != std::string::npos);
+  assert(escaped.find("bad\"name\n") == std::string::npos);
   std::cout << "[PASS] test_write_stream_start\n";
 }
 
@@ -386,6 +400,7 @@ int main() {
   test_escape_quotes();
   test_escape_backslash();
   test_escape_mixed();
+  test_escape_control_characters();
   test_escape_file_paths();
 
   // State helpers

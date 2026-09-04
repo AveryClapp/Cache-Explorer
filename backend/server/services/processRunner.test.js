@@ -32,6 +32,65 @@ test('runProcess rejects with timeout metadata when a command exceeds its deadli
   );
 });
 
+test('runProcess terminates and reports cancellation from an AbortSignal', async () => {
+  const controller = new AbortController();
+  const resultPromise = runProcess(process.execPath, [
+    '-e',
+    'process.on("SIGTERM", () => process.exit(0)); setTimeout(() => {}, 10000);',
+  ], {
+    timeout: 5000,
+    maxOutputBuffer: 1024,
+    gracefulKillDelayMs: 10,
+    signal: controller.signal,
+  });
+
+  setTimeout(() => controller.abort(), 25);
+
+  await assert.rejects(resultPromise, (err) => {
+    assert.equal(err.cancelled, true);
+    assert.equal(err.timeout, false);
+    return true;
+  });
+});
+
+test('runProcess cancellation terminates descendant processes', async () => {
+  const controller = new AbortController();
+  let descendantPid = null;
+  let reportStarted;
+  const started = new Promise(resolve => { reportStarted = resolve; });
+  const resultPromise = runProcess(process.execPath, [
+    '-e',
+    `const { spawn } = require('node:child_process');
+     const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 10000)'], { stdio: 'ignore' });
+     process.stdout.write(String(child.pid));
+     setInterval(() => {}, 10000);`,
+  ], {
+    timeout: 5000,
+    maxOutputBuffer: 1024,
+    gracefulKillDelayMs: 10,
+    signal: controller.signal,
+    onStdout(chunk) {
+      descendantPid = Number(chunk.trim());
+      reportStarted();
+    },
+  });
+
+  await started;
+  controller.abort();
+  await assert.rejects(resultPromise, err => err.cancelled === true);
+
+  let descendantAlive = true;
+  for (let attempt = 0; attempt < 20 && descendantAlive; attempt += 1) {
+    await new Promise(resolve => setTimeout(resolve, 10));
+    try {
+      process.kill(descendantPid, 0);
+    } catch {
+      descendantAlive = false;
+    }
+  }
+  assert.equal(descendantAlive, false);
+});
+
 test('runManagedProcess can transform streamed stderr before buffering', async () => {
   const seen = [];
   const result = await runManagedProcess(process.execPath, [

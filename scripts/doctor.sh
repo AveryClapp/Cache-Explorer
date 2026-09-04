@@ -10,7 +10,7 @@ usage() {
   cat <<'USAGE'
 Usage: ./scripts/doctor.sh [--strict]
 
-Checks the local Cache Explorer toolchain, build artifacts, npm dependencies,
+Checks the local Hardware Explorer toolchain, build artifacts, npm dependencies,
 and product-facing CLI entrypoints.
 
 Options:
@@ -188,7 +188,7 @@ check_cli() {
   fi
 }
 
-echo "=== Cache Explorer Doctor ==="
+echo "=== Hardware Explorer Preview Doctor ==="
 echo "Root: $ROOT_DIR"
 echo ""
 
@@ -208,7 +208,7 @@ if LLVM_CLANG="$(find_upstream_clang)"; then
     export CACHE_EXPLORER_CXX="$LLVM_CLANG_DIR/clang++"
   fi
 else
-  fail "upstream LLVM clang missing. Apple Clang cannot load Cache Explorer LLVM passes; install LLVM 17-21."
+  fail "upstream LLVM clang missing. Apple Clang cannot load Hardware Explorer LLVM passes; install LLVM 17-21."
 fi
 
 if LLVM_CMAKE_DIR="$(find_llvm_cmake_dir)"; then

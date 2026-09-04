@@ -1,6 +1,7 @@
-# How to Read Cache Explorer Results
+# How to Read Hardware Explorer Results
 
-This guide explains what each part of the Cache Explorer output means and how to interpret the results to optimize your code.
+This guide explains how to interpret Hardware Explorer Preview results without
+confusing modeled evidence with hardware measurement.
 
 ## The Summary Panel
 
@@ -143,29 +144,6 @@ Set 2: [□][□][□][□]
 
 3. **Dirty bits**: Many dirty lines = write-heavy code
 
-## Timeline View
-
-Shows access pattern over time:
-
-```
-████████████████░░░░░░░░████████████████
- ^-- L1 hits --^  ^miss^  ^-- hits --^
-```
-
-**Green bars**: L1 hits (fast)
-**Yellow bars**: L2 hits (medium)
-**Red bars**: L3 hits or memory (slow)
-
-### Patterns to Recognize
-
-**Solid green**: Excellent locality, data stays in cache
-
-**Periodic red spikes**: Eviction pattern - working set exceeds cache
-
-**Random red scattered**: Poor spatial locality
-
-**Red at start, then green**: Compulsory misses (cold start)
-
 ## Multi-Core Results
 
 When running multi-threaded code:
@@ -203,7 +181,7 @@ struct Data {
 
 ## Suggestions Panel
 
-Cache Explorer provides optimization suggestions:
+Hardware Explorer provides optimization suggestions:
 
 ```
 [HIGH] false_sharing at line 45
@@ -254,16 +232,13 @@ Cache Explorer provides optimization suggestions:
 
 5. **Profile realistic input** - Cache behavior depends on data size
 
-## Simulation Accuracy
+## Model Confidence
 
-Cache Explorer results are validated against real hardware. On Intel Xeon Platinum 8488C:
-
-- **L1 Data**: ±4.6% accuracy (within ±5% target)
-- **L2**: ±9.3% accuracy (within ±10% target)
-
-This means validated profiles can track real hardware closely for the measured
-cache levels. For detailed validation methodology and current caveats, see
-[VALIDATION.md](VALIDATION.md) and [HARDWARE_MODEL_CONTRACT.md](HARDWARE_MODEL_CONTRACT.md).
+Use the trust label and model contract attached to each result. Historical
+Intel Xeon cache measurements do not guarantee accuracy for the default Intel,
+AMD, or Apple profiles, and estimated cycles should only be used for
+same-workload directional comparisons. See [VALIDATION.md](VALIDATION.md) and
+[HARDWARE_MODEL_CONTRACT.md](HARDWARE_MODEL_CONTRACT.md).
 
 ## Next Steps
 

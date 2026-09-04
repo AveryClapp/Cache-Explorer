@@ -1,6 +1,47 @@
 #include "../include/ArgParser.hpp"
 #include "../profiles/HardwarePresets.hpp"
 #include <iostream>
+#include <limits>
+#include <stdexcept>
+
+namespace {
+
+unsigned long long parse_unsigned_value(const char* raw, const char* option) {
+    const std::string value(raw);
+    if (value.empty() || value.front() == '-') {
+        throw std::invalid_argument(std::string(option) + " requires a non-negative integer");
+    }
+    size_t consumed = 0;
+    unsigned long long parsed = 0;
+    try {
+        parsed = std::stoull(value, &consumed, 10);
+    } catch (...) {
+        throw std::invalid_argument(std::string(option) + " requires an integer");
+    }
+    if (consumed != value.size()) {
+        throw std::invalid_argument(std::string(option) + " requires an integer");
+    }
+    return parsed;
+}
+
+int parse_int_value(const char* raw, const char* option, int minimum, int maximum) {
+    const auto parsed = parse_unsigned_value(raw, option);
+    if (parsed < static_cast<unsigned long long>(minimum) ||
+        parsed > static_cast<unsigned long long>(maximum)) {
+        throw std::out_of_range(std::string(option) + " is outside its supported range");
+    }
+    return static_cast<int>(parsed);
+}
+
+size_t parse_size_value(const char* raw, const char* option, size_t minimum, size_t maximum) {
+    const auto parsed = parse_unsigned_value(raw, option);
+    if (parsed < minimum || parsed > maximum || parsed > std::numeric_limits<size_t>::max()) {
+        throw std::out_of_range(std::string(option) + " is outside its supported range");
+    }
+    return static_cast<size_t>(parsed);
+}
+
+} // namespace
 
 void ArgParser::print_usage(const char* prog) {
     std::cerr << "Usage: " << prog << " [options]\n"
@@ -188,7 +229,7 @@ SimulatorOptions ArgParser::parse(int argc, char* argv[]) {
         if ((arg == "--config" || arg == "--hardware") && i + 1 < argc) {
             opts.config_name = argv[++i];
         } else if (arg == "--cores" && i + 1 < argc) {
-            opts.num_cores = std::stoi(argv[++i]);
+            opts.num_cores = parse_int_value(argv[++i], "--cores", 0, 256);
         } else if (arg == "--verbose") {
             opts.verbose = true;
         } else if (arg == "--json") {
@@ -201,38 +242,42 @@ SimulatorOptions ArgParser::parse(int argc, char* argv[]) {
         } else if (arg == "--fast") {
             opts.fast_mode = true;
         } else if (arg == "--l1-size" && i + 1 < argc) {
-            opts.l1_size = std::stoull(argv[++i]);
+            opts.l1_size = parse_size_value(argv[++i], "--l1-size", 1024, 16ULL * 1024 * 1024);
         } else if (arg == "--l1-assoc" && i + 1 < argc) {
-            opts.l1_assoc = std::stoi(argv[++i]);
+            opts.l1_assoc = parse_int_value(argv[++i], "--l1-assoc", 1, 1024);
         } else if (arg == "--l1-line" && i + 1 < argc) {
-            opts.line_size = std::stoi(argv[++i]);
+            opts.line_size = parse_int_value(argv[++i], "--l1-line", 1, 4096);
         } else if (arg == "--l2-size" && i + 1 < argc) {
-            opts.l2_size = std::stoull(argv[++i]);
+            opts.l2_size = parse_size_value(argv[++i], "--l2-size", 1024, 64ULL * 1024 * 1024);
         } else if (arg == "--l2-assoc" && i + 1 < argc) {
-            opts.l2_assoc = std::stoi(argv[++i]);
+            opts.l2_assoc = parse_int_value(argv[++i], "--l2-assoc", 1, 1024);
         } else if (arg == "--l3-size" && i + 1 < argc) {
-            opts.l3_size = std::stoull(argv[++i]);
+            opts.l3_size = parse_size_value(argv[++i], "--l3-size", 1024, 128ULL * 1024 * 1024);
         } else if (arg == "--l3-assoc" && i + 1 < argc) {
-            opts.l3_assoc = std::stoi(argv[++i]);
+            opts.l3_assoc = parse_int_value(argv[++i], "--l3-assoc", 1, 1024);
         } else if (arg == "--prefetch" && i + 1 < argc) {
             opts.prefetch_policy = parse_prefetch_policy(argv[++i]);
             opts.prefetch_policy_set = true;
         } else if (arg == "--prefetch-degree" && i + 1 < argc) {
-            opts.prefetch_degree = std::stoi(argv[++i]);
+            opts.prefetch_degree = parse_int_value(argv[++i], "--prefetch-degree", 0, 64);
             opts.prefetch_degree_set = true;
         } else if (arg == "--parallel") {
             opts.parallel_parsing = true;
             // Optional thread count argument
             if (i + 1 < argc && argv[i + 1][0] != '-') {
-                opts.parallel_threads = std::stoull(argv[++i]);
+                opts.parallel_threads = parse_size_value(argv[++i], "--parallel", 1, 256);
             }
         } else if (arg == "--cache-segments") {
             opts.cache_segments = true;
         } else if (arg == "--segment-size" && i + 1 < argc) {
-            opts.segment_size = std::stoull(argv[++i]);
+            opts.segment_size = parse_size_value(argv[++i], "--segment-size", 1, 1000000);
         } else if (arg == "--help") {
             opts.show_help = true;
         }
+    }
+
+    if ((opts.line_size & (opts.line_size - 1)) != 0) {
+        throw std::invalid_argument("--l1-line must be a power of two");
     }
 
     // Build the cache config from options

@@ -7,7 +7,40 @@
 #include <iomanip>
 #include <iostream>
 #include <unordered_set>
+#include <utility>
 #include <vector>
+
+constexpr size_t kMaxTraceEvents = 2'000'000;
+
+std::string escape_svg_text(std::string_view value) {
+  std::string escaped;
+  escaped.reserve(value.size());
+  for (unsigned char c : value) {
+    switch (c) {
+      case '&': escaped += "&amp;"; break;
+      case '<': escaped += "&lt;"; break;
+      case '>': escaped += "&gt;"; break;
+      case '"': escaped += "&quot;"; break;
+      case '\'': escaped += "&apos;"; break;
+      default:
+        if (c < 0x20 && c != '\t' && c != '\n' && c != '\r')
+          escaped += "?";
+        else
+          escaped += static_cast<char>(c);
+    }
+  }
+  return escaped;
+}
+
+std::string truncate_svg_label(std::string label, size_t max_bytes = 30) {
+  if (label.size() <= max_bytes)
+    return label;
+  size_t start = label.size() - (max_bytes - 3);
+  while (start < label.size() &&
+         (static_cast<unsigned char>(label[start]) & 0xC0) == 0x80)
+    ++start;
+  return "..." + label.substr(start);
+}
 
 // Generate SVG flamegraph showing cache miss distribution
 template<typename HotLineType>
@@ -51,12 +84,15 @@ void output_flamegraph_svg(const std::vector<HotLineType>& hot_lines, const std:
 
   // Title
   std::cout << "<text x=\"" << margin << "\" y=\"24\" class=\"title\">"
-            << title << " - Cache Miss Distribution</text>\n";
+            << escape_svg_text(title) << " - Cache Miss Distribution</text>\n";
 
   // Bars
   int y = title_height + 10;
   for (const auto& h : hot_lines) {
-    double bar_width = (double)(h.misses) / max_misses * (width - 2 * margin - 100);
+    double bar_width = max_misses == 0
+        ? 1.0
+        : static_cast<double>(h.misses) / max_misses *
+              (width - 2 * margin - 100);
     if (bar_width < 1) bar_width = 1;
 
     // Color based on miss rate
@@ -74,11 +110,9 @@ void output_flamegraph_svg(const std::vector<HotLineType>& hot_lines, const std:
 
     // Label (file:line)
     std::string label = h.file + ":" + std::to_string(h.line);
-    if (label.length() > 30) {
-      label = "..." + label.substr(label.length() - 27);
-    }
+    label = truncate_svg_label(std::move(label));
     std::cout << "  <text x=\"" << (margin + 4) << "\" y=\"" << (y + 14)
-              << "\" class=\"label\">" << label << "</text>\n";
+              << "\" class=\"label\">" << escape_svg_text(label) << "</text>\n";
 
     // Count on right
     std::cout << "  <text x=\"" << (width - margin + 5) << "\" y=\"" << (y + 14)
@@ -100,7 +134,14 @@ void output_flamegraph_svg(const std::vector<HotLineType>& hot_lines, const std:
 
 int main(int argc, char *argv[]) {
   // Parse command line arguments
-  SimulatorOptions opts = ArgParser::parse(argc, argv);
+  SimulatorOptions opts;
+  try {
+    opts = ArgParser::parse(argc, argv);
+  } catch (const std::exception& error) {
+    std::cerr << "Error: " << error.what() << "\n";
+    ArgParser::print_usage(argv[0]);
+    return 2;
+  }
 
   if (opts.show_help) {
     ArgParser::print_usage(argv[0]);
@@ -172,12 +213,17 @@ int main(int argc, char *argv[]) {
     });
 
     // Output header with multicore info
-    std::cout << "{\"type\":\"start\",\"config\":\"" << config_name << "\",\"multicore\":true}\n" << std::flush;
+    JsonOutput::write_stream_start(std::cout, config_name, true);
 
     std::string line;
     while (std::getline(std::cin, line)) {
       auto event = parse_trace_event(line);
       if (!event) continue;
+
+      if (event_count >= kMaxTraceEvents) {
+        std::cout << "{\"type\":\"error\",\"message\":\"Trace exceeds the 2000000 event safety limit\"}\n";
+        return 2;
+      }
 
       event_count++;
       current_index = event_count;
@@ -321,7 +367,7 @@ int main(int argc, char *argv[]) {
         if (i > 0) std::cout << ",";
         const auto &fs = false_sharing[i];
         std::cout << "{\"addr\":\"0x" << std::hex << fs.cache_line_addr << std::dec << "\""
-                  << ",\"accesses\":" << fs.accesses.size() << "}";
+                  << ",\"accesses\":" << fs.total_accesses << "}";
       }
       std::cout << "]";
     }
@@ -457,6 +503,11 @@ int main(int argc, char *argv[]) {
   while (std::getline(std::cin, line)) {
     auto event = parse_trace_event(line);
     if (event) {
+      if (events.size() >= kMaxTraceEvents) {
+        std::cerr << "Error: trace exceeds the " << kMaxTraceEvents
+                  << " event safety limit\n";
+        return 2;
+      }
       threads.insert(event->thread_id);
       events.push_back(*event);
     }
@@ -595,7 +646,7 @@ int main(int argc, char *argv[]) {
 
     if (json_output) {
       std::cout << "{\n";
-      std::cout << "  \"config\": \"" << config_name << "\",\n";
+      std::cout << "  \"config\": \"" << JsonOutput::escape(config_name) << "\",\n";
       JsonOutput::write_profile_metadata(std::cout, profile, cfg,
                                          ArgParser::prefetch_policy_name(prefetch_policy),
                                          prefetch_degree, num_cores);
@@ -665,7 +716,7 @@ int main(int argc, char *argv[]) {
       for (size_t i = 0; i < false_sharing.size(); i++) {
         const auto &fs = false_sharing[i];
         std::cout << "    {\"cacheLineAddr\": \"0x" << std::hex << fs.cache_line_addr << std::dec << "\", "
-                  << "\"accessCount\": " << fs.accesses.size() << ", "
+                  << "\"accessCount\": " << fs.total_accesses << ", "
                   << "\"accesses\": [";
 
         // Group accesses by thread for cleaner output
@@ -875,7 +926,7 @@ int main(int argc, char *argv[]) {
           int shown = 0;
           for (const auto &a : fs.accesses) {
             if (shown >= 4) {
-              std::cout << "  ... and " << (fs.accesses.size() - 4) << " more accesses\n";
+              std::cout << "  ... and " << (fs.total_accesses - 4) << " more accesses\n";
               break;
             }
             std::cout << "  T" << a.thread_id << " " << (a.is_write ? "WRITE" : "READ")
@@ -1017,7 +1068,7 @@ int main(int argc, char *argv[]) {
 
     if (json_output) {
       std::cout << "{\n";
-      std::cout << "  \"config\": \"" << config_name << "\",\n";
+      std::cout << "  \"config\": \"" << JsonOutput::escape(config_name) << "\",\n";
       JsonOutput::write_profile_metadata(std::cout, profile, cfg,
                                          ArgParser::prefetch_policy_name(prefetch_policy),
                                          prefetch_degree, num_cores);

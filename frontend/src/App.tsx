@@ -5,13 +5,14 @@ import './styles/index.css'
 
 // Components
 import {
-  Header,
-  SettingsToolbar,
-  ExamplesSidebar,
-  ResultsPanel,
-  EditorPanel,
-} from './components'
-import type { ProjectFile, CommandItem, ExampleLangFilter } from './components'
+  type ProjectFile,
+} from './components/FileManager'
+import type { CommandItem } from './components/CommandPalette'
+import type { ExampleLangFilter } from './components/ExamplesSidebar'
+import { Header } from './components/Header'
+import { SettingsToolbar } from './components/SettingsToolbar'
+import { ExamplesSidebar } from './components/ExamplesSidebar'
+import { ResultsPanel } from './components/ResultsPanel'
 
 // Types
 import type {
@@ -58,7 +59,7 @@ import {
 
 // Utilities
 import { fuzzyMatch } from './utils/formatting'
-import { encodeState, decodeState } from './utils/state'
+import { decodeState } from './utils/state'
 import {
   exportAsJSON,
   exportAsCSV,
@@ -68,11 +69,29 @@ import {
   exportExperimentAsJSON,
 } from './utils/export'
 
-const CommandPalette = lazy(() => import('./components/CommandPalette').then(module => ({ default: module.CommandPalette })))
-const BatchResultsModal = lazy(() => import('./components/BatchResultsModal').then(module => ({ default: module.BatchResultsModal })))
-const ExperimentResultsModal = lazy(() => import('./components/ExperimentResultsModal').then(module => ({ default: module.ExperimentResultsModal })))
-const HardwareExplorerModal = lazy(() => import('./components/HardwareExplorerModal').then(module => ({ default: module.HardwareExplorerModal })))
-const WorkloadCatalogModal = lazy(() => import('./components/WorkloadCatalogModal').then(module => ({ default: module.WorkloadCatalogModal })))
+type ProductArea = 'analyze' | 'profiles' | 'comparisons' | 'workloads' | 'experiments'
+
+const loadCommandPalette = () => import('./components/CommandPalette').then(module => ({ default: module.CommandPalette }))
+const loadEditorPanel = () => import('./components/EditorPanel').then(module => ({ default: module.EditorPanel }))
+const loadBatchResults = () => import('./components/BatchResultsModal').then(module => ({ default: module.BatchResultsModal }))
+const loadExperimentResults = () => import('./components/ExperimentResultsModal').then(module => ({ default: module.ExperimentResultsModal }))
+const loadHardwareExplorer = () => import('./components/HardwareExplorerModal').then(module => ({ default: module.HardwareExplorerModal }))
+const loadWorkloadCatalog = () => import('./components/WorkloadCatalogModal').then(module => ({ default: module.WorkloadCatalogModal }))
+
+const CommandPalette = lazy(loadCommandPalette)
+const EditorPanel = lazy(loadEditorPanel)
+const BatchResultsModal = lazy(loadBatchResults)
+const ExperimentResultsModal = lazy(loadExperimentResults)
+const HardwareExplorerModal = lazy(loadHardwareExplorer)
+const WorkloadCatalogModal = lazy(loadWorkloadCatalog)
+
+function preloadProductArea(area: ProductArea) {
+  if (area === 'analyze') void loadEditorPanel()
+  if (area === 'profiles') void loadHardwareExplorer()
+  if (area === 'comparisons') void loadBatchResults()
+  if (area === 'workloads') void loadWorkloadCatalog()
+  if (area === 'experiments') void loadExperimentResults()
+}
 
 function annotationClass(annotation: SourceAnnotation) {
   return `hw-${annotation.subsystem} ${annotation.severity}`
@@ -108,6 +127,13 @@ const HARDWARE_CONFIG_ALIASES: Record<string, string> = {
   raspberry: 'rpi4',
 }
 const STRESS_WORKLOAD_VARIANT_TIMEOUT_MS = 30000
+const PRODUCT_AREAS = new Set<ProductArea>(['analyze', 'profiles', 'comparisons', 'workloads', 'experiments'])
+
+function productAreaFromLocation(): ProductArea {
+  if (typeof window === 'undefined') return 'analyze'
+  const area = new URLSearchParams(window.location.search).get('view') as ProductArea | null
+  return area && PRODUCT_AREAS.has(area) ? area : 'analyze'
+}
 
 function hardwareConfigsOrDefault(configs: string[]) {
   return sanitizeHardwareRunSet(configs).configs
@@ -330,23 +356,21 @@ function App() {
   const [selectedHotLineFile, setSelectedHotLineFile] = useState<string>('')  // File filter for hot lines
   const [batchResults, setBatchResults] = useState<{config: string; result: CacheResult}[]>([])
   const [batchError, setBatchError] = useState<string | null>(null)
-  const [showBatchModal, setShowBatchModal] = useState(false)
+  const [activeProductArea, setActiveProductArea] = useState<ProductArea>(productAreaFromLocation)
   const [batchRunning, setBatchRunning] = useState(false)
   const [experimentResult, setExperimentResult] = useState<HardwareExperimentResult | null>(null)
-  const [showExperimentModal, setShowExperimentModal] = useState(false)
   const [experimentRunning, setExperimentRunning] = useState(false)
   const [experimentError, setExperimentError] = useState<string | null>(null)
   const [experimentVariants, setExperimentVariants] = useState('direct\ntiled:RUN_TILED=1')
   const [experimentVariantSources, setExperimentVariantSources] = useState<ExperimentVariantSource[] | null>(null)
   const [experimentVariantSourceLabel, setExperimentVariantSourceLabel] = useState<string | null>(null)
   const [selectedExperimentTemplateId, setSelectedExperimentTemplateId] = useState(EXPERIMENT_TEMPLATES[0]?.id || '')
+  const [experimentTemplatePending, setExperimentTemplatePending] = useState(true)
   const [hardwareProfiles, setHardwareProfiles] = useState<HardwareProfile[]>([])
-  const [showHardwareExplorer, setShowHardwareExplorer] = useState(false)
   const [hardwareProfilesLoading, setHardwareProfilesLoading] = useState(false)
   const [hardwareProfilesError, setHardwareProfilesError] = useState<string | null>(null)
   const [selectedHardwareProfileId, setSelectedHardwareProfileId] = useState('')
   const [runHardwareConfigIds, setRunHardwareConfigIds] = useState<string[]>(readStoredHardwareRunSet)
-  const [showWorkloadCatalog, setShowWorkloadCatalog] = useState(false)
   const [includeStressWorkloads, setIncludeStressWorkloads] = useState(false)
   const [workloads, setWorkloads] = useState<WorkloadSnapshot[]>([])
   const [workloadsLoading, setWorkloadsLoading] = useState(false)
@@ -363,6 +387,21 @@ function App() {
   const decorationsRef = useRef<string[]>([])  // For hover/miss decorations
   const vimStatusRef = useRef<HTMLDivElement>(null)
   const vimModeRef = useRef<{ dispose: () => void } | null>(null)
+
+  const navigateProductArea = useCallback((area: ProductArea, historyMode: 'push' | 'replace' = 'push') => {
+    setActiveProductArea(area)
+    if (typeof window === 'undefined') return
+    const url = new URL(window.location.href)
+    if (area === 'analyze') url.searchParams.delete('view')
+    else url.searchParams.set('view', area)
+    window.history[historyMode === 'replace' ? 'replaceState' : 'pushState']({}, '', url)
+  }, [])
+
+  useEffect(() => {
+    const handlePopState = () => setActiveProductArea(productAreaFromLocation())
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
 
   const shareState = useMemo<ShareableState>(() => ({
     code,
@@ -388,7 +427,7 @@ function App() {
     runHardwareConfigIds,
     experimentVariants,
   }), [
-    activeFileId,
+    activeFile?.name,
     cacheSegments,
     code,
     config,
@@ -616,7 +655,10 @@ function App() {
             addEnvironmentNotice(`Shared hardware run set skipped unavailable profiles ${formatQuotedList(missing)}.`)
           }
         }
-        if (state.experimentVariants) setExperimentVariants(state.experimentVariants)
+        if (state.experimentVariants) {
+          setExperimentVariants(state.experimentVariants)
+          setExperimentTemplatePending(false)
+        }
       }
 
       if (shortId) {
@@ -641,15 +683,6 @@ function App() {
     loadState()
   }, [addEnvironmentNotice])
 
-  // Update URL when state changes
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const encoded = encodeState(shareState)
-      window.history.replaceState(null, '', `${window.location.pathname}#${encoded}`)
-    }, 500)
-    return () => clearTimeout(timer)
-  }, [shareState])
-
   const handleShare = useCallback(async () => {
     try {
       const response = await fetch(`${API_BASE}/shorten`, {
@@ -658,18 +691,20 @@ function App() {
         body: JSON.stringify({ state: shareState }),
       })
       const data = await response.json()
-      if (data.id) {
-        const url = `${window.location.origin}${window.location.pathname}?s=${data.id}`
-        await navigator.clipboard.writeText(url)
-        setCopied(true)
-        setTimeout(() => setCopied(false), 2000)
+      if (!response.ok || !data.id) {
+        throw new Error(readApiFailureMessage(data, 'Share service unavailable'))
       }
-    } catch {
-      await navigator.clipboard.writeText(window.location.href)
+
+      const url = `${window.location.origin}${window.location.pathname}?s=${data.id}`
+      await navigator.clipboard.writeText(url)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      addEnvironmentNotice(
+        `${err instanceof Error ? err.message : 'Share service unavailable'}. Source was not placed in the URL.`,
+      )
     }
-  }, [shareState])
+  }, [addEnvironmentNotice, shareState])
 
   // Apply error markers (red squiggles) for compile errors
   useEffect(() => {
@@ -698,7 +733,7 @@ function App() {
       endColumn: err.column + (err.sourceLine
         ? Math.min(20, err.sourceLine.length - err.column + 1)
         : 10),
-      source: 'Cache Explorer'
+      source: 'Hardware Explorer'
     }))
 
     monaco.editor.setModelMarkers(model, 'cache-explorer', markers)
@@ -1017,7 +1052,7 @@ function App() {
     setBatchError(null)
     setBatchRunning(true)
     setBatchTotal(configsToRun.length)
-    setShowBatchModal(true)
+    navigateProductArea('comparisons')
     let successfulResults = 0
     let failureMessage: string | null = null
 
@@ -1084,11 +1119,15 @@ function App() {
     if (successfulResults === 0) {
       setBatchError(failureMessage || `No hardware comparison results were produced for ${configsToRun.length} profiles.`)
     }
-  }, [files, makeHardwarePayload, runHardwareConfigIds])
+  }, [files, makeHardwarePayload, navigateProductArea, runHardwareConfigIds])
+
+  const openComparisonWorkspace = useCallback(() => {
+    navigateProductArea('comparisons')
+  }, [navigateProductArea])
 
   const openExperimentModal = useCallback(() => {
-    setShowExperimentModal(true)
-  }, [])
+    navigateProductArea('experiments')
+  }, [navigateProductArea])
 
   const loadWorkloads = useCallback(async (includeStress = includeStressWorkloads) => {
     setWorkloadsLoading(true)
@@ -1152,14 +1191,14 @@ function App() {
   }, [])
 
   const openWorkloadCatalog = useCallback(() => {
-    setShowWorkloadCatalog(true)
-    if (workloads.length === 0 && !workloadsLoading) {
-      void loadWorkloads()
-    }
-    if (!workloadHistory && !workloadHistoryLoading) {
-      void loadWorkloadHistory()
-    }
-  }, [loadWorkloadHistory, loadWorkloads, workloadHistory, workloadHistoryLoading, workloads.length, workloadsLoading])
+    navigateProductArea('workloads')
+  }, [navigateProductArea])
+
+  useEffect(() => {
+    if (activeProductArea !== 'workloads') return
+    if (workloads.length === 0 && !workloadsLoading) void loadWorkloads()
+    if (!workloadHistory && !workloadHistoryLoading) void loadWorkloadHistory()
+  }, [activeProductArea, loadWorkloadHistory, loadWorkloads, workloadHistory, workloadHistoryLoading, workloads.length, workloadsLoading])
 
   const updateIncludeStressWorkloads = useCallback((next: boolean) => {
     setIncludeStressWorkloads(next)
@@ -1238,9 +1277,9 @@ function App() {
     }
     setExperimentResult(null)
     setExperimentError(null)
-    setShowWorkloadCatalog(false)
-    setShowExperimentModal(true)
-  }, [exampleKeyForPath, loadExampleByKey, sourceVariantsForWorkload])
+    setExperimentTemplatePending(false)
+    navigateProductArea('experiments')
+  }, [exampleKeyForPath, loadExampleByKey, navigateProductArea, sourceVariantsForWorkload])
 
   const applyExperimentTemplate = useCallback(() => {
     const template = EXPERIMENT_TEMPLATES.find(item => item.id === selectedExperimentTemplateId)
@@ -1255,6 +1294,9 @@ function App() {
     if (typeof template.eventLimit === 'number') setEventLimit(template.eventLimit)
     if (typeof template.fastMode === 'boolean') setFastMode(template.fastMode)
     if (typeof template.cacheSegments === 'boolean') setCacheSegments(template.cacheSegments)
+    setExperimentResult(null)
+    setExperimentError(null)
+    setExperimentTemplatePending(false)
   }, [loadExampleByKey, selectedExperimentTemplateId])
 
   const loadHardwareProfiles = useCallback(async () => {
@@ -1300,11 +1342,13 @@ function App() {
   }, [config])
 
   const openHardwareExplorer = useCallback(() => {
-    setShowHardwareExplorer(true)
-    if (hardwareProfiles.length === 0 && !hardwareProfilesLoading) {
-      void loadHardwareProfiles()
-    }
-  }, [hardwareProfiles.length, hardwareProfilesLoading, loadHardwareProfiles])
+    navigateProductArea('profiles')
+  }, [navigateProductArea])
+
+  useEffect(() => {
+    if (activeProductArea !== 'profiles') return
+    if (hardwareProfiles.length === 0 && !hardwareProfilesLoading) void loadHardwareProfiles()
+  }, [activeProductArea, hardwareProfiles.length, hardwareProfilesLoading, loadHardwareProfiles])
 
   const applyHardwareProfile = useCallback((profileId: string) => {
     setConfig(profileId)
@@ -1322,16 +1366,19 @@ function App() {
   }, [])
 
   const compareHardwareRunSet = useCallback(() => {
-    setShowHardwareExplorer(false)
     void runBatchAnalysis()
   }, [runBatchAnalysis])
 
   const openExperimentFromExplorer = useCallback(() => {
-    setShowHardwareExplorer(false)
-    setShowExperimentModal(true)
-  }, [])
+    navigateProductArea('experiments')
+  }, [navigateProductArea])
 
   const runExperimentAnalysis = useCallback(async () => {
+    if (experimentTemplatePending) {
+      setExperimentError('Apply the selected template before running this experiment')
+      return
+    }
+
     const variants = experimentVariantSources || parseExperimentVariants(experimentVariants)
     if (variants.length === 0) {
       setExperimentError('Add at least one variant')
@@ -1341,7 +1388,7 @@ function App() {
     setExperimentResult(null)
     setExperimentError(null)
     setExperimentRunning(true)
-    setShowExperimentModal(true)
+    navigateProductArea('experiments')
 
     try {
       const response = await fetch(`${API_BASE}/experiment`, {
@@ -1365,12 +1412,12 @@ function App() {
     } finally {
       setExperimentRunning(false)
     }
-  }, [experimentVariantSources, experimentVariants, makeHardwarePayload, runHardwareConfigIds])
+  }, [experimentTemplatePending, experimentVariantSources, experimentVariants, makeHardwarePayload, navigateProductArea, runHardwareConfigIds])
 
-  const commands: CommandItem[] = useMemo(() => [
+  const commands: CommandItem[] = [
     // Actions (@)
     { id: 'run', icon: '@', label: 'Run analysis', shortcut: '⌘R', action: () => { if (!isLoading) runAnalysis() }, category: 'actions' },
-    { id: 'share', icon: '@', label: 'Share / Copy link', shortcut: '⌘S', action: () => { handleShare(); setCopied(true); setTimeout(() => setCopied(false), 2000) }, category: 'actions' },
+    { id: 'share', icon: '@', label: 'Share / Copy link', shortcut: '⌘S', action: () => { void handleShare() }, category: 'actions' },
     { id: 'diff-baseline', icon: '@', label: 'Set as diff baseline', action: () => { if (result) { setBaselineFromHook(result, config, files); setBaselineCode(code) } }, category: 'actions' },
     { id: 'diff-toggle', icon: '@', label: diffMode ? 'Exit diff mode' : 'Enter diff mode', action: () => { if (baselineResult) setDiffMode(!diffMode) }, category: 'actions' },
     { id: 'diff-clear', icon: '@', label: 'Clear diff baseline', action: () => { clearBaselineHook(); setBaselineCode(null) }, category: 'actions' },
@@ -1392,7 +1439,7 @@ function App() {
     { id: 'limit-1m', icon: '*', label: 'Event limit: 1M', action: () => setEventLimit(1000000), category: 'config' },
     { id: 'limit-5m', icon: '*', label: 'Event limit: 5M', action: () => setEventLimit(5000000), category: 'config' },
     { id: 'limit-none', icon: '*', label: 'Event limit: None', action: () => setEventLimit(0), category: 'config' },
-  ], [isLoading, activeFileId, vimMode, diffMode, baselineResult, config, files, result, code, handleShare, updateActiveLanguage, setBaselineFromHook, clearBaselineHook, runBatchAnalysis, openExperimentModal, openHardwareExplorer, openWorkloadCatalog])
+  ]
 
   // Command palette handlers
   const handleCommandSelect = useCallback((cmd: CommandItem) => {
@@ -1400,15 +1447,21 @@ function App() {
     setShowCommandPalette(false)
   }, [])
 
-  const handleCommandNavigate = useCallback((delta: number) => {
+  const handleCommandNavigate = (delta: number) => {
     const filtered = commandQuery
       ? commands.filter(cmd => fuzzyMatch(commandQuery, cmd.label) || fuzzyMatch(commandQuery, cmd.category || ''))
       : commands
     setSelectedCommandIndex(prev => Math.max(0, Math.min(filtered.length - 1, prev + delta)))
-  }, [commandQuery, commands])
+  }
+
+  const openAnalyzeWorkspace = () => {
+    navigateProductArea('analyze')
+  }
 
   return (
     <div className={`app${isEmbedMode ? ' embed' : ''}`}>
+      {!isEmbedMode && <a className="skip-link" href="#main-content">Skip to workspace</a>}
+
       {/* Command Palette - hidden in embed mode */}
       {!isEmbedMode && showCommandPalette && (
         <Suspense fallback={null}>
@@ -1426,95 +1479,10 @@ function App() {
         </Suspense>
       )}
 
-      {/* Batch Results Modal */}
-      {showBatchModal && (
-        <Suspense fallback={null}>
-          <BatchResultsModal
-            results={batchResults}
-            error={batchError}
-            running={batchRunning}
-            total={batchTotal}
-            onExportCSV={() => exportBatchResultsAsCSV(batchResults)}
-            onExportJSON={() => exportBatchResultsAsJSON(batchResults)}
-            onClose={() => setShowBatchModal(false)}
-          />
-        </Suspense>
-      )}
-
-      {/* Hardware Experiment Modal */}
-      {showExperimentModal && (
-        <Suspense fallback={null}>
-          <ExperimentResultsModal
-            result={experimentResult}
-            running={experimentRunning}
-            error={experimentError}
-            variantsText={experimentVariants}
-            variantSourceLabel={experimentVariantSourceLabel}
-            hardwareConfigIds={hardwareConfigsOrDefault(runHardwareConfigIds)}
-            templates={EXPERIMENT_TEMPLATES}
-            selectedTemplateId={selectedExperimentTemplateId}
-            onVariantsTextChange={(value) => {
-              setExperimentVariants(value)
-              setExperimentVariantSources(null)
-              setExperimentVariantSourceLabel(null)
-            }}
-            onTemplateChange={setSelectedExperimentTemplateId}
-            onApplyTemplate={applyExperimentTemplate}
-            onRun={runExperimentAnalysis}
-            onExportCSV={() => experimentResult && exportExperimentAsCSV(experimentResult)}
-            onExportJSON={() => experimentResult && exportExperimentAsJSON(experimentResult)}
-            onClose={() => setShowExperimentModal(false)}
-          />
-        </Suspense>
-      )}
-
-      {/* Hardware Explorer Modal */}
-      {showHardwareExplorer && (
-        <Suspense fallback={null}>
-          <HardwareExplorerModal
-            profiles={hardwareProfiles}
-            selectedId={selectedHardwareProfileId}
-            activeId={config}
-            runConfigIds={runHardwareConfigIds}
-            loading={hardwareProfilesLoading}
-            error={hardwareProfilesError}
-            onSelect={setSelectedHardwareProfileId}
-            onApply={applyHardwareProfile}
-            onToggleRunConfig={toggleRunHardwareConfig}
-            onCompareRunSet={compareHardwareRunSet}
-            onOpenExperiment={openExperimentFromExplorer}
-            onRefresh={loadHardwareProfiles}
-            onClose={() => setShowHardwareExplorer(false)}
-          />
-        </Suspense>
-      )}
-
-      {/* Verified Workloads Modal */}
-      {showWorkloadCatalog && (
-        <Suspense fallback={null}>
-          <WorkloadCatalogModal
-            workloads={workloads}
-          verification={workloadVerification}
-          history={workloadHistory}
-          includeStress={includeStressWorkloads}
-          loading={workloadsLoading}
-            verifying={workloadsVerifying}
-            error={workloadsError}
-            historyLoading={workloadHistoryLoading}
-            historyError={workloadHistoryError}
-            onRefresh={loadWorkloads}
-          onVerify={verifyWorkloads}
-          onRefreshHistory={loadWorkloadHistory}
-          onIncludeStressChange={updateIncludeStressWorkloads}
-          onLoadWorkload={loadWorkload}
-            onClose={() => setShowWorkloadCatalog(false)}
-          />
-        </Suspense>
-      )}
-
       {/* Header - hidden in embed mode */}
       {!isEmbedMode && (
         <Header
+          activeProductArea={activeProductArea}
           theme={theme}
           diffMode={diffMode}
           baselineResult={baselineResult}
@@ -1529,17 +1497,19 @@ function App() {
           onSetDiffMode={setDiffMode}
           onSetBaseline={(r) => { setBaselineFromHook(r, config, files); setBaselineCode(code) }}
           onClearBaseline={() => { clearBaselineHook(); setBaselineCode(null) }}
-          onCompareHardware={runBatchAnalysis}
+          onOpenAnalyze={openAnalyzeWorkspace}
+          onCompareHardware={openComparisonWorkspace}
           onExploreHardware={openHardwareExplorer}
           onOpenWorkloads={openWorkloadCatalog}
           onRunExperiment={openExperimentModal}
+          onPreloadProductArea={preloadProductArea}
           onRun={runAnalysis}
           onCancel={cancelAnalysis}
         />
       )}
 
       {/* Settings Toolbar - Godbolt style */}
-      {!isEmbedMode && (
+      {!isEmbedMode && activeProductArea === 'analyze' && (
         <SettingsToolbar
           config={config}
           optLevel={optLevel}
@@ -1574,13 +1544,97 @@ function App() {
         </div>
       )}
 
+      {!isEmbedMode && activeProductArea !== 'analyze' && (
+        <main id="main-content" className="product-workspace" tabIndex={-1}>
+          <Suspense fallback={<div className="product-loading" role="status">Loading workspace…</div>}>
+            {activeProductArea === 'comparisons' && (
+              <BatchResultsModal
+                results={batchResults}
+                error={batchError}
+                running={batchRunning}
+                total={batchTotal}
+                onRun={() => { void runBatchAnalysis() }}
+                onExportCSV={() => exportBatchResultsAsCSV(batchResults)}
+                onExportJSON={() => exportBatchResultsAsJSON(batchResults)}
+              />
+            )}
+
+            {activeProductArea === 'experiments' && (
+              <ExperimentResultsModal
+                result={experimentResult}
+                running={experimentRunning}
+                error={experimentError}
+                variantsText={experimentVariants}
+                variantSourceLabel={experimentVariantSourceLabel}
+                hardwareConfigIds={hardwareConfigsOrDefault(runHardwareConfigIds)}
+                templates={EXPERIMENT_TEMPLATES}
+                selectedTemplateId={selectedExperimentTemplateId}
+                templatePending={experimentTemplatePending}
+                onVariantsTextChange={(value) => {
+                  setExperimentVariants(value)
+                  setExperimentVariantSources(null)
+                  setExperimentVariantSourceLabel(null)
+                  setExperimentTemplatePending(false)
+                }}
+                onTemplateChange={(value) => {
+                  setSelectedExperimentTemplateId(value)
+                  setExperimentTemplatePending(true)
+                  setExperimentResult(null)
+                  setExperimentError(null)
+                }}
+                onApplyTemplate={applyExperimentTemplate}
+                onRun={runExperimentAnalysis}
+                onExportCSV={() => experimentResult && exportExperimentAsCSV(experimentResult)}
+                onExportJSON={() => experimentResult && exportExperimentAsJSON(experimentResult)}
+              />
+            )}
+
+            {activeProductArea === 'profiles' && (
+              <HardwareExplorerModal
+                profiles={hardwareProfiles}
+                selectedId={selectedHardwareProfileId}
+                activeId={config}
+                runConfigIds={runHardwareConfigIds}
+                loading={hardwareProfilesLoading}
+                error={hardwareProfilesError}
+                onSelect={setSelectedHardwareProfileId}
+                onApply={applyHardwareProfile}
+                onToggleRunConfig={toggleRunHardwareConfig}
+                onCompareRunSet={compareHardwareRunSet}
+                onOpenExperiment={openExperimentFromExplorer}
+                onRefresh={loadHardwareProfiles}
+              />
+            )}
+
+            {activeProductArea === 'workloads' && (
+              <WorkloadCatalogModal
+                workloads={workloads}
+                verification={workloadVerification}
+                history={workloadHistory}
+                includeStress={includeStressWorkloads}
+                loading={workloadsLoading}
+                verifying={workloadsVerifying}
+                error={workloadsError}
+                historyLoading={workloadHistoryLoading}
+                historyError={workloadHistoryError}
+                onRefresh={loadWorkloads}
+                onVerify={verifyWorkloads}
+                onRefreshHistory={loadWorkloadHistory}
+                onIncludeStressChange={updateIncludeStressWorkloads}
+                onLoadWorkload={loadWorkload}
+              />
+            )}
+          </Suspense>
+        </main>
+      )}
+
       {/* Copied Toast */}
       {copied && (
         <div className="toast">Link copied!</div>
       )}
 
       {/* Mobile Tab Switcher */}
-      {isMobile && !isEmbedMode && (
+      {isMobile && !isEmbedMode && activeProductArea === 'analyze' && (
         <div className="mobile-tab-switcher">
           <button
             className={mobilePane === 'editor' ? 'active' : ''}
@@ -1597,7 +1651,7 @@ function App() {
         </div>
       )}
 
-      <div className="workspace">
+      {(isEmbedMode || activeProductArea === 'analyze') && <main id="main-content" className="workspace" tabIndex={-1}>
         {/* Sidebar - Example List */}
         {!isEmbedMode && !isMobile && (
           <ExamplesSidebar
@@ -1610,32 +1664,34 @@ function App() {
           />
         )}
 
-        <EditorPanel
-          code={code}
-          language={language}
-          theme={theme}
-          isReadOnly={isReadOnly}
-          isEmbedMode={isEmbedMode}
-          diffMode={diffMode}
-          baselineCode={baselineCode}
-          files={projectFiles}
-          activeFileId={activeFileId}
-          onFileSelect={setActiveFileId}
-          onFileCreate={createFile}
-          onFileDelete={closeFile}
-          onFileRename={renameFile}
-          onSetMainFile={setMainFileId}
-          onCodeChange={updateActiveCode}
-          onEditorMount={handleEditorMount}
-          isLoading={isLoading}
-          stage={stage}
-          progress={progress}
-          config={config}
-          vimMode={vimMode}
-          vimStatusRef={vimStatusRef}
-          isMobile={isMobile}
-          mobilePane={mobilePane}
-        />
+        <Suspense fallback={<div className="editor-area editor-loading" role="status">Loading code editor...</div>}>
+          <EditorPanel
+            code={code}
+            language={language}
+            theme={theme}
+            isReadOnly={isReadOnly}
+            isEmbedMode={isEmbedMode}
+            diffMode={diffMode}
+            baselineCode={baselineCode}
+            files={projectFiles}
+            activeFileId={activeFileId}
+            onFileSelect={setActiveFileId}
+            onFileCreate={createFile}
+            onFileDelete={closeFile}
+            onFileRename={renameFile}
+            onSetMainFile={setMainFileId}
+            onCodeChange={updateActiveCode}
+            onEditorMount={handleEditorMount}
+            isLoading={isLoading}
+            stage={stage}
+            progress={progress}
+            config={config}
+            vimMode={vimMode}
+            vimStatusRef={vimStatusRef}
+            isMobile={isMobile}
+            mobilePane={mobilePane}
+          />
+        </Suspense>
 
         <ResultsPanel
           result={result}
@@ -1664,7 +1720,7 @@ function App() {
           isMobile={isMobile}
           mobilePane={mobilePane}
         />
-      </div>
+      </main>}
 
     </div>
   )

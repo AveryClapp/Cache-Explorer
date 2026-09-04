@@ -23,18 +23,27 @@ const budgets = [
     required: true,
   },
   {
-    label: 'monaco editor',
-    pattern: /^monaco-[\w-]+\.js$/,
+    label: 'lazy editor core',
+    pattern: /^editor\.api-[\w-]+\.js$/,
+    // Monaco is bundled for offline use but must stay behind the editor boundary.
     maxBytes: 2700 * 1024,
     maxGzipBytes: 700 * 1024,
     required: true,
   },
   {
-    label: 'monaco css',
-    pattern: /^monaco-[\w-]+\.css$/,
-    maxBytes: 180 * 1024,
-    maxGzipBytes: 30 * 1024,
+    label: 'lazy editor panel',
+    pattern: /^EditorPanel-[\w-]+\.js$/,
+    maxBytes: 1200 * 1024,
+    maxGzipBytes: 310 * 1024,
     required: true,
+  },
+  {
+    label: 'lazy editor css',
+    pattern: /^(EditorPanel|editor)-[\w-]+\.css$/,
+    maxBytes: 90 * 1024,
+    maxGzipBytes: 15 * 1024,
+    required: true,
+    multiple: true,
   },
   {
     label: 'lazy product modal',

@@ -1,21 +1,31 @@
-# Cache Explorer
+# Hardware Explorer Preview
 
 [![CI](https://github.com/AveryClapp/Cache-Explorer/actions/workflows/ci.yml/badge.svg)](https://github.com/AveryClapp/Cache-Explorer/actions/workflows/ci.yml)
 [![GitHub release](https://img.shields.io/github/v/release/AveryClapp/Cache-Explorer)](https://github.com/AveryClapp/Cache-Explorer/releases)
 [![GitHub stars](https://img.shields.io/github/stars/AveryClapp/Cache-Explorer)](https://github.com/AveryClapp/Cache-Explorer/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-> Visualize CPU cache behavior in real-time. See exactly which lines of your code cause cache misses.
+> CPU performance modeling for source code.
 
 <p align="center">
-  <img src="assets/demo.gif" width="600" alt="Demo">
+  <img src="assets/hardware-explorer-preview.png" width="900" alt="Hardware Explorer Preview workspace">
 </p>
 
-## Why Cache Explorer?
+Hardware Explorer is the Preview product name for Cache Explorer. It models CPU
+cache, TLB, prefetch, coherence, branch, and pipeline behavior from instrumented
+source. It is not a GPU, storage, or network explorer, and estimated cycles are
+not cycle-accurate CPU simulation.
+
+The product is local-first. Once dependencies and native artifacts are
+installed, the UI and analysis path run without external web assets. A fresh
+dependency install, first Docker image build, optional pass downloads, and
+published workload history still require network access.
+
+## Why Hardware Explorer?
 
 **Before:** "Why is my code slow?" → Guesswork, profilers, prayer
 
-**After:** Exact line-by-line cache miss attribution
+**After:** Source-attributed CPU cache evidence and repeatable directional comparisons
 
 <video src="https://github.com/user-attachments/assets/649aeef7-319c-4778-af70-9df88674da3b" controls width="600"></video>
 
@@ -26,7 +36,7 @@
 ```bash
 git clone https://github.com/AveryClapp/cache-explorer.git
 cd cache-explorer
-docker-compose up --build
+docker compose up --build
 # Open http://localhost:8080
 # Check health with: docker compose ps
 # Product health is proxied at http://localhost:8080/health
@@ -52,24 +62,30 @@ cd cache-explorer
 
 Release builds publish pre-built `CacheProfiler` LLVM passes for supported LLVM
 versions. The download helper uses the official release repo by default and
-verifies binaries against the release `SHA256SUMS` manifest when it is present:
+fails closed unless the binary matches the release `SHA256SUMS` manifest:
 
 ```bash
 ./backend/scripts/cache-explore-download-pass 21
-CACHE_EXPLORER_REQUIRE_CHECKSUM=1 ./backend/scripts/cache-explore-download-pass 21
+# Explicit unsafe override for a private mirror without a manifest:
+HARDWARE_EXPLORER_REQUIRE_CHECKSUM=0 ./backend/scripts/cache-explore-download-pass 21
 ```
 
 ## Features
 
 - **Source-level attribution** - See exactly which line caused each cache miss
 - **3C miss classification** - Compulsory, Capacity, Conflict breakdown
-- **MESI coherence** - Full multi-core cache coherence simulation
+- **MESI coherence model** - Multi-core trace analysis and false-sharing signals
 - **False sharing detection** - Find hidden performance killers in threaded code
 - **6 prefetch policies** - None, Next-line, Stream, Stride, Adaptive, Intel DCU
-- **14 hardware presets** - Intel, AMD, Apple Silicon, ARM, Educational
+- **14 CPU profiles** - Intel, AMD, Apple Silicon, ARM, and Educational models
 - **Hardware bottleneck summaries** - Estimated memory, branch, and front-end stalls
-- **Real-time visualization** - WebSocket streaming to interactive UI
-- **Works offline** - No cloud, no rate limits, your code stays local
+- **Live run progress** - WebSocket progress with interactive result panels
+- **Local-first and offline-capable** - Bundled frontend assets; analysis stays on the local machine by default
+
+Profile labels distinguish modeled, estimated, metadata-only, unsupported, and
+calibrated fields. The checked-in Intel, AMD, and Apple evidence packets are
+schema fixtures rather than release-grade calibration, so the product remains
+clearly labeled Preview.
 
 ## Hardware Presets
 
@@ -103,7 +119,7 @@ Source Code (.c/.cpp)
         │
         ▼
 ┌───────────────────────┐
-│  Web UI / JSON        │  Real-time visualization
+│  Web UI / JSON        │  Results, provenance, comparison
 └───────────────────────┘
 ```
 
@@ -114,7 +130,7 @@ Source Code (.c/.cpp)
 - **LLVM 17-21** (18 recommended)
 - **CMake 3.20+**
 - **Ninja** (optional but faster)
-- **Node.js 18+** (for web UI)
+- **Node.js 20.19+ or 22.12+** (for the web UI)
 
 ### macOS
 
@@ -177,16 +193,30 @@ cache-explore mycode.c -O3 --config apple
   --limit 200000
 ```
 
+The new product-facing command is an alias; existing automation remains valid:
+
+```bash
+./backend/scripts/hardware-explore examples/conv2d_kernel.c --config intel
+HARDWARE_EXPLORER_CC=/opt/llvm/bin/clang ./backend/scripts/hardware-explore code.c
+
+# Compatibility names continue to work
+CACHE_EXPLORER_CC=/opt/llvm/bin/clang ./backend/scripts/cache-explore code.c
+```
+
+`hardware-explore` and `HARDWARE_EXPLORER_*` are additive aliases. The
+`cache-explore` command, `CACHE_EXPLORER_*` variables, file formats, and existing
+integration names remain supported during the Preview rebrand.
+
 ## Running Tests
 
 ```bash
 cd backend/cache-simulator/build
 ./CacheLevelTest        # 22 tests
-./CacheSystemTest       # 25 tests
+./CacheSystemTest       # 26 tests
 ./MESICoherenceTest     # 19 tests
 ./MultiCorePrefetchTest # 18 tests
 ./MultiCoreTLBTest      # 8 tests
-./MultiCoreTraceProcessorTest # 2 tests
+./MultiCoreTraceProcessorTest # 3 tests
 ./AdvancedInstrumentationTest # 31 tests
 ```
 
@@ -201,6 +231,8 @@ npm run tokens:check
 npm run diagnostics:check
 npm run smoke:ui
 npm run visual:check
+# With the Docker product already running:
+npm run smoke:live
 ```
 
 Calibration evidence packets can be validated without running benchmarks:
@@ -232,6 +264,25 @@ CACHE_EXPLORER_WORKLOAD_HISTORY_SUMMARY_PATH=reports/workloads/workload-history-
 CACHE_EXPLORER_DASHBOARD_BASE_URL=https://owner.github.io/Cache-Explorer npm start
 ```
 
+The Preview browser support target is current Chromium on desktop and mobile
+viewports. Firefox and Safari are best-effort until they join the browser gate.
+
+The GitHub Action executes analyzed source directly on its ephemeral runner and
+therefore requires an explicit trusted-source acknowledgement:
+
+```yaml
+- uses: AveryClapp/Cache-Explorer/action@main
+  with:
+    source: examples/conv2d_kernel.c
+    allow-direct-execution: true
+```
+
+Do not enable that input for unreviewed pull-request source. Public web hosting
+has a different contract: hosted mode requires the Docker sandbox and refuses
+startup when it is unavailable. The local UI, CLI, and loopback-only Compose
+stack are the supported Preview product; hosted comparisons and experiments are
+not release-supported yet.
+
 Tagged releases include pre-built LLVM pass assets, `SHA256SUMS` for download
 verification, and GitHub artifact attestations for release provenance.
 Published GHCR Docker images include BuildKit provenance attestations and SBOMs.
@@ -251,6 +302,10 @@ should use the [Release And Install Runbook](docs/RELEASE_INSTALL_RUNBOOK.md).
 - **Requires recompilation** - Can't trace pre-compiled binaries (use Intel Pin for that)
 - **No speculative execution** - All accesses treated as committed
 - **Single socket** - No NUMA simulation
+- **CPU scope only** - No GPU, storage, or network performance modeling
+- **Directional timing** - Cycle and bottleneck results are estimates, not cycle-accurate simulation
+- **Preview calibration** - Only narrow Intel Xeon cache evidence is documented; default Intel, AMD, and Apple profiles are not yet fully calibrated
+- **Preview browser matrix** - Current Chromium is gated; Firefox and Safari remain best-effort
 
 ## Contributing
 

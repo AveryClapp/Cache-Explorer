@@ -1,19 +1,25 @@
-# Cache Explorer Hardware Validation
+# Hardware Explorer Preview: Calibration Status
 
-This document describes how Cache Explorer's simulation accuracy is validated against real hardware using Linux `perf` performance counters.
+This document preserves an earlier Intel Xeon comparison and describes the
+collection tooling. It is not a release-wide accuracy claim. The current
+checked-in Intel, AMD, and Apple evidence packets contain placeholder host/hash
+metadata and are schema fixtures; no default vendor profile is promoted as
+release-calibrated yet.
 
-## Validation Results Summary
+## Historical Intel Xeon Snapshot
 
-**Target Accuracy**: ±5% for L1, ±10% for L2
+The numbers below predate the current evidence-packet contract. They are useful
+as a regression reference, but must be reproduced with complete host, toolchain,
+commit, command, and counter metadata before supporting a calibration claim.
 
-**Achieved Accuracy** (Intel Xeon Platinum 8488C - AWS c7i.4xlarge):
+**Recorded deltas** (Intel Xeon Platinum 8488C - AWS c7i.4xlarge):
 
 | Cache Level | Average Delta | Max Delta | Status |
 |-------------|---------------|-----------|--------|
-| **L1 Data** | ±4.6% | 8.2% | ✅ Within target |
-| **L2** | ±9.3% | 22.7% | ✅ Within target (avg) |
+| **L1 Data** | ±4.6% | 8.2% | Historical; needs reproduction |
+| **L2** | ±9.3% | 22.7% | Historical; needs reproduction |
 
-## Detailed Benchmark Results
+## Historical Benchmark Results
 
 ### L1 Cache Validation
 
@@ -87,7 +93,7 @@ sudo apt install linux-tools-generic linux-tools-$(uname -r)
 # 2. Enable perf counters
 echo 0 | sudo tee /proc/sys/kernel/perf_event_paranoid
 
-# 3. Build Cache Explorer
+# 3. Build Hardware Explorer
 ./scripts/build.sh
 
 # 4. Run validation (auto-detects architecture)
@@ -132,9 +138,10 @@ The script will:
 ./validation/validate-against-baseline.sh
 ```
 
-## Vendor-Specific Prefetch Configurations
+## Vendor-Specific Prefetch Models
 
-Each hardware preset now includes vendor-accurate prefetch settings:
+Each CPU profile includes a simplified vendor-informed prefetch model. These
+settings are directional and do not reproduce proprietary predictor internals:
 
 ### Intel (Xeon, 12th/14th Gen)
 - L2 streamer: Up to 32 concurrent streams
@@ -160,21 +167,21 @@ Each hardware preset now includes vendor-accurate prefetch settings:
 ### Educational
 - No prefetching (clearer results for learning)
 
-## Why Accuracy Matters
+## How To Use This Evidence
 
-Cache Explorer is designed as an **engineering tool**, not just educational:
+Treat confidence as scoped to a profile, subsystem, workload family, and
+captured environment:
 
 | Accuracy | Use Case |
 |----------|----------|
 | ±20% | Educational only |
 | ±10% | Directional guidance |
-| **±5%** | **Engineering decisions** |
+| ±5% | Candidate for narrow, reproduced calibration |
 | ±2% | Production profiler |
 
-At ±5% L1 accuracy, engineers can:
-- Restructure code based on simulator feedback
-- Trust that improvements will translate to real hardware
-- Compare different algorithms' cache behavior
+Even a small delta on one workload does not establish broad CPU-model accuracy.
+Use modeled results to form hypotheses, then verify important decisions with
+hardware counters and representative production inputs.
 
 ## Known Limitations
 
@@ -196,12 +203,12 @@ AWS EC2 virtualization doesn't expose L3/LLC performance counters. Bare metal in
 2. **Pattern-Specific Prefetch** - Different degrees for stream vs stride patterns
 3. **L3 Validation** - Use bare metal instances for LLC counter access
 
-## Multi-Architecture Support (Ready)
+## Multi-Architecture Collection Support
 
 The validation script now supports:
-- **Intel** - Validated on Xeon 8488C (c7i)
-- **AMD** - Ready for validation on EPYC (c6a/m6a)
-- **ARM Graviton** - Ready for validation on Graviton 3 (c7g)
+- **Intel** - Historical Xeon 8488C reference; fresh evidence still required
+- **AMD** - Collection path available for EPYC (c6a/m6a)
+- **ARM Graviton** - Collection path available for Graviton 3 (c7g)
 
 Each architecture uses vendor-specific prefetch models and perf counters.
 

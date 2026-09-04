@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <string>
 #include <string_view>
 #include <unordered_map>
 #include <unordered_set>
@@ -13,9 +14,9 @@
 #include "PipelineModel.hpp"
 #include "TraceEvent.hpp"
 
-// Struct key for source location lookup - avoids string allocation in hot path
+// Own the filename so map keys stay valid across event and map lifetimes.
 struct SourceKey {
-  std::string_view file;
+  std::string file;
   uint32_t line;
 
   bool operator==(const SourceKey &other) const {
@@ -25,7 +26,7 @@ struct SourceKey {
 
 struct SourceKeyHash {
   size_t operator()(const SourceKey &k) const {
-    size_t h = std::hash<std::string_view>{}(k.file);
+    size_t h = std::hash<std::string>{}(k.file);
     h ^= std::hash<uint32_t>{}(k.line) + 0x9e3779b9 + (h << 6) + (h >> 2);
     return h;
   }

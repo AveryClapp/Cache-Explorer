@@ -1,4 +1,5 @@
 #include "../include/JsonOutput.hpp"
+#include <cstdio>
 #include "../include/PipelineModel.hpp"
 #include <iomanip>
 #include <unordered_map>
@@ -58,10 +59,24 @@ void write_bool_field(std::ostream& out, const char* name, bool value, bool last
 std::string JsonOutput::escape(std::string_view s) {
     std::string out;
     out.reserve(s.size());
-    for (char c : s) {
-        if (c == '"') out += "\\\"";
-        else if (c == '\\') out += "\\\\";
-        else out += c;
+    for (unsigned char c : s) {
+        switch (c) {
+            case '"': out += "\\\""; break;
+            case '\\': out += "\\\\"; break;
+            case '\b': out += "\\b"; break;
+            case '\f': out += "\\f"; break;
+            case '\n': out += "\\n"; break;
+            case '\r': out += "\\r"; break;
+            case '\t': out += "\\t"; break;
+            default:
+                if (c < 0x20) {
+                    char encoded[7];
+                    std::snprintf(encoded, sizeof(encoded), "\\u%04x", c);
+                    out += encoded;
+                } else {
+                    out += static_cast<char>(c);
+                }
+        }
     }
     return out;
 }
@@ -415,7 +430,7 @@ void JsonOutput::write_false_sharing(std::ostream& out,
     for (size_t i = 0; i < reports.size(); i++) {
         const auto& fs = reports[i];
         out << "    {\"cacheLineAddr\": \"0x" << std::hex << fs.cache_line_addr << std::dec << "\", "
-            << "\"accessCount\": " << fs.accesses.size() << ", "
+            << "\"accessCount\": " << fs.total_accesses << ", "
             << "\"accesses\": [";
 
         // Group accesses by thread for cleaner output
@@ -451,7 +466,7 @@ void JsonOutput::write_false_sharing_compact(std::ostream& out,
         if (i > 0) out << ",";
         const auto& fs = reports[i];
         out << "{\"addr\":\"0x" << std::hex << fs.cache_line_addr << std::dec << "\""
-            << ",\"accesses\":" << fs.accesses.size() << "}";
+            << ",\"accesses\":" << fs.total_accesses << "}";
     }
     out << "]";
 }
@@ -601,7 +616,7 @@ void JsonOutput::write_coherence_stats(std::ostream& out, uint64_t invalidations
 
 void JsonOutput::write_stream_start(std::ostream& out, std::string_view config_name,
                                     bool multicore) {
-    out << "{\"type\":\"start\",\"config\":\"" << config_name
+    out << "{\"type\":\"start\",\"config\":\"" << escape(config_name)
         << "\",\"multicore\":" << (multicore ? "true" : "false") << "}\n" << std::flush;
 }
 

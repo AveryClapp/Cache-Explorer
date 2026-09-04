@@ -17,16 +17,44 @@ export function runManagedProcess(command, args, options = {}) {
     onStdout,
     onStderr,
     onTimeout,
+    signal,
   } = options;
 
   return new Promise((resolve, reject) => {
-    const proc = spawn(command, args);
+    if (signal?.aborted) {
+      reject({
+        stdout: '',
+        stderr: 'Execution cancelled',
+        exitCode: null,
+        mainFile,
+        killed: true,
+        cancelled: true,
+        timeout: false,
+      });
+      return;
+    }
+
+    const useProcessGroup = process.platform !== 'win32';
+    const proc = spawn(command, args, { detached: useProcessGroup });
 
     let stdout = '';
     let stderr = '';
     let killed = false;
     let timedOut = false;
+    let cancelled = false;
     let forceKillTimer = null;
+
+    const killProcess = (signalToSend) => {
+      try {
+        if (useProcessGroup && proc.pid) {
+          process.kill(-proc.pid, signalToSend);
+        } else {
+          proc.kill(signalToSend);
+        }
+      } catch {
+        proc.kill(signalToSend);
+      }
+    };
 
     const context = () => ({
       proc,
@@ -35,19 +63,31 @@ export function runManagedProcess(command, args, options = {}) {
       mainFile,
       kill(signal = 'SIGKILL') {
         killed = true;
-        proc.kill(signal);
+        killProcess(signal);
       },
     });
 
     onProcess?.(proc);
 
+    const stopGracefully = () => {
+      killed = true;
+      killProcess('SIGTERM');
+      if (!forceKillTimer) {
+        forceKillTimer = setTimeout(() => killProcess('SIGKILL'), gracefulKillDelayMs);
+      }
+    };
+
+    const abortHandler = () => {
+      cancelled = true;
+      stopGracefully();
+    };
+    signal?.addEventListener('abort', abortHandler, { once: true });
+
     const timeoutId = timeout
       ? setTimeout(() => {
-        killed = true;
         timedOut = true;
         onTimeout?.(context());
-        proc.kill('SIGTERM');
-        forceKillTimer = setTimeout(() => proc.kill('SIGKILL'), gracefulKillDelayMs);
+        stopGracefully();
       }, timeout)
       : null;
 
@@ -58,7 +98,7 @@ export function runManagedProcess(command, args, options = {}) {
       onStdout?.(text, context());
       if (maxOutputBuffer && stdout.length > maxOutputBuffer) {
         killed = true;
-        proc.kill('SIGKILL');
+        killProcess('SIGKILL');
       }
     });
 
@@ -69,13 +109,14 @@ export function runManagedProcess(command, args, options = {}) {
       onStderr?.(text, context());
       if (maxOutputBuffer && stderr.length > maxOutputBuffer) {
         killed = true;
-        proc.kill('SIGKILL');
+        killProcess('SIGKILL');
       }
     });
 
     proc.on('close', (exitCode) => {
       if (timeoutId) clearTimeout(timeoutId);
       if (forceKillTimer) clearTimeout(forceKillTimer);
+      signal?.removeEventListener('abort', abortHandler);
 
       const result = {
         stdout,
@@ -83,11 +124,12 @@ export function runManagedProcess(command, args, options = {}) {
         exitCode,
         mainFile,
         killed,
-        timeout: timedOut || killed,
-        timeoutMs: timedOut || killed ? timeout : undefined,
+        cancelled,
+        timeout: timedOut || (killed && !cancelled),
+        timeoutMs: timedOut || (killed && !cancelled) ? timeout : undefined,
       };
 
-      if (rejectOnNonZero && killed && exitCode !== 0) {
+      if (rejectOnNonZero && killed) {
         reject(result);
       } else if (rejectOnNonZero && exitCode !== 0) {
         reject({ stdout, stderr, exitCode, mainFile });
@@ -99,6 +141,7 @@ export function runManagedProcess(command, args, options = {}) {
     proc.on('error', (err) => {
       if (timeoutId) clearTimeout(timeoutId);
       if (forceKillTimer) clearTimeout(forceKillTimer);
+      signal?.removeEventListener('abort', abortHandler);
       reject(err);
     });
   });

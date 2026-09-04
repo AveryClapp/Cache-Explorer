@@ -2,6 +2,15 @@
 set -e
 set +m  # Disable job control to suppress initialization warnings in sandboxed environments
 
+# Hardware Explorer is the product-facing name. Mirror its environment prefix
+# into the established Cache Explorer variables so existing internals and user
+# automation continue to work unchanged. The new name wins when both are set.
+while IFS= read -r hardware_var; do
+  legacy_var="CACHE_EXPLORER_${hardware_var#HARDWARE_EXPLORER_}"
+  printf -v "$legacy_var" '%s' "${!hardware_var}"
+  export "$legacy_var"
+done < <(compgen -A variable HARDWARE_EXPLORER_)
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BACKEND_DIR="$(dirname "$SCRIPT_DIR")"
 PROJECT_ROOT="$(dirname "$BACKEND_DIR")"
@@ -243,7 +252,7 @@ resolve_pass() {
     local version_output
     version_output=$("$clang_cmd" --version 2>/dev/null | head -1)
     if echo "$version_output" | grep -qi "apple"; then
-      echo "Error: Apple clang detected. Cache Explorer requires upstream LLVM." >&2
+      echo "Error: Apple clang detected. Hardware Explorer requires upstream LLVM." >&2
       echo "" >&2
       echo "To fix this, install LLVM via Homebrew:" >&2
       echo "  brew install llvm" >&2
@@ -273,13 +282,19 @@ resolve_pass() {
 
   # Also check in latest/ subdirectory (where download-pass puts it)
   local cached_pass_latest="$PASS_CACHE_DIR/latest/$pass_filename"
+  local download_script="$SCRIPT_DIR/cache-explore-download-pass"
   if [[ -f "$cached_pass_latest" && -x "$cached_pass_latest" ]]; then
-    RESOLVED_PASS="$cached_pass_latest"
-    return 0
+    local verified_cached_pass
+    if [[ -x "$download_script" ]] &&
+       verified_cached_pass=$("$download_script" "$llvm_version" 2>&1 | tail -1) &&
+       [[ -f "$verified_cached_pass" ]]; then
+      RESOLVED_PASS="$verified_cached_pass"
+      return 0
+    fi
+    echo "Cached downloaded pass failed verification: $cached_pass_latest" >&2
   fi
 
   # 4. Try to download the pass
-  local download_script="$SCRIPT_DIR/cache-explore-download-pass"
   if [[ -x "$download_script" ]]; then
     echo "No local pass found. Attempting to download pre-built pass..." >&2
     local downloaded_pass
@@ -310,7 +325,7 @@ resolve_pass() {
 }
 
 main_usage() {
-  echo "Cache Explorer - Visualize CPU cache behavior"
+  echo "Hardware Explorer Preview - CPU performance modeling for source code"
   echo ""
   echo "Usage: cache-explore <command> [options]"
   echo ""
@@ -665,7 +680,7 @@ enrich_json_output() {
 }
 
 if [[ -z "$JSON_OUTPUT" ]]; then
-  echo "=== Cache Explorer ===" >&2
+  echo "=== Hardware Explorer Preview ===" >&2
   echo "Input: $INPUT_FILE" >&2
   echo "Language: $LANG" >&2
   echo "Config: $CONFIG" >&2

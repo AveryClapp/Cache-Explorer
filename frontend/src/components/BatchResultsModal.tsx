@@ -12,9 +12,9 @@ interface BatchResultsModalProps {
   error?: string | null
   running: boolean
   total: number
+  onRun: () => void
   onExportCSV?: () => void
   onExportJSON?: () => void
-  onClose: () => void
 }
 
 function formatHardwareName(config: string, result: CacheResult) {
@@ -42,21 +42,25 @@ function bottleneckClass(result: CacheResult) {
   return `bottleneck-chip ${bottleneck}`
 }
 
-export function BatchResultsModal({ results, error, running, total, onExportCSV, onExportJSON, onClose }: BatchResultsModalProps) {
+export function BatchResultsModal({ results, error, running, total, onRun, onExportCSV, onExportJSON }: BatchResultsModalProps) {
   const showEmptyState = !running && results.length === 0
 
   return (
-    <div className="batch-modal-overlay" onClick={() => !running && onClose()}>
+    <section className="batch-modal-overlay product-surface-overlay" aria-labelledby="hardware-comparison-title">
       <div
-        className="batch-modal"
-        onClick={e => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
+        className="batch-modal product-surface-panel"
+        role="region"
         aria-labelledby="hardware-comparison-title"
       >
         <div className="batch-modal-header">
-          <span className="batch-modal-title" id="hardware-comparison-title">Hardware Comparison</span>
+          <div className="product-surface-title">
+            <h1 className="batch-modal-title" id="hardware-comparison-title">Hardware Comparison</h1>
+            <p>Run the current source across the CPU profiles in your run set.</p>
+          </div>
           <div className="batch-modal-header-actions">
+            <button className="btn-primary" onClick={onRun} disabled={running}>
+              {running ? 'Comparing...' : results.length > 0 ? 'Run Again' : 'Run Comparison'}
+            </button>
             {onExportCSV && (
               <button className="btn" onClick={onExportCSV} disabled={results.length === 0}>
                 Export CSV
@@ -67,7 +71,6 @@ export function BatchResultsModal({ results, error, running, total, onExportCSV,
                 Export JSON
               </button>
             )}
-            <button className="batch-modal-close" onClick={onClose} aria-label="Close hardware comparison">×</button>
           </div>
         </div>
         <div className="batch-modal-content">
@@ -79,9 +82,9 @@ export function BatchResultsModal({ results, error, running, total, onExportCSV,
           )}
           {showEmptyState && (
             <div className={`batch-empty-state${error ? ' error' : ''}`} role={error ? 'alert' : 'status'}>
-              <div className="batch-empty-title">No hardware results</div>
+              <div className="batch-empty-title">{error ? 'No hardware results' : 'Ready to compare'}</div>
               <div className="batch-empty-desc">
-                {error || 'No comparison results were produced for this run set.'}
+                {error || 'Run the active source across the selected hardware profiles.'}
               </div>
               <div className="batch-empty-meta">{total} profiles requested</div>
             </div>
@@ -125,6 +128,6 @@ export function BatchResultsModal({ results, error, running, total, onExportCSV,
           )}
         </div>
       </div>
-    </div>
+    </section>
   )
 }

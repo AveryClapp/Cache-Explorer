@@ -32,7 +32,7 @@ find_llvm_dir() {
     return 1
 }
 
-echo "=== Building Cache Explorer ==="
+echo "=== Building Hardware Explorer Preview ==="
 echo "Build type: $BUILD_TYPE"
 
 mkdir -p build

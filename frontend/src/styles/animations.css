@@ -2,6 +2,7 @@
    LIGHT THEME
    ══════════════════════════════════════════════════════════════════════════ */
 [data-theme="light"] {
+  color-scheme: light;
   --void: #f6f5f2;
   --panel: #ffffff;
   --surface: #f0efeb;

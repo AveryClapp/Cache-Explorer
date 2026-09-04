@@ -518,12 +518,18 @@ async function capture(outputDir, label) {
 }
 
 async function closeModal() {
-  await page.getByRole('button', { name: /^Close/ }).click()
+  await page.getByRole('navigation', { name: 'Product' }).getByRole('link', { name: 'Analyze', exact: true }).click()
 }
 
-async function openHeaderTool(name) {
-  await page.getByRole('button', { name: 'Tools', exact: true }).click()
-  await page.getByRole('menuitem', { name, exact: true }).click()
+async function openProductArea(name) {
+  const navigationLabels = {
+    Explore: 'Profiles',
+    Compare: 'Comparisons',
+    Workloads: 'Workloads',
+    Experiments: 'Experiments',
+  }
+  const label = navigationLabels[name] || name
+  await page.getByRole('navigation', { name: 'Product' }).getByRole('link', { name: label, exact: true }).click()
 }
 
 async function runVisualFlow(url, outputDir) {
@@ -536,12 +542,12 @@ async function runVisualFlow(url, outputDir) {
   await page.getByText('Evidence & Fidelity', { exact: true }).waitFor({ state: 'visible', timeout: 8000 })
   await capture(outputDir, 'desktop-result')
 
-  await openHeaderTool('Explore')
-  await page.getByText('Hardware Explorer', { exact: true }).waitFor({ state: 'visible', timeout: 8000 })
+  await openProductArea('Explore')
+  await page.getByText('CPU Profiles', { exact: true }).waitFor({ state: 'visible', timeout: 8000 })
   await capture(outputDir, 'hardware-explorer')
   await closeModal()
 
-  await openHeaderTool('Workloads')
+  await openProductArea('Workloads')
   await page.getByText('Verified Workloads', { exact: true }).waitFor({ state: 'visible', timeout: 8000 })
   await page.locator('.workload-name').filter({ hasText: 'conv2d-intel14' }).waitFor({ state: 'visible', timeout: 8000 })
   await capture(outputDir, 'workload-catalog')

@@ -3,6 +3,7 @@
 #include "../profiles/HardwarePresets.hpp"
 #include <cassert>
 #include <iostream>
+#include <string>
 
 // Use educational config for predictable results
 CacheHierarchyConfig make_test_hierarchy() {
@@ -100,6 +101,29 @@ void test_hot_lines_tracking() {
   assert(hot.size() == 2);
   // Sorted by misses, both have 1 miss
   std::cout << "[PASS] test_hot_lines_tracking\n";
+}
+
+void test_source_keys_own_short_filename_storage() {
+  TraceProcessor processor(make_test_hierarchy());
+
+  for (uint32_t i = 0; i < 200; ++i) {
+    TraceEvent event;
+    event.address = 0x1000 + static_cast<uint64_t>(i) * 64;
+    event.size = 4;
+    event.file = "f" + std::to_string(i) + ".c";
+    event.line = i + 1;
+    processor.process(event);
+  }
+
+  const auto hot = processor.get_hot_lines(200);
+  assert(hot.size() == 200);
+  for (const auto &entry : hot) {
+    assert(!entry.file.empty());
+    assert(entry.file.front() == 'f');
+    assert(entry.file.size() >= 2);
+    assert(entry.file.compare(entry.file.size() - 2, 2, ".c") == 0);
+  }
+  std::cout << "[PASS] test_source_keys_own_short_filename_storage\n";
 }
 
 void test_bottleneck_summary_and_source_annotations() {
@@ -211,6 +235,8 @@ void test_parse_trace_event_icache() {
 void test_parse_trace_event_invalid() {
   auto event = parse_trace_event("invalid line");
   assert(!event.has_value());
+  assert(!parse_trace_event("L 0x1000 4 main.c:not-a-line T0").has_value());
+  assert(!parse_trace_event("L 0x1000 4 main.c:10 T99999999999999999999").has_value());
   std::cout << "[PASS] test_parse_trace_event_invalid\n";
 }
 
@@ -372,6 +398,7 @@ int main() {
   test_basic_write_event();
   test_repeated_access_hits();
   test_hot_lines_tracking();
+  test_source_keys_own_short_filename_storage();
   test_bottleneck_summary_and_source_annotations();
   test_event_callback();
   test_prefetching_enabled();
@@ -397,6 +424,6 @@ int main() {
   test_pin_multibyte_access();
   test_pin_high_thread_id();
 
-  std::cout << "\n=== All 22 TraceProcessor tests passed! ===\n";
+  std::cout << "\n=== All 23 TraceProcessor tests passed! ===\n";
   return 0;
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <limits>
 
 #include "../include/EvictionPolicy.hpp"
 #include "../include/InclusionPolicy.hpp"
@@ -196,6 +197,7 @@ struct PrefetchConfig {
 };
 
 struct CacheConfig {
+  static constexpr uint64_t max_modeled_lines = 4ULL * 1024 * 1024;
   CacheSize kb_size;
   int associativity;
   int line_size = 64;
@@ -205,18 +207,49 @@ struct CacheConfig {
   [[nodiscard]] constexpr bool is_valid() const noexcept {
     if (kb_size == 0 || associativity <= 0 || line_size <= 0) return false;
     if ((line_size & (line_size - 1)) != 0) return false;
-    if (num_sets() <= 0) return false;
-    if ((num_sets() & (num_sets() - 1)) != 0) return false;
+    if (kb_size > std::numeric_limits<uint64_t>::max() / 1024) return false;
+    const uint64_t bytes = kb_size * 1024;
+    const uint64_t denominator = static_cast<uint64_t>(line_size) *
+                                 static_cast<uint64_t>(associativity);
+    if (denominator == 0 || bytes % denominator != 0) return false;
+    const uint64_t sets = bytes / denominator;
+    const uint64_t lines = bytes / static_cast<uint64_t>(line_size);
+    if (sets == 0 || sets > static_cast<uint64_t>(std::numeric_limits<int>::max())) return false;
+    if (lines == 0 || lines > max_modeled_lines) return false;
+    if ((sets & (sets - 1)) != 0) return false;
     return true;
   }
 
   [[nodiscard]] constexpr int num_sets() const noexcept {
-    return (kb_size * 1024) / (line_size * associativity);
+    if (kb_size > std::numeric_limits<uint64_t>::max() / 1024 ||
+        line_size <= 0 || associativity <= 0)
+      return 0;
+    const uint64_t bytes = kb_size * 1024;
+    const uint64_t lines = bytes / static_cast<uint64_t>(line_size);
+    if (lines > max_modeled_lines)
+      return 0;
+    const uint64_t sets = bytes /
+        (static_cast<uint64_t>(line_size) * static_cast<uint64_t>(associativity));
+    return sets <= static_cast<uint64_t>(std::numeric_limits<int>::max())
+               ? static_cast<int>(sets)
+               : 0;
   }
-  [[nodiscard]] constexpr int num_lines() const noexcept { return (kb_size * 1024) / line_size; }
+  [[nodiscard]] constexpr int num_lines() const noexcept {
+    if (kb_size > std::numeric_limits<uint64_t>::max() / 1024 || line_size <= 0)
+      return 0;
+    const uint64_t lines = (kb_size * 1024) / static_cast<uint64_t>(line_size);
+    return lines <= max_modeled_lines
+               ? static_cast<int>(lines)
+               : 0;
+  }
 
-  [[nodiscard]] constexpr int offset_bits() const noexcept { return __builtin_ctz(line_size); }
-  [[nodiscard]] constexpr int index_bits() const noexcept { return __builtin_ctz(num_sets()); }
+  [[nodiscard]] constexpr int offset_bits() const noexcept {
+    return line_size > 0 ? __builtin_ctz(static_cast<unsigned>(line_size)) : 0;
+  }
+  [[nodiscard]] constexpr int index_bits() const noexcept {
+    const int sets = num_sets();
+    return sets > 0 ? __builtin_ctz(static_cast<unsigned>(sets)) : 0;
+  }
   [[nodiscard]] constexpr int tag_bits() const noexcept { return 64 - offset_bits() - index_bits(); }
 
   [[nodiscard]] constexpr uint64_t get_offset(uint64_t addr) const noexcept {

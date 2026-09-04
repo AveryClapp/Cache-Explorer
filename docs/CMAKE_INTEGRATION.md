@@ -1,6 +1,7 @@
-# CMake Integration
+# Hardware Explorer Preview CMake Integration
 
-Cache Explorer integrates with existing CMake projects through two approaches:
+Hardware Explorer integrates with existing CMake projects through the compatible
+`cache-explore` command in two ways:
 
 1. **Toolchain file** — zero changes to your `CMakeLists.txt`, works with CTest
 2. **`find_package`** — per-target control, explicit in your build system
@@ -10,7 +11,7 @@ Cache Explorer integrates with existing CMake projects through two approaches:
 ## Quick Start
 
 ```bash
-# Configure your project with Cache Explorer instrumentation
+# Configure your project with Hardware Explorer instrumentation
 cache-explore cmake /path/to/your/project
 
 # Build
@@ -48,7 +49,7 @@ ctest 2>&1 | cache-sim --json --config intel
 
 ## `find_package` Integration
 
-For per-target control, add Cache Explorer to your `CMakeLists.txt`:
+For per-target control, add Hardware Explorer to your `CMakeLists.txt`:
 
 ```cmake
 cmake_minimum_required(VERSION 3.16)
@@ -88,7 +89,7 @@ cmake --build build --target analyze-my_app
 | CMake Variable | Default | Description |
 |---|---|---|
 | `CACHE_EXPLORER_ENABLED` | `ON` | Enable/disable profiling without removing from CMakeLists |
-| `CACHE_EXPLORER_PATH` | auto-detected | Path to Cache Explorer `backend/` directory |
+| `CACHE_EXPLORER_PATH` | auto-detected | Path to the Hardware Explorer `backend/` directory |
 | `CACHE_EXPLORER_PASS` | auto-detected | Path to `CacheProfiler.so` |
 | `CACHE_EXPLORER_RUNTIME` | auto-detected | Path to `libcache-explorer-rt.a` |
 | `CACHE_EXPLORER_INCLUDE_STL` | `OFF` | Include STL internals in profiling (slower) |
@@ -99,7 +100,7 @@ cmake --build build --target analyze-my_app
 
 ### "Clang not found" or pass plugin fails to load
 
-Cache Explorer requires LLVM Clang with `-fpass-plugin` support. The toolchain
+Hardware Explorer requires LLVM Clang with `-fpass-plugin` support. The toolchain
 file (`cache-explore cmake`) sets this automatically. For `find_package`, set
 the compiler explicitly:
 

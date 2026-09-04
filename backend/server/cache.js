@@ -20,6 +20,7 @@ let pruneInterval = null;
  */
 export function generateCacheKey(inputs) {
   const normalized = {
+    schemaVersion: 2,
     files: inputs.files.map(f => ({ name: f.name, code: f.code, language: f.language })),
     config: inputs.config,
     optLevel: inputs.optLevel,
@@ -27,9 +28,24 @@ export function generateCacheKey(inputs) {
     defines: inputs.defines || [],
     sampleRate: inputs.sampleRate || 1,
     eventLimit: inputs.eventLimit || 0,
+    fastMode: inputs.fastMode === true,
+    segmentCaching: inputs.segmentCaching === true,
+    customConfig: inputs.customConfig || null,
+    compiler: inputs.compiler || null,
+    executor: inputs.executor || 'direct',
   };
 
-  const json = JSON.stringify(normalized, Object.keys(normalized).sort());
+  const stableValue = value => {
+    if (Array.isArray(value)) return value.map(stableValue);
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(
+        Object.keys(value).sort().map(key => [key, stableValue(value[key])])
+      );
+    }
+    return value;
+  };
+
+  const json = JSON.stringify(stableValue(normalized));
   return crypto.createHash('sha256').update(json).digest('hex');
 }
 

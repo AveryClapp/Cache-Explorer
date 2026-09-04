@@ -253,18 +253,68 @@ export function createShortUrl(data) {
   }
 }
 
+export function pruneShortUrls(maxEntries = 10000, maxAgeDays = 30,
+                               maxTotalBytes = 64 * 1024 * 1024) {
+  if (!ensureDb()) return { deleted: 0 };
+
+  const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
+  const expired = db.prepare('DELETE FROM short_urls WHERE created_at < ?').run(cutoff).changes;
+  const count = db.prepare('SELECT COUNT(*) AS count FROM short_urls').get()?.count || 0;
+  const excess = Math.max(0, count - maxEntries);
+  let overflow = 0;
+  if (excess > 0) {
+    overflow = db.prepare(`
+      DELETE FROM short_urls WHERE code IN (
+        SELECT code FROM short_urls
+        ORDER BY COALESCE(last_accessed, created_at) ASC
+        LIMIT ?
+      )
+    `).run(excess).changes;
+  }
+
+  const totalBytes = db.prepare(`
+    SELECT COALESCE(SUM(LENGTH(CAST(data AS BLOB))), 0) AS bytes
+    FROM short_urls
+  `).get()?.bytes || 0;
+  let overBudget = 0;
+  if (totalBytes > maxTotalBytes) {
+    let bytesToRemove = totalBytes - maxTotalBytes;
+    const candidates = db.prepare(`
+      SELECT code, LENGTH(CAST(data AS BLOB)) AS bytes
+      FROM short_urls
+      ORDER BY COALESCE(last_accessed, created_at) ASC
+    `).all();
+    const remove = db.prepare('DELETE FROM short_urls WHERE code = ?');
+    const pruneToBudget = db.transaction(() => {
+      for (const candidate of candidates) {
+        if (bytesToRemove <= 0) break;
+        overBudget += remove.run(candidate.code).changes;
+        bytesToRemove -= candidate.bytes;
+      }
+    });
+    pruneToBudget();
+  }
+  return { deleted: expired + overflow + overBudget };
+}
+
 /**
  * Get data for short URL
  */
-export function getShortUrl(code) {
+export function getShortUrl(code, maxAgeDays = null) {
   if (!ensureDb()) throw unavailableError();
 
   const stmt = db.prepare(`
-    SELECT data FROM short_urls WHERE code = ?
+    SELECT data, created_at FROM short_urls WHERE code = ?
   `);
   const row = stmt.get(code);
 
   if (row) {
+    const maxAgeMs = Number(maxAgeDays) * 24 * 60 * 60 * 1000;
+    if (Number.isFinite(maxAgeMs) && maxAgeMs > 0 && row.created_at < Date.now() - maxAgeMs) {
+      db.prepare('DELETE FROM short_urls WHERE code = ?').run(code);
+      return null;
+    }
+
     // Update access stats
     const updateStmt = db.prepare(`
       UPDATE short_urls

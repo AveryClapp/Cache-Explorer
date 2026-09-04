@@ -1,7 +1,7 @@
-# Cache Explorer Backend
+# Hardware Explorer Preview backend
 # Builds: LLVM pass, runtime library, cache simulator, and server
 
-FROM ubuntu:24.04 AS builder
+FROM ubuntu:24.04@sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517 AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
@@ -22,6 +22,7 @@ RUN for attempt in 1 2 3 4 5; do \
       if [ "$attempt" -eq 5 ]; then exit 1; fi; \
       sleep 5; \
     done \
+    && echo "8b2a587ffd672c4687e7581dad4b2f6c1bb2ad6b480cd9771ba2ff48e0b8c75d  /etc/apt/trusted.gpg.d/apt.llvm.org.asc" | sha256sum --check --strict \
     && echo "deb https://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" > /etc/apt/sources.list.d/llvm.list
 RUN apt-get -o Acquire::Retries=5 update \
     && apt-get -o Acquire::Retries=5 install -y --no-install-recommends \
@@ -52,6 +53,7 @@ WORKDIR /build/backend/runtime
 RUN mkdir -p build && cd build && \
     cmake .. -G Ninja -DCMAKE_C_COMPILER=clang-20 && \
     ninja && \
+    ctest --output-on-failure && \
     clang-20 -c ../zig_stubs.c -o zig_stubs.o
 
 # Build cache simulator
@@ -62,7 +64,7 @@ RUN mkdir -p build && cd build && \
 
 # Build production Node dependencies separately so native modules such as
 # better-sqlite3 never need a compiler in the runtime image.
-FROM node:20-bookworm-slim AS server-deps
+FROM node:20-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 AS server-deps
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     g++ \
@@ -75,7 +77,7 @@ COPY backend/server/package.json backend/server/package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 # Runtime image
-FROM ubuntu:24.04
+FROM ubuntu:24.04@sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
@@ -88,9 +90,9 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Node.js 20
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs
+# Reuse the official Node.js runtime already used to build native dependencies.
+# This avoids executing a remote repository-setup script during the image build.
+COPY --from=server-deps /usr/local/ /usr/local/
 
 # Install LLVM 20 runtime components
 RUN for attempt in 1 2 3 4 5; do \
@@ -98,6 +100,7 @@ RUN for attempt in 1 2 3 4 5; do \
       if [ "$attempt" -eq 5 ]; then exit 1; fi; \
       sleep 5; \
     done \
+    && echo "8b2a587ffd672c4687e7581dad4b2f6c1bb2ad6b480cd9771ba2ff48e0b8c75d  /etc/apt/trusted.gpg.d/apt.llvm.org.asc" | sha256sum --check --strict \
     && echo "deb https://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" > /etc/apt/sources.list.d/llvm.list
 RUN apt-get -o Acquire::Retries=5 update \
     && apt-get -o Acquire::Retries=5 install -y --no-install-recommends clang-20 \
@@ -106,11 +109,23 @@ RUN apt-get -o Acquire::Retries=5 update \
 # Set LLVM paths
 ENV PATH="/usr/lib/llvm-20/bin:${PATH}"
 
-# Install Zig 0.15.2 (uses LLVM 20, matching our toolchain)
-RUN ARCH=$(uname -m) \
-    && curl -fsSL "https://ziglang.org/download/0.15.2/zig-${ARCH}-linux-0.15.2.tar.xz" \
-    | tar xJf - -C /opt \
-    && ln -s "/opt/zig-${ARCH}-linux-0.15.2/zig" /usr/local/bin/zig
+# Install the pinned Zig archive only after verifying the upstream checksum.
+ARG ZIG_VERSION=0.15.2
+RUN ARCH="$(uname -m)" \
+    && case "$ARCH" in \
+      x86_64) ZIG_SHA256="02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239" ;; \
+      aarch64) ZIG_SHA256="958ed7d1e00d0ea76590d27666efbf7a932281b3d7ba0c6b01b0ff26498f667f" ;; \
+      *) echo "Unsupported architecture: $ARCH" >&2; exit 1 ;; \
+    esac \
+    && ZIG_ARCHIVE="zig-${ARCH}-linux-${ZIG_VERSION}.tar.xz" \
+    && curl --fail --show-error --location --proto '=https' --tlsv1.2 \
+      --connect-timeout 15 --max-time 300 \
+      "https://ziglang.org/download/${ZIG_VERSION}/${ZIG_ARCHIVE}" \
+      --output "/tmp/${ZIG_ARCHIVE}" \
+    && echo "${ZIG_SHA256}  /tmp/${ZIG_ARCHIVE}" | sha256sum --check --strict \
+    && tar xJf "/tmp/${ZIG_ARCHIVE}" -C /opt \
+    && rm "/tmp/${ZIG_ARCHIVE}" \
+    && ln -s "/opt/zig-${ARCH}-linux-${ZIG_VERSION}/zig" /usr/local/bin/zig
 
 # Create non-root user for security
 RUN useradd -m -s /bin/bash cache-explorer
@@ -122,13 +137,19 @@ COPY --from=builder /build/backend/runtime/build/libcache-explorer-rt.a ./backen
 COPY --from=builder /build/backend/runtime/build/zig_stubs.o ./backend/runtime/build/
 COPY --from=builder /build/backend/cache-simulator/build/cache-sim ./backend/cache-simulator/build/
 
-# Copy runtime source and scripts
+# Copy runtime source, scripts, and the product catalogs they expose.
 COPY backend/runtime/*.h ./backend/runtime/
 COPY backend/scripts/ ./backend/scripts/
 COPY backend/server/ ./backend/server/
+COPY benchmarks/workloads/ ./benchmarks/workloads/
+COPY examples/ ./examples/
 
-# Make scripts executable
-RUN chmod +x ./backend/scripts/*
+# Fail the image build if a transient build-context read drops a critical file,
+# or if the workload catalog cannot be loaded from the production filesystem.
+RUN chmod +x ./backend/scripts/* \
+    && test -s ./backend/server/server.js \
+    && test -s ./examples/conv2d_kernel.c \
+    && node ./backend/scripts/cache-explore-workloads --ids >/dev/null
 
 # Copy production Node.js dependencies built with the required native toolchain.
 COPY --from=server-deps /build/backend/server/node_modules ./backend/server/node_modules

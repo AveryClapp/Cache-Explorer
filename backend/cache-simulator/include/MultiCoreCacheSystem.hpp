@@ -26,6 +26,7 @@ struct FalseSharingEvent {
 struct FalseSharingReport {
   uint64_t cache_line_addr;
   std::vector<FalseSharingEvent> accesses;
+  uint64_t total_accesses = 0;
   uint32_t invalidation_count = 0;
 };
 
@@ -71,7 +72,21 @@ private:
     std::string file;
     uint32_t line;
   };
-  std::unordered_map<uint64_t, std::vector<LineAccess>> line_accesses;
+  struct LineHistory {
+    std::vector<LineAccess> samples;
+    uint64_t total_accesses = 0;
+    uint32_t first_thread = 0;
+    uint32_t first_offset = 0;
+    bool initialized = false;
+    bool multiple_threads = false;
+    bool multiple_offsets = false;
+    bool has_write = false;
+  };
+  static constexpr size_t max_tracked_lines = 65536;
+  static constexpr size_t max_samples_per_line = 64;
+  static constexpr size_t max_tracked_threads = 65536;
+  static constexpr size_t max_prefetched_lines_per_core = 65536;
+  std::unordered_map<uint64_t, LineHistory> line_accesses;
   std::unordered_set<uint64_t> false_sharing_lines;
 
   uint64_t coherence_invalidations = 0;

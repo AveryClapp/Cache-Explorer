@@ -12,11 +12,13 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "smoke:ui": "node scripts/ui-smoke.mjs",
+    "smoke:live": "node scripts/live-backend-smoke.mjs",
     "visual:check": "node scripts/visual-smoke.mjs"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
     "lz-string": "^1.5.0",
+    "monaco-editor": "^0.55.1",
     "monaco-vim": "^0.4.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"

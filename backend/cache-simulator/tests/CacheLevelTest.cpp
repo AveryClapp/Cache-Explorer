@@ -35,6 +35,14 @@ void test_config_validation() {
   CacheConfig bad_sets = {.kb_size = 3, .associativity = 4, .line_size = 64};
   assert(!bad_sets.is_valid());
 
+  CacheConfig oversized = {
+      .kb_size = CacheConfig::max_modeled_lines + 1,
+      .associativity = 1,
+      .line_size = 1024,
+  };
+  assert(!oversized.is_valid());
+  assert(oversized.num_sets() == 0);
+
   std::cout << "[PASS] test_config_validation\n";
 }
 

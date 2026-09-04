@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
 import type { CacheResult, EnvironmentHealth, Stage } from "../types";
 
 interface HeaderProps {
+  activeProductArea: "analyze" | "profiles" | "comparisons" | "workloads" | "experiments";
   theme: "dark" | "light";
   diffMode: boolean;
   baselineResult: CacheResult | null;
@@ -16,10 +16,12 @@ interface HeaderProps {
   onSetDiffMode: (mode: boolean) => void;
   onSetBaseline: (result: CacheResult) => void;
   onClearBaseline: () => void;
+  onOpenAnalyze: () => void;
   onCompareHardware: () => void;
   onExploreHardware: () => void;
   onOpenWorkloads: () => void;
   onRunExperiment: () => void;
+  onPreloadProductArea: (area: HeaderProps["activeProductArea"]) => void;
   onRun: () => void;
   onCancel: () => void;
 }
@@ -63,6 +65,13 @@ function checksLabel(health: EnvironmentHealth | null) {
     .join("\n");
 }
 
+function productHref(area: HeaderProps["activeProductArea"]) {
+  const url = new URL(window.location.href);
+  if (area === "analyze") url.searchParams.delete("view");
+  else url.searchParams.set("view", area);
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
 function EnvironmentStatus({
   health,
   error,
@@ -98,6 +107,7 @@ function EnvironmentStatus({
 }
 
 export function Header({
+  activeProductArea,
   theme,
   diffMode,
   baselineResult,
@@ -112,42 +122,22 @@ export function Header({
   onSetDiffMode,
   onSetBaseline,
   onClearBaseline,
+  onOpenAnalyze,
   onCompareHardware,
   onExploreHardware,
   onOpenWorkloads,
   onRunExperiment,
+  onPreloadProductArea,
   onRun,
   onCancel,
 }: HeaderProps) {
-  const [toolsOpen, setToolsOpen] = useState(false);
-  const toolsMenuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!toolsOpen) return;
-
-    const handlePointerDown = (event: MouseEvent) => {
-      if (toolsMenuRef.current && !toolsMenuRef.current.contains(event.target as Node)) {
-        setToolsOpen(false);
-      }
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setToolsOpen(false);
-    };
-
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [toolsOpen]);
-
-  const runToolAction = (action: () => void) => {
-    setToolsOpen(false);
-    action();
-  };
+  const productLinks = [
+    { area: "analyze" as const, label: "Analyze", open: onOpenAnalyze },
+    { area: "profiles" as const, label: "Profiles", open: onExploreHardware },
+    { area: "comparisons" as const, label: "Comparisons", open: onCompareHardware },
+    { area: "workloads" as const, label: "Workloads", open: onOpenWorkloads },
+    { area: "experiments" as const, label: "Experiments", open: onRunExperiment },
+  ];
 
   return (
     <header className="header">
@@ -158,9 +148,34 @@ export function Header({
             <div className="logo-layer l2"></div>
             <div className="logo-layer l1"></div>
           </div>
-          <span className="logo-title">Cache Explorer</span>
+          <span className="logo-copy">
+            <span className="logo-title-row">
+              <span className="logo-title">Hardware Explorer</span>
+              <span className="preview-badge">Preview</span>
+            </span>
+            <span className="logo-subtitle">CPU performance modeling for source code</span>
+          </span>
         </div>
       </div>
+
+      <nav className="header-nav" aria-label="Product">
+        {productLinks.map(({ area, label, open }) => (
+          <a
+            key={area}
+            href={productHref(area)}
+            className={`header-nav-item${activeProductArea === area ? " active" : ""}`}
+            onClick={(event) => {
+              event.preventDefault();
+              open();
+            }}
+            onPointerEnter={() => onPreloadProductArea(area)}
+            onFocus={() => onPreloadProductArea(area)}
+            aria-current={activeProductArea === area ? "page" : undefined}
+          >
+            {label}
+          </a>
+        ))}
+      </nav>
 
       <div className="header-center">
         <EnvironmentStatus
@@ -194,68 +209,6 @@ export function Header({
         >
           {theme === "dark" ? "☀" : "☾"}
         </button>
-
-        {!isLoading && (
-          <div className="header-tools" ref={toolsMenuRef}>
-            <button
-              type="button"
-              className={`btn-tools${toolsOpen ? " active" : ""}`}
-              onClick={() => setToolsOpen(open => !open)}
-              title="Open hardware, workload, and experiment tools"
-              aria-label="Tools"
-              aria-haspopup="menu"
-              aria-expanded={toolsOpen}
-              aria-controls="header-tools-menu"
-            >
-              Tools
-              <span className="btn-tools-caret" aria-hidden="true">{toolsOpen ? "▲" : "▼"}</span>
-            </button>
-            {toolsOpen && (
-              <div className="header-tools-menu" id="header-tools-menu" role="menu">
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="header-tool-item"
-                  onClick={() => runToolAction(onCompareHardware)}
-                  aria-label="Hardware"
-                >
-                  <span className="header-tool-name">Hardware</span>
-                  <span className="header-tool-desc">Compare the selected run set.</span>
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="header-tool-item"
-                  onClick={() => runToolAction(onOpenWorkloads)}
-                  aria-label="Workloads"
-                >
-                  <span className="header-tool-name">Workloads</span>
-                  <span className="header-tool-desc">Load verified, snapshot-backed cases.</span>
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="header-tool-item"
-                  onClick={() => runToolAction(onExploreHardware)}
-                  aria-label="Explore"
-                >
-                  <span className="header-tool-name">Explore</span>
-                  <span className="header-tool-desc">Inspect profiles, contracts, and caveats.</span>
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="header-tool-item"
-                  onClick={() => runToolAction(onRunExperiment)}
-                  aria-label="Experiment"
-                >
-                  <span className="header-tool-name">Experiment</span>
-                  <span className="header-tool-desc">Compare variants across hardware.</span>
-                </button>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Compare button - visible when result exists */}
         {result && !isLoading && (

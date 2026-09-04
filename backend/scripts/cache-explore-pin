@@ -156,7 +156,7 @@ if [[ -z "$TRACE_FILE" ]]; then
 fi
 
 # Run Pin with our tool
-echo "=== Cache Explorer (Pin Mode) ===" >&2
+echo "=== Hardware Explorer Preview (Pin Mode) ===" >&2
 echo "Binary: $BINARY" >&2
 echo "Config: $CONFIG" >&2
 echo "" >&2
