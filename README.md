@@ -60,6 +60,10 @@ cd cache-explorer
 ./backend/scripts/cache-explore mycode.c --config intel --json
 ```
 
+An experimental [Windows IA-32 Pin CLI](backend/pin-tool/README.md#windows-ia-32-preview)
+also captures existing PE32 executables and DLLs without rebuilding. This is a
+local developer workflow, not yet a binary-profiling UI or decompiler integration.
+
 Release builds publish pre-built `CacheProfiler` LLVM passes for supported LLVM
 versions. The download helper uses the official release repo by default and
 fails closed unless the binary matches the release `SHA256SUMS` manifest:
@@ -318,7 +322,7 @@ should use the [Release And Install Runbook](docs/RELEASE_INSTALL_RUNBOOK.md).
 
 ## Limitations
 
-- **Requires recompilation** - Can't trace pre-compiled binaries (use Intel Pin for that)
+- **Source workflow requires recompilation** - Existing PE32 binaries have a separate experimental [Intel Pin CLI](backend/pin-tool/README.md#windows-ia-32-preview)
 - **No speculative execution** - All accesses treated as committed
 - **Single socket** - No NUMA simulation
 - **CPU scope only** - No GPU, storage, or network performance modeling

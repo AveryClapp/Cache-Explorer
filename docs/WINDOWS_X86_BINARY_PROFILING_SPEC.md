@@ -1,6 +1,6 @@
 # Windows x86 Binary Profiling and Decompiler Navigation
 
-Status: In progress — clang-cl capture and versioned code-site attribution implemented in Preview; remaining milestones below are gated.
+Status: In progress — clang-cl/PDB Preview plus experimental Pin IA-32 capture; remaining milestones below are gated.
 
 Tracking issue: [#73](https://github.com/AveryClapp/Cache-Explorer/issues/73)  
 Target: Hardware Explorer Preview
@@ -24,13 +24,16 @@ Decompiler pseudocode is reconstructed rather than original source. Navigation
 therefore carries an explicit confidence level and must never be presented as
 exact source-line attribution when debug information is absent.
 
-The current implementation covers one rebuilt, instrumented PE32 executable.
+The clang-cl implementation covers one rebuilt, instrumented PE32 executable.
 It emits portable SHA-256 + RVA code sites and modeled cache hotspots, with
 batch/streaming analysis and legacy trace compatibility. An optional Windows
 post-processing step resolves functions and approximate source lines using an
-explicit, identity-matched PDB. DLL/JIT capture, exact statement/inline-stack
-attribution, existing-binary Pin capture, a binary results UI, hotspot bundle
-export, and both decompiler adapters are not implemented here.
+explicit, identity-matched PDB. A separate experimental Windows Pin CLI now
+captures uninstrumented PE32 executables and loaded DLLs into the same trace
+format. Pin results have image/RVA sites, but no PDB or decompiler mapping yet.
+Instrumented clang-cl DLLs, named JIT attribution, exact statement/inline-stack
+mapping, binary results UI, hotspot bundle export, and both decompiler adapters
+are not implemented here.
 The `clang-cl` site is an instrumentation return PC; it is not yet a verified
 memory-instruction or pseudocode location. Without PDB lookup it remains
 `unresolved`; a debug-line match is deliberately labeled `source-nearest`.
@@ -66,8 +69,8 @@ memory-instruction or pseudocode location. Without PDB lookup it remains
 | Input | Capture path | Primary navigation | Initial status |
 |---|---|---|---|
 | Source built with `clang-cl` for Win32 | Built-in load/store instrumentation and Windows x86 runtime | Original file and line after PDB attribution | M1 capture, M2 attribution |
-| PE32 executable with PDB | Intel Pin IA-32 | Source/function when symbols resolve; otherwise pseudocode | Planned |
-| PE32 executable without PDB | Intel Pin IA-32 | Function/basic block and best-effort pseudocode | Planned |
+| PE32 executable with PDB | Intel Pin IA-32 | Image/RVA now; PDB and pseudocode navigation pending | Experimental CLI |
+| PE32 executable without PDB | Intel Pin IA-32 | Image/RVA now; function/pseudocode navigation pending | Experimental CLI |
 | Protected or anti-cheat process | None | None | Unsupported |
 | 16-bit executable | None | None | Unsupported |
 
@@ -380,9 +383,9 @@ default because adapters do not need them.
 
 ## 10. Intel Pin IA-32 Capture
 
-The Pin tool will:
+The experimental Pin CLI and normalizer:
 
-- Build an IA-32 tool for the Windows Pin kit.
+- Build an IA-32 tool against Pin 4.3.1 kit 99850 using clang-cl 15/16.
 - Observe image loads and record a manifest entry for the main PE and DLLs.
 - Record the instruction pointer for each instrumented memory operand.
 - Normalize each instruction pointer to an image and RVA.
@@ -394,6 +397,22 @@ The Pin tool will:
 Initial process scope is the launched process and its loaded modules. Child
 process following is deferred until process identity and multi-process traces
 have an explicit model.
+
+Commands and limits are documented in [the Pin integration guide](../backend/pin-tool/README.md).
+The Windows adapter is separate from the old Linux tool. It hashes image files
+at load time using Pin's isolated runtime, serializes recording/sampling/counts
+under one lock, and stops recording at the requested event limit without
+terminating the application. The bounded native normalizer requires a clean
+completion record before writing output, canonicalizes reloads of identical
+images, and keeps unknown/JIT sites unresolved. Captures that fail or time out
+retain a `.partial.raw` diagnostic; they are not published as successful analyses.
+
+The Pin PC is the memory instruction's address, not a clang-cl callback return
+PC. Do **not** apply the clang-cl PDB lookup's `rva - 1` adjustment to Pin sites.
+PDB enrichment for Pin and multi-image selection still require separate work.
+Capture currently includes startup/system DLL traffic and normal pre-execution
+memory operands; nonstandard operands fail closed. It is not yet a user-selectable
+game capture window or a hardware retired-instruction measurement.
 
 ## 11. Ghidra Adapter
 
@@ -564,10 +583,11 @@ Decisions:
 - Keep binary analysis local and offline.
 - Use built-in SanitizerCoverage callbacks for stock clang-cl instead of
   requiring an LLVM build with Windows plugin exports enabled.
+- Use Pin 4.3.1 kit 99850 and clang-cl 16.0.6 as the initial CI configuration.
+- Keep the initial Pin process scope to the launched process and loaded DLLs.
 
-Questions to resolve before M3:
+Remaining questions for stable binary profiling:
 
-- Which Pin 4.x Windows kit becomes the tested minimum?
 - Should capture follow explicitly selected child processes in the first stable
   binary release?
 - Which sampling preset provides a useful default for game workloads?

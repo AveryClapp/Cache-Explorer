@@ -40,7 +40,8 @@ jobs:
           $llvm = Join-Path $env:RUNNER_TEMP 'llvm16'
           $zip = Join-Path $env:RUNNER_TEMP 'pin.zip'
           $installer = Join-Path $env:RUNNER_TEMP 'llvm16.exe'
-          Invoke-WebRequest 'https://software.intel.com/sites/landingpage/pintool/downloads/pin-external-4.3-99850-gce5652921-clang-windows.zip' -OutFile $zip
+          & curl.exe --fail --location --retry 3 --max-time 120 --output $zip 'https://software.intel.com/sites/landingpage/pintool/downloads/pin-external-4.3-99850-gce5652921-clang-windows.zip'
+          if ($LASTEXITCODE -ne 0) { throw 'Intel Pin SDK download failed' }
           if ((Get-FileHash $zip).Hash -ne '286f07529a895f3c24a61b42ddd2228280214370fb7b1e6481cf3db85f265d90') { throw 'Pin SDK checksum mismatch' }
           Expand-Archive -LiteralPath $zip -DestinationPath $kit
           Invoke-WebRequest 'https://github.com/llvm/llvm-project/releases/download/llvmorg-16.0.6/LLVM-16.0.6-win64.exe' -OutFile $installer

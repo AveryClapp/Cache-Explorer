@@ -56,6 +56,22 @@ std::string decode_name(const std::string& value) {
             "image name must be a basename without control characters");
         result += static_cast<char>(byte);
     }
+    // Reject malformed UTF-8 rather than emitting invalid portable JSON later.
+    for (size_t i = 0; i < result.size();) {
+        const auto first = static_cast<unsigned char>(result[i++]);
+        if (first < 128) continue;
+        const unsigned count = first >= 0xc2 && first <= 0xdf ? 1 :
+            first >= 0xe0 && first <= 0xef ? 2 : first >= 0xf0 && first <= 0xf4 ? 3 : 0;
+        require(count != 0 && i + count <= result.size(), "invalid UTF-8 image name");
+        uint32_t point = first & (0x7f >> (count + 1));
+        for (unsigned j = 0; j < count; ++j) {
+            const auto next = static_cast<unsigned char>(result[i++]);
+            require((next & 0xc0) == 0x80, "invalid UTF-8 image name");
+            point = (point << 6) | (next & 0x3f);
+        }
+        require(point >= (count == 1 ? 0x80u : count == 2 ? 0x800u : 0x10000u) &&
+            point <= 0x10ffff && !(point >= 0xd800 && point <= 0xdfff), "invalid UTF-8 image name");
+    }
     return result;
 }
 
