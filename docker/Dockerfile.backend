@@ -122,13 +122,19 @@ COPY --from=builder /build/backend/runtime/build/libcache-explorer-rt.a ./backen
 COPY --from=builder /build/backend/runtime/build/zig_stubs.o ./backend/runtime/build/
 COPY --from=builder /build/backend/cache-simulator/build/cache-sim ./backend/cache-simulator/build/
 
-# Copy runtime source and scripts
+# Copy runtime source, scripts, and the product catalogs they expose.
 COPY backend/runtime/*.h ./backend/runtime/
 COPY backend/scripts/ ./backend/scripts/
 COPY backend/server/ ./backend/server/
+COPY benchmarks/workloads/ ./benchmarks/workloads/
+COPY examples/ ./examples/
 
-# Make scripts executable
-RUN chmod +x ./backend/scripts/*
+# Fail the image build if a transient build-context read drops a critical file,
+# or if the workload catalog cannot be loaded from the production filesystem.
+RUN chmod +x ./backend/scripts/* \
+    && test -s ./backend/server/server.js \
+    && test -s ./examples/conv2d_kernel.c \
+    && node ./backend/scripts/cache-explore-workloads --ids >/dev/null
 
 # Copy production Node.js dependencies built with the required native toolchain.
 COPY --from=server-deps /build/backend/server/node_modules ./backend/server/node_modules
