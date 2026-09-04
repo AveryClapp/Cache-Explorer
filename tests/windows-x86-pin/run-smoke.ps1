@@ -36,11 +36,20 @@ $options = @{
     Program = $program; PinRoot = $PinRoot; PinTool = (Join-Path $toolBuild 'hardware_explorer_pin.dll')
     Normalizer = $normalizer; Output = $trace; TimeoutSeconds = 120
 }
+$arguments = @('--args', 'space value', 'ordinary-value', 'café', '--sample', '999', 'C:\plain\', 'C:\space folder\file.dat')
 Push-Location $fixture
-try { Checked $program @('--args', 'space value', 'quote"value', 'café', '--sample', '999') }
+try { Checked $program $arguments }
 finally { Pop-Location }
-& "$repo/backend/scripts/hardware-explore-pin.ps1" @options `
-    -ArgumentList @('--args', 'space value', 'quote"value', 'café', '--sample', '999')
+foreach ($badArgument in @('', 'quote"value', "line`nbreak", 'C:\space folder\')) {
+    $rejected = $false
+    try { & "$repo/backend/scripts/hardware-explore-pin.ps1" @options -ArgumentList @($badArgument) }
+    catch {
+        if ($_.Exception.Message -notmatch 'cannot safely forward') { throw }
+        $rejected = $true
+    }
+    Assert-True ($rejected -and -not (Test-Path -LiteralPath $trace)) 'Unsafe argument was launched or published output.'
+}
+& "$repo/backend/scripts/hardware-explore-pin.ps1" @options -ArgumentList $arguments
 $lines = [IO.File]::ReadAllLines($trace)
 $mainHash = (Get-FileHash -LiteralPath $program).Hash.ToLowerInvariant()
 $dllHash = (Get-FileHash -LiteralPath $plugin).Hash.ToLowerInvariant()

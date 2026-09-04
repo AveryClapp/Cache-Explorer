@@ -413,6 +413,10 @@ PDB enrichment for Pin and multi-image selection still require separate work.
 Capture currently includes startup/system DLL traffic and normal pre-execution
 memory operands; nonstandard operands fail closed. It is not yet a user-selectable
 game capture window or a hardware retired-instruction measurement.
+Pin's target-command-line reconstruction currently loses literal quotes and
+can merge subsequent arguments. The Preview launcher rejects unsupported
+argument forms before execution rather than silently changing the launch;
+full Windows argument parity is still a stable-release gate.
 
 ## 11. Ghidra Adapter
 

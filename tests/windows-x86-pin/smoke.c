@@ -23,8 +23,9 @@ int wmain(int argc, wchar_t **argv) {
     if (fopen_s(&asset, "fixture asset.txt", "r") != 0 || !asset) return 19;
     fclose(asset);
     if (argc > 1 && !wcscmp(argv[1], L"--args")) {
-        if (argc != 7 || wcscmp(argv[2], L"space value") || wcscmp(argv[3], L"quote\"value") ||
-            wcscmp(argv[4], L"caf\u00e9") || wcscmp(argv[5], L"--sample") || wcscmp(argv[6], L"999")) {
+        if (argc != 9 || wcscmp(argv[2], L"space value") || wcscmp(argv[3], L"ordinary-value") ||
+            wcscmp(argv[4], L"caf\u00e9") || wcscmp(argv[5], L"--sample") || wcscmp(argv[6], L"999") ||
+            wcscmp(argv[7], L"C:\\plain\\") || wcscmp(argv[8], L"C:\\space folder\\file.dat")) {
             for (int i = 1; i < argc; ++i) {
                 fprintf(stderr, "fixture argv[%d]:", i);
                 for (const wchar_t *p = argv[i]; *p; ++p) fprintf(stderr, " %04x", (unsigned)*p);

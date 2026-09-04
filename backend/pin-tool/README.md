@@ -53,6 +53,11 @@ override the default build locations. The existing Unix `cache-explore-pin`
 script is unchanged and is **not** the Windows entry point.
 The target starts in its executable directory so relative game assets work;
 `-WorkingDirectory` can explicitly select another existing directory.
+Pin 4.3.1 does not preserve every Windows command-line argument form. This
+Preview rejects empty arguments, literal double quotes, control characters,
+and whitespace-containing arguments ending in a backslash **before launch**.
+Ordinary spaced/Unicode arguments and option-like target arguments have smoke
+coverage. Do not add manual shell quoting inside `-ArgumentList` values.
 
 Capture defaults to one in every operand (`-SampleRate 1`) and at most
 2,000,000 recorded operands (`-MaxEvents`). Reaching the limit stops recording,

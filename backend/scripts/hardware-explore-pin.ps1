@@ -16,6 +16,15 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 if (-not $IsWindows) { throw 'Intel Pin IA-32 capture requires Windows.' }
+# Pin 4.3.1 reconstructs the target command line and can merge subsequent
+# arguments after a literal quote. Reject unsupported forms before execution.
+foreach ($argument in $ArgumentList) {
+    if ([string]::IsNullOrEmpty($argument) -or $argument.Contains('"') -or
+        $argument -match '[\x00-\x1f\x7f]' -or
+        ($argument -match '\s' -and $argument.EndsWith('\'))) {
+        throw 'This Pin Preview cannot safely forward empty arguments, literal quotes, control characters, or whitespace-containing arguments ending in a backslash.'
+    }
+}
 . (Join-Path $PSScriptRoot 'hardware-explorer-pe.ps1')
 $programPath = (Resolve-Path -LiteralPath $Program).Path
 $pinPath = (Resolve-Path -LiteralPath (Join-Path $PinRoot 'pin.exe')).Path
