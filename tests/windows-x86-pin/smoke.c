@@ -19,19 +19,25 @@ static DWORD WINAPI worker(void *argument) {
 
 int wmain(int argc, wchar_t **argv) {
     SetErrorMode(SEM_NOGPFAULTERRORBOX | SEM_FAILCRITICALERRORS);
-    FILE *asset = fopen("fixture asset.txt", "r");
-    if (!asset) return 19;
+    FILE *asset = NULL;
+    if (fopen_s(&asset, "fixture asset.txt", "r") != 0 || !asset) return 19;
     fclose(asset);
     if (argc > 1 && !wcscmp(argv[1], L"--args")) {
         if (argc != 7 || wcscmp(argv[2], L"space value") || wcscmp(argv[3], L"quote\"value") ||
-            wcscmp(argv[4], L"caf\u00e9") || wcscmp(argv[5], L"--sample") || wcscmp(argv[6], L"999"))
+            wcscmp(argv[4], L"caf\u00e9") || wcscmp(argv[5], L"--sample") || wcscmp(argv[6], L"999")) {
+            for (int i = 1; i < argc; ++i) {
+                fprintf(stderr, "fixture argv[%d]:", i);
+                for (const wchar_t *p = argv[i]; *p; ++p) fprintf(stderr, " %04x", (unsigned)*p);
+                fprintf(stderr, "\n");
+            }
             return 18;
+        }
     }
     wchar_t path[32768];
     if (!GetModuleFileNameW(NULL, path, 32768)) return 11;
     wchar_t *last = wcsrchr(path, L'\\');
     if (!last || (size_t)(last - path) + 32 >= 32768) return 12;
-    wcscpy(last + 1, L"pin smoke plugin.dll");
+    wcscpy_s(last + 1, 32768 - (size_t)(last + 1 - path), L"pin smoke plugin.dll");
     // Reload the same DLL; Pin gets a fresh image ID for the second lifetime.
     for (unsigned run = 0; run < 2; ++run) {
         HMODULE plugin = LoadLibraryW(path);

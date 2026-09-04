@@ -36,6 +36,9 @@ $options = @{
     Program = $program; PinRoot = $PinRoot; PinTool = (Join-Path $toolBuild 'hardware_explorer_pin.dll')
     Normalizer = $normalizer; Output = $trace; TimeoutSeconds = 120
 }
+Push-Location $fixture
+try { Checked $program @('--args', 'space value', 'quote"value', 'café', '--sample', '999') }
+finally { Pop-Location }
 & "$repo/backend/scripts/hardware-explore-pin.ps1" @options `
     -ArgumentList @('--args', 'space value', 'quote"value', 'café', '--sample', '999')
 $lines = [IO.File]::ReadAllLines($trace)

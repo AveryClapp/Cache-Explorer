@@ -35,7 +35,20 @@ std::string image_hash(const std::string& path) {
     if (!file) return "-";
     const auto size = file.tellg();
     // Bound I/O and memory, even for unusual image files.
-    if (size <= 0 || size > 512LL * 1024 * 1024) return "-";
+    if (size < 64 || size > 512LL * 1024 * 1024) return "-";
+    // In particular, never bind a WOW64 code site to a redirected PE32+ file.
+    // Use the same file handle for preflight and hashing; no target DLL loading.
+    unsigned char dos[64], pe[26];
+    file.seekg(0);
+    if (!file.read(reinterpret_cast<char*>(dos), sizeof(dos)) || dos[0] != 'M' || dos[1] != 'Z') return "-";
+    const UINT32 offset = UINT32(dos[60]) | (UINT32(dos[61]) << 8) |
+        (UINT32(dos[62]) << 16) | (UINT32(dos[63]) << 24);
+    if (offset < 64 || offset > size - std::streamoff(sizeof(pe))) return "-";
+    file.seekg(offset);
+    if (!file.read(reinterpret_cast<char*>(pe), sizeof(pe)) ||
+        pe[0] != 'P' || pe[1] != 'E' || pe[2] != 0 || pe[3] != 0 ||
+        pe[4] != 0x4c || pe[5] != 0x01 || pe[24] != 0x0b || pe[25] != 0x01)
+        return "-";
     file.seekg(0);
     picosha2::hash256_one_by_one hasher;
     char bytes[16384];
