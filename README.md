@@ -212,11 +212,11 @@ integration names remain supported during the Preview rebrand.
 ```bash
 cd backend/cache-simulator/build
 ./CacheLevelTest        # 22 tests
-./CacheSystemTest       # 25 tests
+./CacheSystemTest       # 26 tests
 ./MESICoherenceTest     # 19 tests
 ./MultiCorePrefetchTest # 18 tests
 ./MultiCoreTLBTest      # 8 tests
-./MultiCoreTraceProcessorTest # 2 tests
+./MultiCoreTraceProcessorTest # 3 tests
 ./AdvancedInstrumentationTest # 31 tests
 ```
 
