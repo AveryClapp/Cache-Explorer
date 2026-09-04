@@ -1,0 +1,498 @@
+# Windows x86 Binary Profiling and Decompiler Navigation
+
+Status: Proposed  
+Tracking issue: [#73](https://github.com/AveryClapp/Cache-Explorer/issues/73)  
+Target: Hardware Explorer Preview
+
+## 1. Summary
+
+Hardware Explorer will profile 32-bit Windows programs through two paths:
+
+1. `clang-cl` source instrumentation for programs that can be rebuilt.
+2. Intel Pin IA-32 dynamic instrumentation for existing PE executables and
+   DLLs when source is unavailable.
+
+Binary results will be attributed to stable code locations and exported in one
+tool-neutral hotspot bundle. Ghidra and IDA/Hex-Rays adapters will import that
+bundle, highlight costly functions or pseudocode, and navigate to the closest
+known decompiler location. Assembly remains available as a fallback, not the
+primary workflow.
+
+Decompiler pseudocode is reconstructed rather than original source. Navigation
+therefore carries an explicit confidence level and must never be presented as
+exact source-line attribution when debug information is absent.
+
+## 2. Goals
+
+- Profile a 32-bit Windows executable without recompiling it.
+- Support 32-bit programs on 64-bit Windows through the IA-32 Pin tool.
+- Support source builds that target Win32 through `clang-cl` and CMake.
+- Attribute each captured memory access to the instruction that issued it.
+- Keep locations stable across ASLR and across repeated runs of the same image.
+- Aggregate modeled cache behavior by image, function, basic block, and
+  instruction site.
+- Let users move from a Hardware Explorer hotspot to decompiled pseudocode in
+  Ghidra or IDA/Hex-Rays without having to navigate raw assembly.
+- Preserve the current trace format and `cache-explore` compatibility names.
+- Keep capture, analysis, and decompiler use local and offline by default.
+
+## 3. Non-goals
+
+- Recovering the original source code or original statement boundaries from a
+  stripped binary.
+- Debugger-style stepping, breakpoints, or live process control.
+- Bypassing DRM, anti-cheat, anti-tamper, or process-protection systems.
+- Attaching to kernel code, drivers, consoles, or non-Windows x86 programs in
+  the first release.
+- Claiming measured hardware cache misses. The captured address stream is run
+  through Hardware Explorer's modeled CPU profiles.
+- Making Intel Pin or either decompiler available in the hosted product.
+
+## 4. Supported Workflows
+
+| Input | Capture path | Primary navigation | Initial status |
+|---|---|---|---|
+| Source built with `clang-cl` for Win32 | LLVM pass and Windows x86 runtime | Original file and line | First milestone |
+| PE32 executable with PDB | Intel Pin IA-32 | Source/function when symbols resolve; otherwise pseudocode | Planned |
+| PE32 executable without PDB | Intel Pin IA-32 | Function/basic block and best-effort pseudocode | Planned |
+| Protected or anti-cheat process | None | None | Unsupported |
+| 16-bit executable | None | None | Unsupported |
+
+The two capture paths converge on the same trace-ingestion and analysis
+modules. Results differ only in available attribution quality.
+
+## 5. User Journey
+
+```text
+Choose executable and arguments
+          |
+          v
+Preflight: PE32, supported Pin, writable output, no known protection
+          |
+          v
+Run locally under IA-32 instrumentation
+          |
+          v
+Analyze captured addresses with a selected modeled CPU profile
+          |
+          v
+Hotspots: module -> function -> block -> instruction
+          |
+          +---------------------+
+          |                     |
+          v                     v
+ Export for Ghidra       Export for IDA/Hex-Rays
+          |                     |
+          v                     v
+ Highlight and navigate to decompiled pseudocode
+```
+
+The results page defaults to functions, not millions of individual accesses.
+Selecting a function reveals its hottest basic blocks and instruction sites.
+The user can then export the entire result or one selected hotspot set.
+
+## 6. Domain Model
+
+### Image identity
+
+An **image** is the main executable or one loaded DLL. It is identified by:
+
+- `sha256`: SHA-256 of the on-disk PE image when it can be read.
+- `codeView`: PDB GUID and age when CodeView information exists.
+- `name`: display-only basename.
+- `preferredBase`: PE preferred image base.
+- `loadedBase`: run-specific load address, retained only in capture provenance.
+- `imageSize`: mapped image size.
+
+`sha256` is the primary match key. `codeView` is a secondary symbol match key.
+Path and PE timestamp are diagnostic metadata and must not be treated as strong
+identity.
+
+### Code location
+
+A **code location** identifies the instruction responsible for an event:
+
+```json
+{
+  "imageId": "sha256:...",
+  "rva": "0x00012f40"
+}
+```
+
+The relative virtual address is calculated as `instructionPointer -
+loadedBase`. Absolute instruction pointers must not appear in portable hotspot
+identity because ASLR changes them between runs.
+
+### Data location
+
+A **data location** is the memory address accessed by the instruction. It feeds
+the cache simulator but is not a navigation target. Code and data addresses
+must be named separately in every interface to avoid treating a heap address as
+an executable location.
+
+### Source location
+
+A **source location** contains an optional file, line, and column recovered from
+debug information or source instrumentation. A captured event may contain both
+a code location and a source location.
+
+### Hotspot
+
+A **hotspot** is an aggregation keyed by a code location, basic block, or
+function. It includes sampled access counts and modeled cache outcomes. The
+first release ranks by modeled L1 data-cache misses, with accesses, miss rate,
+read/write counts, and estimated memory-stall cycles available as alternatives.
+
+### Navigation confidence
+
+| Value | Meaning |
+|---|---|
+| `source-exact` | Debug information maps the instruction to an original source line. |
+| `instruction-exact` | The PE image and RVA match exactly in the decompiler. |
+| `function-exact` | The instruction maps to a known function but not a stable pseudocode item. |
+| `pseudocode-nearest` | The adapter selected the nearest decompiler item containing the address. |
+| `unresolved` | No safe navigation target was found. |
+
+The UI must display this confidence and explain it on demand.
+
+## 7. Module Design
+
+### 7.1 Binary Capture module
+
+Interface:
+
+```text
+hardware-explore-pin [capture options] -- program.exe [program arguments]
+```
+
+The module owns Pin discovery, IA-32 tool selection, child-process launch,
+module-load tracking, sampling, event limits, raw trace creation, and cleanup.
+Callers receive a capture bundle or a structured failure; they do not need to
+understand Pin knobs or load addresses.
+
+The current `cache-explore-pin` name remains a compatibility alias.
+
+### 7.2 Trace Ingestion module
+
+Interface:
+
+```text
+read trace stream -> TraceSession
+```
+
+The module accepts existing v1 source traces and new v2 binary traces. It owns
+format detection, image and site tables, validation, bounded parsing, and error
+reporting. The cache simulator consumes normalized events rather than parsing
+Pin-specific records itself.
+
+### 7.3 Location Identity module
+
+Interface:
+
+```text
+normalize(image manifest, runtime instruction pointer) -> CodeLocation
+```
+
+The module owns ASLR normalization and image identity. This is the seam shared
+by capture, hotspot aggregation, exports, and decompiler adapters. It must be
+pure and testable with synthetic PE manifests.
+
+### 7.4 Hotspot Analysis module
+
+Interface:
+
+```text
+analyze(TraceSession, HardwareProfile, AnalysisOptions) -> AnalysisResult
+```
+
+The module owns simulation and attribution. It produces both source projections
+and code projections when the trace supplies both. Existing `hotLines` output
+remains intact; binary attribution is added as `codeHotspots`.
+
+### 7.5 Hotspot Export module
+
+Interface:
+
+```text
+export(AnalysisResult) -> hardware-explorer-hotspots-v1.json
+```
+
+The export is the single external seam for decompiler tooling. Its JSON Schema
+is checked into the repository, and fixtures are validated in CI. Core code
+does not load a decompiler SDK or emit tool-specific project files.
+
+### 7.6 Decompiler adapters
+
+Ghidra and IDA/Hex-Rays are two adapters at the hotspot-export seam:
+
+- The Ghidra adapter is an installable extension.
+- The IDA/Hex-Rays adapter is a plugin that uses IDAPython and Hex-Rays when the
+  decompiler is available.
+
+Both adapters validate image identity, map RVAs into the current program's
+address space, create a sortable hotspot view, and navigate to the closest safe
+decompiler location. Tool-specific behavior remains inside each adapter.
+
+## 8. Trace Format v2
+
+The current line-oriented event format remains valid. Binary capture adds a
+version header, an image manifest, a compact code-site table, and an optional
+site reference on each event. Existing readers continue to ignore metadata and
+trailing fields.
+
+Illustrative form:
+
+```text
+# hardware-explorer-trace 2
+# image 1 sha256:<digest> game.exe 0x00400000 0x006a0000
+# site 7 1 0x00012f40
+L 0x01f40020 4 unknown:0 T1 K7
+S 0x01f40024 4 unknown:0 T1 K7
+```
+
+Requirements:
+
+- `K<n>` refers to a previously declared code site.
+- The event address remains the data address used for cache simulation.
+- Site-table growth is bounded and produces a visible truncation warning.
+- Unknown images or sites are retained as unattributed events rather than
+  silently assigned to the main executable.
+- Parsers reject unsupported format versions and invalid numeric ranges.
+- v1 traces produce byte-for-byte compatible result fields.
+
+The implementation may use a binary capture representation internally, but
+the portable/debuggable interchange form above is normative for v2.
+
+## 9. Analysis Result and Hotspot Bundle
+
+`codeHotspots` is additive to the existing result:
+
+```json
+{
+  "capture": {
+    "kind": "intel-pin",
+    "traceFormat": 2,
+    "target": "i686-pc-windows-msvc",
+    "addressWidth": 32,
+    "sampleRate": 100,
+    "eventLimit": 10000000,
+    "truncated": false
+  },
+  "images": [
+    {
+      "id": "sha256:...",
+      "name": "game.exe",
+      "sha256": "...",
+      "codeView": { "guid": "...", "age": 1 }
+    }
+  ],
+  "codeHotspots": [
+    {
+      "location": { "imageId": "sha256:...", "rva": "0x00012f40" },
+      "symbol": { "function": "update_world", "functionRva": "0x00012e90" },
+      "navigationConfidence": "instruction-exact",
+      "metrics": {
+        "accesses": 4200,
+        "reads": 3900,
+        "writes": 300,
+        "l1dHits": 3100,
+        "l1dMisses": 1100,
+        "l1dMissRate": 0.2619,
+        "estimatedMemoryStallCycles": 18200
+      }
+    }
+  ]
+}
+```
+
+Sampled counts are labeled as sampled. Hardware Explorer must not extrapolate
+them to exact totals unless a future estimator documents its method and error.
+Model identity and confidence remain present in the enclosing analysis result.
+
+The decompiler export contains only the capture manifest, selected model
+metadata, code hotspots, and warnings. Raw data addresses are excluded by
+default because adapters do not need them.
+
+## 10. Intel Pin IA-32 Capture
+
+The Pin tool will:
+
+- Build an IA-32 tool for the Windows Pin kit.
+- Observe image loads and record a manifest entry for the main PE and DLLs.
+- Record the instruction pointer for each instrumented memory operand.
+- Normalize each instruction pointer to an image and RVA.
+- Deduplicate code sites so events carry compact site identifiers.
+- Preserve read/write type, data address, access width, and thread identity.
+- Apply event limits and sampling before writing high-volume records.
+- Emit a clear warning when instructions cannot be assigned to an image.
+
+Initial process scope is the launched process and its loaded modules. Child
+process following is deferred until process identity and multi-process traces
+have an explicit model.
+
+## 11. Ghidra Adapter
+
+The first decompiler adapter should be Ghidra because it can be developed and
+tested in an open environment.
+
+Required behavior:
+
+- Import `hardware-explorer-hotspots-v1.json`.
+- Compare the active program with the selected image using SHA-256 and CodeView
+  identity.
+- Block automatic navigation on a strong identity mismatch; permit an explicit
+  user override with a persistent warning.
+- Display functions and addresses ranked by misses, miss rate, accesses, or
+  estimated stall cycles.
+- Add bookmarks or markers with severity buckets.
+- Double-click a hotspot to open the containing function in the Decompiler and
+  navigate to the exact or nearest mapped address.
+- Show navigation confidence and the original RVA.
+- Remove or refresh imported markers without modifying program bytes.
+
+Headless tests cover bundle parsing, identity matching, rebase handling, and
+marker creation against a repository-built PE32 fixture. One manual smoke test
+checks Decompiler navigation for each supported Ghidra release.
+
+## 12. IDA/Hex-Rays Adapter
+
+Required behavior mirrors the Ghidra adapter:
+
+- Import the same hotspot bundle without conversion.
+- Match the input image and account for the IDA image base.
+- Provide a sortable hotspot chooser.
+- Color or annotate matching functions and addresses without patching bytes.
+- Jump to the matching disassembly address and, when Hex-Rays is available, the
+  closest ctree item carrying that address.
+- Fall back to the function entry or disassembly only when pseudocode mapping
+  is unavailable, with the fallback shown explicitly.
+- Work in IDA without Hex-Rays as a reduced-capability adapter.
+
+Core bundle parsing and identity logic should be isolated from IDA SDK calls so
+it can be tested without a licensed IDA installation. Supported IDA versions
+will be declared only after the adapter is exercised against them.
+
+## 13. Privacy and Safety
+
+- Binary capture is local-only and unavailable to hosted runners.
+- Hardware Explorer never uploads the executable, trace, PDB, or decompiler
+  project unless a future feature obtains explicit user consent.
+- Full local paths are redacted from portable exports by default.
+- The bundle includes binary hashes and may reveal module names and function
+  names; the export dialog warns users before sharing it.
+- Capture requires an executable the user owns or is authorized to analyze.
+- Hardware Explorer will not attempt to evade anti-debug, DRM, anti-cheat, or
+  endpoint-security controls. If instrumentation is rejected, capture fails
+  closed with an explanation.
+- Program arguments are passed as an argument vector, never through shell
+  interpolation.
+- Output paths are created with restrictive user permissions where Windows
+  permits them.
+
+## 14. Performance and Failure Behavior
+
+- Full instrumentation may be substantially slower than native execution.
+- Default binary capture uses a bounded event count and presents sampling as an
+  explicit control.
+- The UI estimates trace size before launch and shows events captured, sampling
+  rate, truncation state, and elapsed time afterward.
+- A full or unwritable output location stops capture cleanly and preserves a
+  diagnostic rather than a partially valid analysis.
+- Process crashes retain a marked partial trace when its metadata is complete.
+- Image hashing happens once per loaded image and is cached for the session.
+- Decompiler import operates on aggregated hotspots, not raw event streams.
+
+## 15. Compatibility
+
+- `cache-explore-pin` and existing v1 trace records remain supported.
+- `hardware-explore-pin` is the product-facing command.
+- `CACHE_EXPLORER_*` variables remain aliases for corresponding
+  `HARDWARE_EXPLORER_*` variables.
+- Existing source-based `hotLines` and `sourceAnnotations` remain unchanged.
+- New fields are additive until a separately announced major format change.
+- Hotspot bundles declare `schemaVersion`; adapters reject newer incompatible
+  major versions with an upgrade message.
+
+## 16. Milestones and Acceptance Criteria
+
+### M1 — Win32 `clang-cl` source capture
+
+- Windows runtime builds for an i686 target.
+- LLVM pass builds as a Windows DLL and loads through `clang-cl`.
+- CMake integration chooses clang-cl-compatible flags.
+- A Win32 fixture compiles, executes, emits memory events, and is analyzed by
+  `cache-sim` in Windows CI.
+- macOS and Linux integrations remain green.
+
+### M2 — Versioned binary attribution
+
+- v2 trace parser accepts image, site, and event records.
+- v1 parsing has regression coverage.
+- Code locations remain identical across two ASLR-varied fixture runs.
+- Results expose `codeHotspots` and capture provenance.
+- Malformed, oversized, and unknown-version traces fail predictably.
+
+### M3 — Windows IA-32 Pin capture
+
+- A repository-built PE32 fixture is captured without source instrumentation.
+- Main executable and DLL sites resolve to the correct image and RVA.
+- Stripped and PDB-bearing fixtures both produce useful hotspots.
+- Multithreaded capture, sampling, event limits, crashes, and paths containing
+  spaces have automated coverage.
+- No claim of Windows x86 support is published until this path passes on a real
+  Windows runner.
+
+### M4 — Hardware Explorer binary hotspot UX
+
+- Results group by module and function before instruction sites.
+- `unknown:0` is replaced by an explicit unresolved attribution state.
+- Users can export a schema-validated hotspot bundle.
+- Sampling, truncation, model confidence, and navigation confidence remain
+  visible.
+
+### M5 — Ghidra adapter
+
+- Bundle identity verification, hotspot list, markers, and decompiler navigation
+  work on the PE32 fixture.
+- Rebased imports navigate correctly.
+- Mismatched binaries do not receive silent annotations.
+
+### M6 — IDA/Hex-Rays adapter
+
+- Bundle identity verification, hotspot chooser, annotations, and address
+  navigation work without Hex-Rays.
+- Hex-Rays installations additionally navigate to the nearest mapped pseudocode
+  item.
+- Missing pseudocode mappings fall back visibly instead of failing silently.
+
+## 17. Release Gate
+
+The project may advertise **Windows x86 source capture** after M1 passes in CI.
+It may advertise **existing binary profiling** only after M2 through M4 pass.
+Ghidra and IDA integrations are advertised separately after their respective
+milestones pass.
+
+Until then, the documentation must describe each incomplete path as planned or
+experimental. None of these milestones changes the modeled/calibrated status
+of a hardware profile.
+
+## 18. Decisions and Open Questions
+
+Decisions:
+
+- Use image hash plus RVA as the portable location identity.
+- Keep data addresses separate from navigation addresses.
+- Use one tool-neutral hotspot bundle and two decompiler adapters.
+- Build Ghidra navigation before IDA/Hex-Rays navigation.
+- Keep binary analysis local and offline.
+
+Questions to resolve before M3:
+
+- Which Pin 4.x Windows kit becomes the tested minimum?
+- Should capture follow explicitly selected child processes in the first stable
+  binary release?
+- Which sampling preset provides a useful default for game workloads?
+- Which Ghidra and IDA release ranges can be maintained in CI and manual smoke
+  testing?
+- Should function names from stripped binaries be stored in shared exports by
+  default, or require an additional privacy opt-in?

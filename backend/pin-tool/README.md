@@ -77,9 +77,11 @@ Options:
 
 ## Limitations
 
-- **Platform**: Linux x86-64 only (Pin limitation)
+- **Current integration**: Linux x86-64 only
+- **Windows x86**: IA-32 capture is being implemented in
+  [issue #73](https://github.com/AveryClapp/Cache-Explorer/issues/73); see the
+  [binary profiling spec](../../docs/WINDOWS_X86_BINARY_PROFILING_SPEC.md)
 - **macOS**: Limited support, may require older Pin versions
-- **Windows**: Requires separate build configuration
 - **Debug info**: Source attribution requires `-g` compiled binaries
 
 ## Comparison with LLVM Pass
