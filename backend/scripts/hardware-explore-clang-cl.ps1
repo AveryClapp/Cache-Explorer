@@ -48,6 +48,7 @@ $compiler = if ($env:HARDWARE_EXPLORER_CLANG_CL) {
 $compileOnly = $CompilerArguments -contains '/c' -or $CompilerArguments -contains '-c'
 $arguments = @(
     '/clang:-fsanitize-coverage=trace-pc,trace-loads,trace-stores,no-prune',
+    '/clang:-fno-sanitize-link-runtime',
     '/Z7',
     "/I$($backendDirectory)\runtime"
 ) + $CompilerArguments

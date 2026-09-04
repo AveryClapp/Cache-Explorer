@@ -129,6 +129,7 @@ function(cache_explorer_enable_target target)
   if(CACHE_EXPLORER_CLANG_CL)
     target_compile_options(${target} PRIVATE
       /clang:-fsanitize-coverage=trace-pc,trace-loads,trace-stores,no-prune
+      /clang:-fno-sanitize-link-runtime
       /Z7
     )
   else()
@@ -166,6 +167,7 @@ function(cache_explorer_enable_project)
   if(CACHE_EXPLORER_CLANG_CL)
     add_compile_options(
       /clang:-fsanitize-coverage=trace-pc,trace-loads,trace-stores,no-prune
+      /clang:-fno-sanitize-link-runtime
       /Z7
     )
   else()

@@ -108,7 +108,7 @@ set(CMAKE_CXX_COMPILER "${CLANGXX_PATH}" CACHE STRING "C++ compiler")
 # Add instrumentation flags
 if(WIN32)
   set(CACHE_EXPLORER_FLAGS
-    "/clang:-fsanitize-coverage=trace-pc,trace-loads,trace-stores,no-prune /Z7")
+    "/clang:-fsanitize-coverage=trace-pc,trace-loads,trace-stores,no-prune /clang:-fno-sanitize-link-runtime /Z7")
 else()
   set(CACHE_EXPLORER_FLAGS
     "-fpass-plugin=${CACHE_EXPLORER_PASS} -g -Xclang -disable-O0-optnone")
