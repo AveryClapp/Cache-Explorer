@@ -245,6 +245,7 @@ Illustrative form:
 
 ```text
 # hardware-explorer-trace 2
+# capture clang-cl i686-pc-windows-msvc 32 1 10000000 false
 # image 1 sha256:<digest> game.exe 0x00400000 0x006a0000
 # site 7 1 0x00012f40
 L 0x01f40020 4 unknown:0 T1 K7
@@ -254,6 +255,8 @@ S 0x01f40024 4 unknown:0 T1 K7
 Requirements:
 
 - `K<n>` refers to a previously declared code site.
+- The capture record stores capture kind, target triple, address width, sample
+  rate, event limit, and truncation state in that order.
 - The event address remains the data address used for cache simulation.
 - Site-table growth is bounded and produces a visible truncation warning.
 - Unknown images or sites are retained as unattributed events rather than
@@ -263,6 +266,14 @@ Requirements:
 
 The implementation may use a binary capture representation internally, but
 the portable/debuggable interchange form above is normative for v2.
+
+During capture, the Win32 `clang-cl` runtime appends process-local
+`C0x<address>` (return PC), `B0x<address>` (loaded image base), and
+`R0x<offset>` (RVA) tokens to each instrumented load/store event. These are raw
+capture provenance, not a portable code identity. The trace normalizer verifies
+`C - B == R`, checks the RVA against the PE image, hashes the image, and replaces
+the raw fields with a `K<n>` reference. Raw `C` and `B` addresses must not appear
+in exported hotspot bundles.
 
 ## 9. Analysis Result and Hotspot Bundle
 
@@ -409,6 +420,8 @@ will be declared only after the adapter is exercised against them.
 - `hardware-explore-pin` is the product-facing command.
 - `CACHE_EXPLORER_*` variables remain aliases for corresponding
   `HARDWARE_EXPLORER_*` variables.
+- `cache-explore-run-x86.ps1` and `cache-explore-normalize-trace.ps1` remain
+  aliases for their `hardware-explore-*` names.
 - Existing source-based `hotLines` and `sourceAnnotations` remain unchanged.
 - New fields are additive until a separately announced major format change.
 - Hotspot bundles declare `schemaVersion`; adapters reject newer incompatible

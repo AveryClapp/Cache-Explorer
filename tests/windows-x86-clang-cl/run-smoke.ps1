@@ -74,20 +74,32 @@ if ($machine -ne 0x014c) {
     throw "The smoke executable machine is 0x$($machine.ToString('x4')); expected PE32 i386 (0x014c)."
 }
 
-$trace = Join-Path $buildRoot 'trace.txt'
-$progress = Join-Path $buildRoot 'progress.txt'
-$smokeProcess = Start-Process -FilePath $smokeBinary -NoNewWindow -Wait -PassThru `
-    -RedirectStandardOutput $trace -RedirectStandardError $progress
-if ($smokeProcess.ExitCode -ne 0) {
-    throw "The instrumented x86 executable failed with exit code $($smokeProcess.ExitCode)."
-}
+$trace = Join-Path $buildRoot 'trace-v2.txt'
+& (Join-Path $repositoryRoot 'backend\scripts\hardware-explore-run-x86.ps1') `
+    -Program $smokeBinary -Output $trace
 
 $traceLines = Get-Content -LiteralPath $trace
-if (-not ($traceLines | Where-Object { $_ -match '^L 0x[0-9a-f]+ ' })) {
-    throw 'The instrumented x86 executable did not emit load events.'
+if ($traceLines[0] -ne '# hardware-explorer-trace 2') {
+    throw 'The capture wrapper did not produce a trace v2 header.'
 }
-if (-not ($traceLines | Where-Object { $_ -match '^S 0x[0-9a-f]+ ' })) {
-    throw 'The instrumented x86 executable did not emit store events.'
+if (-not ($traceLines | Where-Object { $_ -match '^L 0x[0-9a-f]+ .* T[0-9]+ K[0-9]+$' })) {
+    throw 'The normalized x86 trace did not contain attributed load events.'
+}
+if (-not ($traceLines | Where-Object { $_ -match '^S 0x[0-9a-f]+ .* T[0-9]+ K[0-9]+$' })) {
+    throw 'The normalized x86 trace did not contain attributed store events.'
+}
+if ($traceLines | Where-Object { $_ -match ' [CBR]0x[0-9a-f]+' }) {
+    throw 'The normalized trace leaked process-local capture addresses.'
+}
+
+$repeatTrace = Join-Path $buildRoot 'trace-v2-repeat.txt'
+& (Join-Path $repositoryRoot 'backend\scripts\hardware-explore-run-x86.ps1') `
+    -Program $smokeBinary -Output $repeatTrace
+$firstSites = @($traceLines | Where-Object { $_ -match '^# site ' })
+$repeatSites = @(Get-Content -LiteralPath $repeatTrace | Where-Object { $_ -match '^# site ' })
+if ($firstSites.Count -eq 0 -or
+    (Compare-Object -ReferenceObject $firstSites -DifferenceObject $repeatSites)) {
+    throw 'Code-site image/RVA identities changed across repeated ASLR-enabled runs.'
 }
 
 $simulator = Join-Path $simulatorBuild 'cache-sim.exe'
@@ -117,5 +129,11 @@ $l1dAccesses = $result.levels.l1d.hits + $result.levels.l1d.misses
 if ($l1dAccesses -le 0) {
     throw 'cache-sim reported no L1 data-cache accesses for the x86 trace.'
 }
+if ($result.capture.traceFormat -ne 2 -or $result.capture.kind -ne 'clang-cl' -or
+    $result.capture.addressWidth -ne 32 -or $result.capture.sampleRate -ne 1 -or
+    $result.images.Count -ne 1 -or
+    $result.codeHotspots.Count -le 0) {
+    throw 'cache-sim did not expose v2 capture provenance and code hotspots.'
+}
 
-Write-Host "Windows x86 clang-cl smoke passed with $l1dAccesses L1D accesses."
+Write-Host "Windows x86 clang-cl attribution smoke passed with $l1dAccesses L1D accesses and $($result.codeHotspots.Count) code hotspots."

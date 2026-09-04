@@ -8,6 +8,8 @@ on:
       - 'backend/integration/cmake/**'
       - 'backend/runtime/**'
       - 'backend/scripts/*clang-cl.ps1'
+      - 'backend/scripts/*run-x86.ps1'
+      - 'backend/scripts/*normalize-trace.ps1'
       - 'tests/windows-x86-clang-cl/**'
   push:
     branches: [main]
@@ -17,6 +19,8 @@ on:
       - 'backend/integration/cmake/**'
       - 'backend/runtime/**'
       - 'backend/scripts/*clang-cl.ps1'
+      - 'backend/scripts/*run-x86.ps1'
+      - 'backend/scripts/*normalize-trace.ps1'
       - 'tests/windows-x86-clang-cl/**'
   workflow_dispatch:
 

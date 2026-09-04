@@ -6,6 +6,17 @@
 #include <optional>
 #include <sstream>
 
+// Compact reference into a trace's image table. Portable output expands the
+// table id to the image's SHA-256 identity.
+struct TraceCodeLocation {
+  uint32_t image_table_id = 0;
+  uint64_t rva = 0;
+
+  bool operator==(const TraceCodeLocation &other) const {
+    return image_table_id == other.image_table_id && rva == other.rva;
+  }
+};
+
 struct TraceEvent {
   // Basic event properties
   bool is_write = false;
@@ -15,6 +26,15 @@ struct TraceEvent {
   std::string file;
   uint32_t line = 0;
   uint32_t thread_id = 1;
+
+  // Binary-attribution extensions. code_address is a process-local capture PC
+  // and must be normalized before export. code_site_id refers to a v2 trace
+  // site table entry, whose stable identity is image + RVA.
+  std::optional<uint64_t> code_address;
+  std::optional<uint64_t> code_image_base;
+  std::optional<uint64_t> code_rva;
+  std::optional<uint32_t> code_site_id;
+  std::optional<TraceCodeLocation> code_location;
 
   // Software prefetch hints (__builtin_prefetch)
   bool is_prefetch = false;
@@ -67,6 +87,65 @@ inline std::optional<uint32_t> parse_trace_u32(const std::string &value) {
   }
 }
 
+inline std::optional<uint64_t> parse_trace_u64(const std::string &value,
+                                               int base) {
+  if (value.empty() || value[0] == '-') return std::nullopt;
+  try {
+    size_t consumed = 0;
+    const unsigned long long parsed = std::stoull(value, &consumed, base);
+    if (consumed != value.size()) return std::nullopt;
+    return static_cast<uint64_t>(parsed);
+  } catch (...) {
+    return std::nullopt;
+  }
+}
+
+inline bool parse_trace_extension(const std::string &token,
+                                  TraceEvent &event) {
+  if (token.size() > 1 && token[0] == 'T') {
+    auto parsed_thread = parse_trace_u32(token.substr(1));
+    if (!parsed_thread) return false;
+    event.thread_id = *parsed_thread;
+  } else if (token.size() > 1 && token[0] == 'C') {
+    const std::string value = token.substr(1);
+    if (value.size() < 3 || value[0] != '0' ||
+        (value[1] != 'x' && value[1] != 'X')) {
+      return false;
+    }
+    auto parsed_address = parse_trace_u64(value, 0);
+    if (!parsed_address || event.code_address) return false;
+    event.code_address = *parsed_address;
+  } else if (token.size() > 1 && token[0] == 'K') {
+    auto parsed_site = parse_trace_u32(token.substr(1));
+    if (!parsed_site || event.code_site_id) return false;
+    event.code_site_id = *parsed_site;
+  } else if (token.size() > 1 &&
+             (token[0] == 'B' || token[0] == 'R')) {
+    const std::string value = token.substr(1);
+    if (value.size() < 3 || value[0] != '0' ||
+        (value[1] != 'x' && value[1] != 'X')) {
+      return false;
+    }
+    auto parsed_address = parse_trace_u64(value, 0);
+    if (!parsed_address) return false;
+    std::optional<uint64_t> &destination =
+        token[0] == 'B' ? event.code_image_base : event.code_rva;
+    if (destination) return false;
+    destination = *parsed_address;
+  }
+  // Unknown trailing extensions remain forward-compatible.
+  return true;
+}
+
+inline bool parse_trace_extensions(std::istringstream &iss,
+                                   TraceEvent &event) {
+  std::string token;
+  while (iss >> token) {
+    if (!parse_trace_extension(token, event)) return false;
+  }
+  return true;
+}
+
 inline std::optional<TraceEvent> parse_trace_event(const std::string &line) {
   if (line.empty() || line[0] == '#')
     return std::nullopt;
@@ -76,7 +155,6 @@ inline std::optional<TraceEvent> parse_trace_event(const std::string &line) {
   uint64_t addr;
   uint32_t size;
   std::string location;
-  std::string thread_str;
 
   // First, read type and address
   if (!(iss >> type_str >> std::hex >> addr))
@@ -117,13 +195,7 @@ inline std::optional<TraceEvent> parse_trace_event(const std::string &line) {
         event.line = 0;
       }
     }
-    if (iss >> thread_str) {
-      if (!thread_str.empty() && thread_str[0] == 'T') {
-        auto parsed_thread = parse_trace_u32(thread_str.substr(1));
-        if (!parsed_thread) return std::nullopt;
-        event.thread_id = *parsed_thread;
-      }
-    }
+    if (!parse_trace_extensions(iss, event)) return std::nullopt;
     return event;
   }
 
@@ -219,14 +291,8 @@ inline std::optional<TraceEvent> parse_trace_event(const std::string &line) {
     }
   }
 
-  // Parse thread ID (format: T<number>)
-  if (iss >> thread_str) {
-    if (!thread_str.empty() && thread_str[0] == 'T') {
-      auto parsed_thread = parse_trace_u32(thread_str.substr(1));
-      if (!parsed_thread) return std::nullopt;
-      event.thread_id = *parsed_thread;
-    }
-  }
+  // Parse thread ID and optional binary-attribution extensions.
+  if (!parse_trace_extensions(iss, event)) return std::nullopt;
 
   return event;
 }

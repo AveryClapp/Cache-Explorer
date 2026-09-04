@@ -51,7 +51,11 @@ int main(void) {
   assert(strstr(output, "P1 0x12340 64 address_test.c:10") != NULL);
   assert(strstr(output, "Z 0x12340 128 address_test.c:11") != NULL);
   assert(strstr(output, "O 0x12340 0x22340 32 address_test.c:12") != NULL);
-  assert(strstr(output, "L 0x12340 4 unknown:0") != NULL);
-  assert(strstr(output, "S 0x22340 8 unknown:0") != NULL);
+  assert(strstr(output, "L 0x12340 4 unknown:0 T1 C0x") != NULL);
+  assert(strstr(output, "S 0x22340 8 unknown:0 T1 C0x") != NULL);
+#ifdef _WIN32
+  assert(strstr(output, " B0x") != NULL);
+  assert(strstr(output, " R0x") != NULL);
+#endif
   return 0;
 }

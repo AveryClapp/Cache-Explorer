@@ -3,7 +3,9 @@
 #include "../include/MultiCoreTraceProcessor.hpp"
 #include "../include/OptimizationSuggester.hpp"
 #include "../include/SegmentCache.hpp"
+#include "../include/TraceParser.hpp"
 #include "../include/TraceProcessor.hpp"
+#include <algorithm>
 #include <iomanip>
 #include <iostream>
 #include <unordered_set>
@@ -215,10 +217,17 @@ int main(int argc, char *argv[]) {
     // Output header with multicore info
     JsonOutput::write_stream_start(std::cout, config_name, true);
 
+    TraceParser trace_parser;
     std::string line;
     while (std::getline(std::cin, line)) {
-      auto event = parse_trace_event(line);
-      if (!event) continue;
+      auto parsed = trace_parser.parse_line(line);
+      if (parsed.kind == TraceLineKind::Error) {
+        std::cout << "{\"type\":\"error\",\"message\":\""
+                  << JsonOutput::escape(parsed.error) << "\"}\n";
+        return 2;
+      }
+      if (parsed.kind != TraceLineKind::Event) continue;
+      TraceEvent &event = *parsed.event;
 
       if (event_count >= kMaxTraceEvents) {
         std::cout << "{\"type\":\"error\",\"message\":\"Trace exceeds the 2000000 event safety limit\"}\n";
@@ -227,8 +236,8 @@ int main(int argc, char *argv[]) {
 
       event_count++;
       current_index = event_count;
-      current_event = &(*event);
-      processor.process(*event);
+      current_event = &event;
+      processor.process(event);
       current_event = nullptr;
       batch_count++;
 
@@ -490,6 +499,12 @@ int main(int argc, char *argv[]) {
       std::cout << "}";
     }
 
+    if (trace_parser.manifest().version == 2) {
+      std::cout << ",";
+      JsonOutput::write_binary_attribution(
+          std::cout, trace_parser.manifest(), processor.get_code_hotspots(), cfg);
+    }
+
     std::cout << "}\n" << std::flush;
     return 0;
   }
@@ -499,18 +514,34 @@ int main(int argc, char *argv[]) {
   std::unordered_set<uint32_t> threads;
 
   // Parse trace events
+  TraceParser trace_parser;
   std::string line;
   while (std::getline(std::cin, line)) {
-    auto event = parse_trace_event(line);
-    if (event) {
+    auto parsed = trace_parser.parse_line(line);
+    if (parsed.kind == TraceLineKind::Error) {
+      std::cerr << "Error: " << parsed.error << "\n";
+      return 2;
+    }
+    if (parsed.kind == TraceLineKind::Event) {
+      TraceEvent &event = *parsed.event;
       if (events.size() >= kMaxTraceEvents) {
         std::cerr << "Error: trace exceeds the " << kMaxTraceEvents
                   << " event safety limit\n";
         return 2;
       }
-      threads.insert(event->thread_id);
-      events.push_back(*event);
+      threads.insert(event.thread_id);
+      events.push_back(std::move(event));
     }
+  }
+
+  const bool has_code_locations =
+      std::any_of(events.begin(), events.end(), [](const TraceEvent &event) {
+        return event.code_location.has_value();
+      });
+  if (opts.cache_segments && has_code_locations) {
+    std::cerr << "Warning: segment caching is disabled for attributed traces "
+                 "to preserve per-code-location metrics.\n";
+    opts.cache_segments = false;
   }
 
   bool multicore = threads.size() > 1;
@@ -862,6 +893,12 @@ int main(int argc, char *argv[]) {
       }
 
       // Output L1 cache state for visualization
+      if (trace_parser.manifest().version == 2) {
+        std::cout << ",\n  ";
+        JsonOutput::write_binary_attribution(
+            std::cout, trace_parser.manifest(), processor.get_code_hotspots(), cfg);
+      }
+
       std::cout << ",\n  \"cacheState\": {\"l1d\": [";
       const auto& cache_sys = processor.get_cache_system();
       for (int core = 0; core < num_cores; core++) {
@@ -1274,6 +1311,12 @@ int main(int argc, char *argv[]) {
       }
 
       // Output L1 cache state for visualization (single core = core 0)
+      if (trace_parser.manifest().version == 2) {
+        std::cout << ",\n  ";
+        JsonOutput::write_binary_attribution(
+            std::cout, trace_parser.manifest(), processor.get_code_hotspots(), cfg);
+      }
+
       std::cout << ",\n  \"cacheState\": {\"l1d\": [";
       const auto& cache_sys = processor.get_cache_system();
       JsonOutput::write_cache_state(std::cout, cache_sys.get_l1d(), 0, true, false);  // false = single-core mode

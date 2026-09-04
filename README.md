@@ -207,6 +207,18 @@ CACHE_EXPLORER_CC=/opt/llvm/bin/clang ./backend/scripts/cache-explore code.c
 `cache-explore` command, `CACHE_EXPLORER_*` variables, file formats, and existing
 integration names remain supported during the Preview rebrand.
 
+Windows PE32 programs rebuilt with `clang-cl` can use the Preview capture path:
+
+```powershell
+.\backend\scripts\hardware-explore-run-x86.ps1 `
+  -Program .\build\game.exe -Output .\game-trace-v2.txt
+Get-Content .\game-trace-v2.txt | cache-sim.exe --config intel --json
+```
+
+This produces stable executable SHA-256 + RVA `codeHotspots`; original-source
+PDB navigation and profiling PE32 binaries that cannot be rebuilt are still in
+development. See [the Windows x86 profiling specification](docs/WINDOWS_X86_BINARY_PROFILING_SPEC.md).
+
 ## Running Tests
 
 ```bash
@@ -218,6 +230,7 @@ cd backend/cache-simulator/build
 ./MultiCoreTLBTest      # 8 tests
 ./MultiCoreTraceProcessorTest # 3 tests
 ./AdvancedInstrumentationTest # 31 tests
+./TraceParserTest       # v1/v2 trace attribution tests
 ```
 
 Frontend build and browser smoke:

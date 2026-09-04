@@ -9,6 +9,7 @@ add_library(CacheSimulator
   src/BranchPredictor.cpp
   src/CacheLevel.cpp
   src/CacheSystem.cpp
+  src/CodeHotspot.cpp
   src/CoherenceController.cpp
   src/JsonOutput.cpp
   src/MultiCoreCacheSystem.cpp
@@ -18,6 +19,7 @@ add_library(CacheSimulator
   src/Prefetcher.cpp
   src/SegmentCache.cpp
   src/TLB.cpp
+  src/TraceParser.cpp
   src/TraceProcessor.cpp
 )
 target_include_directories(CacheSimulator PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
@@ -57,6 +59,9 @@ target_link_libraries(ArgParserTest CacheSimulator)
 
 add_executable(TraceProcessorTest tests/TraceProcessorTest.cpp)
 target_link_libraries(TraceProcessorTest CacheSimulator)
+
+add_executable(TraceParserTest tests/TraceParserTest.cpp)
+target_link_libraries(TraceParserTest CacheSimulator)
 
 add_executable(JsonOutputTest tests/JsonOutputTest.cpp)
 target_link_libraries(JsonOutputTest CacheSimulator)

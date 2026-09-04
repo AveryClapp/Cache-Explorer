@@ -10,6 +10,7 @@
 #include "AdvancedStats.hpp"
 #include "BranchPredictor.hpp"
 #include "CacheSystem.hpp"
+#include "CodeHotspot.hpp"
 #include "MemoryAccess.hpp"
 #include "PipelineModel.hpp"
 #include "TraceEvent.hpp"
@@ -78,6 +79,7 @@ private:
   CacheSystem cache;
   BranchPredictor branch_predictor;
   PipelineModel pipeline;
+  CodeHotspotTracker code_hotspots;
   std::unordered_map<SourceKey, SourceStats, SourceKeyHash> source_stats;
   std::function<void(const EventResult &)> event_callback;
 
@@ -91,9 +93,8 @@ private:
   std::unordered_set<uint64_t> prefetched_addresses;
 
   // Helper to process a single cache line access
-  void process_line_access(uint64_t line_addr, bool is_write, bool is_icache,
-                           std::string_view file, uint32_t line,
-                           uint32_t event_size);
+  void process_line_access(const TraceEvent &event, uint64_t line_addr,
+                           bool is_write, bool is_icache);
   SourceStats *find_or_create_source_stats(std::string_view file,
                                            uint32_t line);
 
@@ -113,6 +114,8 @@ public:
   [[nodiscard]] HierarchyStats get_stats() const;
 
   [[nodiscard]] std::vector<SourceStats> get_hot_lines(size_t limit = 10) const;
+  [[nodiscard]] std::vector<CodeHotspot>
+  get_code_hotspots(size_t limit = 100) const;
 
   void reset();
 

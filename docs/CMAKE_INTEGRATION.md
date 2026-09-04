@@ -211,9 +211,27 @@ For direct compiler invocations, use
 `backend\scripts\hardware-explore-clang-cl.ps1`; the
 `cache-explore-clang-cl.ps1` compatibility name remains available.
 
-The current Preview captures modeled data-cache events. PDB/call-site
-symbolization is part of the versioned attribution milestone and must land
-before the project claims complete source navigation on Windows. Existing PE32
-binary capture and Ghidra/IDA navigation are specified in
+Run an instrumented PE32 target through the capture wrapper to produce a
+portable v2 trace. Application stdout remains separate from the trace:
+
+```powershell
+.\backend\scripts\hardware-explore-run-x86.ps1 `
+  -Program .\build-hardware-explorer\game.exe `
+  -ArgumentList @('-windowed') `
+  -Output .\game-trace-v2.txt
+
+Get-Content .\game-trace-v2.txt | .\backend\cache-simulator\build\cache-sim.exe `
+  --config intel --json
+```
+
+`cache-explore-run-x86.ps1` and `cache-explore-normalize-trace.ps1` remain
+compatibility aliases. The runtime accepts both `HARDWARE_EXPLORER_*` and
+`CACHE_EXPLORER_*` capture settings; `HARDWARE_EXPLORER_TRACE` and
+`CACHE_EXPLORER_TRACE` select an isolated text trace file.
+
+The current Preview now preserves stable executable SHA-256 + RVA identities
+and reports modeled `codeHotspots`. PDB symbolization must still land before
+the project claims original-source navigation on Windows. Existing PE32 binary
+capture without rebuilding, and Ghidra/IDA navigation, are specified in
 [Windows x86 Binary Profiling and Decompiler Navigation](WINDOWS_X86_BINARY_PROFILING_SPEC.md)
 and remain experimental until their separate release gates pass.
