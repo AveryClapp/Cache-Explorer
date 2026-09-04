@@ -35,7 +35,8 @@ $smokeBuild = Join-Path $buildRoot 'smoke-x86'
 
 Invoke-Checked cmake @(
     '-S', (Join-Path $repositoryRoot 'backend\cache-simulator'), '-B', $simulatorBuild,
-    '-G', 'Ninja', "-DCMAKE_CXX_COMPILER=$clangCl", '-DBUILD_TESTING=OFF'
+    '-G', 'Ninja', "-DCMAKE_C_COMPILER=$clangCl", "-DCMAKE_CXX_COMPILER=$clangCl",
+    '-DBUILD_TESTING=OFF'
 )
 Invoke-Checked cmake @('--build', $simulatorBuild, '--target', 'cache-sim')
 
