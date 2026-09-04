@@ -29,11 +29,23 @@ const SANDBOX_CONFIG = {
   dropCapabilities: ['ALL'],
 };
 
-function removeContainer(containerName) {
+function removeContainer(containerName, timeoutMs = 5000) {
   return new Promise(resolve => {
     const cleanup = spawn('docker', ['rm', '-f', containerName], { stdio: 'ignore' });
-    cleanup.once('close', () => resolve());
-    cleanup.once('error', () => resolve());
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutHandle);
+      resolve();
+    };
+    const timeoutHandle = setTimeout(() => {
+      cleanup.kill('SIGKILL');
+      finish();
+    }, timeoutMs);
+    timeoutHandle.unref?.();
+    cleanup.once('close', finish);
+    cleanup.once('error', finish);
   });
 }
 
@@ -151,13 +163,17 @@ export async function runInSandbox(options) {
     const result = await new Promise((resolve, reject) => {
       const proc = spawn('docker', dockerArgs);
 
-      let stdout = '';
-      let stderr = '';
+      const stdoutChunks = [];
+      const stderrChunks = [];
+      let outputBytes = 0;
       let timedOut = false;
       let aborted = false;
       let outputExceeded = false;
       let containerCleanup = Promise.resolve();
+      let stopRequested = false;
       const stopContainer = () => {
+        if (stopRequested) return;
+        stopRequested = true;
         containerCleanup = removeContainer(containerName);
         proc.kill('SIGKILL');
       };
@@ -174,21 +190,29 @@ export async function runInSandbox(options) {
       if (signal?.aborted) abortHandler();
       else signal?.addEventListener('abort', abortHandler, { once: true });
 
-      const appendOutput = (current, data) => {
-        if (outputExceeded) return current;
-        const next = current + data.toString();
-        if (Buffer.byteLength(next) <= CONFIG.memory.maxOutputBuffer) return next;
+      const appendOutput = (chunks, data) => {
+        if (outputExceeded) return;
+        const chunk = Buffer.isBuffer(data) ? data : Buffer.from(data);
+        const available = CONFIG.memory.maxOutputBuffer - outputBytes;
+        if (chunk.length <= available) {
+          chunks.push(chunk);
+          outputBytes += chunk.length;
+          return;
+        }
+        if (available > 0) {
+          chunks.push(chunk.subarray(0, available));
+          outputBytes += available;
+        }
         outputExceeded = true;
         stopContainer();
-        return next.slice(0, CONFIG.memory.maxOutputBuffer);
       };
 
       proc.stdout.on('data', (data) => {
-        stdout = appendOutput(stdout, data);
+        appendOutput(stdoutChunks, data);
       });
 
       proc.stderr.on('data', (data) => {
-        stderr = appendOutput(stderr, data);
+        appendOutput(stderrChunks, data);
         // Parse progress from stderr
         const chunk = data.toString();
         if (chunk.includes('Compiling') && onProgress) {
@@ -204,6 +228,8 @@ export async function runInSandbox(options) {
         clearTimeout(timeoutHandle);
         signal?.removeEventListener('abort', abortHandler);
         await containerCleanup;
+        const stdout = Buffer.concat(stdoutChunks).toString();
+        const stderr = Buffer.concat(stderrChunks).toString();
         if (timedOut) {
           reject({
             stderr: 'Execution timed out',

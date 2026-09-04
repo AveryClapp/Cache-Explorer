@@ -249,9 +249,10 @@ sha256_file() {
 verify_checksum() {
   local pass_path="$1"
   local manifest_path="$2"
+  local expected_filename="${3:-}"
   local filename expected actual
 
-  filename="$(basename "$pass_path")"
+  filename="${expected_filename:-$(basename "$pass_path")}"
   expected=$(awk -v name="$filename" '$2 == name { print $1; exit }' "$manifest_path")
   if [[ -z "$expected" ]]; then
     echo "Error: No checksum entry for $filename in $manifest_path" >&2
@@ -281,6 +282,7 @@ verify_checksum() {
 #######################################
 verify_downloaded_pass() {
   local pass_path="$1"
+  local expected_filename="${2:-}"
   local manifest_path manifest_tmp checksum_url
 
   manifest_path=$(get_checksum_cache_path)
@@ -304,7 +306,7 @@ verify_downloaded_pass() {
     return 0
   fi
 
-  verify_checksum "$pass_path" "$manifest_path"
+  verify_checksum "$pass_path" "$manifest_path" "$expected_filename"
 }
 
 #######################################
@@ -320,22 +322,25 @@ verify_downloaded_pass() {
 download_pass() {
   local url="$1"
   local dest="$2"
+  local temp_path
 
   # Create parent directory
   mkdir -p "$(dirname "$dest")"
+  temp_path=$(mktemp "${dest}.tmp.XXXXXX") || return 1
 
   # Download with curl
   # -f: Fail silently on HTTP errors
   # -s: Silent mode
   # -S: Show errors
   # -L: Follow redirects
-  if curl --proto '=https' --tlsv1.2 --connect-timeout 10 --max-time 120 -fsSL "$url" -o "$dest" 2>/dev/null; then
-    # Make executable
-    chmod +x "$dest"
+  if curl --proto '=https' --tlsv1.2 --connect-timeout 10 --max-time 120 -fsSL "$url" -o "$temp_path" 2>/dev/null &&
+     verify_downloaded_pass "$temp_path" "$(basename "$dest")"; then
+    chmod +x "$temp_path"
+    mv "$temp_path" "$dest"
     return 0
   else
     # Clean up partial download
-    rm -f "$dest"
+    rm -f "$temp_path"
     return 1
   fi
 }
@@ -383,7 +388,7 @@ main() {
   echo "Downloading CacheProfiler for LLVM ${llvm_version} (${platform})..." >&2
   echo "URL: $url" >&2
 
-  if download_pass "$url" "$cache_path" && verify_downloaded_pass "$cache_path"; then
+  if download_pass "$url" "$cache_path"; then
     echo "" >&2
     echo "Downloaded successfully to: $cache_path" >&2
     echo "$cache_path"

@@ -242,17 +242,17 @@ SimulatorOptions ArgParser::parse(int argc, char* argv[]) {
         } else if (arg == "--fast") {
             opts.fast_mode = true;
         } else if (arg == "--l1-size" && i + 1 < argc) {
-            opts.l1_size = parse_size_value(argv[++i], "--l1-size", 1024, 1024ULL * 1024 * 1024 * 1024);
+            opts.l1_size = parse_size_value(argv[++i], "--l1-size", 1024, 16ULL * 1024 * 1024);
         } else if (arg == "--l1-assoc" && i + 1 < argc) {
             opts.l1_assoc = parse_int_value(argv[++i], "--l1-assoc", 1, 1024);
         } else if (arg == "--l1-line" && i + 1 < argc) {
             opts.line_size = parse_int_value(argv[++i], "--l1-line", 1, 4096);
         } else if (arg == "--l2-size" && i + 1 < argc) {
-            opts.l2_size = parse_size_value(argv[++i], "--l2-size", 1024, 1024ULL * 1024 * 1024 * 1024);
+            opts.l2_size = parse_size_value(argv[++i], "--l2-size", 1024, 64ULL * 1024 * 1024);
         } else if (arg == "--l2-assoc" && i + 1 < argc) {
             opts.l2_assoc = parse_int_value(argv[++i], "--l2-assoc", 1, 1024);
         } else if (arg == "--l3-size" && i + 1 < argc) {
-            opts.l3_size = parse_size_value(argv[++i], "--l3-size", 1024, 1024ULL * 1024 * 1024 * 1024);
+            opts.l3_size = parse_size_value(argv[++i], "--l3-size", 1024, 128ULL * 1024 * 1024);
         } else if (arg == "--l3-assoc" && i + 1 < argc) {
             opts.l3_assoc = parse_int_value(argv[++i], "--l3-assoc", 1, 1024);
         } else if (arg == "--prefetch" && i + 1 < argc) {

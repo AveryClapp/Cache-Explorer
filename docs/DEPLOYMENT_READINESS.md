@@ -34,7 +34,8 @@ Recommended hosted defaults:
   `TIMEOUT_DEFAULT=60000`, `TIMEOUT_COMPILATION=30000`, and
   `HARDWARE_EXPLORER_WORKLOAD_VARIANT_TIMEOUT_MS=120000`.
 - Bound database-backed shares with `HARDWARE_EXPLORER_MAX_SHARE_BYTES`,
-  `HARDWARE_EXPLORER_MAX_SHARE_ENTRIES`, and
+  `HARDWARE_EXPLORER_MAX_SHARE_ENTRIES`,
+  `HARDWARE_EXPLORER_MAX_SHARE_TOTAL_BYTES`, and
   `HARDWARE_EXPLORER_SHARE_MAX_AGE_DAYS`; share URLs keep source out of the URL
   itself but the server still stores that source until retention removes it.
 - Keep stress workloads opt-in. Default verification should not include

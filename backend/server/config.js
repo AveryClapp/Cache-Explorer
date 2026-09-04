@@ -31,6 +31,10 @@ export const CONFIG = {
   rateLimit: {
     maxRequestsPerMinute: parseInt(process.env.RATE_LIMIT_RPM) || 30,
     maxConcurrentProcesses: parseInt(process.env.MAX_CONCURRENT_PROCESSES) || 5,
+    maxWebSocketConnections: parseInt(firstEnv(
+      'HARDWARE_EXPLORER_MAX_WEBSOCKET_CONNECTIONS',
+      'CACHE_EXPLORER_MAX_WEBSOCKET_CONNECTIONS',
+    )) || 100,
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW) || 60000,
   },
 
@@ -80,6 +84,7 @@ export const CONFIG = {
   persistence: {
     maxShareBytes: parseInt(firstEnv('HARDWARE_EXPLORER_MAX_SHARE_BYTES', 'CACHE_EXPLORER_MAX_SHARE_BYTES')) || 256 * 1024,
     maxShareEntries: parseInt(firstEnv('HARDWARE_EXPLORER_MAX_SHARE_ENTRIES', 'CACHE_EXPLORER_MAX_SHARE_ENTRIES')) || 10000,
+    maxShareTotalBytes: parseInt(firstEnv('HARDWARE_EXPLORER_MAX_SHARE_TOTAL_BYTES', 'CACHE_EXPLORER_MAX_SHARE_TOTAL_BYTES')) || 64 * 1024 * 1024,
     shareMaxAgeDays: parseInt(firstEnv('HARDWARE_EXPLORER_SHARE_MAX_AGE_DAYS', 'CACHE_EXPLORER_SHARE_MAX_AGE_DAYS')) || 30,
   },
 };

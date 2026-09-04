@@ -5,7 +5,7 @@
 # ============================================================
 # Stage 1: Build Cache Explorer components
 # ============================================================
-FROM ubuntu:22.04 AS builder
+FROM ubuntu:22.04@sha256:2edbbc5dc405e9612ba3584ce95480277e3eb374407b5505fe26f17df77c7dbc AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -23,6 +23,7 @@ RUN for attempt in 1 2 3 4 5; do \
       if [ "$attempt" -eq 5 ]; then exit 1; fi; \
       sleep 5; \
     done \
+    && echo "8b2a587ffd672c4687e7581dad4b2f6c1bb2ad6b480cd9771ba2ff48e0b8c75d  /etc/apt/trusted.gpg.d/apt.llvm.org.asc" | sha256sum --check --strict \
     && echo "deb https://apt.llvm.org/jammy/ llvm-toolchain-jammy-20 main" > /etc/apt/sources.list.d/llvm.list
 
 # Install build dependencies
@@ -58,6 +59,7 @@ RUN mkdir -p /build/runtime/build && cd /build/runtime/build \
     && cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release \
        -DCMAKE_C_FLAGS="-mno-outline-atomics" \
     && ninja \
+    && ctest --output-on-failure \
     && clang -c /build/runtime/zig_stubs.c -o /build/runtime/build/zig_stubs.o
 
 # Build cache simulator
@@ -68,7 +70,7 @@ RUN mkdir -p /build/cache-simulator/build && cd /build/cache-simulator/build \
 # ============================================================
 # Stage 2: Runtime image (minimal)
 # ============================================================
-FROM ubuntu:22.04
+FROM ubuntu:22.04@sha256:2edbbc5dc405e9612ba3584ce95480277e3eb374407b5505fe26f17df77c7dbc
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -85,6 +87,7 @@ RUN for attempt in 1 2 3 4 5; do \
       if [ "$attempt" -eq 5 ]; then exit 1; fi; \
       sleep 5; \
     done \
+    && echo "8b2a587ffd672c4687e7581dad4b2f6c1bb2ad6b480cd9771ba2ff48e0b8c75d  /etc/apt/trusted.gpg.d/apt.llvm.org.asc" | sha256sum --check --strict \
     && echo "deb https://apt.llvm.org/jammy/ llvm-toolchain-jammy-20 main" > /etc/apt/sources.list.d/llvm.list
 
 # Install runtime dependencies including opt for bitcode pipeline

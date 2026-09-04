@@ -282,13 +282,19 @@ resolve_pass() {
 
   # Also check in latest/ subdirectory (where download-pass puts it)
   local cached_pass_latest="$PASS_CACHE_DIR/latest/$pass_filename"
+  local download_script="$SCRIPT_DIR/cache-explore-download-pass"
   if [[ -f "$cached_pass_latest" && -x "$cached_pass_latest" ]]; then
-    RESOLVED_PASS="$cached_pass_latest"
-    return 0
+    local verified_cached_pass
+    if [[ -x "$download_script" ]] &&
+       verified_cached_pass=$("$download_script" "$llvm_version" 2>&1 | tail -1) &&
+       [[ -f "$verified_cached_pass" ]]; then
+      RESOLVED_PASS="$verified_cached_pass"
+      return 0
+    fi
+    echo "Cached downloaded pass failed verification: $cached_pass_latest" >&2
   fi
 
   # 4. Try to download the pass
-  local download_script="$SCRIPT_DIR/cache-explore-download-pass"
   if [[ -x "$download_script" ]]; then
     echo "No local pass found. Attempting to download pre-built pass..." >&2
     local downloaded_pass

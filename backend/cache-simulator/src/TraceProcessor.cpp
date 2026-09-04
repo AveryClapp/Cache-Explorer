@@ -27,14 +27,11 @@ SourceStats *TraceProcessor::find_or_create_source_stats(std::string_view file,
   if (file.empty())
     return nullptr;
 
-  SourceKey key{file, line};
+  SourceKey key{std::string(file), line};
   auto it = source_stats.find(key);
   if (it == source_stats.end()) {
-    SourceStats stats;
-    stats.file = std::string(file);
-    stats.line = line;
-    auto [inserted_it, _] =
-        source_stats.emplace(SourceKey{stats.file, line}, std::move(stats));
+    SourceStats stats{.file = key.file, .line = line};
+    auto [inserted_it, _] = source_stats.emplace(std::move(key), std::move(stats));
     it = inserted_it;
   }
   return &it->second;

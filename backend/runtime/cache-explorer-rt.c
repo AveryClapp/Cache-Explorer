@@ -40,6 +40,10 @@ static int file_overflow_warned = 0;
 static int output_fd = -1;
 static int text_mode = 1;
 static atomic_int initialized = 0;
+static pthread_once_t init_once = PTHREAD_ONCE_INIT;
+static pthread_mutex_t event_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static void flush_locked(void);
 
 // Sampling: only emit every Nth event (1 = no sampling, 100 = 1% of events)
 static uint32_t sample_rate = 1;
@@ -97,7 +101,7 @@ static inline void emit_event_with_src(uint64_t addr_with_flag, uint64_t src_add
                                         uint32_t size, const char *file, uint32_t line) {
   // Lazy initialization: handles runtimes where .init_array constructors
   // are not processed (e.g., Zig's _start on Linux skips __libc_start_main)
-  if (__builtin_expect(!atomic_load_explicit(&initialized, memory_order_relaxed), 0)) {
+  if (__builtin_expect(!atomic_load_explicit(&initialized, memory_order_acquire), 0)) {
     __cache_explorer_init();
   }
 
@@ -128,19 +132,20 @@ static inline void emit_event_with_src(uint64_t addr_with_flag, uint64_t src_add
     }
   }
 
+  pthread_mutex_lock(&event_mutex);
   uint64_t head = atomic_load_explicit(&ring_buffer.head, memory_order_relaxed);
   uint64_t next = (head + 1) & BUFFER_MASK;
 
   uint64_t tail = atomic_load_explicit(&ring_buffer.tail, memory_order_acquire);
   if (next == tail) {
     // Buffer full - must flush
-    __cache_explorer_flush();
+    flush_locked();
     head = atomic_load_explicit(&ring_buffer.head, memory_order_relaxed);
     next = (head + 1) & BUFFER_MASK;
   } else if ((head & 0xFFF) == 0 && head != tail) {
     // Periodic flush every 4096 events - ensures output even when
     // destructors don't fire (e.g., Zig's _start calls _exit directly)
-    __cache_explorer_flush();
+    flush_locked();
   }
 
   ring_buffer.events[head] = (CacheEvent){
@@ -152,6 +157,7 @@ static inline void emit_event_with_src(uint64_t addr_with_flag, uint64_t src_add
   };
 
   atomic_store_explicit(&ring_buffer.head, next, memory_order_release);
+  pthread_mutex_unlock(&event_mutex);
 }
 
 static inline void emit_event(uint64_t addr_with_flag, uint32_t size,
@@ -226,10 +232,7 @@ void __tag_memmove(void *dest, void *src, uint32_t size, const char *file, uint3
   emit_event_with_src((uint64_t)dest | EVENT_MEMINTR_FLAG | EVENT_MEMMOVE_TYPE, (uint64_t)src, size, file, line);
 }
 
-void __cache_explorer_init(void) {
-  if (atomic_exchange(&initialized, 1))
-    return;
-
+static void initialize_runtime(void) {
   atomic_store(&ring_buffer.head, 0);
   atomic_store(&ring_buffer.tail, 0);
   atomic_store(&total_events, 0);
@@ -262,6 +265,11 @@ void __cache_explorer_init(void) {
   atomic_store(&progress_next, progress_interval);
   // Emit initial progress
   emit_runtime_progress(0);
+  atomic_store_explicit(&initialized, 1, memory_order_release);
+}
+
+void __cache_explorer_init(void) {
+  pthread_once(&init_once, initialize_runtime);
 }
 
 void __cache_explorer_set_output(const char *path) {
@@ -279,6 +287,7 @@ void __cache_explorer_set_output(const char *path) {
 
 // Write buffer for batching output (eliminates per-event syscalls)
 #define WRITE_BUF_SIZE (256 * 1024)  // 256KB write buffer
+#define MAX_FORMATTED_EVENT_SIZE (MAX_FILENAME + 128)
 static char write_buf[WRITE_BUF_SIZE];
 static int write_buf_pos = 0;
 
@@ -336,8 +345,7 @@ static inline int fmt_dec(char *buf, uint32_t val) {
 // Format one event into write buffer, flushing if needed
 static inline void fmt_event(char type, uint64_t addr, uint32_t size,
                              const char *file, uint32_t line, uint32_t tid) {
-  // Max line: "X 0x1234567890abcdef 12345 somefile.c:99999 T99\n" ~80 chars
-  if (write_buf_pos + 128 > WRITE_BUF_SIZE)
+  if (write_buf_pos + MAX_FORMATTED_EVENT_SIZE > WRITE_BUF_SIZE)
     wb_flush();
   char *p = write_buf + write_buf_pos;
   *p++ = type;
@@ -360,7 +368,7 @@ static inline void fmt_event(char type, uint64_t addr, uint32_t size,
 static inline void fmt_event_src(char type, uint64_t addr, uint64_t src_addr,
                                  uint32_t size, const char *file, uint32_t line,
                                  uint32_t tid) {
-  if (write_buf_pos + 160 > WRITE_BUF_SIZE)
+  if (write_buf_pos + MAX_FORMATTED_EVENT_SIZE > WRITE_BUF_SIZE)
     wb_flush();
   char *p = write_buf + write_buf_pos;
   *p++ = type;
@@ -384,7 +392,7 @@ static inline void fmt_event_src(char type, uint64_t addr, uint64_t src_addr,
 // Format prefetch with hint level
 static inline void fmt_prefetch(uint8_t hint, uint64_t addr, uint32_t size,
                                 const char *file, uint32_t line, uint32_t tid) {
-  if (write_buf_pos + 128 > WRITE_BUF_SIZE)
+  if (write_buf_pos + MAX_FORMATTED_EVENT_SIZE > WRITE_BUF_SIZE)
     wb_flush();
   char *p = write_buf + write_buf_pos;
   *p++ = 'P';
@@ -404,7 +412,7 @@ static inline void fmt_prefetch(uint8_t hint, uint64_t addr, uint32_t size,
   write_buf_pos = (int)(p - write_buf);
 }
 
-void __cache_explorer_flush(void) {
+static void flush_locked(void) {
   if (output_fd < 0)
     output_fd = STDOUT_FILENO;
 
@@ -471,6 +479,12 @@ void __cache_explorer_flush(void) {
   }
 
   atomic_store_explicit(&ring_buffer.tail, tail, memory_order_release);
+}
+
+void __cache_explorer_flush(void) {
+  pthread_mutex_lock(&event_mutex);
+  flush_locked();
+  pthread_mutex_unlock(&event_mutex);
 }
 
 static atomic_int shutdown_done = 0;

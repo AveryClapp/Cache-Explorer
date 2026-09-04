@@ -13,11 +13,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Install LLVM 18
         run: |
-          wget https://apt.llvm.org/llvm.sh
+          curl --proto '=https' --tlsv1.2 --connect-timeout 10 --max-time 60 -fsSLo llvm.sh https://apt.llvm.org/llvm.sh
+          echo '03878e08f47b66cc95bc4b544b0db3c6d9ce8d60e6cf2492ae357984330a9eae  llvm.sh' | sha256sum -c -
           chmod +x llvm.sh
           sudo ./llvm.sh 18
           sudo apt-get install -y llvm-18-dev clang-18 lld-18
@@ -55,6 +56,7 @@ jobs:
             -G Ninja \
             -DCMAKE_C_COMPILER=clang-18
           ninja
+          ctest --output-on-failure
 
       - name: Build cache simulator
         working-directory: backend/cache-simulator
@@ -124,7 +126,7 @@ jobs:
 
       - name: Upload workload benchmark history
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: workload-benchmark-history
           path: |
@@ -139,10 +141,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: '20.19'
           cache: 'npm'
@@ -166,10 +168,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: '20.19'
           cache: 'npm'
@@ -196,7 +198,7 @@ jobs:
         run: npm run bundle:check
 
       - name: Set up Chrome
-        uses: browser-actions/setup-chrome@v1
+        uses: browser-actions/setup-chrome@c785b87e244131f27c9f19c1a33e2ead956ab7ce # v1
 
       - name: Run UI smoke
         working-directory: frontend
@@ -212,10 +214,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: '20.19'
 
@@ -238,10 +240,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: '20.19'
           cache: 'npm'
@@ -253,7 +255,7 @@ jobs:
         run: npm ci
 
       - name: Set up Chrome
-        uses: browser-actions/setup-chrome@v1
+        uses: browser-actions/setup-chrome@c785b87e244131f27c9f19c1a33e2ead956ab7ce # v1
 
       - name: Build and start the local product
         run: docker compose up --build --detach --wait --wait-timeout 180

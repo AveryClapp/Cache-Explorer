@@ -120,6 +120,14 @@ void test_invalid_numeric_flags_are_rejected() {
     catch (const std::invalid_argument&) { rejected = true; }
     assert(rejected);
   }
+  {
+    ArgvBuilder builder;
+    builder.add("--l3-size").add("1073741824");
+    bool rejected = false;
+    try { (void)ArgParser::parse(builder.argc(), builder.argv()); }
+    catch (const std::out_of_range&) { rejected = true; }
+    assert(rejected);
+  }
   std::cout << "[PASS] test_invalid_numeric_flags_are_rejected\n";
 }
 

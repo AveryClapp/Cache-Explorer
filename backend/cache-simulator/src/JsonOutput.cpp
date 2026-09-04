@@ -430,7 +430,7 @@ void JsonOutput::write_false_sharing(std::ostream& out,
     for (size_t i = 0; i < reports.size(); i++) {
         const auto& fs = reports[i];
         out << "    {\"cacheLineAddr\": \"0x" << std::hex << fs.cache_line_addr << std::dec << "\", "
-            << "\"accessCount\": " << fs.accesses.size() << ", "
+            << "\"accessCount\": " << fs.total_accesses << ", "
             << "\"accesses\": [";
 
         // Group accesses by thread for cleaner output
@@ -466,7 +466,7 @@ void JsonOutput::write_false_sharing_compact(std::ostream& out,
         if (i > 0) out << ",";
         const auto& fs = reports[i];
         out << "{\"addr\":\"0x" << std::hex << fs.cache_line_addr << std::dec << "\""
-            << ",\"accesses\":" << fs.accesses.size() << "}";
+            << ",\"accesses\":" << fs.total_accesses << "}";
     }
     out << "]";
 }
@@ -616,7 +616,7 @@ void JsonOutput::write_coherence_stats(std::ostream& out, uint64_t invalidations
 
 void JsonOutput::write_stream_start(std::ostream& out, std::string_view config_name,
                                     bool multicore) {
-    out << "{\"type\":\"start\",\"config\":\"" << config_name
+    out << "{\"type\":\"start\",\"config\":\"" << escape(config_name)
         << "\",\"multicore\":" << (multicore ? "true" : "false") << "}\n" << std::flush;
 }
 

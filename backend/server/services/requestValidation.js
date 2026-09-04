@@ -19,6 +19,21 @@ export function validateWorkPlan({ configs, variants = 1 }, limits = CONFIG.work
   return null;
 }
 
+export function parseConfigList(value, allowedConfigs = null) {
+  const configs = Array.isArray(value) ? value.map(String) : String(value).split(',');
+  const allowed = allowedConfigs ? new Set(allowedConfigs) : null;
+
+  if (
+    configs.length === 0
+    || configs.some(config => !/^[A-Za-z0-9_.-]+$/.test(config))
+    || (allowed && configs.some(config => !allowed.has(config)))
+  ) {
+    return null;
+  }
+
+  return configs;
+}
+
 export function validateSharePayload(value, maxBytes = CONFIG.persistence.maxShareBytes) {
   let encoded;
   try {

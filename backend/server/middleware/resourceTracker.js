@@ -199,8 +199,27 @@ export function createHttpExecutionLimitMiddleware({ shouldLimit = () => true } 
       return;
     }
 
-    res.once('finish', release);
-    res.once('close', release);
+    const controller = new AbortController();
+    let executionStarted = false;
+
+    req.executionSignal = controller.signal;
+    req.markExecutionStarted = () => {
+      executionStarted = true;
+    };
+    req.finishExecution = () => {
+      executionStarted = false;
+      release();
+    };
+
+    res.once('finish', () => {
+      if (!executionStarted) release();
+    });
+    res.once('close', () => {
+      if (!res.writableFinished) {
+        controller.abort();
+        if (!executionStarted) release();
+      }
+    });
     next();
   };
 }

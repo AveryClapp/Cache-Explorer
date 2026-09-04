@@ -1,7 +1,7 @@
 # Hardware Explorer Preview backend
 # Builds: LLVM pass, runtime library, cache simulator, and server
 
-FROM ubuntu:24.04 AS builder
+FROM ubuntu:24.04@sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517 AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
@@ -22,6 +22,7 @@ RUN for attempt in 1 2 3 4 5; do \
       if [ "$attempt" -eq 5 ]; then exit 1; fi; \
       sleep 5; \
     done \
+    && echo "8b2a587ffd672c4687e7581dad4b2f6c1bb2ad6b480cd9771ba2ff48e0b8c75d  /etc/apt/trusted.gpg.d/apt.llvm.org.asc" | sha256sum --check --strict \
     && echo "deb https://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" > /etc/apt/sources.list.d/llvm.list
 RUN apt-get -o Acquire::Retries=5 update \
     && apt-get -o Acquire::Retries=5 install -y --no-install-recommends \
@@ -52,6 +53,7 @@ WORKDIR /build/backend/runtime
 RUN mkdir -p build && cd build && \
     cmake .. -G Ninja -DCMAKE_C_COMPILER=clang-20 && \
     ninja && \
+    ctest --output-on-failure && \
     clang-20 -c ../zig_stubs.c -o zig_stubs.o
 
 # Build cache simulator
@@ -62,7 +64,7 @@ RUN mkdir -p build && cd build && \
 
 # Build production Node dependencies separately so native modules such as
 # better-sqlite3 never need a compiler in the runtime image.
-FROM node:20-bookworm-slim AS server-deps
+FROM node:20-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 AS server-deps
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     g++ \
@@ -75,7 +77,7 @@ COPY backend/server/package.json backend/server/package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 # Runtime image
-FROM ubuntu:24.04
+FROM ubuntu:24.04@sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
@@ -98,6 +100,7 @@ RUN for attempt in 1 2 3 4 5; do \
       if [ "$attempt" -eq 5 ]; then exit 1; fi; \
       sleep 5; \
     done \
+    && echo "8b2a587ffd672c4687e7581dad4b2f6c1bb2ad6b480cd9771ba2ff48e0b8c75d  /etc/apt/trusted.gpg.d/apt.llvm.org.asc" | sha256sum --check --strict \
     && echo "deb https://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" > /etc/apt/sources.list.d/llvm.list
 RUN apt-get -o Acquire::Retries=5 update \
     && apt-get -o Acquire::Retries=5 install -y --no-install-recommends clang-20 \

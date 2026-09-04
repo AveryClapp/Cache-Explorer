@@ -22,7 +22,12 @@ import { createTempProject, cleanupTempProject, cleanupOrphanedTempDirs } from '
 import { workloadProcessErrorResponse } from './services/workloadErrors.js';
 import { loadWorkloadHistory } from './services/workloadHistory.js';
 import { deploymentSecurityFromEnv } from './services/deploymentMode.js';
-import { normalizeRequestTimeout, validateSharePayload, validateWorkPlan } from './services/requestValidation.js';
+import {
+  normalizeRequestTimeout,
+  parseConfigList,
+  validateSharePayload,
+  validateWorkPlan,
+} from './services/requestValidation.js';
 import { isAllowedClientOrigin, validateDirectBind } from './services/clientSecurity.js';
 import {
   ConnectionResourceTracker,
@@ -500,9 +505,7 @@ app.post('/compile', async (req, res) => {
 
   // Use Docker sandbox if available (production), otherwise direct execution (development)
   if (sandboxAvailable) {
-    const sandboxController = new AbortController();
-    const abortSandbox = () => sandboxController.abort();
-    req.once('aborted', abortSandbox);
+    req.markExecutionStarted();
     try {
       const result = await runInSandbox({
         code: Array.isArray(inputFiles) ? inputFiles[0].code : inputFiles,
@@ -517,7 +520,7 @@ app.post('/compile', async (req, res) => {
         customConfig: req.body.customConfig,
         defines: req.body.defines || [],
         timeout,
-        signal: sandboxController.signal,
+        signal: req.executionSignal,
       });
 
       const output = result.stdout.trim();
@@ -556,7 +559,7 @@ app.post('/compile', async (req, res) => {
       const parsed = parseSandboxError(err);
       res.status(400).json(parsed);
     } finally {
-      req.off('aborted', abortSandbox);
+      req.finishExecution();
     }
     return;
   }
@@ -565,6 +568,7 @@ app.post('/compile', async (req, res) => {
   // WARNING: This executes untrusted code without sandboxing
   let tempDir, mainFile;
 
+  req.markExecutionStarted();
   try {
     const project = await createTempProject(inputFiles, language);
     tempDir = project.tempDir;
@@ -633,6 +637,7 @@ app.post('/compile', async (req, res) => {
       timeout,
       maxOutputBuffer: CONFIG.memory.maxOutputBuffer,
       mainFile,
+      signal: req.executionSignal,
     });
 
     const output = result.stdout.trim();
@@ -673,8 +678,12 @@ app.post('/compile', async (req, res) => {
     const parsed = createErrorResponse(err, mainFile);
     res.status(400).json(parsed);
   } finally {
-    if (tempDir) {
-      await cleanupTempProject(tempDir);
+    try {
+      if (tempDir) {
+        await cleanupTempProject(tempDir);
+      }
+    } finally {
+      req.finishExecution();
     }
   }
 });
@@ -724,11 +733,12 @@ app.post('/compare', async (req, res) => {
     });
   }
 
-  const configList = Array.isArray(configs) ? configs.join(',') : String(configs);
-  if (!/^[A-Za-z0-9_,.-]+$/.test(configList)) {
+  const configIds = parseConfigList(configs, listHardwareProfiles().map(profile => profile.id));
+  if (!configIds) {
     return res.status(400).json({ error: 'Invalid config list', type: 'validation_error' });
   }
-  const comparePlanError = validateWorkPlan({ configs: configList.split(',').filter(Boolean).length });
+  const configList = configIds.join(',');
+  const comparePlanError = validateWorkPlan({ configs: configIds.length });
   if (comparePlanError) {
     return res.status(400).json({ error: comparePlanError, type: 'validation_error' });
   }
@@ -741,6 +751,7 @@ app.post('/compare', async (req, res) => {
 
   let tempDir, mainFile;
 
+  req.markExecutionStarted();
   try {
     const project = await createTempProject(inputFiles, language);
     tempDir = project.tempDir;
@@ -784,6 +795,7 @@ app.post('/compare', async (req, res) => {
       timeout,
       maxOutputBuffer: CONFIG.memory.maxOutputBuffer,
       mainFile,
+      signal: req.executionSignal,
     });
 
     const json = JSON.parse(result.stdout.trim());
@@ -824,8 +836,12 @@ app.post('/compare', async (req, res) => {
     const parsed = createErrorResponse(err, mainFile);
     res.status(400).json(parsed);
   } finally {
-    if (tempDir) {
-      await cleanupTempProject(tempDir);
+    try {
+      if (tempDir) {
+        await cleanupTempProject(tempDir);
+      }
+    } finally {
+      req.finishExecution();
     }
   }
 });
@@ -912,12 +928,13 @@ app.post('/experiment', async (req, res) => {
     }
   }
 
-  const configList = Array.isArray(configs) ? configs.join(',') : String(configs);
-  if (!/^[A-Za-z0-9_,.-]+$/.test(configList)) {
+  const configIds = parseConfigList(configs, listHardwareProfiles().map(profile => profile.id));
+  if (!configIds) {
     return res.status(400).json({ error: 'Invalid config list', type: 'validation_error' });
   }
+  const configList = configIds.join(',');
   const experimentPlanError = validateWorkPlan({
-    configs: configList.split(',').filter(Boolean).length,
+    configs: configIds.length,
     variants: variantList.length,
   });
   if (experimentPlanError) {
@@ -933,6 +950,7 @@ app.post('/experiment', async (req, res) => {
   let tempDir, mainFile;
   const tempDirs = [];
 
+  req.markExecutionStarted();
   try {
     if (structuredVariantMode) {
       const structuredVariants = variantList.map(normalizeStructuredVariant);
@@ -994,6 +1012,7 @@ app.post('/experiment', async (req, res) => {
           timeout,
           maxOutputBuffer: CONFIG.memory.maxOutputBuffer,
           mainFile: variantMainFile,
+          signal: req.executionSignal,
         });
 
         const json = JSON.parse(result.stdout.trim());
@@ -1053,7 +1072,7 @@ app.post('/experiment', async (req, res) => {
       json.provenance = aggregateProvenance({}, {
         resultKind: 'hardware-experiment',
         executor: 'direct-dev',
-        configs: configList.split(','),
+        configs: configIds,
         variants: structuredVariants.map(variant => variant.spec),
         fidelity: {
           trace: sampleRate > 1 ? 'sampled' : 'full',
@@ -1117,6 +1136,7 @@ app.post('/experiment', async (req, res) => {
       timeout,
       maxOutputBuffer: CONFIG.memory.maxOutputBuffer,
       mainFile,
+      signal: req.executionSignal,
     });
 
     const json = JSON.parse(result.stdout.trim());
@@ -1144,7 +1164,7 @@ app.post('/experiment', async (req, res) => {
     json.provenance = aggregateProvenance(json.provenance, {
       resultKind: 'hardware-experiment',
       executor: 'direct-dev',
-      configs: configList.split(','),
+      configs: configIds,
       variants: variantList,
       fidelity: {
         trace: sampleRate > 1 ? 'sampled' : 'full',
@@ -1168,11 +1188,15 @@ app.post('/experiment', async (req, res) => {
       type: err.type || parsed.type,
     });
   } finally {
-    if (tempDir) {
-      await cleanupTempProject(tempDir);
-    }
-    for (const dir of tempDirs) {
-      await cleanupTempProject(dir);
+    try {
+      if (tempDir) {
+        await cleanupTempProject(tempDir);
+      }
+      for (const dir of tempDirs) {
+        await cleanupTempProject(dir);
+      }
+    } finally {
+      req.finishExecution();
     }
   }
 });
@@ -1258,6 +1282,7 @@ app.get('/api/workloads/history', async (req, res) => {
 
 app.get('/api/workloads/verify', async (req, res) => {
   incCounter('requests', { type: 'workloads_verify' });
+  req.markExecutionStarted();
   try {
     const args = ['workloads', '--verify', '--json'];
     const requestedVariantTimeoutMs = Number.parseInt(req.query.variantTimeoutMs, 10);
@@ -1271,12 +1296,15 @@ app.get('/api/workloads/verify', async (req, res) => {
     const result = await runProcess(CACHE_EXPLORE, args, {
       timeout: CONFIG.timeouts.max,
       maxOutputBuffer: CONFIG.memory.maxOutputBuffer,
+      signal: req.executionSignal,
     });
     res.json(JSON.parse(result.stdout.trim()));
   } catch (err) {
     console.error('Failed to verify workloads:', err);
     incCounter('errors', { type: 'workloads_verify' });
     res.status(500).json(workloadProcessErrorResponse(err, 'Failed to verify workloads'));
+  } finally {
+    req.finishExecution();
   }
 });
 
@@ -1314,7 +1342,11 @@ app.post('/shorten', (req, res) => {
 
   try {
     const code = createShortUrl(state);
-    pruneShortUrls(CONFIG.persistence.maxShareEntries, CONFIG.persistence.shareMaxAgeDays);
+    pruneShortUrls(
+      CONFIG.persistence.maxShareEntries,
+      CONFIG.persistence.shareMaxAgeDays,
+      CONFIG.persistence.maxShareTotalBytes,
+    );
     res.json({ id: code, url: `/s/${code}` });
   } catch (err) {
     logShareError('Failed to create short URL', err);
@@ -1331,7 +1363,7 @@ app.get('/s/:id', (req, res) => {
   const { id } = req.params;
 
   try {
-    const data = getShortUrl(id);
+    const data = getShortUrl(id, CONFIG.persistence.shareMaxAgeDays);
     if (!data) {
       return res.status(404).json({ error: 'Link not found' });
     }
@@ -1359,7 +1391,11 @@ app.post('/api/share', (req, res) => {
 
   try {
     const code = createShortUrl(data);
-    pruneShortUrls(CONFIG.persistence.maxShareEntries, CONFIG.persistence.shareMaxAgeDays);
+    pruneShortUrls(
+      CONFIG.persistence.maxShareEntries,
+      CONFIG.persistence.shareMaxAgeDays,
+      CONFIG.persistence.maxShareTotalBytes,
+    );
     res.json({ code, url: `/s/${code}` });
   } catch (err) {
     logShareError('Failed to create short URL', err);
@@ -1375,7 +1411,7 @@ app.get('/api/s/:code', (req, res) => {
   const { code } = req.params;
 
   try {
-    const data = getShortUrl(code);
+    const data = getShortUrl(code, CONFIG.persistence.shareMaxAgeDays);
     if (!data) {
       return res.status(404).json({ error: 'Not found' });
     }
@@ -1434,6 +1470,10 @@ app.get('/api/docs.json', async (req, res) => {
 // ============================================================================
 
 wss.on('connection', (ws) => {
+  if (wss.clients.size > CONFIG.rateLimit.maxWebSocketConnections) {
+    ws.close(1013, 'Server connection capacity reached');
+    return;
+  }
   const connectionId = randomUUID();
   const tracker = new ConnectionResourceTracker(connectionId);
   connectionResources.set(connectionId, tracker);
@@ -1826,6 +1866,11 @@ async function startServer() {
 
   try {
     initDb();
+    pruneShortUrls(
+      CONFIG.persistence.maxShareEntries,
+      CONFIG.persistence.shareMaxAgeDays,
+      CONFIG.persistence.maxShareTotalBytes,
+    );
     startCachePruning();
     console.log('Database and cache initialized');
   } catch (err) {

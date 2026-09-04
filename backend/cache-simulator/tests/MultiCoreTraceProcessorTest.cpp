@@ -73,11 +73,34 @@ void test_same_offset_is_not_false_sharing() {
   std::cout << "[PASS] test_same_offset_is_not_false_sharing\n";
 }
 
+void test_false_sharing_history_is_sampled_and_counted() {
+  MultiCoreTraceProcessor processor(2, make_test_l1_config(),
+                                    make_test_l2_config(),
+                                    make_test_l3_config());
+  for (uint32_t i = 0; i < 1000; ++i) {
+    TraceEvent event;
+    event.address = 0x3000 + (i % 2) * 4;
+    event.size = 4;
+    event.is_write = true;
+    event.thread_id = (i % 2) + 1;
+    event.file = "threaded.c";
+    event.line = i + 1;
+    processor.process(event);
+  }
+
+  const auto reports = processor.get_false_sharing_reports();
+  assert(reports.size() == 1);
+  assert(reports[0].total_accesses == 1000);
+  assert(reports[0].accesses.size() <= 64);
+  std::cout << "[PASS] test_false_sharing_history_is_sampled_and_counted\n";
+}
+
 int main() {
   std::cout << "=== Multi-Core Trace Processor Tests ===\n\n";
 
   test_false_sharing_preserves_byte_offsets();
   test_same_offset_is_not_false_sharing();
+  test_false_sharing_history_is_sampled_and_counted();
 
   std::cout << "\n=== All Multi-Core Trace Processor tests passed! ===\n";
   return 0;
