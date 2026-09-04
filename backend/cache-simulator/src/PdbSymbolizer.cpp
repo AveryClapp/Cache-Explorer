@@ -111,8 +111,11 @@ public:
     module.SizeOfStruct = sizeof(module);
     const bool loaded = base != 0 && SymGetModuleInfoW64(process_, base, &module);
     const DWORD info_error = loaded ? 0 : GetLastError();
+    // Standalone PDB loads have no PE CodeView record attached to the DbgHelp
+    // module and may set PdbUnmatched. Enforce the actual GUID/age instead:
+    // those must equal both files checked above, even for an explicit PDB load.
     if (base != kLookupBase || !loaded ||
-        module.SymType != SymPdb || module.PdbUnmatched ||
+        module.SymType != SymPdb ||
         module.PdbAge != expected.age ||
         std::memcmp(&module.PdbSig70, &expected.guid, sizeof(GUID)) != 0) {
       SymCleanup(process_);
@@ -120,7 +123,8 @@ public:
           "(load error " + std::to_string(load_error) + ", info error " +
           std::to_string(info_error) + ", type " + std::to_string(module.SymType) +
           ", GUID " + guid_text(module.PdbSig70) + ", age " +
-          std::to_string(module.PdbAge) + ")");
+          std::to_string(module.PdbAge) + ", expected GUID " + guid_text(expected.guid) +
+          ", expected age " + std::to_string(expected.age) + ", base " + hex(base) + ")");
     }
   }
   ~PdbSession() { SymCleanup(process_); }
