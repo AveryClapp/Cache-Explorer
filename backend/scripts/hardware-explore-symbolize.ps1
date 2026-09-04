@@ -98,6 +98,7 @@ try {
     if ($process.ExitCode -ne 0) {
         throw "PDB symbolization failed: $($stderr.Result.Trim())"
     }
+    if ($stderr.Result) { Write-Verbose $stderr.Result.Trim() }
     $symbolText = $stdout.Result
 } finally {
     if ($started -and -not $process.HasExited) { $process.Kill($true) }

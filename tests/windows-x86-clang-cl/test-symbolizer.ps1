@@ -28,7 +28,7 @@ function Write-Analysis {
 }
 try {
     $output = Join-Path $testRoot 'enriched.json'
-    & $command -Result $Result -Image $Image -Pdb $Pdb -Output $output -Symbolizer $Symbolizer
+    & $command -Result $Result -Image $Image -Pdb $Pdb -Output $output -Symbolizer $Symbolizer -Verbose
     $before = [IO.File]::ReadAllText($Result) | ConvertFrom-Json -AsHashtable
     $after = [IO.File]::ReadAllText($output) | ConvertFrom-Json -AsHashtable
     if ($after.symbolization.sourceSites -lt 1 -or $after.symbolization.functionSites -lt 1 -or

@@ -142,10 +142,17 @@ public:
     symbol->SizeOfStruct = sizeof(SYMBOL_INFOW);
     symbol->MaxNameLen = kMaxName;
     DWORD64 displacement = 0;
-    const bool function = SymFromAddrW(process_, address, &displacement, symbol) &&
+    const bool found = SymFromAddrW(process_, address, &displacement, symbol);
+    const bool function = found &&
         (symbol->Flags & SYMFLAG_FUNCTION) && symbol->Size > 0 &&
         symbol->Address >= kLookupBase && symbol->Address <= address &&
         address - symbol->Address < symbol->Size && symbol->NameLen < kMaxName;
+    if (!function && diagnostics_++ < 8) {
+      std::cerr << "Unresolved function at " << hex(rva) << ": found=" << found
+                << " flags=" << hex(symbol->Flags) << " tag=" << symbol->Tag
+                << " size=" << symbol->Size << " address=" << hex(symbol->Address)
+                << " displacement=" << displacement << '\n';
+    }
     std::string function_name;
     if (function) function_name = utf8(std::wstring(symbol->Name, symbol->NameLen));
     IMAGEHLP_LINEW64 line{};
@@ -173,6 +180,7 @@ public:
 
 private:
   HANDLE process_ = GetCurrentProcess();
+  mutable size_t diagnostics_ = 0;
 };
 } // namespace
 
