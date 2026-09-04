@@ -26,8 +26,16 @@ if (-not $vsInstall) {
 Import-Module (Join-Path $vsInstall 'Common7\Tools\Microsoft.VisualStudio.DevShell.dll')
 Enter-VsDevShell -VsInstallPath $vsInstall -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64'
 
-$clangCl = (Get-Command clang-cl -ErrorAction Stop).Source
-$llvmRoot = Split-Path -Parent (Split-Path -Parent $clangCl)
+$llvmRoot = if ($env:HARDWARE_EXPLORER_LLVM_ROOT) {
+    (Resolve-Path -LiteralPath $env:HARDWARE_EXPLORER_LLVM_ROOT).Path
+} else {
+    $discoveredClangCl = (Get-Command clang-cl -ErrorAction Stop).Source
+    Split-Path -Parent (Split-Path -Parent $discoveredClangCl)
+}
+$clangCl = Join-Path $llvmRoot 'bin\clang-cl.exe'
+if (-not (Test-Path -LiteralPath $clangCl -PathType Leaf)) {
+    throw "clang-cl.exe was not found under $llvmRoot"
+}
 $llvmCMake = Join-Path $llvmRoot 'lib\cmake\llvm'
 if (-not (Test-Path -LiteralPath (Join-Path $llvmCMake 'LLVMConfig.cmake'))) {
     throw "LLVMConfig.cmake was not found under $llvmCMake"
@@ -41,14 +49,14 @@ $smokeBuild = Join-Path $buildRoot 'smoke-x86'
 
 Invoke-Checked cmake @(
     '-S', (Join-Path $repositoryRoot 'backend\llvm-pass'), '-B', $passBuild,
-    '-G', 'Ninja', '-DCMAKE_C_COMPILER=clang-cl', '-DCMAKE_CXX_COMPILER=clang-cl',
+    '-G', 'Ninja', "-DCMAKE_C_COMPILER=$clangCl", "-DCMAKE_CXX_COMPILER=$clangCl",
     "-DLLVM_DIR=$llvmCMake"
 )
 Invoke-Checked cmake @('--build', $passBuild)
 
 Invoke-Checked cmake @(
     '-S', (Join-Path $repositoryRoot 'backend\cache-simulator'), '-B', $simulatorBuild,
-    '-G', 'Ninja', '-DCMAKE_CXX_COMPILER=clang-cl', '-DBUILD_TESTING=OFF'
+    '-G', 'Ninja', "-DCMAKE_CXX_COMPILER=$clangCl", '-DBUILD_TESTING=OFF'
 )
 Invoke-Checked cmake @('--build', $simulatorBuild, '--target', 'cache-sim')
 
@@ -56,7 +64,7 @@ Enter-VsDevShell -VsInstallPath $vsInstall -SkipAutomaticLocation -DevCmdArgumen
 
 Invoke-Checked cmake @(
     '-S', (Join-Path $repositoryRoot 'backend\runtime'), '-B', $runtimeBuild,
-    '-G', 'Ninja', '-DCMAKE_C_COMPILER=clang-cl',
+    '-G', 'Ninja', "-DCMAKE_C_COMPILER=$clangCl",
     '-DCMAKE_C_COMPILER_TARGET=i686-pc-windows-msvc', '-DBUILD_TESTING=ON'
 )
 Invoke-Checked cmake @('--build', $runtimeBuild)
@@ -66,7 +74,7 @@ $pass = Join-Path $passBuild 'CacheProfiler.dll'
 $runtime = Join-Path $runtimeBuild 'cache-explorer-rt.lib'
 Invoke-Checked cmake @(
     '-S', $PSScriptRoot, '-B', $smokeBuild, '-G', 'Ninja',
-    '-DCMAKE_C_COMPILER=clang-cl', '-DCMAKE_C_COMPILER_TARGET=i686-pc-windows-msvc',
+    "-DCMAKE_C_COMPILER=$clangCl", '-DCMAKE_C_COMPILER_TARGET=i686-pc-windows-msvc',
     "-DCACHE_EXPLORER_PATH=$repositoryRoot\backend",
     "-DCACHE_EXPLORER_PASS=$pass", "-DCACHE_EXPLORER_RUNTIME=$runtime"
 )

@@ -183,7 +183,7 @@ from an x86 Developer PowerShell.
 Prerequisites:
 
 - Visual Studio C++ Build Tools
-- LLVM/Clang 18-21 with `clang-cl` and LLVM CMake files
+- LLVM/Clang 18-22 with `clang-cl` and LLVM CMake files
 - Ninja and CMake 3.20+
 
 Build the host LLVM pass:

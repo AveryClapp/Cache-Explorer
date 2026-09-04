@@ -29,10 +29,42 @@ jobs:
   smoke:
     name: Instrument and analyze Win32 executable
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
+    env:
+      LLVM_VERSION: 22.1.6
+      LLVM_SHA256: 657343edf361ca463bd642e39c74b251c6338b96cdbd55ff277555298b027696
+      HARDWARE_EXPLORER_LLVM_ROOT: ${{ runner.tool_cache }}\llvm-22.1.6
 
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      # The normal Windows LLVM installer is a compiler toolchain and omits the
+      # development CMake package needed to build pass plugins. Use the official
+      # clang+llvm archive, which contains LLVMConfig.cmake and matching libs.
+      - name: Restore LLVM development archive
+        id: llvm-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ env.HARDWARE_EXPLORER_LLVM_ROOT }}
+          key: llvm-windows-msvc-${{ env.LLVM_VERSION }}
+
+      - name: Install LLVM development archive
+        if: steps.llvm-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP "clang+llvm-$env:LLVM_VERSION-windows-msvc.tar.xz"
+          $url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-$env:LLVM_VERSION/clang%2Bllvm-$env:LLVM_VERSION-x86_64-pc-windows-msvc.tar.xz"
+          curl.exe --fail --location --retry 3 --output $archive $url
+          if ($LASTEXITCODE -ne 0) { throw "LLVM download failed with exit code $LASTEXITCODE" }
+
+          $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant()
+          if ($actualHash -ne $env:LLVM_SHA256) {
+            throw "LLVM archive hash mismatch: expected $env:LLVM_SHA256, got $actualHash"
+          }
+
+          New-Item -ItemType Directory -Force -Path $env:HARDWARE_EXPLORER_LLVM_ROOT | Out-Null
+          tar.exe -xf $archive -C $env:HARDWARE_EXPLORER_LLVM_ROOT --strip-components 1
+          if ($LASTEXITCODE -ne 0) { throw "LLVM extraction failed with exit code $LASTEXITCODE" }
 
       - name: Build and run Windows x86 smoke
         shell: pwsh
