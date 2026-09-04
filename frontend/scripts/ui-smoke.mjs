@@ -1506,7 +1506,7 @@ async function verifyExperimentResults(url) {
   assert(experimentRequest?.code?.includes('Direct vs tiled 3x3 convolution kernel'), 'default experiment should load the Conv2D source before running')
   assert(experimentRequest?.optLevel === '-O2', `default experiment should use -O2, got ${experimentRequest?.optLevel}`)
   assert(experimentRequest?.prefetch === 'adaptive', `default experiment should use adaptive prefetch, got ${experimentRequest?.prefetch}`)
-  assert(experimentRequest?.limit === 200000, `default experiment should use the bounded 200K event limit, got ${experimentRequest?.limit}`)
+  assert(experimentRequest?.limit === 100000, `default experiment should use the bounded 100K event limit, got ${experimentRequest?.limit}`)
 
   await closeModal()
   await page.unroute('**/experiment')

@@ -113,7 +113,7 @@ const defaultData = await postExperiment({
   optLevel: '-O2',
   configs: ['educational', 'intel', 'amd', 'apple'],
   prefetch: 'adaptive',
-  limit: 200000,
+  limit: 100000,
   fast: true,
   cacheSegments: true,
   variants: ['direct', 'tiled:RUN_TILED=1'],
@@ -155,7 +155,7 @@ console.log(JSON.stringify({
     configs: defaultConfigs,
     variants: Object.keys(defaultData.variants),
     rows: defaultData.summary.length,
-    eventLimit: 200000,
+    eventLimit: 100000,
   },
 }))
 NODE
