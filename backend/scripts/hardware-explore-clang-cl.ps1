@@ -55,6 +55,11 @@ $arguments = @(
 
 if (-not $compileOnly) {
     $arguments += $runtimePath
+    if ($CompilerArguments -contains '/link') {
+        $arguments += '/NODEFAULTLIB:clang_rt.ubsan_standalone.lib'
+    } else {
+        $arguments += @('/link', '/NODEFAULTLIB:clang_rt.ubsan_standalone.lib')
+    }
 }
 
 & $compiler @arguments

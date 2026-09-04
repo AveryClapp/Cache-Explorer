@@ -148,6 +148,14 @@ function(cache_explorer_enable_target target)
 
   # Link runtime library
   target_link_libraries(${target} PRIVATE ${CACHE_EXPLORER_RUNTIME})
+  if(CACHE_EXPLORER_CLANG_CL)
+    # SanitizerCoverage embeds a request for Clang's UBSan runtime in COFF
+    # objects. Hardware Explorer supplies the required callbacks itself, and
+    # 32-bit compiler-rt is not included in standard LLVM Windows installs.
+    target_link_options(${target} PRIVATE
+      /NODEFAULTLIB:clang_rt.ubsan_standalone.lib
+    )
+  endif()
 
   # Add include path for runtime header
   target_include_directories(${target} PRIVATE "${CACHE_EXPLORER_PATH}/runtime")
@@ -179,6 +187,9 @@ function(cache_explorer_enable_project)
     )
   endif()
   add_link_options(${CACHE_EXPLORER_RUNTIME})
+  if(CACHE_EXPLORER_CLANG_CL)
+    add_link_options(/NODEFAULTLIB:clang_rt.ubsan_standalone.lib)
+  endif()
 
   if(CACHE_EXPLORER_INCLUDE_STL)
     add_compile_definitions(CACHE_EXPLORER_INCLUDE_STL=1)

@@ -109,6 +109,8 @@ set(CMAKE_CXX_COMPILER "${CLANGXX_PATH}" CACHE STRING "C++ compiler")
 if(WIN32)
   set(CACHE_EXPLORER_FLAGS
     "/clang:-fsanitize-coverage=trace-pc,trace-loads,trace-stores,no-prune /clang:-fno-sanitize-link-runtime /Z7")
+  set(CMAKE_EXE_LINKER_FLAGS_INIT
+    "/NODEFAULTLIB:clang_rt.ubsan_standalone.lib")
 else()
   set(CACHE_EXPLORER_FLAGS
     "-fpass-plugin=${CACHE_EXPLORER_PASS} -g -Xclang -disable-O0-optnone")
