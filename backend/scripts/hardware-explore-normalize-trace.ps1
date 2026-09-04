@@ -54,7 +54,9 @@ $siteRvas = [Collections.Generic.List[UInt64]]::new()
 [object] $loadedBase = $null
 [UInt64] $eventCount = 0
 
-foreach ($line in [IO.File]::ReadLines($rawTracePath)) {
+$reader = [IO.StreamReader]::new($rawTracePath)
+try {
+  while ($null -ne ($line = $reader.ReadLine())) {
     if ($line -notmatch $eventPattern) {
         if ($line -match '^[LS] ') {
             throw "Malformed attributed event in '$rawTracePath': $line"
@@ -84,6 +86,9 @@ foreach ($line in [IO.File]::ReadLines($rawTracePath)) {
         $siteRvas.Add($rva)
     }
     ++$eventCount
+  }
+} finally {
+    $reader.Dispose()
 }
 
 if ($eventCount -eq 0 -or $null -eq $loadedBase) {
@@ -105,6 +110,7 @@ $imageName = [IO.Path]::GetFileName($imagePath).Replace('\', '\\').Replace('"', 
 $temporaryOutput = Join-Path $outputDirectory ".hardware-explorer-$([Guid]::NewGuid().ToString('N')).tmp"
 $encoding = [Text.UTF8Encoding]::new($false)
 $writer = [IO.StreamWriter]::new($temporaryOutput, $false, $encoding)
+$reader = $null
 try {
     $writer.WriteLine('# hardware-explorer-trace 2')
     $truncated = $EventLimit -gt 0 -and $eventCount -ge $EventLimit
@@ -118,7 +124,8 @@ try {
             (Format-HexUInt64 $rva)))
     }
 
-    foreach ($line in [IO.File]::ReadLines($rawTracePath)) {
+    $reader = [IO.StreamReader]::new($rawTracePath)
+    while ($null -ne ($line = $reader.ReadLine())) {
         if ($line -match $eventPattern) {
             $eventText = $Matches.event
             $rva = Convert-HexUInt64 $Matches.rva
@@ -126,6 +133,7 @@ try {
         }
     }
 } finally {
+    if ($null -ne $reader) { $reader.Dispose() }
     $writer.Dispose()
 }
 

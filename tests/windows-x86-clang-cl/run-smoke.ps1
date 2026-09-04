@@ -140,6 +140,8 @@ if (-not $preservedRaw -or -not (Test-Path -LiteralPath $preservedRaw) -or
     throw 'Failed target execution did not preserve its raw capture.'
 }
 Remove-Item -LiteralPath $preservedRaw -Force
+# The expected native exit code must not become the GitHub step's exit status.
+$global:LASTEXITCODE = 0
 
 $simulator = Join-Path $simulatorBuild 'cache-sim.exe'
 $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
