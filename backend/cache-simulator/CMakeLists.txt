@@ -32,6 +32,9 @@ target_link_libraries(CacheSimulator PUBLIC Threads::Threads)
 add_executable(cache-sim src/main.cpp)
 target_link_libraries(cache-sim CacheSimulator)
 
+add_executable(hardware-explorer-normalize-pin src/PinNormalizer.cpp)
+target_include_directories(hardware-explorer-normalize-pin PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
 # Offline PDB lookup stays out of the portable simulator and capture runtime.
 if(WIN32)
   add_executable(hardware-explorer-symbolize-pdb src/PdbSymbolizer.cpp)

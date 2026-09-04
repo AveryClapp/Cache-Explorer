@@ -1,0 +1,11 @@
+cmake_minimum_required(VERSION 3.20)
+project(HardwareExplorerPinFixture C)
+# Deliberately no CacheExplorer.cmake, compiler wrappers or capture runtime.
+add_library(pin-smoke-plugin SHARED plugin.c)
+set_target_properties(pin-smoke-plugin PROPERTIES OUTPUT_NAME "pin smoke plugin")
+add_executable(pin-smoke smoke.c)
+set_target_properties(pin-smoke PROPERTIES OUTPUT_NAME "pin smoke")
+foreach(target pin-smoke pin-smoke-plugin)
+  target_compile_options(${target} PRIVATE /Od /Z7)
+  target_link_options(${target} PRIVATE /DEBUG /INCREMENTAL:NO /DYNAMICBASE)
+endforeach()
