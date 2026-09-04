@@ -55,7 +55,7 @@ jobs:
           ./backend/scripts/build-passes.sh ${{ matrix.llvm-version }} ./passes
 
       - name: Upload artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: CacheProfiler-llvm${{ matrix.llvm-version }}-${{ matrix.platform }}
           path: ./passes/CacheProfiler-llvm${{ matrix.llvm-version }}-*.so
