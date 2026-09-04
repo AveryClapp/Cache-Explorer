@@ -106,14 +106,21 @@ public:
     // or a symbol server. The private base is unrelated to the captured ASLR base.
     const auto base = SymLoadModuleExW(process_, nullptr, pdb.c_str(), nullptr,
                                       kLookupBase, size, nullptr, 0);
+    const DWORD load_error = base == 0 ? GetLastError() : 0;
     IMAGEHLP_MODULEW64 module{};
     module.SizeOfStruct = sizeof(module);
-    if (base != kLookupBase || !SymGetModuleInfoW64(process_, base, &module) ||
+    const bool loaded = base != 0 && SymGetModuleInfoW64(process_, base, &module);
+    const DWORD info_error = loaded ? 0 : GetLastError();
+    if (base != kLookupBase || !loaded ||
         module.SymType != SymPdb || module.PdbUnmatched ||
         module.PdbAge != expected.age ||
         std::memcmp(&module.PdbSig70, &expected.guid, sizeof(GUID)) != 0) {
       SymCleanup(process_);
-      throw std::runtime_error("The selected PDB could not be loaded with matching identity");
+      throw std::runtime_error("The selected PDB could not be loaded with matching identity "
+          "(load error " + std::to_string(load_error) + ", info error " +
+          std::to_string(info_error) + ", type " + std::to_string(module.SymType) +
+          ", GUID " + guid_text(module.PdbSig70) + ", age " +
+          std::to_string(module.PdbAge) + ")");
     }
   }
   ~PdbSession() { SymCleanup(process_); }
@@ -181,7 +188,11 @@ int wmain(int argc, wchar_t **argv) {
     std::vector<uint32_t> rvas;
     char buffer[64];
     while (std::cin.getline(buffer, sizeof(buffer))) {
-      std::istringstream input(buffer);
+      const auto count = static_cast<size_t>(std::cin.gcount()) - (std::cin.eof() ? 0 : 1);
+      const std::string record(buffer, count);
+      if (record.find('\0') != std::string::npos)
+        throw std::runtime_error("RVA input contains a NUL byte");
+      std::istringstream input(record);
       std::string token, extra;
       if (!(input >> token) || (input >> extra) || token.size() < 3 ||
           token.size() > 10 || token.compare(0, 2, "0x") != 0 ||

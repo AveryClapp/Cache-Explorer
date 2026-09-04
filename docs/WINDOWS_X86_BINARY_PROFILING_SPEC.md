@@ -26,11 +26,14 @@ exact source-line attribution when debug information is absent.
 
 The current implementation covers one rebuilt, instrumented PE32 executable.
 It emits portable SHA-256 + RVA code sites and modeled cache hotspots, with
-batch/streaming analysis and legacy trace compatibility. DLL/JIT capture,
-PDB/source attribution, existing-binary Pin capture, a binary results UI,
-hotspot bundle export, and both decompiler adapters are not implemented here.
+batch/streaming analysis and legacy trace compatibility. An optional Windows
+post-processing step resolves functions and approximate source lines using an
+explicit, identity-matched PDB. DLL/JIT capture, exact statement/inline-stack
+attribution, existing-binary Pin capture, a binary results UI, hotspot bundle
+export, and both decompiler adapters are not implemented here.
 The `clang-cl` site is an instrumentation return PC; it is not yet a verified
-memory-instruction or pseudocode location (`navigationConfidence: unresolved`).
+memory-instruction or pseudocode location. Without PDB lookup it remains
+`unresolved`; a debug-line match is deliberately labeled `source-nearest`.
 
 ## 2. Goals
 
@@ -158,6 +161,7 @@ read/write counts, and estimated memory-stall cycles available as alternatives.
 | Value | Meaning |
 |---|---|
 | `source-exact` | Debug information maps the instruction to an original source line. |
+| `source-nearest` | Debug information maps the instrumentation call site to an approximate original source location; exact statement attribution is not verified. |
 | `instruction-exact` | The PE image and RVA match exactly in the decompiler. |
 | `function-exact` | The instruction maps to a known function but not a stable pseudocode item. |
 | `pseudocode-nearest` | The adapter selected the nearest decompiler item containing the address. |
@@ -243,6 +247,32 @@ Both adapters validate image identity, map RVAs into the current program's
 address space, create a sortable hotspot view, and navigate to the closest safe
 decompiler location. Tool-specific behavior remains inside each adapter.
 
+### 7.7 Local PDB attribution
+
+Interface:
+
+```text
+hardware-explore-symbolize.ps1 -Result analysis.json -Image game.exe -Pdb game.pdb -Output profile.json
+```
+
+This post-processing module owns executable SHA-256 verification, explicit PDB
+selection and GUID/age matching, bounded native lookup, failure handling, and
+enrichment of code hotspots. The simulator does not acquire Windows-specific
+dependencies or reinterpret a source path from a PDB as a file to execute/read.
+
+The Windows-only helper uses [DbgHelp symbol loading](https://learn.microsoft.com/en-us/windows/win32/api/dbghelp/nf-dbghelp-symloadmoduleexw)
+with the selected PDB rather than discovering symbols through the PE's embedded
+path. It compares [CodeView/PDB identity information](https://learn.microsoft.com/en-us/windows/win32/api/dbghelp/nf-dbghelp-symsrvgetfileindexinfow)
+and verifies the loaded PDB identity before returning results. Inherited symbol
+server paths are ignored, and no automatic symbol downloads are enabled.
+
+For clang-cl return-PC sites, lookup uses `rva - 1` while preserving the original
+code identity. A containing function may be `function-exact`; a matching debug
+line is `source-nearest`, because the instrumented memory instruction and exact
+source statement have not been independently verified. Resolved hotspots carry
+`attribution.lookupRva` and `attribution.method: return-pc-minus-one`. The
+post-processor does not rewrite cache metrics or the existing `hotLines` view.
+
 ## 8. Trace Format v2
 
 The current line-oriented event format remains valid. Binary capture adds a
@@ -298,8 +328,9 @@ Offline normalization requires the caller to supply the exact captured image.
 ## 9. Analysis Result and Hotspot Bundle
 
 `codeHotspots` is additive to the existing result. The example below describes
-the target bundle after symbolization/Pin support; current clang-cl output has
-no `symbol` or `codeView` and always uses `navigationConfidence: unresolved`:
+the target bundle after Pin/decompiler support; bare simulator output remains
+unresolved. The optional PDB post-processor adds `symbol`, `source`, `codeView`,
+and lookup provenance, but never labels a site `instruction-exact`:
 
 ```json
 {
@@ -471,6 +502,11 @@ will be declared only after the adapter is exercised against them.
 - Malformed, oversized, and unknown-version traces fail predictably.
 - PDB/source attribution remains a separate release gate: code-site identity
   alone must not be marketed as original-source navigation.
+
+The current optional PDB post-processor provides containing functions and
+approximate source lines. Its tests cover identity mismatches, relocated/renamed
+files, unchanged metrics/identities, and unresolved fallback. Exact statement
+and inline-stack mapping remain outside this milestone's implemented slice.
 
 ### M3 — Windows IA-32 Pin capture
 

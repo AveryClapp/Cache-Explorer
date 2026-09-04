@@ -248,11 +248,54 @@ exact executable used for capture; an arbitrary offline file's identity cannot
 be verified against an already captured process. `-ExpectedImageSha256` can
 enforce a separately recorded pre-capture hash.
 
-The current Preview now preserves stable executable SHA-256 + RVA identities
+The current Preview preserves stable executable SHA-256 + RVA identities
 and reports modeled `codeHotspots`. The captured PC is the instrumentation
-callback's return address, not a verified memory-instruction or source location;
-`navigationConfidence` remains `unresolved`. PDB symbolization must still land before
-the project claims original-source navigation on Windows. Existing PE32 binary
-capture without rebuilding, and Ghidra/IDA navigation, are specified in
+callback's return address, not a verified memory-instruction or source location.
+The simulator leaves `navigationConfidence` as `unresolved`; the optional local
+PDB step below adds function and approximate source attribution. Existing PE32
+binary capture without rebuilding, and Ghidra/IDA navigation, are specified in
 [Windows x86 Binary Profiling and Decompiler Navigation](WINDOWS_X86_BINARY_PROFILING_SPEC.md)
 and remain experimental until their separate release gates pass.
+
+### Optional local PDB attribution (Windows Preview)
+
+Use PowerShell 7.2 or later and the exact executable and PDB from the captured
+build. Build the helper in the same native Windows CMake build as `cache-sim`:
+
+```powershell
+cmake --build .\backend\cache-simulator\build --target hardware-explorer-symbolize-pdb
+Get-Content .\game-trace-v2.txt | .\backend\cache-simulator\build\cache-sim.exe `
+  --config intel --json | Set-Content -Encoding utf8 .\game-analysis.json
+
+.\backend\scripts\hardware-explore-symbolize.ps1 `
+  -Result .\game-analysis.json -Image .\build\game.exe -Pdb .\build\game.pdb `
+  -Output .\game-profile.json
+```
+
+For a non-default CMake build directory, pass `-Symbolizer <path-to-hardware-explorer-symbolize-pdb.exe>`.
+`cache-explore-symbolize.ps1` is a compatibility alias. The input is one completed
+analysis JSON object, not a trace or a stream of progress messages.
+
+The post-processor checks the executable SHA-256 against the analysis and the
+PDB GUID/age against the executable, then rechecks both file hashes after lookup.
+It opens only the selected local files: no target execution, source downloads,
+symbol servers, or automatic use of the embedded PDB path. The Windows helper
+uses DbgHelp; no separately installed DIA SDK or decompiler is needed.
+
+Results preserve the original code identities and modeled metrics. They add
+`images[].codeView`, `codeHotspots[].symbol`, optional `codeHotspots[].source`,
+lookup provenance, and a `symbolization` summary. Existing `hotLines` are not
+rewritten. PDB source paths are metadata, not proof that the current source file
+matches the build; the tool neither reads nor executes those paths.
+
+The lookup uses the byte preceding the instrumentation return PC. A containing
+function is labeled `function-exact`; a debug-line match is `source-nearest`,
+not exact source-statement attribution. Optimized/inlined code may map coarsely;
+inline stacks and pseudocode navigation are not implemented. Unmapped sites
+remain `unresolved` without stale function/source fields.
+
+Missing/mismatched PDBs, changed images, invalid RVAs, timeouts, and malformed
+results fail without publishing partial output. Inputs are bounded to 16 MiB
+and 10,000 hotspots; the default lookup timeout is 60 seconds. The output must
+be separate from the input result, executable, PDB, and helper. Only one
+instrumented main PE32 executable from `clang-cl` capture is supported.

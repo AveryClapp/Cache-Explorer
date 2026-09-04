@@ -78,6 +78,10 @@ try {
     [IO.File]::WriteAllText($output, 'existing output')
     Assert-Fails { & $command -Result $Result -Image $Image -Pdb $WrongPdb -Output $output -Symbolizer $Symbolizer } 'PDB GUID/age'
     Assert-Fails { & $command -Result $Result -Image $WrongImage -Pdb $WrongPdb -Output $output -Symbolizer $Symbolizer } 'SHA-256'
+    $invalidPdb = Join-Path $testRoot 'invalid.pdb'
+    [IO.File]::WriteAllText($invalidPdb, 'not a PDB')
+    Assert-Fails { & $command -Result $Result -Image $Image -Pdb $invalidPdb -Output $output -Symbolizer $Symbolizer } 'CodeView/PDB identity'
+    Assert-Fails { & $command -Result $Result -Image $Image -Pdb (Join-Path $testRoot 'missing.pdb') -Output $output -Symbolizer $Symbolizer } 'does not exist'
     Assert-Fails { & $command -Result $Result -Image $Image -Pdb $Pdb -Output $Image -Symbolizer $Symbolizer } 'different file'
     Assert-Fails { & $command -Result $Result -Image $Image -Pdb $Pdb -Output $Result -Symbolizer $Symbolizer } 'different file'
     $badResult = Join-Path $testRoot 'bad-result.json'
