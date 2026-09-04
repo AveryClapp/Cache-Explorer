@@ -229,8 +229,29 @@ compatibility aliases. The runtime accepts both `HARDWARE_EXPLORER_*` and
 `CACHE_EXPLORER_*` capture settings; `HARDWARE_EXPLORER_TRACE` and
 `CACHE_EXPLORER_TRACE` select an isolated text trace file.
 
+The wrapper validates an x86 PE32 executable before launch and verifies that
+its SHA-256 did not change during the run. Only the instrumented main executable
+is supported: instrumented DLL/JIT sites cause normalization to fail rather
+than being assigned to the wrong image. Calls into uninstrumented DLLs are not
+captured. Use only trusted local programs; the wrapper is not a sandbox.
+
+`-MaxEvents` defaults to 2,000,000 (the simulator limit) and accepts 1–2,000,000.
+`-SampleRate` defaults to 1 and accepts positive signed 32-bit values. Reaching
+the event limit sets `capture.truncated` conservatively, even if the program
+happened to stop at exactly that count. A nonzero target exit or failed
+normalization preserves the raw capture and leaves the requested output alone.
+The wrapper restores the calling process's capture environment settings.
+
+Offline normalization is also available with `hardware-explore-normalize-trace.ps1
+-RawTrace <raw-file> -Image <exact-executable> -Output <trace-file>`. Supply the
+exact executable used for capture; an arbitrary offline file's identity cannot
+be verified against an already captured process. `-ExpectedImageSha256` can
+enforce a separately recorded pre-capture hash.
+
 The current Preview now preserves stable executable SHA-256 + RVA identities
-and reports modeled `codeHotspots`. PDB symbolization must still land before
+and reports modeled `codeHotspots`. The captured PC is the instrumentation
+callback's return address, not a verified memory-instruction or source location;
+`navigationConfidence` remains `unresolved`. PDB symbolization must still land before
 the project claims original-source navigation on Windows. Existing PE32 binary
 capture without rebuilding, and Ghidra/IDA navigation, are specified in
 [Windows x86 Binary Profiling and Decompiler Navigation](WINDOWS_X86_BINARY_PROFILING_SPEC.md)

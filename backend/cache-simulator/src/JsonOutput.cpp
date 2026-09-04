@@ -467,7 +467,7 @@ void JsonOutput::write_binary_attribution(
         out << "{\"location\":{\"imageId\":\""
             << escape(image->image_id) << "\",\"rva\":\""
             << hex_address(hotspot.location.rva, 8) << "\"}"
-            << ",\"navigationConfidence\":\"instruction-exact\""
+            << ",\"navigationConfidence\":\"unresolved\""
             << ",\"metrics\":{\"accesses\":" << hotspot.accesses
             << ",\"reads\":" << hotspot.reads
             << ",\"writes\":" << hotspot.writes

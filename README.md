@@ -218,6 +218,10 @@ Get-Content .\game-trace-v2.txt | cache-sim.exe --config intel --json
 This produces stable executable SHA-256 + RVA `codeHotspots`; original-source
 PDB navigation and profiling PE32 binaries that cannot be rebuilt are still in
 development. See [the Windows x86 profiling specification](docs/WINDOWS_X86_BINARY_PROFILING_SPEC.md).
+The current path accepts one instrumented PE32 executable, not instrumented
+DLLs, and captures up to two million sampled events. Hotspots identify
+instrumentation return sites, not verified source statements or decompiler
+locations. These are modeled cache results, not hardware-counter measurements.
 
 ## Running Tests
 

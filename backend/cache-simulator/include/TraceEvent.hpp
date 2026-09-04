@@ -75,6 +75,8 @@ struct EventResult {
 };
 
 inline std::optional<uint32_t> parse_trace_u32(const std::string &value) {
+  if (value.empty() || value.find_first_not_of("0123456789") != std::string::npos)
+    return std::nullopt;
   try {
     size_t consumed = 0;
     const unsigned long long parsed = std::stoull(value, &consumed, 10);
@@ -89,7 +91,7 @@ inline std::optional<uint32_t> parse_trace_u32(const std::string &value) {
 
 inline std::optional<uint64_t> parse_trace_u64(const std::string &value,
                                                int base) {
-  if (value.empty() || value[0] == '-') return std::nullopt;
+  if (value.empty() || value[0] == '-' || value[0] == '+') return std::nullopt;
   try {
     size_t consumed = 0;
     const unsigned long long parsed = std::stoull(value, &consumed, base);

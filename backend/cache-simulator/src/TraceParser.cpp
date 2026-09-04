@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 #include <utility>
 
@@ -42,6 +43,46 @@ TraceLineResult parsed_event(TraceEvent event) {
   result.kind = TraceLineKind::Event;
   result.event = std::move(event);
   return result;
+}
+
+bool valid_v2_event(const std::string &line, uint32_t address_width) {
+  std::istringstream input(line);
+  std::string type, address, source, size, location, thread, token;
+  if (!(input >> type >> address)) return false;
+  const bool memory_copy = type == "M" || type == "O";
+  if (type != "P0" && type != "P1" && type != "P2" && type != "P3" &&
+      (type.size() != 1 || std::string("LlRrSsIiPVUAXCZBMO").find(type[0]) == std::string::npos))
+    return false;
+  if (memory_copy && !(input >> source)) return false;
+  if (!(input >> size >> location >> thread)) return false;
+  const auto count = parse_trace_u32(size);
+  if (!count || (type == "B" ? *count > 1 : (*count == 0 || *count > TraceParser::kMaxAccessBytes)))
+    return false;
+  const auto valid_address = [&](const std::string &value) {
+    const size_t start = value.size() > 2 && value[0] == '0' &&
+                                (value[1] == 'x' || value[1] == 'X') ? 2 : 0;
+    if (value.size() == start || value.find_first_not_of("0123456789abcdefABCDEF", start) != std::string::npos)
+      return false;
+    const auto parsed = parse_trace_u64(value, 16);
+    const uint64_t max_address = address_width == 32
+        ? std::numeric_limits<uint32_t>::max() : std::numeric_limits<uint64_t>::max();
+    return parsed && *parsed <= max_address &&
+           (type == "B" || static_cast<uint64_t>(*count - 1) <= max_address - *parsed);
+  };
+  if (!valid_address(address) || (memory_copy && !valid_address(source))) return false;
+  const size_t colon = location.rfind(':');
+  if (colon == std::string::npos || colon == 0 || !parse_trace_u32(location.substr(colon + 1)))
+    return false;
+  if (thread.size() < 2 || thread[0] != 'T' || !parse_trace_u32(thread.substr(1))) return false;
+  bool saw_site = false;
+  while (input >> token) {
+    // Portable v2 records carry site references, never raw capture PCs.
+    if (token.size() < 2 || token[0] != 'K' || saw_site) return false;
+    const auto site = parse_trace_u32(token.substr(1));
+    if (!site || *site == 0) return false;
+    saw_site = true;
+  }
+  return true;
 }
 
 } // namespace
@@ -125,6 +166,12 @@ TraceLineResult TraceParser::parse_metadata(const std::string &line) {
         (truncated_token != "true" && truncated_token != "false")) {
       return fail("invalid capture declaration");
     }
+    if (*address_width == 32) {
+      for (const auto &image : manifest_.images) {
+        if (image.end_address > (uint64_t{1} << 32))
+          return fail("image exceeds the capture address width");
+      }
+    }
     manifest_.capture = TraceCapture{std::move(kind), std::move(target),
                                      *address_width, *sample_rate, *event_limit,
                                      truncated_token == "true"};
@@ -152,21 +199,24 @@ TraceLineResult TraceParser::parse_metadata(const std::string &line) {
     const auto loaded_base = parse_trace_u64(loaded_base_token, 0);
     const auto end_address = parse_trace_u64(end_address_token, 0);
     if (!table_id || *table_id == 0 || !loaded_base || !end_address ||
-        *loaded_base >= *end_address) {
+        *loaded_base >= *end_address ||
+        (manifest_.capture && manifest_.capture->address_width == 32 &&
+         *end_address > (uint64_t{1} << 32))) {
       return fail("invalid image id or address range");
     }
     if (!is_sha256_identity(image_id))
       return fail("image identity must be 'sha256:' followed by 64 hex digits");
+    std::transform(image_id.begin(), image_id.end(), image_id.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     if (name.empty() || name.size() > kMaxImageNameBytes)
       return fail("image name is empty or exceeds its safety limit");
     if (image_indexes_.count(*table_id) != 0)
       return fail("duplicate image table id " + std::to_string(*table_id));
 
     const uint64_t image_size = *end_address - *loaded_base;
-    for (const TraceCodeSite &site : manifest_.sites) {
-      if (site.image_table_id == *table_id && site.rva >= image_size)
-        return fail("existing code-site RVA falls outside the declared image");
-    }
+    const auto largest = largest_site_rvas_.find(*table_id);
+    if (largest != largest_site_rvas_.end() && largest->second >= image_size)
+      return fail("existing code-site RVA falls outside the declared image");
 
     image_indexes_[*table_id] = manifest_.images.size();
     manifest_.images.push_back(
@@ -206,15 +256,24 @@ TraceLineResult TraceParser::parse_metadata(const std::string &line) {
   }
 
   site_indexes_[*table_id] = manifest_.sites.size();
+  auto &largest_rva = largest_site_rvas_[*image_table_id];
+  largest_rva = std::max(largest_rva, *rva);
   manifest_.sites.push_back(TraceCodeSite{*table_id, *image_table_id, *rva});
   return ignored();
 }
 
 TraceLineResult TraceParser::parse_line(const std::string &raw_line) {
   ++line_number_;
+  if (raw_line.size() > kMaxLineBytes) return fail("record exceeds the 16384-byte safety limit");
+  if (raw_line.find('\0') != std::string::npos) return fail("record contains a NUL byte");
   const std::string line = trim(raw_line);
   if (line.empty()) return ignored();
   if (line[0] == '#') return parse_metadata(line);
+
+  if (manifest_.version == 2 &&
+      !valid_v2_event(line, manifest_.capture ? manifest_.capture->address_width : 64)) {
+    return fail("invalid v2 event fields or address/access range");
+  }
 
   auto event = parse_trace_event(line);
   if (!event) {
@@ -228,4 +287,16 @@ TraceLineResult TraceParser::parse_line(const std::string &raw_line) {
     event->code_location = resolve(*event->code_site_id);
   }
   return parsed_event(std::move(*event));
+}
+
+std::optional<TraceLineResult> TraceParser::next(std::istream &input) {
+  char buffer[kMaxLineBytes + 2];
+  input.getline(buffer, sizeof(buffer));
+  if (input.bad() || (input.fail() && !input.eof())) {
+    ++line_number_;
+    return fail("input failed or record exceeds the 16384-byte safety limit");
+  }
+  if (input.gcount() == 0 && input.eof()) return std::nullopt;
+  const size_t count = static_cast<size_t>(input.gcount());
+  return parse_line(std::string(buffer, count - (input.eof() ? 0 : 1)));
 }

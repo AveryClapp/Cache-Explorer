@@ -1,6 +1,7 @@
 # Windows x86 Binary Profiling and Decompiler Navigation
 
-Status: Proposed  
+Status: In progress — clang-cl capture and versioned code-site attribution implemented in Preview; remaining milestones below are gated.
+
 Tracking issue: [#73](https://github.com/AveryClapp/Cache-Explorer/issues/73)  
 Target: Hardware Explorer Preview
 
@@ -22,6 +23,14 @@ primary workflow.
 Decompiler pseudocode is reconstructed rather than original source. Navigation
 therefore carries an explicit confidence level and must never be presented as
 exact source-line attribution when debug information is absent.
+
+The current implementation covers one rebuilt, instrumented PE32 executable.
+It emits portable SHA-256 + RVA code sites and modeled cache hotspots, with
+batch/streaming analysis and legacy trace compatibility. DLL/JIT capture,
+PDB/source attribution, existing-binary Pin capture, a binary results UI,
+hotspot bundle export, and both decompiler adapters are not implemented here.
+The `clang-cl` site is an instrumentation return PC; it is not yet a verified
+memory-instruction or pseudocode location (`navigationConfidence: unresolved`).
 
 ## 2. Goals
 
@@ -245,7 +254,7 @@ Illustrative form:
 
 ```text
 # hardware-explorer-trace 2
-# capture clang-cl i686-pc-windows-msvc 32 1 10000000 false
+# capture clang-cl i686-pc-windows-msvc 32 1 2000000 false
 # image 1 sha256:<digest> game.exe 0x00400000 0x006a0000
 # site 7 1 0x00012f40
 L 0x01f40020 4 unknown:0 T1 K7
@@ -258,10 +267,14 @@ Requirements:
 - The capture record stores capture kind, target triple, address width, sample
   rate, event limit, and truncation state in that order.
 - The event address remains the data address used for cache simulation.
-- Site-table growth is bounded and produces a visible truncation warning.
+- Site-table growth is bounded; the current parser/normalizer fails explicitly
+  above one million sites rather than dropping attribution silently.
 - Unknown images or sites are retained as unattributed events rather than
   silently assigned to the main executable.
 - Parsers reject unsupported format versions and invalid numeric ranges.
+- The parser bounds records to 16 KiB, images to 4,096, and memory accesses to
+  1 MiB per event. v2 requires a location and thread, rejects signed/overflowing
+  numeric fields, and validates access spans against the capture address width.
 - v1 traces produce byte-for-byte compatible result fields.
 
 The implementation may use a binary capture representation internally, but
@@ -275,9 +288,18 @@ capture provenance, not a portable code identity. The trace normalizer verifies
 the raw fields with a `K<n>` reference. Raw `C` and `B` addresses must not appear
 in exported hotspot bundles.
 
+The capture wrapper preflights PE32/i386 and hashes the launched executable
+before and after execution. It limits capture to two million events by default,
+preserves raw files on failure, and does not publish a normalized trace when the
+program exits unsuccessfully. The normalizer rejects mixed instrumented images;
+the runtime deliberately withholds main-image attribution from DLL/JIT sites.
+Offline normalization requires the caller to supply the exact captured image.
+
 ## 9. Analysis Result and Hotspot Bundle
 
-`codeHotspots` is additive to the existing result:
+`codeHotspots` is additive to the existing result. The example below describes
+the target bundle after symbolization/Pin support; current clang-cl output has
+no `symbol` or `codeView` and always uses `navigationConfidence: unresolved`:
 
 ```json
 {
@@ -447,6 +469,8 @@ will be declared only after the adapter is exercised against them.
 - Code locations remain identical across two ASLR-varied fixture runs.
 - Results expose `codeHotspots` and capture provenance.
 - Malformed, oversized, and unknown-version traces fail predictably.
+- PDB/source attribution remains a separate release gate: code-site identity
+  alone must not be marketed as original-source navigation.
 
 ### M3 — Windows IA-32 Pin capture
 
@@ -484,7 +508,8 @@ will be declared only after the adapter is exercised against them.
 ## 17. Release Gate
 
 The project may advertise **Windows x86 capture Preview** after M1 passes in
-CI. It may advertise **source-attributed Windows x86 profiling** after M2, and
+CI. It may advertise **source-attributed Windows x86 profiling** only after M2
+and verified PDB/source mapping, and
 **existing binary profiling** only after M2 through M4 pass. Ghidra and IDA
 integrations are advertised separately after their respective milestones pass.
 

@@ -83,7 +83,11 @@ static uint64_t cache_explorer_image_base(uint64_t code_address) {
   MEMORY_BASIC_INFORMATION memory = {0};
   if (code_address != 0 &&
       VirtualQuery((const void *)(uintptr_t)code_address, &memory,
-                   sizeof(memory)) == sizeof(memory)) {
+                   sizeof(memory)) == sizeof(memory) &&
+      memory.Type == MEM_IMAGE &&
+      memory.AllocationBase == (void *)GetModuleHandleW(NULL)) {
+    // The current normalizer identifies only the launched executable. Leave
+    // DLL/JIT sites unresolved instead of binding them to the wrong image.
     return (uint64_t)(uintptr_t)memory.AllocationBase;
   }
 #else

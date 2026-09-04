@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <istream>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -55,8 +56,12 @@ public:
   static constexpr size_t kMaxImages = 4096;
   static constexpr size_t kMaxCodeSites = 1'000'000;
   static constexpr size_t kMaxImageNameBytes = 4096;
+  static constexpr size_t kMaxLineBytes = 16 * 1024;
+  static constexpr uint32_t kMaxAccessBytes = 1024 * 1024;
 
   TraceLineResult parse_line(const std::string &line);
+  // Bounded input reader; nullopt means EOF, Error means stop reading.
+  std::optional<TraceLineResult> next(std::istream &input);
   const TraceManifest &manifest() const { return manifest_; }
 
 private:
@@ -67,6 +72,7 @@ private:
   TraceManifest manifest_;
   std::unordered_map<uint32_t, size_t> image_indexes_;
   std::unordered_map<uint32_t, size_t> site_indexes_;
+  std::unordered_map<uint32_t, uint64_t> largest_site_rvas_;
   size_t line_number_ = 0;
   bool saw_header_ = false;
   bool saw_event_ = false;

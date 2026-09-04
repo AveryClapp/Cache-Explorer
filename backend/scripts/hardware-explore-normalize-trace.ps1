@@ -5,16 +5,14 @@ param(
     [Parameter(Mandatory = $true)] [string] $RawTrace,
     [Parameter(Mandatory = $true)] [string] $Image,
     [Parameter(Mandatory = $true)] [string] $Output,
-    [UInt32] $SampleRate = 1,
-    [UInt64] $EventLimit = 0
+    [ValidateRange(1, 2147483647)] [UInt32] $SampleRate = 1,
+    [UInt64] $EventLimit = 0,
+    [ValidatePattern('^[0-9a-fA-F]{64}$')] [string] $ExpectedImageSha256
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
-
-if ($SampleRate -lt 1) {
-    throw 'SampleRate must be at least 1.'
-}
+. (Join-Path $PSScriptRoot 'hardware-explorer-pe.ps1')
 
 function Convert-HexUInt64 {
     param([Parameter(Mandatory = $true)] [string] $Value)
@@ -30,32 +28,6 @@ function Format-HexUInt64 {
     return '0x{0:x}' -f $Value
 }
 
-function Read-PeSizeOfImage {
-    param([Parameter(Mandatory = $true)] [string] $Path)
-
-    $bytes = [IO.File]::ReadAllBytes($Path)
-    if ($bytes.Length -lt 64) {
-        throw "'$Path' is too small to be a PE image."
-    }
-    $peOffset = [BitConverter]::ToInt32($bytes, 0x3c)
-    if ($peOffset -lt 0 -or $peOffset + 82 -gt $bytes.Length -or
-        $bytes[$peOffset] -ne 0x50 -or $bytes[$peOffset + 1] -ne 0x45 -or
-        $bytes[$peOffset + 2] -ne 0 -or $bytes[$peOffset + 3] -ne 0) {
-        throw "'$Path' does not contain a valid PE header."
-    }
-
-    $optionalHeader = $peOffset + 24
-    $magic = [BitConverter]::ToUInt16($bytes, $optionalHeader)
-    if ($magic -ne 0x10b -and $magic -ne 0x20b) {
-        throw "'$Path' has an unsupported PE optional-header format."
-    }
-    $sizeOfImage = [BitConverter]::ToUInt32($bytes, $optionalHeader + 56)
-    if ($sizeOfImage -eq 0) {
-        throw "'$Path' reports a zero SizeOfImage."
-    }
-    return [UInt64] $sizeOfImage
-}
-
 $rawTracePath = (Resolve-Path -LiteralPath $RawTrace).Path
 $imagePath = (Resolve-Path -LiteralPath $Image).Path
 $outputPath = [IO.Path]::GetFullPath($Output)
@@ -64,6 +36,11 @@ if ($rawTracePath -eq $outputPath) {
 }
 if ($imagePath -eq $outputPath) {
     throw 'Image and Output must be different files.'
+}
+$sizeOfImage = (Get-HardwareExplorerPeImage $imagePath).SizeOfImage
+$sha256 = (Get-FileHash -LiteralPath $imagePath -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($ExpectedImageSha256 -and $sha256 -ne $ExpectedImageSha256) {
+    throw 'The executable changed after capture started; refusing to bind code sites to a different image.'
 }
 
 $outputDirectory = [IO.Path]::GetDirectoryName($outputPath)
@@ -85,9 +62,10 @@ foreach ($line in [IO.File]::ReadLines($rawTracePath)) {
         continue
     }
 
-    $pc = Convert-HexUInt64 $Matches.pc
-    $base = Convert-HexUInt64 $Matches.base
-    $rva = Convert-HexUInt64 $Matches.rva
+    $fields = $Matches
+    $pc = Convert-HexUInt64 $fields.pc
+    $base = Convert-HexUInt64 $fields.base
+    $rva = Convert-HexUInt64 $fields.rva
     if ($pc -lt $base -or $pc - $base -ne $rva) {
         throw "Capture PC/base/RVA values are inconsistent: $line"
     }
@@ -112,17 +90,16 @@ if ($eventCount -eq 0 -or $null -eq $loadedBase) {
     throw "'$rawTracePath' does not contain attributed load/store events."
 }
 
-$sizeOfImage = Read-PeSizeOfImage $imagePath
 foreach ($rva in $siteRvas) {
     if ($rva -ge $sizeOfImage) {
         throw "Captured RVA $(Format-HexUInt64 $rva) falls outside the PE image."
     }
 }
-if ([UInt64] $loadedBase -gt [UInt64]::MaxValue - $sizeOfImage) {
-    throw 'The loaded image address range overflows 64 bits.'
+if ([UInt64] $loadedBase -ge 4294967296 -or
+    [UInt64] $loadedBase + $sizeOfImage -gt 4294967296) {
+    throw 'The loaded image address range exceeds the 32-bit address space.'
 }
 $endAddress = [UInt64] $loadedBase + $sizeOfImage
-$sha256 = (Get-FileHash -LiteralPath $imagePath -Algorithm SHA256).Hash.ToLowerInvariant()
 $imageName = [IO.Path]::GetFileName($imagePath).Replace('\', '\\').Replace('"', '\"')
 
 $temporaryOutput = Join-Path $outputDirectory ".hardware-explorer-$([Guid]::NewGuid().ToString('N')).tmp"

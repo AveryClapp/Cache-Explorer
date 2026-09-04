@@ -17,6 +17,7 @@ function Invoke-Checked {
 }
 
 $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+& (Join-Path $PSScriptRoot 'test-normalizer.ps1')
 $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
 $vsInstall = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
 if (-not $vsInstall) {
@@ -36,9 +37,13 @@ $smokeBuild = Join-Path $buildRoot 'smoke-x86'
 Invoke-Checked cmake @(
     '-S', (Join-Path $repositoryRoot 'backend\cache-simulator'), '-B', $simulatorBuild,
     '-G', 'Ninja', "-DCMAKE_C_COMPILER=$clangCl", "-DCMAKE_CXX_COMPILER=$clangCl",
-    '-DBUILD_TESTING=OFF'
+    '-DBUILD_TESTING=ON'
 )
-Invoke-Checked cmake @('--build', $simulatorBuild, '--target', 'cache-sim')
+Invoke-Checked cmake @('--build', $simulatorBuild, '--target', 'cache-sim', 'TraceParserTest', 'JsonOutputTest', 'TraceProcessorTest')
+foreach ($test in @('TraceParserTest', 'JsonOutputTest', 'TraceProcessorTest')) {
+    Invoke-Checked (Join-Path $simulatorBuild "$test.exe")
+}
+& (Join-Path $PSScriptRoot 'test-simulator.ps1') -Simulator (Join-Path $simulatorBuild 'cache-sim.exe')
 
 Enter-VsDevShell -VsInstallPath $vsInstall -SkipAutomaticLocation -DevCmdArguments '-arch=x86 -host_arch=x64'
 
@@ -93,7 +98,7 @@ if ($traceLines | Where-Object { $_ -match ' [CBR]0x[0-9a-f]+' }) {
 }
 
 $repeatTrace = Join-Path $buildRoot 'trace-v2-repeat.txt'
-& (Join-Path $repositoryRoot 'backend\scripts\hardware-explore-run-x86.ps1') `
+& (Join-Path $repositoryRoot 'backend\scripts\cache-explore-run-x86.ps1') `
     -Program $smokeBinary -Output $repeatTrace
 $firstSites = @($traceLines | Where-Object { $_ -match '^# site ' })
 $repeatSites = @(Get-Content -LiteralPath $repeatTrace | Where-Object { $_ -match '^# site ' })
@@ -101,6 +106,40 @@ if ($firstSites.Count -eq 0 -or
     (Compare-Object -ReferenceObject $firstSites -DifferenceObject $repeatSites)) {
     throw 'Code-site image/RVA identities changed across repeated ASLR-enabled runs.'
 }
+
+$failedOutput = Join-Path $buildRoot 'failed-run.txt'
+[IO.File]::WriteAllText($failedOutput, 'existing output')
+$captureWarnings = @()
+$failedAsExpected = $false
+$envBefore = @{}
+foreach ($key in @('HARDWARE_EXPLORER_TRACE', 'HARDWARE_EXPLORER_SAMPLE_RATE', 'HARDWARE_EXPLORER_MAX_EVENTS')) {
+    $envBefore[$key] = [Environment]::GetEnvironmentVariable($key, 'Process')
+}
+try {
+    & (Join-Path $repositoryRoot 'backend\scripts\hardware-explore-run-x86.ps1') `
+        -Program $smokeBinary -ArgumentList @('--fail') -Output $failedOutput `
+        -WarningVariable captureWarnings
+} catch {
+    if ($_.Exception.Message -notmatch 'target exited with code 17') { throw }
+    $failedAsExpected = $true
+}
+if (-not $failedAsExpected -or [IO.File]::ReadAllText($failedOutput) -ne 'existing output') {
+    throw 'Failed target execution published or overwrote a normalized trace.'
+}
+foreach ($key in $envBefore.Keys) {
+    if ([Environment]::GetEnvironmentVariable($key, 'Process') -cne $envBefore[$key]) {
+        throw "Capture did not restore $key."
+    }
+}
+$preservedRaw = $null
+foreach ($warning in $captureWarnings) {
+    if ($warning.ToString() -match "raw capture preserved at '([^']+)'") { $preservedRaw = $Matches[1] }
+}
+if (-not $preservedRaw -or -not (Test-Path -LiteralPath $preservedRaw) -or
+    (Get-Item -LiteralPath $preservedRaw).Length -eq 0) {
+    throw 'Failed target execution did not preserve its raw capture.'
+}
+Remove-Item -LiteralPath $preservedRaw -Force
 
 $simulator = Join-Path $simulatorBuild 'cache-sim.exe'
 $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
@@ -134,6 +173,9 @@ if ($result.capture.traceFormat -ne 2 -or $result.capture.kind -ne 'clang-cl' -o
     $result.images.Count -ne 1 -or
     $result.codeHotspots.Count -le 0) {
     throw 'cache-sim did not expose v2 capture provenance and code hotspots.'
+}
+if ($result.codeHotspots | Where-Object { $_.navigationConfidence -ne 'unresolved' }) {
+    throw 'Unresolved code sites were presented as verified source/decompiler navigation.'
 }
 
 Write-Host "Windows x86 clang-cl attribution smoke passed with $l1dAccesses L1D accesses and $($result.codeHotspots.Count) code hotspots."

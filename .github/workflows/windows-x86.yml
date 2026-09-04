@@ -10,6 +10,7 @@ on:
       - 'backend/scripts/*clang-cl.ps1'
       - 'backend/scripts/*run-x86.ps1'
       - 'backend/scripts/*normalize-trace.ps1'
+      - 'backend/scripts/hardware-explorer-pe.ps1'
       - 'tests/windows-x86-clang-cl/**'
   push:
     branches: [main]
@@ -21,6 +22,7 @@ on:
       - 'backend/scripts/*clang-cl.ps1'
       - 'backend/scripts/*run-x86.ps1'
       - 'backend/scripts/*normalize-trace.ps1'
+      - 'backend/scripts/hardware-explorer-pe.ps1'
       - 'tests/windows-x86-clang-cl/**'
   workflow_dispatch:
 

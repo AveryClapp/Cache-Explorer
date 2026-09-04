@@ -140,6 +140,8 @@ void test_write_binary_attribution() {
   assert(json.find("\"accesses\":10") != std::string::npos);
   assert(json.find("\"l1dMisses\":3") != std::string::npos);
   assert(json.find("\"estimatedMemoryStallCycles\"") != std::string::npos);
+  assert(json.find("\"navigationConfidence\":\"unresolved\"") != std::string::npos);
+  assert(json.find("instruction-exact") == std::string::npos);
   std::cout << "[PASS] test_write_binary_attribution\n";
 }
 

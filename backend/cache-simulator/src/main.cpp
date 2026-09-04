@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -166,9 +167,21 @@ int main(int argc, char *argv[]) {
   // Streaming mode: process events as they arrive and output JSON for each
   // Uses MultiCoreTraceProcessor to handle both single and multi-threaded code
   if (stream_mode) {
-    // Use 8 cores max - handles both single and multi-threaded transparently
-    MultiCoreTraceProcessor processor(8, cfg.l1_data, cfg.l2, cfg.l3,
+    // The auto default accommodates threads discovered as the trace arrives.
+    MultiCoreTraceProcessor processor(num_cores == 0 ? 8 : num_cores,
+                                       cfg.l1_data, cfg.l2, cfg.l3,
                                        prefetch_policy, prefetch_degree);
+    // Pretty-printed JSON fragments must not split a streaming NDJSON record.
+    // Serialized string newlines are already escaped by JsonOutput::escape.
+    const auto write_fragment = [](auto writer) {
+      std::ostringstream fragment;
+      writer(fragment);
+      std::string text = fragment.str();
+      text.erase(std::remove_if(text.begin(), text.end(), [](char c) {
+        return c == '\n' || c == '\r';
+      }), text.end());
+      std::cout << text;
+    };
     if (fast_mode) {
       processor.set_fast_mode(true);
     }
@@ -218,9 +231,8 @@ int main(int argc, char *argv[]) {
     JsonOutput::write_stream_start(std::cout, config_name, true);
 
     TraceParser trace_parser;
-    std::string line;
-    while (std::getline(std::cin, line)) {
-      auto parsed = trace_parser.parse_line(line);
+    while (auto input = trace_parser.next(std::cin)) {
+      auto &parsed = *input;
       if (parsed.kind == TraceLineKind::Error) {
         std::cout << "{\"type\":\"error\",\"message\":\""
                   << JsonOutput::escape(parsed.error) << "\"}\n";
@@ -349,9 +361,11 @@ int main(int argc, char *argv[]) {
     std::cout << "}";
 
     std::cout << ",";
-    JsonOutput::write_profile_metadata(std::cout, profile, cfg,
-                                       ArgParser::prefetch_policy_name(prefetch_policy),
-                                       prefetch_degree, processor.get_num_cores());
+    write_fragment([&](std::ostream &out) {
+      JsonOutput::write_profile_metadata(out, profile, cfg,
+                                         ArgParser::prefetch_policy_name(prefetch_policy),
+                                         prefetch_degree, processor.get_num_cores());
+    });
 
     // Coherence stats
     std::cout << ",\"coherence\":{\"invalidations\":" << stats.coherence_invalidations
@@ -431,13 +445,15 @@ int main(int argc, char *argv[]) {
               << "}}";
 
     std::cout << ",";
-    JsonOutput::write_execution_unavailable(
-        std::cout,
-        "Execution-engine estimates are not available in streaming multi-core mode yet.");
+    write_fragment([](std::ostream &out) {
+      JsonOutput::write_execution_unavailable(
+          out, "Execution-engine estimates are not available in streaming multi-core mode yet.");
+    });
     std::cout << ",";
-    JsonOutput::write_execution_subsystem_unavailable(
-        std::cout,
-        "Execution-engine estimates are not available in streaming multi-core mode yet.");
+    write_fragment([](std::ostream &out) {
+      JsonOutput::write_execution_subsystem_unavailable(
+          out, "Execution-engine estimates are not available in streaming multi-core mode yet.");
+    });
 
     // Prefetch stats (if enabled)
     if (prefetch_policy != PrefetchPolicy::NONE) {
@@ -515,9 +531,8 @@ int main(int argc, char *argv[]) {
 
   // Parse trace events
   TraceParser trace_parser;
-  std::string line;
-  while (std::getline(std::cin, line)) {
-    auto parsed = trace_parser.parse_line(line);
+  while (auto input = trace_parser.next(std::cin)) {
+    auto &parsed = *input;
     if (parsed.kind == TraceLineKind::Error) {
       std::cerr << "Error: " << parsed.error << "\n";
       return 2;
