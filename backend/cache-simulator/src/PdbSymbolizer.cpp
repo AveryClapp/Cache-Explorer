@@ -2,6 +2,8 @@
 // executable. stdin contains PE32 return-PC RVAs, one per line. stdout is NDJSON.
 #include "../include/JsonOutput.hpp"
 #include <windows.h>
+// Request DbgHelp's PDB tag definitions without a DIA SDK dependency.
+#define _NO_CVCONST_H
 #include <dbghelp.h>
 
 #include <array>
@@ -144,7 +146,7 @@ public:
     DWORD64 displacement = 0;
     const bool found = SymFromAddrW(process_, address, &displacement, symbol);
     const bool function = found &&
-        (symbol->Flags & SYMFLAG_FUNCTION) && symbol->Size > 0 &&
+        symbol->Tag == SymTagFunction && symbol->Size > 0 &&
         symbol->Address >= kLookupBase && symbol->Address <= address &&
         address - symbol->Address < symbol->Size && symbol->NameLen < kMaxName;
     if (!function && diagnostics_++ < 8) {
