@@ -85,12 +85,21 @@ try {
     $started = $true
     $stdout = $process.StandardOutput.ReadToEndAsync()
     $stderr = $process.StandardError.ReadToEndAsync()
-    $write = $process.StandardInput.WriteAsync(($rvas -join "`n") + "`n")
-    if (-not $write.Wait($TimeoutSeconds * 1000)) {
+    $writeFailure = $null
+    $writeTimedOut = $false
+    try {
+        $write = $process.StandardInput.WriteAsync(($rvas -join "`n") + "`n")
+        $writeTimedOut = -not $write.Wait($TimeoutSeconds * 1000)
+    } catch {
+        # A rejected PDB can make the helper exit before it reads stdin. Keep
+        # its useful diagnostic instead of masking it with a broken-pipe error.
+        $writeFailure = $_
+    }
+    if ($writeTimedOut) {
         $process.Kill($true)
         throw 'PDB symbolization timed out while sending code sites.'
     }
-    $process.StandardInput.Close()
+    try { $process.StandardInput.Close() } catch { $writeFailure = $_ }
     if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
         $process.Kill($true)
         throw 'PDB symbolization timed out.'
@@ -98,6 +107,7 @@ try {
     if ($process.ExitCode -ne 0) {
         throw "PDB symbolization failed: $($stderr.Result.Trim())"
     }
+    if ($null -ne $writeFailure) { throw "Could not send code sites: $($writeFailure.Exception.Message)" }
     if ($stderr.Result) { Write-Verbose $stderr.Result.Trim() }
     $symbolText = $stdout.Result
 } finally {
