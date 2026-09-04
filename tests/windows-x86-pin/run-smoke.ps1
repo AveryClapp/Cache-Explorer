@@ -18,7 +18,7 @@ $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.
 Import-Module (Join-Path $vs 'Common7/Tools/Microsoft.VisualStudio.DevShell.dll')
 Enter-VsDevShell -VsInstallPath $vs -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64'
 $clang = (Get-Command clang-cl).Source
-Checked cmake @('-S', "$repo/backend/cache-simulator", '-B', $simBuild, '-G', 'Ninja', "-DCMAKE_CXX_COMPILER=$clang")
+Checked cmake @('-S', "$repo/backend/cache-simulator", '-B', $simBuild, '-G', 'Ninja', "-DCMAKE_C_COMPILER=$clang", "-DCMAKE_CXX_COMPILER=$clang")
 Checked cmake @('--build', $simBuild, '--target', 'hardware-explorer-normalize-pin', 'cache-sim')
 $normalizer = Join-Path $simBuild 'hardware-explorer-normalize-pin.exe'
 & (Join-Path $PSScriptRoot 'test-normalizer.ps1') -Normalizer $normalizer
@@ -28,6 +28,7 @@ Enter-VsDevShell -VsInstallPath $vs -SkipAutomaticLocation -DevCmdArguments '-ar
     -Compiler (Join-Path $Toolchain 'bin/clang-cl.exe') -Linker (Join-Path $Toolchain 'bin/lld-link.exe')
 Checked cmake @('-S', $PSScriptRoot, '-B', $fixture, '-G', 'Ninja', "-DCMAKE_C_COMPILER=$clang", '-DCMAKE_C_COMPILER_TARGET=i686-pc-windows-msvc')
 Checked cmake @('--build', $fixture)
+[IO.File]::WriteAllText((Join-Path $fixture 'fixture asset.txt'), 'relative-path game asset')
 $program = Join-Path $fixture 'pin smoke.exe'
 $plugin = Join-Path $fixture 'pin smoke plugin.dll'
 $trace = Join-Path $root 'capture.txt'
@@ -65,13 +66,27 @@ Assert-True (@($result.codeHotspots | Where-Object { $_.location.imageId -eq "sh
 Assert-True (@($result.codeHotspots | Where-Object { $_.location.imageId -eq "sha256:$dllHash" }).Count -gt 0) 'DLL hotspots missing.'
 Assert-True (@($result.codeHotspots | Where-Object { $_.navigationConfidence -ne 'unresolved' }).Count -eq 0) 'Capture invented source-level confidence.'
 
+# The no-debug-directory executable must retain attributed sites with no PDBs present.
+$pdbs = Join-Path $root 'unused symbols'
+[IO.Directory]::CreateDirectory($pdbs) | Out-Null
+Get-ChildItem -LiteralPath $fixture -Filter '*.pdb' | Move-Item -Destination $pdbs
+$strippedOptions = $options.Clone()
+$strippedOptions.Program = Join-Path $fixture 'pin-smoke-stripped.exe'
+& "$repo/backend/scripts/hardware-explore-pin.ps1" @strippedOptions
+$strippedHash = (Get-FileHash -LiteralPath $strippedOptions.Program).Hash.ToLowerInvariant()
+$stripped = [IO.File]::ReadAllLines($trace)
+$strippedImage = @($stripped | Where-Object { $_ -match "^# image ([0-9]+) sha256:$strippedHash " })
+Assert-True ($strippedImage.Count -eq 1) 'Stripped executable image missing.'
+[void]($strippedImage[0] -match '^# image ([0-9]+) ')
+Assert-True (@($stripped -match "^# site [0-9]+ $($Matches[1]) ").Count -gt 0) 'Stripped executable has no attributed code sites.'
+
 # Alias, sampling and exactly enforced cross-thread limit.
 & "$repo/backend/scripts/cache-explore-pin.ps1" @options -SampleRate 7 -MaxEvents 1000
 $limited = [IO.File]::ReadAllLines($trace)
 Assert-True ($limited[1] -eq '# capture intel-pin i686-pc-windows-msvc 32 7 1000 true') 'Missing sampling/limit provenance.'
 Assert-True (@($limited -match '^[LS] ').Count -eq 1000) 'Sampling/event limit was not enforced exactly.'
 
-foreach ($mode in @('--fail', '--hang')) {
+foreach ($mode in @('--fail', '--crash', '--hang')) {
     [IO.File]::WriteAllText($trace, 'preserve existing output')
     $failed = $false; $warnings = @()
     $failureOptions = $options.Clone()

@@ -51,6 +51,8 @@ Get-Content .\game-trace.txt | .\backend\cache-simulator\build\cache-sim.exe --c
 `cache-explore-pin.ps1` is a compatibility alias. `-PinTool` and `-Normalizer`
 override the default build locations. The existing Unix `cache-explore-pin`
 script is unchanged and is **not** the Windows entry point.
+The target starts in its executable directory so relative game assets work;
+`-WorkingDirectory` can explicitly select another existing directory.
 
 Capture defaults to one in every operand (`-SampleRate 1`) and at most
 2,000,000 recorded operands (`-MaxEvents`). Reaching the limit stops recording,
@@ -163,8 +165,8 @@ Options:
 
 ## Performance
 
-- **Overhead**: 10-50x slowdown (typical for dynamic instrumentation)
-- **Sampling**: Use `-sample 100` to reduce overhead to ~2x
+- **Overhead**: Workload-dependent and not benchmarked by this integration
+- **Sampling**: Reduces recorded traffic, but also changes the modeled sequence
 - **Max events**: Use `-max 1000000` to limit trace size
 
 ## Limitations
@@ -182,7 +184,7 @@ Options:
 |---------|-----------|----------|
 | Requires source | Yes | No |
 | Compiler | Clang only | Any |
-| Overhead | 2-5x | 10-50x |
+| Overhead | Workload-dependent | Workload-dependent |
 | Cache metrics | Modeled | Modeled |
 | Source attribution | Excellent | Limited |
 

@@ -5,6 +5,7 @@ param(
     [Parameter(Mandatory)] [string] $Program,
     [Parameter(Mandatory)] [string] $PinRoot,
     [string[]] $ArgumentList = @(),
+    [string] $WorkingDirectory,
     [string] $Output,
     [string] $PinTool,
     [string] $Normalizer,

@@ -18,6 +18,10 @@ static DWORD WINAPI worker(void *argument) {
 }
 
 int wmain(int argc, wchar_t **argv) {
+    SetErrorMode(SEM_NOGPFAULTERRORBOX | SEM_FAILCRITICALERRORS);
+    FILE *asset = fopen("fixture asset.txt", "r");
+    if (!asset) return 19;
+    fclose(asset);
     if (argc > 1 && !wcscmp(argv[1], L"--args")) {
         if (argc != 7 || wcscmp(argv[2], L"space value") || wcscmp(argv[3], L"quote\"value") ||
             wcscmp(argv[4], L"caf\u00e9") || wcscmp(argv[5], L"--sample") || wcscmp(argv[6], L"999"))
@@ -44,6 +48,8 @@ int wmain(int argc, wchar_t **argv) {
         FreeLibrary(plugin);
     }
     printf("Uninstrumented x86 fixture: %u\n", values[0][0]);
+    if (argc > 1 && !wcscmp(argv[1], L"--crash"))
+        RaiseException(EXCEPTION_ACCESS_VIOLATION, EXCEPTION_NONCONTINUABLE, 0, NULL);
     if (argc > 1 && !wcscmp(argv[1], L"--hang")) Sleep(60000);
     return argc > 1 && !wcscmp(argv[1], L"--fail") ? 17 : 0;
 }
