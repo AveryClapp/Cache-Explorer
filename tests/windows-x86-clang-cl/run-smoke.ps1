@@ -39,7 +39,7 @@ Invoke-Checked cmake @(
     '-G', 'Ninja', "-DCMAKE_C_COMPILER=$clangCl", "-DCMAKE_CXX_COMPILER=$clangCl",
     '-DBUILD_TESTING=ON'
 )
-Invoke-Checked cmake @('--build', $simulatorBuild, '--target', 'cache-sim', 'TraceParserTest', 'JsonOutputTest', 'TraceProcessorTest')
+Invoke-Checked cmake @('--build', $simulatorBuild, '--target', 'cache-sim', 'hardware-explorer-symbolize-pdb', 'TraceParserTest', 'JsonOutputTest', 'TraceProcessorTest')
 foreach ($test in @('TraceParserTest', 'JsonOutputTest', 'TraceProcessorTest')) {
     Invoke-Checked (Join-Path $simulatorBuild "$test.exe")
 }
@@ -179,5 +179,13 @@ if ($result.capture.traceFormat -ne 2 -or $result.capture.kind -ne 'clang-cl' -o
 if ($result.codeHotspots | Where-Object { $_.navigationConfidence -ne 'unresolved' }) {
     throw 'Unresolved code sites were presented as verified source/decompiler navigation.'
 }
+
+$analysisFile = Join-Path $buildRoot 'analysis.json'
+[IO.File]::WriteAllText($analysisFile, $resultText, [Text.UTF8Encoding]::new($false))
+& (Join-Path $PSScriptRoot 'test-symbolizer.ps1') -Result $analysisFile -Image $smokeBinary `
+    -Pdb (Join-Path $smokeBuild 'hardware-explorer-x86-smoke.pdb') `
+    -WrongImage (Join-Path $smokeBuild 'hardware-explorer-pdb-mismatch.exe') `
+    -WrongPdb (Join-Path $smokeBuild 'hardware-explorer-pdb-mismatch.pdb') `
+    -Symbolizer (Join-Path $simulatorBuild 'hardware-explorer-symbolize-pdb.exe')
 
 Write-Host "Windows x86 clang-cl attribution smoke passed with $l1dAccesses L1D accesses and $($result.codeHotspots.Count) code hotspots."

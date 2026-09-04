@@ -32,6 +32,13 @@ target_link_libraries(CacheSimulator PUBLIC Threads::Threads)
 add_executable(cache-sim src/main.cpp)
 target_link_libraries(cache-sim CacheSimulator)
 
+# Offline PDB lookup stays out of the portable simulator and capture runtime.
+if(WIN32)
+  add_executable(hardware-explorer-symbolize-pdb src/PdbSymbolizer.cpp)
+  target_link_libraries(hardware-explorer-symbolize-pdb CacheSimulator dbghelp)
+  target_compile_definitions(hardware-explorer-symbolize-pdb PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+endif()
+
 # Tests
 add_executable(CacheLevelTest tests/CacheLevelTest.cpp)
 target_link_libraries(CacheLevelTest CacheSimulator)

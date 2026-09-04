@@ -12,3 +12,8 @@ add_executable(hardware-explorer-x86-smoke smoke.c)
 
 include("${CACHE_EXPLORER_PATH}/integration/cmake/CacheExplorerConfig.cmake")
 cache_explorer_enable_target(hardware-explorer-x86-smoke)
+
+# Deliberately different executable/PDB pair for identity rejection tests.
+add_executable(hardware-explorer-pdb-mismatch smoke.c)
+target_compile_options(hardware-explorer-pdb-mismatch PRIVATE /Z7)
+target_link_options(hardware-explorer-pdb-mismatch PRIVATE /DEBUG /INCREMENTAL:NO)
