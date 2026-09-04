@@ -961,6 +961,8 @@ async function verifyHardwareComparison(url) {
 
   const modal = page.locator('.batch-modal').filter({ hasText: 'Hardware Comparison' })
   await assertVisible(modal.getByText('Hardware Comparison', { exact: true }), 'hardware comparison modal')
+  await assertVisible(modal.getByText('Ready to compare', { exact: true }), 'comparison ready state')
+  await modal.getByRole('button', { name: 'Run Comparison', exact: true }).click()
   await assertVisible(modal.getByText('Educational', { exact: true }), 'comparison educational row')
   await assertVisible(modal.getByText('Intel 14th Gen', { exact: true }), 'comparison intel row')
   await assertVisible(modal.getByText('AMD Zen 4', { exact: true }), 'comparison amd row')
@@ -1006,6 +1008,7 @@ async function verifyHardwareComparisonEmptyState(url) {
   await openHeaderTool('Hardware')
 
   const modal = page.locator('.batch-modal').filter({ hasText: 'Hardware Comparison' })
+  await modal.getByRole('button', { name: 'Run Comparison', exact: true }).click()
   await assertVisible(modal.getByText('No hardware results', { exact: true }), 'comparison empty-state title')
   await assertVisible(modal.getByText(failureMessage, { exact: true }), 'comparison empty-state message')
   await assertVisible(modal.getByText('4 profiles requested', { exact: true }), 'comparison empty-state profile count')
@@ -1078,7 +1081,9 @@ async function verifyEditRunCompareShareReopen(url) {
   assert(compilePayload?.code?.includes('EDIT_RUN_MARKER'), `edited compile payload missing marker: ${compilePayload?.code}`)
 
   await openHeaderTool('Hardware')
-  await assertVisible(page.locator('.batch-modal').filter({ hasText: 'Hardware Comparison' }), 'edited comparison modal')
+  const editedComparison = page.locator('.batch-modal').filter({ hasText: 'Hardware Comparison' })
+  await assertVisible(editedComparison, 'edited comparison modal')
+  await editedComparison.getByRole('button', { name: 'Run Comparison', exact: true }).click()
   assert(comparePayload?.code?.includes('EDIT_RUN_MARKER'), `edited compare payload missing marker: ${comparePayload?.code}`)
   await closeModal()
 
@@ -1267,7 +1272,9 @@ async function verifyShareRoundTrip(url) {
   assert(shortenedState?.runHardwareConfigIds?.join(',') === 'intel,amd', `empty-state share run set mismatch: ${JSON.stringify(shortenedState?.runHardwareConfigIds)}`)
 
   await openHeaderTool('Hardware')
-  await assertVisible(page.locator('.batch-modal').filter({ hasText: 'Hardware Comparison' }), 'restored hardware comparison modal')
+  const restoredComparison = page.locator('.batch-modal').filter({ hasText: 'Hardware Comparison' })
+  await assertVisible(restoredComparison, 'restored hardware comparison modal')
+  await restoredComparison.getByRole('button', { name: 'Run Comparison', exact: true }).click()
   assert(restoredCompareRequest?.configs?.join(',') === 'intel,amd', `restored comparison configs mismatch: ${JSON.stringify(restoredCompareRequest?.configs)}`)
   await closeModal()
 

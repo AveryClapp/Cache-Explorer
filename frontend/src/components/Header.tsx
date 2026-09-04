@@ -1,6 +1,7 @@
 import type { CacheResult, EnvironmentHealth, Stage } from "../types";
 
 interface HeaderProps {
+  activeProductArea: "analyze" | "profiles" | "comparisons" | "workloads" | "experiments";
   theme: "dark" | "light";
   diffMode: boolean;
   baselineResult: CacheResult | null;
@@ -15,6 +16,7 @@ interface HeaderProps {
   onSetDiffMode: (mode: boolean) => void;
   onSetBaseline: (result: CacheResult) => void;
   onClearBaseline: () => void;
+  onOpenAnalyze: () => void;
   onCompareHardware: () => void;
   onExploreHardware: () => void;
   onOpenWorkloads: () => void;
@@ -97,6 +99,7 @@ function EnvironmentStatus({
 }
 
 export function Header({
+  activeProductArea,
   theme,
   diffMode,
   baselineResult,
@@ -111,6 +114,7 @@ export function Header({
   onSetDiffMode,
   onSetBaseline,
   onClearBaseline,
+  onOpenAnalyze,
   onCompareHardware,
   onExploreHardware,
   onOpenWorkloads,
@@ -138,16 +142,48 @@ export function Header({
       </div>
 
       <nav className="header-nav" aria-label="Product">
-        <button type="button" className="header-nav-item" onClick={onExploreHardware} disabled={isLoading}>
+        <button
+          type="button"
+          className={`header-nav-item${activeProductArea === "analyze" ? " active" : ""}`}
+          onClick={onOpenAnalyze}
+          aria-current={activeProductArea === "analyze" ? "page" : undefined}
+        >
+          Analyze
+        </button>
+        <button
+          type="button"
+          className={`header-nav-item${activeProductArea === "profiles" ? " active" : ""}`}
+          onClick={onExploreHardware}
+          disabled={isLoading}
+          aria-current={activeProductArea === "profiles" ? "page" : undefined}
+        >
           Profiles
         </button>
-        <button type="button" className="header-nav-item" onClick={onCompareHardware} disabled={isLoading}>
+        <button
+          type="button"
+          className={`header-nav-item${activeProductArea === "comparisons" ? " active" : ""}`}
+          onClick={onCompareHardware}
+          disabled={isLoading}
+          aria-current={activeProductArea === "comparisons" ? "page" : undefined}
+        >
           Comparisons
         </button>
-        <button type="button" className="header-nav-item" onClick={onOpenWorkloads} disabled={isLoading}>
+        <button
+          type="button"
+          className={`header-nav-item${activeProductArea === "workloads" ? " active" : ""}`}
+          onClick={onOpenWorkloads}
+          disabled={isLoading}
+          aria-current={activeProductArea === "workloads" ? "page" : undefined}
+        >
           Workloads
         </button>
-        <button type="button" className="header-nav-item" onClick={onRunExperiment} disabled={isLoading}>
+        <button
+          type="button"
+          className={`header-nav-item${activeProductArea === "experiments" ? " active" : ""}`}
+          onClick={onRunExperiment}
+          disabled={isLoading}
+          aria-current={activeProductArea === "experiments" ? "page" : undefined}
+        >
           Experiments
         </button>
       </nav>

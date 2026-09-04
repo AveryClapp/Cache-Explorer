@@ -1700,3 +1700,56 @@
     justify-content: flex-start;
   }
 }
+
+/* Product areas are navigable workspaces rather than blocking dialogs. The
+   persistent header remains available for direct movement between areas. */
+.product-surface-overlay {
+  inset: var(--header-height) 0 0;
+  padding: var(--space-4);
+  align-items: stretch;
+  justify-content: stretch;
+  background: var(--void);
+  backdrop-filter: none;
+  z-index: 1000;
+}
+
+.product-surface-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  border-radius: var(--radius-md);
+  box-shadow: none;
+}
+
+.product-surface-panel .batch-modal-content {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+}
+
+.batch-modal-close.surface-back {
+  width: auto;
+  height: 32px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.batch-modal-close.surface-back:hover {
+  border-color: var(--border-bright);
+  color: var(--text-bright);
+}
+
+@media (max-width: 768px) {
+  .product-surface-overlay {
+    inset-block-start: calc(var(--header-height) * 2);
+    padding: var(--space-2);
+  }
+
+  .product-surface-panel {
+    border-radius: 0;
+  }
+}

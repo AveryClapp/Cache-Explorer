@@ -100,12 +100,11 @@ export function ExperimentResultsModal({
   const selectedTemplate = templates.find(template => template.id === selectedTemplateId)
 
   return (
-    <div className="batch-modal-overlay" onClick={() => !running && onClose()}>
+    <div className="batch-modal-overlay product-surface-overlay" onClick={() => !running && onClose()}>
       <div
-        className="batch-modal experiment-modal"
+        className="batch-modal experiment-modal product-surface-panel"
         onClick={event => event.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
+        role="region"
         aria-labelledby="hardware-experiment-title"
       >
         <div className="batch-modal-header">
@@ -121,7 +120,7 @@ export function ExperimentResultsModal({
                 Export JSON
               </button>
             )}
-            <button className="batch-modal-close" onClick={onClose} aria-label="Close hardware experiment">×</button>
+            <button className="batch-modal-close surface-back" onClick={onClose} aria-label="Close hardware experiment and return to analysis">Back to Analyze</button>
           </div>
         </div>
         <div className="batch-modal-content">

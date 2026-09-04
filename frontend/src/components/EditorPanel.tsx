@@ -1,9 +1,18 @@
-import Editor, { DiffEditor } from '@monaco-editor/react'
+import Editor, { DiffEditor, loader } from '@monaco-editor/react'
 import type { Monaco } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
+import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
+import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
+import 'monaco-editor/esm/vs/basic-languages/cpp/cpp.contribution.js'
+import 'monaco-editor/esm/vs/basic-languages/rust/rust.contribution.js'
 import { FileManager } from './FileManager'
 import type { ProjectFile } from './FileManager'
 import type { Language, Stage } from '../types'
+
+self.MonacoEnvironment = {
+  getWorker: () => new EditorWorker(),
+}
+loader.config({ monaco })
 
 interface EditorPanelProps {
   // Editor state

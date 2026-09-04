@@ -172,12 +172,11 @@ export function HardwareExplorerModal({
   ].filter(item => item.best)
 
   return (
-    <div className="batch-modal-overlay" onClick={() => !loading && onClose()}>
+    <div className="batch-modal-overlay product-surface-overlay" onClick={() => !loading && onClose()}>
       <div
-        className="batch-modal hardware-explorer-modal"
+        className="batch-modal hardware-explorer-modal product-surface-panel"
         onClick={event => event.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
+        role="region"
         aria-labelledby="hardware-explorer-title"
       >
         <div className="batch-modal-header">
@@ -220,7 +219,7 @@ export function HardwareExplorerModal({
               Use Profile
             </button>
             <button className="btn" onClick={onRefresh} disabled={loading}>Refresh</button>
-            <button className="batch-modal-close" onClick={onClose} aria-label="Close hardware explorer">×</button>
+            <button className="batch-modal-close surface-back" onClick={onClose} aria-label="Close hardware explorer and return to analysis">Back to Analyze</button>
           </div>
         </div>
         <div className="batch-modal-content hardware-explorer-content">

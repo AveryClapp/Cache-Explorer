@@ -226,12 +226,11 @@ export function WorkloadCatalogModal({
   }
 
   return (
-    <div className="batch-modal-overlay" onClick={() => !verifying && onClose()}>
+    <div className="batch-modal-overlay product-surface-overlay" onClick={() => !verifying && onClose()}>
       <div
-        className="batch-modal workload-modal"
+        className="batch-modal workload-modal product-surface-panel"
         onClick={event => event.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
+        role="region"
         aria-labelledby="verified-workloads-title"
       >
         <div className="batch-modal-header">
@@ -257,7 +256,7 @@ export function WorkloadCatalogModal({
             >
               {historyLoading ? 'History...' : 'History'}
             </button>
-            <button className="batch-modal-close" onClick={onClose} aria-label="Close verified workloads">×</button>
+            <button className="batch-modal-close surface-back" onClick={onClose} aria-label="Close verified workloads and return to analysis">Back to Analyze</button>
           </div>
         </div>
         <div className="batch-modal-content workload-modal-content">

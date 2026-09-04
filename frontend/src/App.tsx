@@ -5,13 +5,14 @@ import './styles/index.css'
 
 // Components
 import {
-  Header,
-  SettingsToolbar,
-  ExamplesSidebar,
-  ResultsPanel,
-  EditorPanel,
-} from './components'
-import type { ProjectFile, CommandItem, ExampleLangFilter } from './components'
+  type ProjectFile,
+} from './components/FileManager'
+import type { CommandItem } from './components/CommandPalette'
+import type { ExampleLangFilter } from './components/ExamplesSidebar'
+import { Header } from './components/Header'
+import { SettingsToolbar } from './components/SettingsToolbar'
+import { ExamplesSidebar } from './components/ExamplesSidebar'
+import { ResultsPanel } from './components/ResultsPanel'
 
 // Types
 import type {
@@ -69,6 +70,7 @@ import {
 } from './utils/export'
 
 const CommandPalette = lazy(() => import('./components/CommandPalette').then(module => ({ default: module.CommandPalette })))
+const EditorPanel = lazy(() => import('./components/EditorPanel').then(module => ({ default: module.EditorPanel })))
 const BatchResultsModal = lazy(() => import('./components/BatchResultsModal').then(module => ({ default: module.BatchResultsModal })))
 const ExperimentResultsModal = lazy(() => import('./components/ExperimentResultsModal').then(module => ({ default: module.ExperimentResultsModal })))
 const HardwareExplorerModal = lazy(() => import('./components/HardwareExplorerModal').then(module => ({ default: module.HardwareExplorerModal })))
@@ -1021,6 +1023,9 @@ function App() {
     setBatchError(null)
     setBatchRunning(true)
     setBatchTotal(configsToRun.length)
+    setShowHardwareExplorer(false)
+    setShowWorkloadCatalog(false)
+    setShowExperimentModal(false)
     setShowBatchModal(true)
     let successfulResults = 0
     let failureMessage: string | null = null
@@ -1090,7 +1095,17 @@ function App() {
     }
   }, [files, makeHardwarePayload, runHardwareConfigIds])
 
+  const openComparisonWorkspace = useCallback(() => {
+    setShowExperimentModal(false)
+    setShowHardwareExplorer(false)
+    setShowWorkloadCatalog(false)
+    setShowBatchModal(true)
+  }, [])
+
   const openExperimentModal = useCallback(() => {
+    setShowBatchModal(false)
+    setShowHardwareExplorer(false)
+    setShowWorkloadCatalog(false)
     setShowExperimentModal(true)
   }, [])
 
@@ -1156,6 +1171,9 @@ function App() {
   }, [])
 
   const openWorkloadCatalog = useCallback(() => {
+    setShowBatchModal(false)
+    setShowExperimentModal(false)
+    setShowHardwareExplorer(false)
     setShowWorkloadCatalog(true)
     if (workloads.length === 0 && !workloadsLoading) {
       void loadWorkloads()
@@ -1308,6 +1326,9 @@ function App() {
   }, [config])
 
   const openHardwareExplorer = useCallback(() => {
+    setShowBatchModal(false)
+    setShowExperimentModal(false)
+    setShowWorkloadCatalog(false)
     setShowHardwareExplorer(true)
     if (hardwareProfiles.length === 0 && !hardwareProfilesLoading) {
       void loadHardwareProfiles()
@@ -1420,6 +1441,23 @@ function App() {
     setSelectedCommandIndex(prev => Math.max(0, Math.min(filtered.length - 1, prev + delta)))
   }
 
+  const activeProductArea = showHardwareExplorer
+    ? 'profiles'
+    : showBatchModal
+      ? 'comparisons'
+      : showWorkloadCatalog
+        ? 'workloads'
+        : showExperimentModal
+          ? 'experiments'
+          : 'analyze'
+
+  const openAnalyzeWorkspace = () => {
+    setShowBatchModal(false)
+    setShowExperimentModal(false)
+    setShowHardwareExplorer(false)
+    setShowWorkloadCatalog(false)
+  }
+
   return (
     <div className={`app${isEmbedMode ? ' embed' : ''}`}>
       {/* Command Palette - hidden in embed mode */}
@@ -1447,6 +1485,7 @@ function App() {
             error={batchError}
             running={batchRunning}
             total={batchTotal}
+            onRun={() => { void runBatchAnalysis() }}
             onExportCSV={() => exportBatchResultsAsCSV(batchResults)}
             onExportJSON={() => exportBatchResultsAsJSON(batchResults)}
             onClose={() => setShowBatchModal(false)}
@@ -1535,6 +1574,7 @@ function App() {
       {/* Header - hidden in embed mode */}
       {!isEmbedMode && (
         <Header
+          activeProductArea={activeProductArea}
           theme={theme}
           diffMode={diffMode}
           baselineResult={baselineResult}
@@ -1549,7 +1589,8 @@ function App() {
           onSetDiffMode={setDiffMode}
           onSetBaseline={(r) => { setBaselineFromHook(r, config, files); setBaselineCode(code) }}
           onClearBaseline={() => { clearBaselineHook(); setBaselineCode(null) }}
-          onCompareHardware={runBatchAnalysis}
+          onOpenAnalyze={openAnalyzeWorkspace}
+          onCompareHardware={openComparisonWorkspace}
           onExploreHardware={openHardwareExplorer}
           onOpenWorkloads={openWorkloadCatalog}
           onRunExperiment={openExperimentModal}
@@ -1630,32 +1671,34 @@ function App() {
           />
         )}
 
-        <EditorPanel
-          code={code}
-          language={language}
-          theme={theme}
-          isReadOnly={isReadOnly}
-          isEmbedMode={isEmbedMode}
-          diffMode={diffMode}
-          baselineCode={baselineCode}
-          files={projectFiles}
-          activeFileId={activeFileId}
-          onFileSelect={setActiveFileId}
-          onFileCreate={createFile}
-          onFileDelete={closeFile}
-          onFileRename={renameFile}
-          onSetMainFile={setMainFileId}
-          onCodeChange={updateActiveCode}
-          onEditorMount={handleEditorMount}
-          isLoading={isLoading}
-          stage={stage}
-          progress={progress}
-          config={config}
-          vimMode={vimMode}
-          vimStatusRef={vimStatusRef}
-          isMobile={isMobile}
-          mobilePane={mobilePane}
-        />
+        <Suspense fallback={<div className="editor-area editor-loading" role="status">Loading code editor...</div>}>
+          <EditorPanel
+            code={code}
+            language={language}
+            theme={theme}
+            isReadOnly={isReadOnly}
+            isEmbedMode={isEmbedMode}
+            diffMode={diffMode}
+            baselineCode={baselineCode}
+            files={projectFiles}
+            activeFileId={activeFileId}
+            onFileSelect={setActiveFileId}
+            onFileCreate={createFile}
+            onFileDelete={closeFile}
+            onFileRename={renameFile}
+            onSetMainFile={setMainFileId}
+            onCodeChange={updateActiveCode}
+            onEditorMount={handleEditorMount}
+            isLoading={isLoading}
+            stage={stage}
+            progress={progress}
+            config={config}
+            vimMode={vimMode}
+            vimStatusRef={vimStatusRef}
+            isMobile={isMobile}
+            mobilePane={mobilePane}
+          />
+        </Suspense>
 
         <ResultsPanel
           result={result}
