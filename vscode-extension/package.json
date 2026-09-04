@@ -1,11 +1,21 @@
 {
   "name": "cache-explorer",
-  "displayName": "Cache Explorer",
-  "description": "Visual cache profiler for C, C++, and Rust - see how your code interacts with CPU cache hierarchies",
+  "displayName": "Hardware Explorer Preview",
+  "description": "CPU performance modeling for C, C++, and Rust source code",
   "version": "0.1.0",
   "publisher": "cache-explorer",
   "engines": {
     "vscode": "^1.85.0"
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Analysis is disabled because it sends and executes source code.",
+      "restrictedConfigurations": [
+        "cacheExplorer.serverUrl",
+        "cacheExplorer.autoProfile"
+      ]
+    }
   },
   "categories": [
     "Debuggers",
@@ -30,39 +40,57 @@
     "commands": [
       {
         "command": "cacheExplorer.profileCurrentFile",
-        "title": "Cache Explorer: Profile Current File"
+        "title": "Hardware Explorer: Profile Current File"
       },
       {
         "command": "cacheExplorer.showResults",
-        "title": "Cache Explorer: Show Results"
+        "title": "Hardware Explorer: Show Results"
       }
     ],
     "configuration": {
-      "title": "Cache Explorer",
+      "title": "Hardware Explorer",
       "properties": {
         "cacheExplorer.serverUrl": {
           "type": "string",
           "default": "ws://localhost:3001/ws",
-          "description": "WebSocket URL of the Cache Explorer server"
+          "description": "WebSocket URL of the Hardware Explorer server. Remote destinations require confirmation."
         },
         "cacheExplorer.hardwarePreset": {
           "type": "string",
-          "default": "modern-desktop",
+          "default": "educational",
           "enum": [
-            "modern-desktop",
-            "laptop",
-            "server",
+            "educational",
+            "intel",
+            "intel14",
+            "amd",
+            "zen3",
+            "apple",
+            "m2",
+            "m3",
+            "xeon",
+            "epyc",
+            "graviton",
             "embedded",
+            "rpi4",
             "custom"
           ],
           "enumDescriptions": [
-            "Modern desktop CPU (Intel/AMD, large L3)",
-            "Laptop CPU (balanced power/performance)",
-            "Server CPU (large caches, high associativity)",
-            "Embedded processor (smaller caches)",
+            "Teaching model with small caches and visible misses",
+            "Intel 12th Gen directional model",
+            "Intel 14th Gen directional model",
+            "AMD Zen 4 directional model",
+            "AMD Zen 3 directional model",
+            "Apple M1 directional model",
+            "Apple M2 directional model",
+            "Apple M3 directional model",
+            "Intel Xeon directional model",
+            "AMD EPYC directional model",
+            "AWS Graviton 3 directional model",
+            "Generic embedded ARM model",
+            "Raspberry Pi 4 directional model",
             "Custom configuration"
           ],
-          "description": "Hardware preset for cache simulation"
+          "description": "CPU profile for Hardware Explorer modeling"
         },
         "cacheExplorer.showInlineAnnotations": {
           "type": "boolean",
@@ -81,8 +109,8 @@
         {
           "type": "webview",
           "id": "cacheExplorer.resultsView",
-          "name": "Cache Explorer",
-          "contextualTitle": "Cache Explorer Results"
+          "name": "Hardware Explorer",
+          "contextualTitle": "Hardware Explorer Results"
         }
       ]
     },
@@ -117,7 +145,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/cache-explorer/cache-explorer"
+    "url": "https://github.com/AveryClapp/Cache-Explorer"
   },
   "license": "MIT"
 }

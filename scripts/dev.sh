@@ -75,13 +75,13 @@ ensure_build
 ensure_node_modules "$ROOT_DIR/backend/server"
 ensure_node_modules "$ROOT_DIR/frontend"
 
-echo "Starting Cache Explorer"
+echo "Starting Hardware Explorer Preview"
 echo "  Backend:  http://$HOST:$BACKEND_PORT"
 echo "  Frontend: http://$HOST:$FRONTEND_PORT"
 echo "  Health:   http://$HOST:$BACKEND_PORT/health"
 echo ""
 
-(cd "$ROOT_DIR/backend/server" && PORT="$BACKEND_PORT" npm start) &
+(cd "$ROOT_DIR/backend/server" && HOST="$HOST" PORT="$BACKEND_PORT" npm start) &
 BACKEND_PID="$!"
 
 wait_for_backend
@@ -95,7 +95,7 @@ wait_for_backend
 FRONTEND_PID="$!"
 
 echo ""
-echo "Cache Explorer is running at http://$HOST:$FRONTEND_PORT"
+echo "Hardware Explorer Preview is running at http://$HOST:$FRONTEND_PORT"
 echo "Press Ctrl-C to stop both processes."
 
 while true; do

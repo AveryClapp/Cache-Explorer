@@ -29,12 +29,27 @@ echo -n "Test: backend accepts per-variant source experiments... "
 ) &
 SERVER_PID=$!
 
-for _ in {1..80}; do
+SERVER_READY=0
+for _ in {1..160}; do
   if curl -fsS "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
+    SERVER_READY=1
     break
+  fi
+  if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+    echo "FAIL"
+    echo "Temporary server exited before becoming healthy:" >&2
+    cat "$SERVER_LOG" >&2
+    exit 1
   fi
   sleep 0.25
 done
+
+if [[ "$SERVER_READY" != "1" ]]; then
+  echo "FAIL"
+  echo "Temporary server did not become healthy on port $PORT:" >&2
+  cat "$SERVER_LOG" >&2
+  exit 1
+fi
 
 OUTPUT=$(cd "$PROJECT_ROOT" && TEST_PORT="$PORT" node --input-type=module <<'NODE'
 import { readFileSync } from 'fs'

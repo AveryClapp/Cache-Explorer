@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { encodeState, decodeState } from '../utils/state'
+import { decodeState } from '../utils/state'
 import { API_BASE } from '../constants/config'
 import type { ShareableState, Language, DefineEntry, PrefetchPolicy } from '../types'
 
@@ -7,19 +7,7 @@ export function useUrlState(
   onLoadState: (state: ShareableState) => void,
   deps: [string, string, string, Language, DefineEntry[], PrefetchPolicy?, string?, number?, number?, boolean?, boolean?]
 ) {
-  const [
-    code,
-    config,
-    optLevel,
-    language,
-    defines,
-    prefetchPolicy,
-    selectedCompiler,
-    sampleRate,
-    eventLimit,
-    fastMode,
-    cacheSegments,
-  ] = deps
+  void deps
 
   // Load state from URL on mount
   useEffect(() => {
@@ -49,26 +37,6 @@ export function useUrlState(
     loadState()
   }, [onLoadState])
 
-  // Update URL when state changes
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const encoded = encodeState({
-        code,
-        config,
-        optLevel,
-        language,
-        defines,
-        prefetchPolicy,
-        selectedCompiler,
-        sampleRate,
-        eventLimit,
-        fastMode,
-        cacheSegments,
-      })
-      window.history.replaceState(null, '', `${window.location.pathname}#${encoded}`)
-    }, 500)
-    return () => clearTimeout(timer)
-  }, [cacheSegments, code, config, defines, eventLimit, fastMode, language, optLevel, prefetchPolicy, sampleRate, selectedCompiler])
 }
 
 export async function shareUrl(state: ShareableState): Promise<string | null> {
@@ -82,8 +50,6 @@ export async function shareUrl(state: ShareableState): Promise<string | null> {
     if (data.id) {
       return `${window.location.origin}${window.location.pathname}?s=${data.id}`
     }
-  } catch {
-    return window.location.href
-  }
+  } catch { /* sharing requires the server so source is never copied into the URL */ }
   return null
 }

@@ -5,7 +5,7 @@ import { profileCurrentFile } from './profileCommand';
 let cacheExplorerProvider: CacheExplorerProvider | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
-  console.log('Cache Explorer extension is now active');
+  console.log('Hardware Explorer extension is now active');
 
   // Create the provider for the results panel
   cacheExplorerProvider = new CacheExplorerProvider(context.extensionUri);
@@ -27,13 +27,18 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
 
+      if (!vscode.workspace.isTrusted) {
+        vscode.window.showWarningMessage('Hardware Explorer is disabled in untrusted workspaces because analysis sends and executes source code.');
+        return;
+      }
+
       const document = editor.document;
       const languageId = document.languageId;
 
       // Check if the language is supported
       if (!['c', 'cpp', 'rust'].includes(languageId)) {
         vscode.window.showWarningMessage(
-          `Cache Explorer doesn't support ${languageId} files. Supported: C, C++, Rust`
+          `Hardware Explorer doesn't support ${languageId} files. Supported: C, C++, Rust`
         );
         return;
       }
@@ -45,7 +50,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
-        vscode.window.showErrorMessage(`Cache Explorer: ${message}`);
+        vscode.window.showErrorMessage(`Hardware Explorer: ${message}`);
       }
     })
   );
@@ -60,9 +65,9 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.workspace.onDidSaveTextDocument(async (document) => {
       const config = vscode.workspace.getConfiguration('cacheExplorer');
-      if (config.get('autoProfile') && ['c', 'cpp', 'rust'].includes(document.languageId)) {
+      if (vscode.workspace.isTrusted && config.get('autoProfile') && ['c', 'cpp', 'rust'].includes(document.languageId)) {
         try {
-          const results = await profileCurrentFile(document);
+          const results = await profileCurrentFile(document, { allowRemotePrompt: false });
           if (results && cacheExplorerProvider) {
             cacheExplorerProvider.updateResults(results);
           }
@@ -78,7 +83,7 @@ export function activate(context: vscode.ExtensionContext) {
   const hasShownWelcome = context.globalState.get('hasShownWelcome');
   if (!hasShownWelcome) {
     vscode.window.showInformationMessage(
-      'Cache Explorer: Profile your code with "Cache Explorer: Profile Current File" command',
+      'Hardware Explorer Preview: profile source with the “Hardware Explorer: Profile Current File” command.',
       'Got it'
     );
     context.globalState.update('hasShownWelcome', true);
@@ -86,5 +91,5 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {
-  console.log('Cache Explorer extension deactivated');
+  console.log('Hardware Explorer extension deactivated');
 }

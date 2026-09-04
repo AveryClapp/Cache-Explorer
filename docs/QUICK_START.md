@@ -7,7 +7,7 @@ Get the local-first CPU performance modeling workbench running in 5 minutes.
 - **macOS** (ARM64/Intel) or **Linux** (x86_64)
 - **LLVM/Clang 17-21** (LLVM 18 recommended)
 - **CMake 3.20+**
-- **Node.js 18+** (for web UI)
+- **Node.js 20.19+ or 22.12+** (for the web UI)
 
 ## Installation
 

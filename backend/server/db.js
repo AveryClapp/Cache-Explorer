@@ -253,6 +253,26 @@ export function createShortUrl(data) {
   }
 }
 
+export function pruneShortUrls(maxEntries = 10000, maxAgeDays = 30) {
+  if (!ensureDb()) return { deleted: 0 };
+
+  const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
+  const expired = db.prepare('DELETE FROM short_urls WHERE created_at < ?').run(cutoff).changes;
+  const count = db.prepare('SELECT COUNT(*) AS count FROM short_urls').get()?.count || 0;
+  const excess = Math.max(0, count - maxEntries);
+  let overflow = 0;
+  if (excess > 0) {
+    overflow = db.prepare(`
+      DELETE FROM short_urls WHERE code IN (
+        SELECT code FROM short_urls
+        ORDER BY COALESCE(last_accessed, created_at) ASC
+        LIMIT ?
+      )
+    `).run(excess).changes;
+  }
+  return { deleted: expired + overflow };
+}
+
 /**
  * Get data for short URL
  */

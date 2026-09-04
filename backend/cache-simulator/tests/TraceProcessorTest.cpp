@@ -211,6 +211,8 @@ void test_parse_trace_event_icache() {
 void test_parse_trace_event_invalid() {
   auto event = parse_trace_event("invalid line");
   assert(!event.has_value());
+  assert(!parse_trace_event("L 0x1000 4 main.c:not-a-line T0").has_value());
+  assert(!parse_trace_event("L 0x1000 4 main.c:10 T99999999999999999999").has_value());
   std::cout << "[PASS] test_parse_trace_event_invalid\n";
 }
 

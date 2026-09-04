@@ -13,7 +13,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install LLVM 18
         run: |
@@ -139,12 +139,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '20.19'
           cache: 'npm'
           cache-dependency-path: backend/server/package-lock.json
 
@@ -166,12 +166,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '20.19'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
@@ -212,12 +212,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '20.19'
 
       - name: Install dependencies
         working-directory: vscode-extension
@@ -230,3 +230,42 @@ jobs:
       - name: Lint extension
         working-directory: vscode-extension
         run: npm run lint
+
+  local-product-smoke:
+    name: Local Product (Docker + Real Browser)
+    runs-on: ubuntu-latest
+    needs: [server, frontend]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20.19'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+          package-manager-cache: false
+
+      - name: Install browser smoke dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Set up Chrome
+        uses: browser-actions/setup-chrome@v1
+
+      - name: Build and start the local product
+        run: docker compose up --build --detach --wait --wait-timeout 180
+
+      - name: Run the real default journey
+        working-directory: frontend
+        run: npm run smoke:live
+
+      - name: Capture product logs
+        if: always()
+        run: docker compose logs --no-color
+
+      - name: Stop the local product
+        if: always()
+        run: docker compose down --volumes

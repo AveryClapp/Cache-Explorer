@@ -179,7 +179,7 @@ fi
 
 echo -n "Test: workload history artifact can render an HTML report... "
 if "$CACHE_EXPLORE" workloads --history-summary "$HISTORY_FILE" --html > "$HISTORY_REPORT_FILE" \
-  && grep -q "Cache Explorer Workload History" "$HISTORY_REPORT_FILE" \
+  && grep -q "Hardware Explorer Preview Workload History" "$HISTORY_REPORT_FILE" \
   && grep -q "Per-Workload Trend" "$HISTORY_REPORT_FILE"; then
   echo "PASS"
 else

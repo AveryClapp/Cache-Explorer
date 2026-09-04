@@ -150,7 +150,10 @@ async function openHeaderTool(name) {
     Workloads: 'Workloads',
     Experiment: 'Experiments',
   }
-  await page.getByRole('button', { name: navigationLabels[name] || name, exact: true }).click()
+  const label = navigationLabels[name] || name
+  await page.getByRole('navigation', { name: 'Product' }).getByRole('link', { name: label, exact: true }).click()
+  const expectedView = label.toLowerCase()
+  assert(new URL(page.url()).searchParams.get('view') === expectedView, `${label} navigation did not update the URL`)
 }
 
 async function openAdvancedSettings() {
@@ -200,9 +203,44 @@ async function layoutMetrics() {
 }
 
 async function closeModal() {
-  const closeButton = page.locator('.batch-modal-close')
-  await assertVisible(closeButton, 'modal close button')
-  await closeButton.click()
+  const analyzeLink = page.getByRole('navigation', { name: 'Product' }).getByRole('link', { name: 'Analyze', exact: true })
+  await assertVisible(analyzeLink, 'Analyze navigation link')
+  await analyzeLink.click()
+  assert(new URL(page.url()).searchParams.get('view') === null, 'Analyze navigation did not clear the workspace URL')
+}
+
+async function verifyProductDeepLinks(url) {
+  const scriptRequests = []
+  const requestListener = request => {
+    if (request.resourceType() === 'script') scriptRequests.push(request.url())
+  }
+  page.on('request', requestListener)
+
+  const startedAt = Date.now()
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await page.goto(`${url}?view=workloads`, { waitUntil: 'domcontentloaded' })
+  await assertVisible(page.getByText('Verified Workloads', { exact: true }), 'direct workload workspace')
+  const visibleMs = Date.now() - startedAt
+  assert(visibleMs < 5000, `workload workspace took ${visibleMs}ms to become visible`)
+  assert(await page.locator('.editor-area').count() === 0, 'direct workload navigation should not mount the code editor')
+  assert(
+    !scriptRequests.some(requestUrl => /EditorPanel|editor\.api|monaco-vim/.test(requestUrl)),
+    `direct workload navigation loaded editor code: ${JSON.stringify(scriptRequests)}`,
+  )
+
+  await page.getByRole('navigation', { name: 'Product' }).getByRole('link', { name: 'Profiles', exact: true }).click()
+  await assertVisible(page.getByText('CPU Profiles', { exact: true }), 'profile workspace navigation')
+  assert(new URL(page.url()).searchParams.get('view') === 'profiles', 'profile workspace URL mismatch')
+
+  await page.goBack({ waitUntil: 'domcontentloaded' })
+  await assertVisible(page.getByText('Verified Workloads', { exact: true }), 'browser back workload workspace')
+  assert(new URL(page.url()).searchParams.get('view') === 'workloads', 'browser back did not restore workload workspace')
+
+  await page.goForward({ waitUntil: 'domcontentloaded' })
+  await assertVisible(page.getByText('CPU Profiles', { exact: true }), 'browser forward profile workspace')
+  assert(new URL(page.url()).searchParams.get('view') === 'profiles', 'browser forward did not restore profile workspace')
+
+  page.off('request', requestListener)
 }
 
 async function verifyLaunchSurface(url) {
@@ -278,7 +316,7 @@ async function verifyLaunchSurface(url) {
   await assertVisible(page.getByText('Model contract', { exact: true }), 'launch model-contract evidence')
   await assertVisible(page.getByText('Repro command', { exact: true }), 'launch repro evidence')
   await assertVisible(page.getByRole('button', { name: 'Share', exact: true }), 'launch share action')
-  await assertVisible(page.getByRole('button', { name: /Run buffer/ }), 'run buffer path')
+  await assertVisible(page.getByRole('button', { name: /Analyze current code/ }), 'analyze current code path')
 
   const desktopLayout = await layoutMetrics()
   assert(desktopLayout.pathCount === 4, `expected 4 launch paths, saw ${desktopLayout.pathCount}`)
@@ -296,9 +334,9 @@ async function verifyLaunchSurface(url) {
   assert(await page.getByText('Defines:', { exact: true }).count() === 0, 'advanced settings should not expose compiler defines')
   await page.getByRole('button', { name: /Run setup/ }).click()
 
-  await page.getByRole('button', { name: /Hardware map/ }).click()
+  await page.getByRole('button', { name: /^03 CPU profiles/ }).click()
   const hardwareModal = page.locator('.hardware-explorer-modal')
-  await assertVisible(hardwareModal.getByText('Hardware Explorer', { exact: true }), 'hardware modal')
+  await assertVisible(hardwareModal.getByText('CPU Profiles', { exact: true }), 'profile workspace')
   await assertVisible(hardwareModal.getByText('Trust Snapshot', { exact: true }), 'hardware trust snapshot')
   await assertVisible(hardwareModal.getByText('2/3', { exact: true }), 'hardware driven field count')
   await assertVisible(hardwareModal.getByText('Local perf smoke', { exact: true }), 'hardware validation source')
@@ -306,7 +344,7 @@ async function verifyLaunchSurface(url) {
   await assertVisible(hardwareModal.getByText('L1 validated on local perf counters', { exact: true }), 'hardware validation caveat')
   await closeModal()
 
-  await page.getByRole('button', { name: /Experiment matrix/ }).click()
+  await page.getByRole('button', { name: /^04 Source experiments/ }).click()
   await assertVisible(page.getByText('Hardware Experiment', { exact: true }), 'experiment modal')
   await closeModal()
 
@@ -326,6 +364,31 @@ async function verifyLaunchSurface(url) {
   assert((mobileLayout.emptyScrollDelta ?? 0) <= maxLayoutScrollDelta, `mobile launch surface scrolls by ${mobileLayout.emptyScrollDelta}px`)
 
   await page.unroute('**/profiles')
+}
+
+async function verifyShareFailurePrivacy(url) {
+  await page.route('**/shorten', async route => {
+    await route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'Share service unavailable' }),
+    })
+  })
+
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await page.goto(url, { waitUntil: 'domcontentloaded' })
+  await delay(700)
+  assert(new URL(page.url()).hash === '', 'source state should not be written to the URL fragment')
+  await page.evaluate(() => { window.__copiedText = '' })
+  await page.getByRole('button', { name: 'Share', exact: true }).click()
+  await assertVisible(
+    page.getByText('Share service unavailable. Source was not placed in the URL.', { exact: true }),
+    'share privacy failure notice',
+  )
+  assert(await page.evaluate(() => window.__copiedText) === '', 'failed share should not copy source-bearing URL state')
+  assert(new URL(page.url()).hash === '', 'failed share should not put source into the URL fragment')
+
+  await page.unroute('**/shorten')
 }
 
 async function verifyWorkloadCatalogControls(url) {
@@ -1473,7 +1536,7 @@ async function verifyExperimentResults(url) {
   await assertVisible(page.getByText('Hardware Explorer', { exact: true }).first(), 'Hardware Explorer product name')
   await assertVisible(page.getByText('Preview', { exact: true }).first(), 'Preview badge')
   for (const label of ['Profiles', 'Comparisons', 'Workloads', 'Experiments']) {
-    await assertVisible(page.getByRole('button', { name: label, exact: true }), `${label} primary navigation`)
+    await assertVisible(page.getByRole('navigation', { name: 'Product' }).getByRole('link', { name: label, exact: true }), `${label} primary navigation`)
   }
   await openHeaderTool('Experiment')
 
@@ -1676,7 +1739,9 @@ try {
     }),
   }))
 
+  await runSmokeStep('product deep links and task load', () => verifyProductDeepLinks(url))
   await runSmokeStep('launch surface', () => verifyLaunchSurface(url))
+  await runSmokeStep('share failure privacy', () => verifyShareFailurePrivacy(url))
   await runSmokeStep('result trust panel', () => verifyResultTrustPanel(url))
   await runSmokeStep('legacy result trust panel', () => verifyLegacyResultTrustPanel(url))
   await runSmokeStep('hardware comparison', () => verifyHardwareComparison(url))

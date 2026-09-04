@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <optional>
 #include <sstream>
@@ -53,6 +54,19 @@ struct EventResult {
   uint32_t line;
 };
 
+inline std::optional<uint32_t> parse_trace_u32(const std::string &value) {
+  try {
+    size_t consumed = 0;
+    const unsigned long long parsed = std::stoull(value, &consumed, 10);
+    if (consumed != value.size() || parsed > std::numeric_limits<uint32_t>::max()) {
+      return std::nullopt;
+    }
+    return static_cast<uint32_t>(parsed);
+  } catch (...) {
+    return std::nullopt;
+  }
+}
+
 inline std::optional<TraceEvent> parse_trace_event(const std::string &line) {
   if (line.empty() || line[0] == '#')
     return std::nullopt;
@@ -93,7 +107,9 @@ inline std::optional<TraceEvent> parse_trace_event(const std::string &line) {
       auto colon = location.find(':');
       if (colon != std::string::npos) {
         event.file = location.substr(0, colon);
-        event.line = std::stoul(location.substr(colon + 1));
+        auto parsed_line = parse_trace_u32(location.substr(colon + 1));
+        if (!parsed_line) return std::nullopt;
+        event.line = *parsed_line;
       } else {
         event.file = location;
         event.line = 0;
@@ -101,7 +117,9 @@ inline std::optional<TraceEvent> parse_trace_event(const std::string &line) {
     }
     if (iss >> thread_str) {
       if (!thread_str.empty() && thread_str[0] == 'T') {
-        event.thread_id = std::stoul(thread_str.substr(1));
+        auto parsed_thread = parse_trace_u32(thread_str.substr(1));
+        if (!parsed_thread) return std::nullopt;
+        event.thread_id = *parsed_thread;
       }
     }
     return event;
@@ -188,7 +206,9 @@ inline std::optional<TraceEvent> parse_trace_event(const std::string &line) {
     auto colon = location.find(':');
     if (colon != std::string::npos) {
       event.file = location.substr(0, colon);
-      event.line = std::stoul(location.substr(colon + 1));
+      auto parsed_line = parse_trace_u32(location.substr(colon + 1));
+      if (!parsed_line) return std::nullopt;
+      event.line = *parsed_line;
     } else {
       event.file = location;
       event.line = 0;
@@ -198,7 +218,9 @@ inline std::optional<TraceEvent> parse_trace_event(const std::string &line) {
   // Parse thread ID (format: T<number>)
   if (iss >> thread_str) {
     if (!thread_str.empty() && thread_str[0] == 'T') {
-      event.thread_id = std::stoul(thread_str.substr(1));
+      auto parsed_thread = parse_trace_u32(thread_str.substr(1));
+      if (!parsed_thread) return std::nullopt;
+      event.thread_id = *parsed_thread;
     }
   }
 

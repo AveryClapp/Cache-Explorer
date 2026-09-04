@@ -518,7 +518,7 @@ async function capture(outputDir, label) {
 }
 
 async function closeModal() {
-  await page.getByRole('button', { name: /^Close/ }).click()
+  await page.getByRole('navigation', { name: 'Product' }).getByRole('link', { name: 'Analyze', exact: true }).click()
 }
 
 async function openProductArea(name) {
@@ -529,7 +529,7 @@ async function openProductArea(name) {
     Experiments: 'Experiments',
   }
   const label = navigationLabels[name] || name
-  await page.getByRole('navigation', { name: 'Product' }).getByRole('button', { name: label, exact: true }).click()
+  await page.getByRole('navigation', { name: 'Product' }).getByRole('link', { name: label, exact: true }).click()
 }
 
 async function runVisualFlow(url, outputDir) {
@@ -543,7 +543,7 @@ async function runVisualFlow(url, outputDir) {
   await capture(outputDir, 'desktop-result')
 
   await openProductArea('Explore')
-  await page.getByText('Hardware Explorer', { exact: true }).waitFor({ state: 'visible', timeout: 8000 })
+  await page.getByText('CPU Profiles', { exact: true }).waitFor({ state: 'visible', timeout: 8000 })
   await capture(outputDir, 'hardware-explorer')
   await closeModal()
 

@@ -1,4 +1,5 @@
 #include "../include/JsonOutput.hpp"
+#include <cstdio>
 #include "../include/PipelineModel.hpp"
 #include <iomanip>
 #include <unordered_map>
@@ -58,10 +59,24 @@ void write_bool_field(std::ostream& out, const char* name, bool value, bool last
 std::string JsonOutput::escape(std::string_view s) {
     std::string out;
     out.reserve(s.size());
-    for (char c : s) {
-        if (c == '"') out += "\\\"";
-        else if (c == '\\') out += "\\\\";
-        else out += c;
+    for (unsigned char c : s) {
+        switch (c) {
+            case '"': out += "\\\""; break;
+            case '\\': out += "\\\\"; break;
+            case '\b': out += "\\b"; break;
+            case '\f': out += "\\f"; break;
+            case '\n': out += "\\n"; break;
+            case '\r': out += "\\r"; break;
+            case '\t': out += "\\t"; break;
+            default:
+                if (c < 0x20) {
+                    char encoded[7];
+                    std::snprintf(encoded, sizeof(encoded), "\\u%04x", c);
+                    out += encoded;
+                } else {
+                    out += static_cast<char>(c);
+                }
+        }
     }
     return out;
 }

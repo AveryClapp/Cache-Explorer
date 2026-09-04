@@ -49,7 +49,7 @@ ctest 2>&1 | cache-sim --json --config intel
 
 ## `find_package` Integration
 
-For per-target control, add Cache Explorer to your `CMakeLists.txt`:
+For per-target control, add Hardware Explorer to your `CMakeLists.txt`:
 
 ```cmake
 cmake_minimum_required(VERSION 3.16)
@@ -89,7 +89,7 @@ cmake --build build --target analyze-my_app
 | CMake Variable | Default | Description |
 |---|---|---|
 | `CACHE_EXPLORER_ENABLED` | `ON` | Enable/disable profiling without removing from CMakeLists |
-| `CACHE_EXPLORER_PATH` | auto-detected | Path to Cache Explorer `backend/` directory |
+| `CACHE_EXPLORER_PATH` | auto-detected | Path to the Hardware Explorer `backend/` directory |
 | `CACHE_EXPLORER_PASS` | auto-detected | Path to `CacheProfiler.so` |
 | `CACHE_EXPLORER_RUNTIME` | auto-detected | Path to `libcache-explorer-rt.a` |
 | `CACHE_EXPLORER_INCLUDE_STL` | `OFF` | Include STL internals in profiling (slower) |
@@ -100,7 +100,7 @@ cmake --build build --target analyze-my_app
 
 ### "Clang not found" or pass plugin fails to load
 
-Cache Explorer requires LLVM Clang with `-fpass-plugin` support. The toolchain
+Hardware Explorer requires LLVM Clang with `-fpass-plugin` support. The toolchain
 file (`cache-explore cmake`) sets this automatically. For `find_package`, set
 the compiler explicitly:
 

@@ -19,7 +19,6 @@ interface ExperimentResultsModalProps {
   onRun: () => void
   onExportCSV?: () => void
   onExportJSON?: () => void
-  onClose: () => void
 }
 
 function formatCycles(value: number | null | undefined) {
@@ -93,22 +92,23 @@ export function ExperimentResultsModal({
   onRun,
   onExportCSV,
   onExportJSON,
-  onClose,
 }: ExperimentResultsModalProps) {
   const winners = winnerRows(result)
   const overall = overallWinner(result)
   const selectedTemplate = templates.find(template => template.id === selectedTemplateId)
 
   return (
-    <div className="batch-modal-overlay product-surface-overlay" onClick={() => !running && onClose()}>
+    <section className="batch-modal-overlay product-surface-overlay" aria-labelledby="hardware-experiment-title">
       <div
         className="batch-modal experiment-modal product-surface-panel"
-        onClick={event => event.stopPropagation()}
         role="region"
         aria-labelledby="hardware-experiment-title"
       >
         <div className="batch-modal-header">
-          <span className="batch-modal-title" id="hardware-experiment-title">Hardware Experiment</span>
+          <div className="product-surface-title">
+            <h1 className="batch-modal-title" id="hardware-experiment-title">Hardware Experiment</h1>
+            <p>Compare source variants across the CPU profiles in your run set.</p>
+          </div>
           <div className="batch-modal-header-actions">
             {onExportCSV && (
               <button className="btn" onClick={onExportCSV} disabled={!result}>
@@ -120,7 +120,6 @@ export function ExperimentResultsModal({
                 Export JSON
               </button>
             )}
-            <button className="batch-modal-close surface-back" onClick={onClose} aria-label="Close hardware experiment and return to analysis">Back to Analyze</button>
           </div>
         </div>
         <div className="batch-modal-content">
@@ -259,6 +258,6 @@ export function ExperimentResultsModal({
           )}
         </div>
       </div>
-    </div>
+    </section>
   )
 }

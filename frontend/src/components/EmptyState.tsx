@@ -50,29 +50,29 @@ export function EmptyState({
           <button className="empty-state-path primary" onClick={onRun}>
             <span className="empty-state-path-index">01</span>
             <span className="empty-state-path-copy">
-              <span className="empty-state-path-title">Run buffer</span>
-              <span className="empty-state-path-desc">Analyze the active project.</span>
+              <span className="empty-state-path-title">Analyze current code</span>
+              <span className="empty-state-path-desc">Run the active source project.</span>
             </span>
           </button>
           <button className="empty-state-path" onClick={onOpenWorkloads}>
             <span className="empty-state-path-index">02</span>
             <span className="empty-state-path-copy">
-              <span className="empty-state-path-title">Verified workload</span>
+              <span className="empty-state-path-title">Verified workloads</span>
               <span className="empty-state-path-desc">Load a snapshot-backed case.</span>
             </span>
           </button>
           <button className="empty-state-path" onClick={onOpenHardware}>
             <span className="empty-state-path-index">03</span>
             <span className="empty-state-path-copy">
-              <span className="empty-state-path-title">Hardware map</span>
-              <span className="empty-state-path-desc">Inspect profiles and run sets.</span>
+              <span className="empty-state-path-title">CPU profiles</span>
+              <span className="empty-state-path-desc">Inspect model coverage and run sets.</span>
             </span>
           </button>
           <button className="empty-state-path" onClick={onOpenExperiment}>
             <span className="empty-state-path-index">04</span>
             <span className="empty-state-path-copy">
-              <span className="empty-state-path-title">Experiment matrix</span>
-              <span className="empty-state-path-desc">Compare variants across hardware.</span>
+              <span className="empty-state-path-title">Source experiments</span>
+              <span className="empty-state-path-desc">Compare variants across CPU profiles.</span>
             </span>
           </button>
         </div>

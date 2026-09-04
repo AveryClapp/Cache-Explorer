@@ -24,6 +24,7 @@ export const CONFIG = {
   memory: {
     maxOutputBuffer: parseInt(process.env.MAX_OUTPUT_BUFFER) || 50 * 1024 * 1024,
     maxEventBatch: parseInt(process.env.MAX_EVENT_BATCH) || 1000,
+    maxWebSocketPayload: parseInt(process.env.MAX_WEBSOCKET_PAYLOAD) || 1024 * 1024,
   },
 
   // Rate limiting
@@ -31,6 +32,13 @@ export const CONFIG = {
     maxRequestsPerMinute: parseInt(process.env.RATE_LIMIT_RPM) || 30,
     maxConcurrentProcesses: parseInt(process.env.MAX_CONCURRENT_PROCESSES) || 5,
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW) || 60000,
+  },
+
+  // Bound the amount of compiler/simulator work one request can fan out into.
+  workPlan: {
+    maxConfigs: parseInt(process.env.MAX_COMPARE_CONFIGS) || 16,
+    maxVariants: parseInt(process.env.MAX_EXPERIMENT_VARIANTS) || 16,
+    maxRuns: parseInt(process.env.MAX_EXPERIMENT_RUNS) || 64,
   },
 
   // Event streaming
@@ -49,8 +57,11 @@ export const CONFIG = {
   // Server
   server: {
     port: parseInt(firstEnv('HARDWARE_EXPLORER_PORT', 'CACHE_EXPLORER_PORT', 'PORT')) || 3001,
-    host: firstEnv('HARDWARE_EXPLORER_HOST', 'CACHE_EXPLORER_HOST', 'HOST') || '0.0.0.0',
+    host: firstEnv('HARDWARE_EXPLORER_HOST', 'CACHE_EXPLORER_HOST', 'HOST') || '127.0.0.1',
     trustProxy: ['1', 'true'].includes(firstEnv('HARDWARE_EXPLORER_TRUST_PROXY', 'CACHE_EXPLORER_TRUST_PROXY', 'TRUST_PROXY') || ''),
+    allowedOrigins: (firstEnv('HARDWARE_EXPLORER_ALLOWED_ORIGINS', 'CACHE_EXPLORER_ALLOWED_ORIGINS') || '')
+      .split(',').map(value => value.trim()).filter(Boolean),
+    allowNonLoopbackDirect: ['1', 'true'].includes(firstEnv('HARDWARE_EXPLORER_ALLOW_NON_LOOPBACK_DIRECT', 'CACHE_EXPLORER_ALLOW_NON_LOOPBACK_DIRECT') || ''),
   },
 
   // Paths
@@ -64,6 +75,12 @@ export const CONFIG = {
     historySummaryPath: firstEnv('HARDWARE_EXPLORER_WORKLOAD_HISTORY_SUMMARY_PATH', 'CACHE_EXPLORER_WORKLOAD_HISTORY_SUMMARY_PATH') || null,
     historyFetchTimeoutMs: parseInt(firstEnv('HARDWARE_EXPLORER_WORKLOAD_HISTORY_TIMEOUT', 'CACHE_EXPLORER_WORKLOAD_HISTORY_TIMEOUT')) || 5000,
     variantTimeoutMs: parseInt(firstEnv('HARDWARE_EXPLORER_WORKLOAD_VARIANT_TIMEOUT_MS', 'CACHE_EXPLORER_WORKLOAD_VARIANT_TIMEOUT_MS')) || 120000,
+  },
+
+  persistence: {
+    maxShareBytes: parseInt(firstEnv('HARDWARE_EXPLORER_MAX_SHARE_BYTES', 'CACHE_EXPLORER_MAX_SHARE_BYTES')) || 256 * 1024,
+    maxShareEntries: parseInt(firstEnv('HARDWARE_EXPLORER_MAX_SHARE_ENTRIES', 'CACHE_EXPLORER_MAX_SHARE_ENTRIES')) || 10000,
+    shareMaxAgeDays: parseInt(firstEnv('HARDWARE_EXPLORER_SHARE_MAX_AGE_DAYS', 'CACHE_EXPLORER_SHARE_MAX_AGE_DAYS')) || 30,
   },
 };
 

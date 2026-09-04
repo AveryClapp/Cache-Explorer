@@ -252,7 +252,7 @@ resolve_pass() {
     local version_output
     version_output=$("$clang_cmd" --version 2>/dev/null | head -1)
     if echo "$version_output" | grep -qi "apple"; then
-      echo "Error: Apple clang detected. Cache Explorer requires upstream LLVM." >&2
+      echo "Error: Apple clang detected. Hardware Explorer requires upstream LLVM." >&2
       echo "" >&2
       echo "To fix this, install LLVM via Homebrew:" >&2
       echo "  brew install llvm" >&2
@@ -319,7 +319,7 @@ resolve_pass() {
 }
 
 main_usage() {
-  echo "Cache Explorer - Visualize CPU cache behavior"
+  echo "Hardware Explorer Preview - CPU performance modeling for source code"
   echo ""
   echo "Usage: cache-explore <command> [options]"
   echo ""
@@ -674,7 +674,7 @@ enrich_json_output() {
 }
 
 if [[ -z "$JSON_OUTPUT" ]]; then
-  echo "=== Cache Explorer ===" >&2
+  echo "=== Hardware Explorer Preview ===" >&2
   echo "Input: $INPUT_FILE" >&2
   echo "Language: $LANG" >&2
   echo "Config: $CONFIG" >&2

@@ -21,6 +21,7 @@ interface HeaderProps {
   onExploreHardware: () => void;
   onOpenWorkloads: () => void;
   onRunExperiment: () => void;
+  onPreloadProductArea: (area: HeaderProps["activeProductArea"]) => void;
   onRun: () => void;
   onCancel: () => void;
 }
@@ -62,6 +63,13 @@ function checksLabel(health: EnvironmentHealth | null) {
   return Object.entries(health.checks)
     .map(([key, value]) => `${key}: ${value}`)
     .join("\n");
+}
+
+function productHref(area: HeaderProps["activeProductArea"]) {
+  const url = new URL(window.location.href);
+  if (area === "analyze") url.searchParams.delete("view");
+  else url.searchParams.set("view", area);
+  return `${url.pathname}${url.search}${url.hash}`;
 }
 
 function EnvironmentStatus({
@@ -119,9 +127,18 @@ export function Header({
   onExploreHardware,
   onOpenWorkloads,
   onRunExperiment,
+  onPreloadProductArea,
   onRun,
   onCancel,
 }: HeaderProps) {
+  const productLinks = [
+    { area: "analyze" as const, label: "Analyze", open: onOpenAnalyze },
+    { area: "profiles" as const, label: "Profiles", open: onExploreHardware },
+    { area: "comparisons" as const, label: "Comparisons", open: onCompareHardware },
+    { area: "workloads" as const, label: "Workloads", open: onOpenWorkloads },
+    { area: "experiments" as const, label: "Experiments", open: onRunExperiment },
+  ];
+
   return (
     <header className="header">
       <div className="header-left">
@@ -142,50 +159,22 @@ export function Header({
       </div>
 
       <nav className="header-nav" aria-label="Product">
-        <button
-          type="button"
-          className={`header-nav-item${activeProductArea === "analyze" ? " active" : ""}`}
-          onClick={onOpenAnalyze}
-          aria-current={activeProductArea === "analyze" ? "page" : undefined}
-        >
-          Analyze
-        </button>
-        <button
-          type="button"
-          className={`header-nav-item${activeProductArea === "profiles" ? " active" : ""}`}
-          onClick={onExploreHardware}
-          disabled={isLoading}
-          aria-current={activeProductArea === "profiles" ? "page" : undefined}
-        >
-          Profiles
-        </button>
-        <button
-          type="button"
-          className={`header-nav-item${activeProductArea === "comparisons" ? " active" : ""}`}
-          onClick={onCompareHardware}
-          disabled={isLoading}
-          aria-current={activeProductArea === "comparisons" ? "page" : undefined}
-        >
-          Comparisons
-        </button>
-        <button
-          type="button"
-          className={`header-nav-item${activeProductArea === "workloads" ? " active" : ""}`}
-          onClick={onOpenWorkloads}
-          disabled={isLoading}
-          aria-current={activeProductArea === "workloads" ? "page" : undefined}
-        >
-          Workloads
-        </button>
-        <button
-          type="button"
-          className={`header-nav-item${activeProductArea === "experiments" ? " active" : ""}`}
-          onClick={onRunExperiment}
-          disabled={isLoading}
-          aria-current={activeProductArea === "experiments" ? "page" : undefined}
-        >
-          Experiments
-        </button>
+        {productLinks.map(({ area, label, open }) => (
+          <a
+            key={area}
+            href={productHref(area)}
+            className={`header-nav-item${activeProductArea === area ? " active" : ""}`}
+            onClick={(event) => {
+              event.preventDefault();
+              open();
+            }}
+            onPointerEnter={() => onPreloadProductArea(area)}
+            onFocus={() => onPreloadProductArea(area)}
+            aria-current={activeProductArea === area ? "page" : undefined}
+          >
+            {label}
+          </a>
+        ))}
       </nav>
 
       <div className="header-center">

@@ -15,7 +15,6 @@ interface HardwareExplorerModalProps {
   onCompareRunSet: () => void
   onOpenExperiment: () => void
   onRefresh: () => void
-  onClose: () => void
 }
 
 function formatSize(sizeKB: number) {
@@ -139,7 +138,6 @@ export function HardwareExplorerModal({
   onCompareRunSet,
   onOpenExperiment,
   onRefresh,
-  onClose,
 }: HardwareExplorerModalProps) {
   const selected = profiles.find(profile => profile.id === selectedId) || profiles[0]
   const selectedTrust = selected ? trustSnapshot(selected) : null
@@ -172,15 +170,17 @@ export function HardwareExplorerModal({
   ].filter(item => item.best)
 
   return (
-    <div className="batch-modal-overlay product-surface-overlay" onClick={() => !loading && onClose()}>
+    <section className="batch-modal-overlay product-surface-overlay" aria-labelledby="hardware-explorer-title">
       <div
         className="batch-modal hardware-explorer-modal product-surface-panel"
-        onClick={event => event.stopPropagation()}
         role="region"
         aria-labelledby="hardware-explorer-title"
       >
         <div className="batch-modal-header">
-          <span className="batch-modal-title" id="hardware-explorer-title">Hardware Explorer</span>
+          <div className="product-surface-title">
+            <h1 className="batch-modal-title" id="hardware-explorer-title">CPU Profiles</h1>
+            <p>Inspect model coverage, confidence, and the profiles used for comparisons.</p>
+          </div>
           <div className="hardware-explorer-actions">
             <span className="hardware-run-set-count">{runConfigIds.length} selected</span>
             <button
@@ -219,7 +219,6 @@ export function HardwareExplorerModal({
               Use Profile
             </button>
             <button className="btn" onClick={onRefresh} disabled={loading}>Refresh</button>
-            <button className="batch-modal-close surface-back" onClick={onClose} aria-label="Close hardware explorer and return to analysis">Back to Analyze</button>
           </div>
         </div>
         <div className="batch-modal-content hardware-explorer-content">
@@ -385,6 +384,6 @@ export function HardwareExplorerModal({
           </div>
         </div>
       </div>
-    </div>
+    </section>
   )
 }

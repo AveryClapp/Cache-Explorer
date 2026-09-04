@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "=== Cache Explorer Setup ==="
+echo "=== Hardware Explorer Preview Setup ==="
 
 # Check tools
 command -v cmake >/dev/null 2>&1 || { echo "Error: cmake required"; exit 1; }

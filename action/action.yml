@@ -1,6 +1,6 @@
-name: 'Cache Explorer Analysis'
-description: 'Analyze CPU cache behavior of your C/C++ code'
-author: 'Cache Explorer'
+name: 'Hardware Explorer Analysis (Preview)'
+description: 'Model CPU cache and performance behavior for C/C++ source code'
+author: 'Hardware Explorer'
 
 branding:
   icon: 'cpu'
@@ -34,6 +34,10 @@ inputs:
     description: 'GitHub token for PR comments (defaults to github.token)'
     required: false
     default: ${{ github.token }}
+  allow-direct-execution:
+    description: 'Required acknowledgement that the analyzed source is trusted; this action executes it directly on the runner'
+    required: false
+    default: 'false'
 
 outputs:
   l1-hit-rate:
@@ -55,13 +59,32 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Install LLVM 18
+    - name: Confirm trusted-source execution
+      shell: bash
+      env:
+        ALLOW_DIRECT_EXECUTION: ${{ inputs.allow-direct-execution }}
+      run: |
+        if [ "$ALLOW_DIRECT_EXECUTION" != "true" ]; then
+          echo "::error::Hardware Explorer compiles and executes source directly in this action. Set allow-direct-execution: true only for trusted source on an ephemeral runner."
+          exit 1
+        fi
+
+    - name: Check required toolchain
       shell: bash
       run: |
-        wget -qO- https://apt.llvm.org/llvm.sh | sudo bash -s 18
-        sudo apt-get install -y llvm-18-dev clang-18
+        missing=0
+        for command in clang-18 clang++-18 cmake ninja jq bc; do
+          if ! command -v "$command" >/dev/null 2>&1; then
+            echo "::error::Missing required command: $command"
+            missing=1
+          fi
+        done
+        if [ "$missing" -ne 0 ]; then
+          echo "Install LLVM 18, CMake, Ninja, jq, and bc before invoking this action."
+          exit 1
+        fi
 
-    - name: Build Cache Explorer
+    - name: Build Hardware Explorer
       shell: bash
       run: |
         cd ${{ github.action_path }}/..
@@ -87,13 +110,19 @@ runs:
     - name: Analyze cache behavior
       id: analyze
       shell: bash
+      env:
+        INPUT_SOURCE: ${{ inputs.source }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_THRESHOLD: ${{ inputs.threshold }}
+        INPUT_FAIL_ON_REGRESSION: ${{ inputs.fail-on-regression }}
+        INPUT_BASELINE_FILE: ${{ inputs.baseline-file }}
       run: |
         export PATH="/usr/lib/llvm-18/bin:$PATH"
         CACHE_EXPLORE="${{ github.action_path }}/../backend/scripts/cache-explore"
 
         # Run analysis
         RESULT_FILE="${{ runner.temp }}/cache-result.json"
-        $CACHE_EXPLORE "${{ inputs.source }}" --config "${{ inputs.config }}" --json > "$RESULT_FILE"
+        "$CACHE_EXPLORE" "$INPUT_SOURCE" --config "$INPUT_CONFIG" --json > "$RESULT_FILE"
 
         # Parse results
         L1_HITS=$(jq -r '.levels.l1d.hits // .levels.l1.hits // 0' "$RESULT_FILE")
@@ -116,7 +145,7 @@ runs:
         echo "result_json=$RESULT_FILE" >> $GITHUB_OUTPUT
 
         # Print summary
-        echo "## Cache Analysis Results" >> $GITHUB_STEP_SUMMARY
+        echo "## Hardware Explorer CPU Analysis" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
         echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
@@ -126,8 +155,12 @@ runs:
         echo "| Total Events | ${EVENTS} |" >> $GITHUB_STEP_SUMMARY
 
         # Check threshold
-        if [ -n "${{ inputs.threshold }}" ] && [ "${{ inputs.threshold }}" != "0.0" ]; then
-          THRESHOLD="${{ inputs.threshold }}"
+        if [ -n "$INPUT_THRESHOLD" ] && [ "$INPUT_THRESHOLD" != "0.0" ]; then
+          if ! [[ "$INPUT_THRESHOLD" =~ ^(0([.][0-9]+)?|1([.]0+)?)$ ]]; then
+            echo "::error::threshold must be a number between 0 and 1"
+            exit 1
+          fi
+          THRESHOLD="$INPUT_THRESHOLD"
           if (( $(echo "$L1_HIT_RATE < $THRESHOLD" | bc -l) )); then
             echo ""
             echo "::error::L1 hit rate ($L1_HIT_RATE) is below threshold ($THRESHOLD)"
@@ -136,9 +169,9 @@ runs:
         fi
 
         # Check regression
-        if [ "${{ inputs.fail-on-regression }}" = "true" ] && [ -n "${{ inputs.baseline-file }}" ]; then
-          if [ -f "${{ inputs.baseline-file }}" ]; then
-            BASELINE_L1=$(jq -r '.levels.l1d.hitRate // .levels.l1.hitRate // 0' "${{ inputs.baseline-file }}")
+        if [ "$INPUT_FAIL_ON_REGRESSION" = "true" ] && [ -n "$INPUT_BASELINE_FILE" ]; then
+          if [ -f "$INPUT_BASELINE_FILE" ]; then
+            BASELINE_L1=$(jq -r '.levels.l1d.hitRate // .levels.l1.hitRate // 0' "$INPUT_BASELINE_FILE")
             if (( $(echo "$L1_HIT_RATE < $BASELINE_L1 - 0.01" | bc -l) )); then
               echo ""
               echo "::error::L1 hit rate regressed from $BASELINE_L1 to $L1_HIT_RATE"
@@ -158,6 +191,8 @@ runs:
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
+        INPUT_SOURCE: ${{ inputs.source }}
+        INPUT_CONFIG: ${{ inputs.config }}
       run: |
         RESULT_FILE="${{ steps.analyze.outputs.result_json }}"
 
@@ -192,11 +227,12 @@ runs:
 
         # Build comment body
         COMMENT_BODY=$(cat << EOF
-        ## 📊 Cache Explorer Analysis
+        <!-- hardware-explorer-analysis -->
+        ## Hardware Explorer CPU Analysis — Preview
 
         **Status:** ${STATUS} ${STATUS_TEXT}
-        **Source:** \`${{ inputs.source }}\`
-        **Config:** \`${{ inputs.config }}\`
+        **Source:** \`${INPUT_SOURCE}\`
+        **Config:** \`${INPUT_CONFIG}\`
 
         ### Cache Hit Rates
 
@@ -215,7 +251,7 @@ runs:
         ${HOT_LINES}
 
         ---
-        *Analyzed with [Cache Explorer](https://github.com/cache-explorer/cache-explorer)*
+        *Modeled with [Hardware Explorer](https://github.com/AveryClapp/Cache-Explorer)*
         EOF
         )
 
@@ -227,7 +263,7 @@ runs:
         EXISTING_COMMENT_ID=$(gh api \
           -H "Accept: application/vnd.github+json" \
           "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
-          --jq '.[] | select(.body | contains("Cache Explorer Analysis")) | .id' \
+          --jq '.[] | select(.body | contains("hardware-explorer-analysis") or contains("Cache Explorer Analysis")) | .id' \
           | head -1)
 
         if [ -n "$EXISTING_COMMENT_ID" ]; then

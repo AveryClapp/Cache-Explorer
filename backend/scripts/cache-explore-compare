@@ -189,7 +189,7 @@ if [[ "$OPT_LEVEL" == "-O0" ]]; then
 fi
 
 if [[ -z "$JSON_OUTPUT" ]]; then
-  echo "=== Cache Explorer Compare ===" >&2
+  echo "=== Hardware Explorer Preview Comparison ===" >&2
   echo "Source: $INPUT_FILE" >&2
   echo "Configs: $CONFIGS" >&2
   echo "" >&2

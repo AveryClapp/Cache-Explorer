@@ -106,7 +106,7 @@
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
 }
 
 .command-item:hover,
@@ -197,4 +197,3 @@
     transform: translateX(-50%) translateY(0);
   }
 }
-

@@ -12,6 +12,7 @@ import { spawn } from 'child_process';
 import { writeFile, mkdir, rm } from 'fs/promises';
 import { randomUUID } from 'crypto';
 import { join } from 'path';
+import { CONFIG } from './config.js';
 
 // Sandbox configuration
 const SANDBOX_CONFIG = {
@@ -27,6 +28,14 @@ const SANDBOX_CONFIG = {
   noNewPrivileges: true,
   dropCapabilities: ['ALL'],
 };
+
+function removeContainer(containerName) {
+  return new Promise(resolve => {
+    const cleanup = spawn('docker', ['rm', '-f', containerName], { stdio: 'ignore' });
+    cleanup.once('close', () => resolve());
+    cleanup.once('error', () => resolve());
+  });
+}
 
 /**
  * Check if Docker is available and the sandbox image exists
@@ -78,7 +87,8 @@ export async function runInSandbox(options) {
     customConfig,
     defines = [],
     timeout = SANDBOX_CONFIG.timeout,
-    onProgress
+    onProgress,
+    signal,
   } = options;
   const executionTimeout = Math.min(
     Math.max(Number(timeout) || SANDBOX_CONFIG.timeout, 1),
@@ -87,6 +97,7 @@ export async function runInSandbox(options) {
 
   // Create temp directory for this execution
   const execId = randomUUID();
+  const containerName = `hardware-explorer-${execId}`;
   const tempDir = `/tmp/cache-explorer-${execId}`;
 
   // Determine file extension
@@ -105,6 +116,7 @@ export async function runInSandbox(options) {
     const dockerArgs = [
       'run',
       '--rm',                                           // Remove container after execution
+      '--name', containerName,                          // Enables reliable timeout/cancel cleanup
       '--network', 'none',                              // No network access
       '--memory', SANDBOX_CONFIG.memoryLimit,           // Memory limit
       `--cpu-quota=${SANDBOX_CONFIG.cpuQuota}`,         // CPU limit
@@ -142,18 +154,41 @@ export async function runInSandbox(options) {
       let stdout = '';
       let stderr = '';
       let timedOut = false;
+      let aborted = false;
+      let outputExceeded = false;
+      let containerCleanup = Promise.resolve();
+      const stopContainer = () => {
+        containerCleanup = removeContainer(containerName);
+        proc.kill('SIGKILL');
+      };
       const timeoutHandle = setTimeout(() => {
         timedOut = true;
-        proc.kill('SIGKILL');
+        stopContainer();
       }, executionTimeout);
       timeoutHandle.unref?.();
 
+      const abortHandler = () => {
+        aborted = true;
+        stopContainer();
+      };
+      if (signal?.aborted) abortHandler();
+      else signal?.addEventListener('abort', abortHandler, { once: true });
+
+      const appendOutput = (current, data) => {
+        if (outputExceeded) return current;
+        const next = current + data.toString();
+        if (Buffer.byteLength(next) <= CONFIG.memory.maxOutputBuffer) return next;
+        outputExceeded = true;
+        stopContainer();
+        return next.slice(0, CONFIG.memory.maxOutputBuffer);
+      };
+
       proc.stdout.on('data', (data) => {
-        stdout += data;
+        stdout = appendOutput(stdout, data);
       });
 
       proc.stderr.on('data', (data) => {
-        stderr += data;
+        stderr = appendOutput(stderr, data);
         // Parse progress from stderr
         const chunk = data.toString();
         if (chunk.includes('Compiling') && onProgress) {
@@ -165,14 +200,24 @@ export async function runInSandbox(options) {
         }
       });
 
-      proc.on('close', (exitCode) => {
+      proc.on('close', async (exitCode) => {
         clearTimeout(timeoutHandle);
+        signal?.removeEventListener('abort', abortHandler);
+        await containerCleanup;
         if (timedOut) {
           reject({
             stderr: 'Execution timed out',
             exitCode: 124,
             timeout: true
           });
+          return;
+        }
+        if (aborted) {
+          reject({ stderr: 'Execution cancelled', exitCode: 130, cancelled: true });
+          return;
+        }
+        if (outputExceeded) {
+          reject({ stderr: 'Execution output exceeded the configured limit', exitCode: 137, resourceLimit: true });
           return;
         }
         if (exitCode === 0) {
@@ -184,6 +229,7 @@ export async function runInSandbox(options) {
 
       proc.on('error', (err) => {
         clearTimeout(timeoutHandle);
+        signal?.removeEventListener('abort', abortHandler);
         reject(err);
       });
     });
@@ -193,6 +239,7 @@ export async function runInSandbox(options) {
     return result;
 
   } finally {
+    await removeContainer(containerName);
     // Cleanup temp directory
     await rm(tempDir, { recursive: true, force: true }).catch(() => {});
   }

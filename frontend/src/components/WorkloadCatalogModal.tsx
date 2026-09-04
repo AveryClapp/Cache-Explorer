@@ -25,7 +25,6 @@ interface WorkloadCatalogModalProps {
   onRefreshHistory: () => void
   onIncludeStressChange: (includeStress: boolean) => void
   onLoadWorkload: (workload: WorkloadSnapshot) => void
-  onClose: () => void
 }
 
 function formatLimit(limit: number | undefined) {
@@ -188,7 +187,6 @@ export function WorkloadCatalogModal({
   onRefreshHistory,
   onIncludeStressChange,
   onLoadWorkload,
-  onClose,
 }: WorkloadCatalogModalProps) {
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<WorkloadStatusFilter>('all')
@@ -226,15 +224,17 @@ export function WorkloadCatalogModal({
   }
 
   return (
-    <div className="batch-modal-overlay product-surface-overlay" onClick={() => !verifying && onClose()}>
+    <section className="batch-modal-overlay product-surface-overlay" aria-labelledby="verified-workloads-title">
       <div
         className="batch-modal workload-modal product-surface-panel"
-        onClick={event => event.stopPropagation()}
         role="region"
         aria-labelledby="verified-workloads-title"
       >
         <div className="batch-modal-header">
-          <span className="batch-modal-title" id="verified-workloads-title">Verified Workloads</span>
+          <div className="product-surface-title">
+            <h1 className="batch-modal-title" id="verified-workloads-title">Verified Workloads</h1>
+            <p>Load and verify reproducible CPU modeling scenarios.</p>
+          </div>
           <div className="batch-modal-header-actions">
             {verification && (
               <span className={`workload-summary-chip ${verification.ok ? 'ok' : 'fail'}`}>
@@ -256,7 +256,6 @@ export function WorkloadCatalogModal({
             >
               {historyLoading ? 'History...' : 'History'}
             </button>
-            <button className="batch-modal-close surface-back" onClick={onClose} aria-label="Close verified workloads and return to analysis">Back to Analyze</button>
           </div>
         </div>
         <div className="batch-modal-content workload-modal-content">
@@ -541,6 +540,6 @@ export function WorkloadCatalogModal({
           </div>}
         </div>
       </div>
-    </div>
+    </section>
   )
 }

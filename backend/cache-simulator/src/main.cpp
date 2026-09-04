@@ -9,6 +9,22 @@
 #include <unordered_set>
 #include <vector>
 
+std::string escape_svg_text(std::string_view value) {
+  std::string escaped;
+  escaped.reserve(value.size());
+  for (char c : value) {
+    switch (c) {
+      case '&': escaped += "&amp;"; break;
+      case '<': escaped += "&lt;"; break;
+      case '>': escaped += "&gt;"; break;
+      case '"': escaped += "&quot;"; break;
+      case '\'': escaped += "&apos;"; break;
+      default: escaped += c;
+    }
+  }
+  return escaped;
+}
+
 // Generate SVG flamegraph showing cache miss distribution
 template<typename HotLineType>
 void output_flamegraph_svg(const std::vector<HotLineType>& hot_lines, const std::string& title) {
@@ -51,7 +67,7 @@ void output_flamegraph_svg(const std::vector<HotLineType>& hot_lines, const std:
 
   // Title
   std::cout << "<text x=\"" << margin << "\" y=\"24\" class=\"title\">"
-            << title << " - Cache Miss Distribution</text>\n";
+            << escape_svg_text(title) << " - Cache Miss Distribution</text>\n";
 
   // Bars
   int y = title_height + 10;
@@ -78,7 +94,7 @@ void output_flamegraph_svg(const std::vector<HotLineType>& hot_lines, const std:
       label = "..." + label.substr(label.length() - 27);
     }
     std::cout << "  <text x=\"" << (margin + 4) << "\" y=\"" << (y + 14)
-              << "\" class=\"label\">" << label << "</text>\n";
+              << "\" class=\"label\">" << escape_svg_text(label) << "</text>\n";
 
     // Count on right
     std::cout << "  <text x=\"" << (width - margin + 5) << "\" y=\"" << (y + 14)
@@ -100,7 +116,14 @@ void output_flamegraph_svg(const std::vector<HotLineType>& hot_lines, const std:
 
 int main(int argc, char *argv[]) {
   // Parse command line arguments
-  SimulatorOptions opts = ArgParser::parse(argc, argv);
+  SimulatorOptions opts;
+  try {
+    opts = ArgParser::parse(argc, argv);
+  } catch (const std::exception& error) {
+    std::cerr << "Error: " << error.what() << "\n";
+    ArgParser::print_usage(argv[0]);
+    return 2;
+  }
 
   if (opts.show_help) {
     ArgParser::print_usage(argv[0]);

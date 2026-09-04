@@ -24,6 +24,8 @@ Recommended hosted defaults:
 - Put the service behind a reverse proxy and set
   `HARDWARE_EXPLORER_TRUST_PROXY=1` so rate limits
   use the client-facing address rather than the proxy address.
+- Set `HARDWARE_EXPLORER_ALLOWED_ORIGINS` to the exact HTTPS origins allowed to
+  call HTTP and WebSocket endpoints. Do not use a reflected or wildcard origin.
 - Keep health and metrics probe-friendly; do not rate-limit `/health` or
   `/metrics`.
 - Keep expensive product routes rate-limited: `/compile`, `/compare`,
@@ -31,6 +33,10 @@ Recommended hosted defaults:
 - Start conservative: `RATE_LIMIT_RPM=30`, `MAX_CONCURRENT_PROCESSES=5`,
   `TIMEOUT_DEFAULT=60000`, `TIMEOUT_COMPILATION=30000`, and
   `HARDWARE_EXPLORER_WORKLOAD_VARIANT_TIMEOUT_MS=120000`.
+- Bound database-backed shares with `HARDWARE_EXPLORER_MAX_SHARE_BYTES`,
+  `HARDWARE_EXPLORER_MAX_SHARE_ENTRIES`, and
+  `HARDWARE_EXPLORER_SHARE_MAX_AGE_DAYS`; share URLs keep source out of the URL
+  itself but the server still stores that source until retention removes it.
 - Keep stress workloads opt-in. Default verification should not include
   `--include-stress` until those workloads are tuned on a dedicated machine.
 

@@ -15,7 +15,6 @@ interface BatchResultsModalProps {
   onRun: () => void
   onExportCSV?: () => void
   onExportJSON?: () => void
-  onClose: () => void
 }
 
 function formatHardwareName(config: string, result: CacheResult) {
@@ -43,19 +42,21 @@ function bottleneckClass(result: CacheResult) {
   return `bottleneck-chip ${bottleneck}`
 }
 
-export function BatchResultsModal({ results, error, running, total, onRun, onExportCSV, onExportJSON, onClose }: BatchResultsModalProps) {
+export function BatchResultsModal({ results, error, running, total, onRun, onExportCSV, onExportJSON }: BatchResultsModalProps) {
   const showEmptyState = !running && results.length === 0
 
   return (
-    <div className="batch-modal-overlay product-surface-overlay" onClick={() => !running && onClose()}>
+    <section className="batch-modal-overlay product-surface-overlay" aria-labelledby="hardware-comparison-title">
       <div
         className="batch-modal product-surface-panel"
-        onClick={e => e.stopPropagation()}
         role="region"
         aria-labelledby="hardware-comparison-title"
       >
         <div className="batch-modal-header">
-          <span className="batch-modal-title" id="hardware-comparison-title">Hardware Comparison</span>
+          <div className="product-surface-title">
+            <h1 className="batch-modal-title" id="hardware-comparison-title">Hardware Comparison</h1>
+            <p>Run the current source across the CPU profiles in your run set.</p>
+          </div>
           <div className="batch-modal-header-actions">
             <button className="btn-primary" onClick={onRun} disabled={running}>
               {running ? 'Comparing...' : results.length > 0 ? 'Run Again' : 'Run Comparison'}
@@ -70,7 +71,6 @@ export function BatchResultsModal({ results, error, running, total, onRun, onExp
                 Export JSON
               </button>
             )}
-            <button className="batch-modal-close surface-back" onClick={onClose} aria-label="Close hardware comparison and return to analysis">Back to Analyze</button>
           </div>
         </div>
         <div className="batch-modal-content">
@@ -128,6 +128,6 @@ export function BatchResultsModal({ results, error, running, total, onRun, onExp
           )}
         </div>
       </div>
-    </div>
+    </section>
   )
 }

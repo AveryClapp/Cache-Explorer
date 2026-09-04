@@ -32,7 +32,7 @@
   font-family: var(--font-display);
   font-size: var(--text-sm);
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
 }
 
 .tab:hover {

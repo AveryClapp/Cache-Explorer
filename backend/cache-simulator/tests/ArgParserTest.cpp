@@ -103,6 +103,26 @@ void test_cores_flag() {
   std::cout << "[PASS] test_cores_flag\n";
 }
 
+void test_invalid_numeric_flags_are_rejected() {
+  {
+    ArgvBuilder builder;
+    builder.add("--cores").add("not-a-number");
+    bool rejected = false;
+    try { (void)ArgParser::parse(builder.argc(), builder.argv()); }
+    catch (const std::invalid_argument&) { rejected = true; }
+    assert(rejected);
+  }
+  {
+    ArgvBuilder builder;
+    builder.add("--l1-line").add("63");
+    bool rejected = false;
+    try { (void)ArgParser::parse(builder.argc(), builder.argv()); }
+    catch (const std::invalid_argument&) { rejected = true; }
+    assert(rejected);
+  }
+  std::cout << "[PASS] test_invalid_numeric_flags_are_rejected\n";
+}
+
 void test_prefetch_policy_none() {
   auto policy = ArgParser::parse_prefetch_policy("none");
   assert(policy == PrefetchPolicy::NONE);
@@ -285,6 +305,7 @@ int main() {
   test_stream_flag();
   test_help_flag();
   test_cores_flag();
+  test_invalid_numeric_flags_are_rejected();
   test_flamegraph_flag();
 
   // Prefetch parsing

@@ -73,14 +73,21 @@
   .header-nav {
     order: 3;
     flex: 1 0 100%;
+    width: 100%;
+    max-width: none;
     justify-content: stretch;
-    overflow-x: auto;
+    gap: 0;
+    overflow: visible;
+    padding-inline: 0;
   }
 
   .header-nav-item {
-    flex: 1 0 auto;
-    min-height: 30px;
-    padding: var(--space-1) var(--space-2);
+    flex: 1 1 0;
+    justify-content: center;
+    min-width: 0;
+    min-height: 34px;
+    padding: 0 4px;
+    font-size: var(--text-2xs);
   }
 
   .btn-compare,
@@ -244,7 +251,7 @@
   font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: all var(--duration-fast);
+  transition: background-color var(--duration-fast), border-color var(--duration-fast), color var(--duration-fast);
 }
 
 .mobile-tab-switcher button.active {
@@ -345,7 +352,7 @@
   font-size: var(--text-xl);
   cursor: pointer;
   border-radius: var(--radius-md);
-  transition: all var(--duration-fast);
+  transition: background-color var(--duration-fast), border-color var(--duration-fast), color var(--duration-fast);
 }
 
 .batch-modal-close:hover {
@@ -905,6 +912,8 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface);
+  content-visibility: auto;
+  contain-intrinsic-size: auto 180px;
 }
 
 .workload-row-main {
@@ -1704,13 +1713,16 @@
 /* Product areas are navigable workspaces rather than blocking dialogs. The
    persistent header remains available for direct movement between areas. */
 .product-surface-overlay {
-  inset: var(--header-height) 0 0;
-  padding: var(--space-4);
+  position: static;
+  inset: auto;
+  width: 100%;
+  min-height: 0;
+  padding: var(--space-5);
   align-items: stretch;
   justify-content: stretch;
   background: var(--void);
   backdrop-filter: none;
-  z-index: 1000;
+  z-index: auto;
 }
 
 .product-surface-panel {
@@ -1719,8 +1731,35 @@
   width: 100%;
   max-width: none;
   height: 100%;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   box-shadow: none;
+}
+
+.product-workspace {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--void);
+}
+
+.product-loading {
+  display: grid;
+  width: 100%;
+  place-items: center;
+  color: var(--text-secondary);
+}
+
+.product-surface-title {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.product-surface-title p {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.4;
 }
 
 .product-surface-panel .batch-modal-content {
@@ -1745,11 +1784,17 @@
 
 @media (max-width: 768px) {
   .product-surface-overlay {
-    inset-block-start: calc(var(--header-height) * 2);
-    padding: var(--space-2);
+    padding: 0;
   }
 
   .product-surface-panel {
+    border-inline: 0;
+    border-block-end: 0;
     border-radius: 0;
+  }
+
+  .batch-modal-header {
+    align-items: flex-start;
+    gap: var(--space-3);
   }
 }

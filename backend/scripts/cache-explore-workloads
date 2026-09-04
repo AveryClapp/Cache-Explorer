@@ -13,7 +13,7 @@ const DEFAULT_VARIANT_TIMEOUT_MS = parseNonNegativeInteger(
 function usage() {
   console.log(`Usage: cache-explore workloads [options] [workload-id]
 
-List and verify benchmark workload snapshots modeled by Cache Explorer.
+List and verify benchmark workload snapshots modeled by Hardware Explorer Preview.
 
 Options:
   --json       Output JSON
@@ -626,7 +626,7 @@ function printHistoryHtmlReport(summary, records) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Cache Explorer Workload History</title>
+  <title>Hardware Explorer Preview Workload History</title>
   <style>
     :root { color-scheme: dark; --bg:#161616; --panel:#202020; --line:#363636; --text:#f0f0f0; --muted:#9ca3af; --ok:#5eead4; --fail:#fb7185; --warn:#fbbf24; --accent:#7dd3fc; }
     body { margin:0; background:var(--bg); color:var(--text); font:14px/1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
@@ -656,7 +656,7 @@ function printHistoryHtmlReport(summary, records) {
 </head>
 <body>
   <main>
-    <h1>Cache Explorer Workload History</h1>
+    <h1>Hardware Explorer Preview Workload History</h1>
     <p class="lede">Generated from benchmark-history artifacts. Use this report to spot failing workload contracts and runtime drift.</p>
     <div class="cards">
       <div class="card"><span class="label">Status</span><span class="value ${status}">${status}</span></div>

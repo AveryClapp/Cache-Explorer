@@ -9,11 +9,28 @@ import { CONFIG } from '../config.js';
 export const connectionResources = new Map();
 export const httpRateTrackers = new Map();
 let nextHttpRatePruneAt = 0;
+let activeExecutions = 0;
+
+export function reserveGlobalExecution(limit = CONFIG.rateLimit.maxConcurrentProcesses) {
+  if (activeExecutions >= limit) return null;
+  activeExecutions += 1;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    activeExecutions = Math.max(0, activeExecutions - 1);
+  };
+}
+
+export function activeExecutionCount() {
+  return activeExecutions;
+}
 
 export class ConnectionResourceTracker {
   constructor(connectionId) {
     this.connectionId = connectionId;
     this.processes = new Set();
+    this.abortControllers = new Set();
     this.tempDirs = new Set();
     this.requestTimes = [];
     this.heartbeatInterval = null;
@@ -51,6 +68,11 @@ export class ConnectionResourceTracker {
     this.processes.delete(proc);
   }
 
+  addAbortController(controller) {
+    this.abortControllers.add(controller);
+    return () => this.abortControllers.delete(controller);
+  }
+
   setCleanupFunction(fn) {
     this.cleanupTempDir = fn;
   }
@@ -65,6 +87,8 @@ export class ConnectionResourceTracker {
       }
     }
     this.processes.clear();
+    for (const controller of this.abortControllers) controller.abort();
+    this.abortControllers.clear();
 
     // Clear heartbeat
     if (this.heartbeatInterval) {
@@ -158,11 +182,36 @@ export function createHttpRateLimitMiddleware({ shouldLimit = () => true } = {})
   };
 }
 
+export function createHttpExecutionLimitMiddleware({ shouldLimit = () => true } = {}) {
+  return function httpExecutionLimit(req, res, next) {
+    if (!shouldLimit(req)) {
+      next();
+      return;
+    }
+
+    const release = reserveGlobalExecution();
+    if (!release) {
+      res.set?.('Retry-After', '1');
+      res.status(503).json({
+        type: 'capacity_limit',
+        message: 'Analysis capacity is full; retry shortly',
+      });
+      return;
+    }
+
+    res.once('finish', release);
+    res.once('close', release);
+    next();
+  };
+}
+
 export default {
   ConnectionResourceTracker,
   connectionResources,
   httpRateTrackers,
   getOrCreateTracker,
+  reserveGlobalExecution,
   createHttpRateLimitMiddleware,
+  createHttpExecutionLimitMiddleware,
   removeTracker,
 };

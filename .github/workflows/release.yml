@@ -1,4 +1,4 @@
-name: Release
+name: Hardware Explorer Release
 
 on:
   push:
@@ -7,9 +7,14 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to release (e.g., v1.0.0)'
+        description: 'Tag to release (for example, v1.8.0-preview.1)'
         required: true
         type: string
+      prerelease:
+        description: 'Publish as a Preview prerelease'
+        required: true
+        default: true
+        type: boolean
 
 jobs:
   build:
@@ -28,7 +33,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install LLVM (Linux)
         if: runner.os == 'Linux'
@@ -68,7 +73,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download all artifacts
         uses: actions/download-artifact@v8
@@ -103,12 +108,12 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.get-tag.outputs.tag }}
-          name: Cache Explorer ${{ steps.get-tag.outputs.tag }}
+          name: Hardware Explorer ${{ steps.get-tag.outputs.tag }}
           files: |
             ./release-assets/*.so
             ./release-assets/SHA256SUMS
           draft: false
-          prerelease: false
+          prerelease: ${{ contains(steps.get-tag.outputs.tag, '-') || (github.event_name == 'workflow_dispatch' && inputs.prerelease) }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

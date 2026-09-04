@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "smoke:ui": "node scripts/ui-smoke.mjs",
+    "smoke:live": "node scripts/live-backend-smoke.mjs",
     "visual:check": "node scripts/visual-smoke.mjs"
   },
   "dependencies": {

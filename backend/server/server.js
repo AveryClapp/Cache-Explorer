@@ -8,7 +8,7 @@ import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import * as yaml from 'js-yaml';
 import { checkSandboxAvailable, runInSandbox, parseSandboxError } from './sandbox.js';
-import { initDb, createShortUrl, getShortUrl, isHealthy as isDbHealthy, getDbStats } from './db.js';
+import { initDb, createShortUrl, getShortUrl, isHealthy as isDbHealthy, getDbStats, pruneShortUrls } from './db.js';
 import { getCachedResult, cacheResult, startCachePruning } from './cache.js';
 import { incCounter, setGauge, recordDuration, getPrometheusMetrics, getHealthStatus } from './metrics.js';
 import { discoverCompilers, getCompiler, getDefaultCompiler } from './compilers.js';
@@ -22,12 +22,16 @@ import { createTempProject, cleanupTempProject, cleanupOrphanedTempDirs } from '
 import { workloadProcessErrorResponse } from './services/workloadErrors.js';
 import { loadWorkloadHistory } from './services/workloadHistory.js';
 import { deploymentSecurityFromEnv } from './services/deploymentMode.js';
+import { normalizeRequestTimeout, validateSharePayload, validateWorkPlan } from './services/requestValidation.js';
+import { isAllowedClientOrigin, validateDirectBind } from './services/clientSecurity.js';
 import {
   ConnectionResourceTracker,
   connectionResources,
+  createHttpExecutionLimitMiddleware,
   createHttpRateLimitMiddleware,
   getOrCreateTracker,
   removeTracker,
+  reserveGlobalExecution,
 } from './middleware/resourceTracker.js';
 
 // CONFIG is now imported from ./config.js
@@ -184,6 +188,13 @@ function isRateLimitedHttpRequest(req) {
   );
 }
 
+function isExecutionHttpRequest(req) {
+  return (
+    (req.method === 'POST' && ['/compile', '/compare', '/experiment'].includes(req.path))
+    || (req.method === 'GET' && req.path === '/api/workloads/verify')
+  );
+}
+
 function httpError(status, message, type = 'validation_error') {
   const error = new Error(message);
   error.statusCode = status;
@@ -312,6 +323,12 @@ let sandboxAvailable = false;
 
 async function initializeExecutionMode() {
   deploymentSecurity = deploymentSecurityFromEnv();
+  const bindError = validateDirectBind({
+    deploymentMode: deploymentSecurity.deploymentMode,
+    host: CONFIG.server.host,
+    allowNonLoopbackDirect: CONFIG.server.allowNonLoopbackDirect,
+  });
+  if (bindError) throw new Error(bindError);
   sandboxConfigured = deploymentSecurity.sandboxRequested;
 
   if (!sandboxConfigured) {
@@ -354,14 +371,36 @@ function sandboxStatusSnapshot() {
 
 const app = express();
 if (CONFIG.server.trustProxy) {
-  app.set('trust proxy', true);
+  app.set('trust proxy', 1);
 }
-app.use(cors());
+const clientOriginAllowed = origin => isAllowedClientOrigin(
+  origin,
+  CONFIG.server.allowedOrigins,
+  deploymentSecurity?.deploymentMode !== 'hosted',
+);
+app.use((req, res, next) => {
+  if (!clientOriginAllowed(req.headers.origin)) {
+    res.status(403).json({ type: 'forbidden_origin', message: 'Browser origin is not allowed' });
+    return;
+  }
+  next();
+});
+app.use(cors({
+  origin(origin, callback) {
+    callback(null, clientOriginAllowed(origin));
+  },
+}));
 app.use(express.json({ limit: '1mb' }));
 app.use(createHttpRateLimitMiddleware({ shouldLimit: isRateLimitedHttpRequest }));
+app.use(createHttpExecutionLimitMiddleware({ shouldLimit: isExecutionHttpRequest }));
 
 const server = createServer(app);
-const wss = new WebSocketServer({ server, path: '/ws' });
+const wss = new WebSocketServer({
+  server,
+  path: '/ws',
+  maxPayload: CONFIG.memory.maxWebSocketPayload,
+  verifyClient: ({ origin }) => clientOriginAllowed(origin),
+});
 
 // ============================================================================
 // HTTP Endpoints
@@ -430,6 +469,9 @@ app.post('/compile', async (req, res) => {
     eventLimit,
     fastMode,
     segmentCaching,
+    customConfig: req.body.customConfig || null,
+    compiler: req.body.compiler || null,
+    executor: sandboxAvailable ? 'sandbox' : 'direct',
   };
 
   try {
@@ -454,13 +496,13 @@ app.post('/compile', async (req, res) => {
   incCounter('cache_misses');
 
   // Configurable timeout with bounds
-  const timeout = Math.min(
-    Math.max(requestedTimeout || CONFIG.timeouts.default, CONFIG.timeouts.min),
-    CONFIG.timeouts.max
-  );
+  const timeout = normalizeRequestTimeout(requestedTimeout);
 
   // Use Docker sandbox if available (production), otherwise direct execution (development)
   if (sandboxAvailable) {
+    const sandboxController = new AbortController();
+    const abortSandbox = () => sandboxController.abort();
+    req.once('aborted', abortSandbox);
     try {
       const result = await runInSandbox({
         code: Array.isArray(inputFiles) ? inputFiles[0].code : inputFiles,
@@ -471,9 +513,11 @@ app.post('/compile', async (req, res) => {
         prefetch: req.body.prefetch || 'none',
         sampleRate,
         eventLimit,
+        fastMode,
         customConfig: req.body.customConfig,
         defines: req.body.defines || [],
-        timeout
+        timeout,
+        signal: sandboxController.signal,
       });
 
       const output = result.stdout.trim();
@@ -511,6 +555,8 @@ app.post('/compile', async (req, res) => {
       incCounter('errors', { type: 'compile' });
       const parsed = parseSandboxError(err);
       res.status(400).json(parsed);
+    } finally {
+      req.off('aborted', abortSandbox);
     }
     return;
   }
@@ -682,15 +728,16 @@ app.post('/compare', async (req, res) => {
   if (!/^[A-Za-z0-9_,.-]+$/.test(configList)) {
     return res.status(400).json({ error: 'Invalid config list', type: 'validation_error' });
   }
+  const comparePlanError = validateWorkPlan({ configs: configList.split(',').filter(Boolean).length });
+  if (comparePlanError) {
+    return res.status(400).json({ error: comparePlanError, type: 'validation_error' });
+  }
 
   const eventLimit = limit !== undefined ? limit : 1000000;
   const sampleRate = sample !== undefined ? sample : 1;
   const fastMode = fast === true;
   const segmentCaching = cacheSegments === true;
-  const timeout = Math.min(
-    Math.max(requestedTimeout || CONFIG.timeouts.default, CONFIG.timeouts.min),
-    CONFIG.timeouts.max
-  );
+  const timeout = normalizeRequestTimeout(requestedTimeout);
 
   let tempDir, mainFile;
 
@@ -869,15 +916,19 @@ app.post('/experiment', async (req, res) => {
   if (!/^[A-Za-z0-9_,.-]+$/.test(configList)) {
     return res.status(400).json({ error: 'Invalid config list', type: 'validation_error' });
   }
+  const experimentPlanError = validateWorkPlan({
+    configs: configList.split(',').filter(Boolean).length,
+    variants: variantList.length,
+  });
+  if (experimentPlanError) {
+    return res.status(400).json({ error: experimentPlanError, type: 'validation_error' });
+  }
 
   const eventLimit = limit !== undefined ? limit : 1000000;
   const sampleRate = sample !== undefined ? sample : 1;
   const fastMode = fast === true;
   const segmentCaching = cacheSegments === true;
-  const timeout = Math.min(
-    Math.max(requestedTimeout || CONFIG.timeouts.default, CONFIG.timeouts.min),
-    CONFIG.timeouts.max
-  );
+  const timeout = normalizeRequestTimeout(requestedTimeout);
 
   let tempDir, mainFile;
   const tempDirs = [];
@@ -1256,9 +1307,14 @@ app.post('/shorten', (req, res) => {
   if (!state) {
     return res.status(400).json({ error: 'No state provided' });
   }
+  const payloadError = validateSharePayload(state);
+  if (payloadError) {
+    return res.status(413).json({ error: payloadError, type: 'payload_too_large' });
+  }
 
   try {
     const code = createShortUrl(state);
+    pruneShortUrls(CONFIG.persistence.maxShareEntries, CONFIG.persistence.shareMaxAgeDays);
     res.json({ id: code, url: `/s/${code}` });
   } catch (err) {
     logShareError('Failed to create short URL', err);
@@ -1296,9 +1352,14 @@ app.post('/api/share', (req, res) => {
   if (!data) {
     return res.status(400).json({ error: 'No data provided' });
   }
+  const payloadError = validateSharePayload(data);
+  if (payloadError) {
+    return res.status(413).json({ error: payloadError, type: 'payload_too_large' });
+  }
 
   try {
     const code = createShortUrl(data);
+    pruneShortUrls(CONFIG.persistence.maxShareEntries, CONFIG.persistence.shareMaxAgeDays);
     res.json({ code, url: `/s/${code}` });
   } catch (err) {
     logShareError('Failed to create short URL', err);
@@ -1445,6 +1506,18 @@ wss.on('connection', (ws) => {
       return;
     }
 
+    const releaseExecution = reserveGlobalExecution();
+    if (!releaseExecution) {
+      ws.send(JSON.stringify({
+        type: 'error',
+        error: 'Analysis capacity is full',
+        suggestion: 'Retry shortly'
+      }));
+      return;
+    }
+
+    try {
+
     const {
       code,
       files,
@@ -1475,13 +1548,12 @@ wss.on('connection', (ws) => {
     const segmentCaching = cacheSegments === true;              // Segment caching for repeated loops
 
     // Configurable timeout with bounds
-    const timeout = Math.min(
-      Math.max(requestedTimeout || CONFIG.timeouts.default, CONFIG.timeouts.min),
-      CONFIG.timeouts.max
-    );
+    const timeout = normalizeRequestTimeout(requestedTimeout);
 
     // Use Docker sandbox if available
     if (sandboxAvailable) {
+      const sandboxController = new AbortController();
+      const removeSandboxController = tracker.addAbortController(sandboxController);
       try {
         const result = await runInSandbox({
           code,
@@ -1495,6 +1567,7 @@ wss.on('connection', (ws) => {
           customConfig,
           defines: defines || [],
           timeout,
+          signal: sandboxController.signal,
           onProgress: (progress) => {
             if (ws.readyState === ws.OPEN) {
               ws.send(JSON.stringify({ type: 'status', ...progress }));
@@ -1528,6 +1601,8 @@ wss.on('connection', (ws) => {
           const parsed = parseSandboxError(err);
           ws.send(JSON.stringify({ type: 'error', ...parsed }));
         }
+      } finally {
+        removeSandboxController();
       }
       return;
     }
@@ -1721,6 +1796,9 @@ wss.on('connection', (ws) => {
         tracker.tempDirs.delete(tempDir);
         await cleanupTempProject(tempDir);
       }
+    }
+    } finally {
+      releaseExecution();
     }
   });
 

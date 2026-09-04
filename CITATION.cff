@@ -1,6 +1,6 @@
 cff-version: 1.2.0
-message: "If Cache Explorer helps your research, teaching, or performance work, please cite the project repository."
-title: "Cache Explorer"
+message: "If Hardware Explorer helps your research, teaching, or performance work, please cite the project repository."
+title: "Hardware Explorer Preview (Cache Explorer)"
 type: software
 authors:
   - family-names: "Clapp"

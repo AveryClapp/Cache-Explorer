@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 
 import { CONFIG } from '../config.js';
 import {
+  activeExecutionCount,
   ConnectionResourceTracker,
   createHttpRateLimitMiddleware,
   httpRateTrackers,
+  reserveGlobalExecution,
 } from './resourceTracker.js';
 
 test('ConnectionResourceTracker enforces per-window request limits', () => {
@@ -31,6 +33,23 @@ test('ConnectionResourceTracker enforces concurrent process limits', () => {
 
   cleanupFns[0]();
   assert.equal(tracker.canStartProcess(), true);
+});
+
+test('global execution reservations are atomic and idempotent', () => {
+  const releases = [];
+  for (let i = 0; i < 3; i += 1) releases.push(reserveGlobalExecution(3));
+  assert.equal(activeExecutionCount(), 3);
+  assert.equal(reserveGlobalExecution(3), null);
+
+  releases[0]();
+  releases[0]();
+  assert.equal(activeExecutionCount(), 2);
+  const replacement = reserveGlobalExecution(3);
+  assert.equal(typeof replacement, 'function');
+
+  for (const release of releases.slice(1)) release();
+  replacement();
+  assert.equal(activeExecutionCount(), 0);
 });
 
 test('ConnectionResourceTracker cleanup kills processes and removes temp dirs', async () => {

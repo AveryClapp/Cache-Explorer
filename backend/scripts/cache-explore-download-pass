@@ -9,20 +9,20 @@
 #   cache-explore-download-pass [LLVM_VERSION]
 #
 # Environment variables:
-#   CACHE_EXPLORER_CACHE_DIR  - Override cache location (default: ~/.cache/cache-explorer/passes)
-#   CACHE_EXPLORER_RELEASE    - Specific release tag (default: latest)
-#   CACHE_EXPLORER_REPO       - GitHub repo (default: AveryClapp/Cache-Explorer)
-#   CACHE_EXPLORER_REQUIRE_CHECKSUM
-#                            - Set to 1 to fail if SHA256SUMS is unavailable
+#   HARDWARE_EXPLORER_CACHE_DIR  - Override cache location (legacy CACHE_EXPLORER_CACHE_DIR also works)
+#   HARDWARE_EXPLORER_RELEASE    - Specific release tag (legacy CACHE_EXPLORER_RELEASE also works)
+#   HARDWARE_EXPLORER_REPO       - GitHub repo (legacy CACHE_EXPLORER_REPO also works)
+#   HARDWARE_EXPLORER_REQUIRE_CHECKSUM
+#                            - Defaults to 1; set to 0 only for an explicit unsafe override
 #
 set -e
 
 # Configuration
 DEFAULT_REPO="AveryClapp/Cache-Explorer"
-REPO="${CACHE_EXPLORER_REPO:-$DEFAULT_REPO}"
-RELEASE="${CACHE_EXPLORER_RELEASE:-latest}"
-CACHE_DIR="${CACHE_EXPLORER_CACHE_DIR:-$HOME/.cache/cache-explorer/passes}"
-REQUIRE_CHECKSUM="${CACHE_EXPLORER_REQUIRE_CHECKSUM:-0}"
+REPO="${HARDWARE_EXPLORER_REPO:-${CACHE_EXPLORER_REPO:-$DEFAULT_REPO}}"
+RELEASE="${HARDWARE_EXPLORER_RELEASE:-${CACHE_EXPLORER_RELEASE:-latest}}"
+CACHE_DIR="${HARDWARE_EXPLORER_CACHE_DIR:-${CACHE_EXPLORER_CACHE_DIR:-$HOME/.cache/cache-explorer/passes}}"
+REQUIRE_CHECKSUM="${HARDWARE_EXPLORER_REQUIRE_CHECKSUM:-${CACHE_EXPLORER_REQUIRE_CHECKSUM:-1}}"
 
 # Parse optional LLVM version argument
 LLVM_VERSION_OVERRIDE="${1:-}"
@@ -281,20 +281,26 @@ verify_checksum() {
 #######################################
 verify_downloaded_pass() {
   local pass_path="$1"
-  local manifest_path checksum_url
+  local manifest_path manifest_tmp checksum_url
 
   manifest_path=$(get_checksum_cache_path)
+  manifest_tmp="${manifest_path}.tmp.$$"
   checksum_url=$(get_checksum_url)
   mkdir -p "$(dirname "$manifest_path")"
 
-  if ! curl -fsSL "$checksum_url" -o "$manifest_path" 2>/dev/null; then
-    rm -f "$manifest_path"
+  if curl --proto '=https' --tlsv1.2 --connect-timeout 10 --max-time 60 -fsSL "$checksum_url" -o "$manifest_tmp" 2>/dev/null; then
+    mv "$manifest_tmp" "$manifest_path"
+  else
+    rm -f "$manifest_tmp"
+  fi
+
+  if [[ ! -s "$manifest_path" ]]; then
     if [[ "$REQUIRE_CHECKSUM" == "1" ]]; then
       echo "Error: Checksum manifest unavailable: $checksum_url" >&2
       return 1
     fi
     echo "Warning: Checksum manifest unavailable; downloaded pass was not verified." >&2
-    echo "         Set CACHE_EXPLORER_REQUIRE_CHECKSUM=1 to fail closed." >&2
+    echo "         HARDWARE_EXPLORER_REQUIRE_CHECKSUM=0 explicitly enabled this unsafe fallback." >&2
     return 0
   fi
 
@@ -323,7 +329,7 @@ download_pass() {
   # -s: Silent mode
   # -S: Show errors
   # -L: Follow redirects
-  if curl -fsSL "$url" -o "$dest" 2>/dev/null; then
+  if curl --proto '=https' --tlsv1.2 --connect-timeout 10 --max-time 120 -fsSL "$url" -o "$dest" 2>/dev/null; then
     # Make executable
     chmod +x "$dest"
     return 0
@@ -360,10 +366,13 @@ main() {
   local cache_path
   cache_path=$(get_cache_path "$llvm_version" "$platform")
 
-  # Check if already cached
+  # Revalidate cached binaries so a stale or modified cache is never trusted.
   if [[ -f "$cache_path" && -x "$cache_path" ]]; then
-    echo "$cache_path"
-    exit 0
+    if verify_downloaded_pass "$cache_path"; then
+      echo "$cache_path"
+      exit 0
+    fi
+    rm -f "$cache_path"
   fi
 
   # Get download URL

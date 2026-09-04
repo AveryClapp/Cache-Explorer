@@ -56,7 +56,7 @@ Out of scope:
 - Running intentionally untrusted code in direct local development mode.
 - Resource-heavy workloads when stress mode or large event limits were
   explicitly requested.
-- Vulnerabilities in unsupported local toolchains outside Cache Explorer's
+- Vulnerabilities in unsupported local toolchains outside Hardware Explorer's
   control.
 
 ## Safe Disclosure
