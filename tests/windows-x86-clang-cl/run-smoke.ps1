@@ -60,9 +60,18 @@ Invoke-Checked cmake @(
 Invoke-Checked cmake @('--build', $smokeBuild)
 
 $smokeBinary = Join-Path $smokeBuild 'hardware-explorer-x86-smoke.exe'
-$headers = & dumpbin /headers $smokeBinary
-if ($headers -notmatch '14C machine \(x86\)') {
-    throw 'The smoke executable is not a Windows x86 binary.'
+$binaryBytes = [System.IO.File]::ReadAllBytes($smokeBinary)
+if ($binaryBytes.Length -lt 64) {
+    throw 'The smoke executable is too small to contain a valid PE header.'
+}
+$peOffset = [BitConverter]::ToInt32($binaryBytes, 0x3c)
+if ($peOffset -lt 0 -or $peOffset + 6 -gt $binaryBytes.Length -or
+    $binaryBytes[$peOffset] -ne 0x50 -or $binaryBytes[$peOffset + 1] -ne 0x45) {
+    throw 'The smoke executable does not contain a valid PE header.'
+}
+$machine = [BitConverter]::ToUInt16($binaryBytes, $peOffset + 4)
+if ($machine -ne 0x014c) {
+    throw "The smoke executable machine is 0x$($machine.ToString('x4')); expected PE32 i386 (0x014c)."
 }
 
 $trace = Join-Path $buildRoot 'trace.txt'
