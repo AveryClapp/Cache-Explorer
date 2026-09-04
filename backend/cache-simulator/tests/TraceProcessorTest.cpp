@@ -364,6 +364,17 @@ void test_pin_store_format_with_source() {
   std::cout << "[PASS] test_pin_store_format_with_source\n";
 }
 
+void test_pin_windows_path_source() {
+  auto event = parse_trace_event(
+      "L 0x401000 4 C:\\games\\engine\\renderer.cpp:314 T3");
+  assert(event.has_value());
+  assert(event->address == 0x401000ULL);
+  assert(event->file == "C:\\games\\engine\\renderer.cpp");
+  assert(event->line == 314);
+  assert(event->thread_id == 3);
+  std::cout << "[PASS] test_pin_windows_path_source\n";
+}
+
 void test_pin_multibyte_access() {
   // 16-byte access (e.g. XMM register load)
   auto event = parse_trace_event("L 0x1000 16 memops.c:7 T0");
@@ -421,9 +432,10 @@ int main() {
   test_pin_store_format_no_source();
   test_pin_load_path_qualified_source();
   test_pin_store_format_with_source();
+  test_pin_windows_path_source();
   test_pin_multibyte_access();
   test_pin_high_thread_id();
 
-  std::cout << "\n=== All 23 TraceProcessor tests passed! ===\n";
+  std::cout << "\n=== All 24 TraceProcessor tests passed! ===\n";
   return 0;
 }

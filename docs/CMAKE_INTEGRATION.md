@@ -172,3 +172,54 @@ ctest --output-on-failure 2>&1 | cache-sim --json --config intel | jq '.levels.l
 ```
 
 See `tests/cmake-integration/sample-project/` for a working example.
+
+## Windows x86 with `clang-cl` (Preview)
+
+The Win32 path uses a 64-bit `clang-cl` process to load `CacheProfiler.dll` and
+links a 32-bit `cache-explorer-rt.lib` into the target. Run the pass build from
+an x64 Visual Studio Developer PowerShell, then build the runtime and target
+from an x86 Developer PowerShell.
+
+Prerequisites:
+
+- Visual Studio C++ Build Tools
+- LLVM/Clang 18-21 with `clang-cl` and LLVM CMake files
+- Ninja and CMake 3.20+
+
+Build the host LLVM pass:
+
+```powershell
+cmake -S backend/llvm-pass -B backend/llvm-pass/build -G Ninja `
+  -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl `
+  -DLLVM_DIR="C:\Program Files\LLVM\lib\cmake\llvm"
+cmake --build backend/llvm-pass/build
+```
+
+From an x86 Developer PowerShell, build the Win32 runtime:
+
+```powershell
+cmake -S backend/runtime -B backend/runtime/build -G Ninja `
+  -DCMAKE_C_COMPILER=clang-cl `
+  -DCMAKE_C_COMPILER_TARGET=i686-pc-windows-msvc
+cmake --build backend/runtime/build
+```
+
+Then configure a Win32 project with the toolchain file:
+
+```powershell
+cmake -S . -B build-hardware-explorer -G Ninja `
+  -DCMAKE_TOOLCHAIN_FILE=C:\path\to\Cache-Explorer\backend\integration\cmake\CacheExplorerToolchain.cmake `
+  -DCACHE_EXPLORER_PATH=C:\path\to\Cache-Explorer\backend `
+  -DCMAKE_C_COMPILER_TARGET=i686-pc-windows-msvc `
+  -DCMAKE_CXX_COMPILER_TARGET=i686-pc-windows-msvc
+cmake --build build-hardware-explorer
+```
+
+For direct compiler invocations, use
+`backend\scripts\hardware-explore-clang-cl.ps1`; the
+`cache-explore-clang-cl.ps1` compatibility name remains available.
+
+This milestone covers programs that can be rebuilt. Existing PE32 binary
+capture and Ghidra/IDA navigation are specified in
+[Windows x86 Binary Profiling and Decompiler Navigation](WINDOWS_X86_BINARY_PROFILING_SPEC.md)
+and remain experimental until their separate release gates pass.

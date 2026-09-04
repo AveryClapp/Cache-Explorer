@@ -36,7 +36,9 @@ typedef struct {
 #define EVENT_MEMSET_TYPE   (1ULL << 54)    // Bit 55-54 = 01
 #define EVENT_MEMMOVE_TYPE  (2ULL << 54)    // Bit 55-54 = 10
 #define EVENT_BRANCH_FLAG   (1ULL << 53)
-#define EVENT_ADDR_MASK     0x00FFFFFFFFFFFFFFULL  // Lower 56 bits for address
+// Bits 53-63 are reserved for event kind and subtype encoding. User-space
+// addresses on currently supported targets fit in the remaining low bits.
+#define EVENT_ADDR_MASK     ((1ULL << 53) - 1ULL)
 
 void __tag_mem_load(void *addr, uint32_t size, const char *file, uint32_t line);
 void __tag_mem_store(void *addr, uint32_t size, const char *file,

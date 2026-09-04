@@ -1,11 +1,70 @@
 #include "cache-explorer-rt.h"
-#include <fcntl.h>
-#include <pthread.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <fcntl.h>
+#include <io.h>
+#include <sys/stat.h>
+
+typedef SRWLOCK cache_mutex_t;
+#define CACHE_MUTEX_INITIALIZER SRWLOCK_INIT
+
+static void cache_mutex_lock(cache_mutex_t *mutex) {
+  AcquireSRWLockExclusive(mutex);
+}
+
+static void cache_mutex_unlock(cache_mutex_t *mutex) {
+  ReleaseSRWLockExclusive(mutex);
+}
+
+static int cache_stdout_fileno(void) { return _fileno(stdout); }
+static int cache_stderr_fileno(void) { return _fileno(stderr); }
+
+static int cache_open_output(const char *path) {
+  return _open(path, _O_WRONLY | _O_CREAT | _O_TRUNC | _O_BINARY,
+               _S_IREAD | _S_IWRITE);
+}
+
+static int cache_write_bytes(int fd, const void *buffer, size_t size) {
+  return _write(fd, buffer, (unsigned int)size);
+}
+
+static int cache_close_output(int fd) { return _close(fd); }
+#else
+#include <fcntl.h>
+#include <pthread.h>
 #include <unistd.h>
+
+typedef pthread_mutex_t cache_mutex_t;
+#define CACHE_MUTEX_INITIALIZER PTHREAD_MUTEX_INITIALIZER
+
+static void cache_mutex_lock(cache_mutex_t *mutex) {
+  pthread_mutex_lock(mutex);
+}
+
+static void cache_mutex_unlock(cache_mutex_t *mutex) {
+  pthread_mutex_unlock(mutex);
+}
+
+static int cache_stdout_fileno(void) { return STDOUT_FILENO; }
+static int cache_stderr_fileno(void) { return STDERR_FILENO; }
+
+static int cache_open_output(const char *path) {
+  return open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+}
+
+static ssize_t cache_write_bytes(int fd, const void *buffer, size_t size) {
+  return write(fd, buffer, size);
+}
+
+static int cache_close_output(int fd) { return close(fd); }
+#endif
 
 static _Thread_local uint32_t cached_thread_id = 0;
 static atomic_uint_fast32_t thread_counter = 1;
@@ -33,15 +92,19 @@ static struct {
   char names[MAX_FILES][MAX_FILENAME];
   uint32_t count;
   uint32_t overflow_count;  // Track how many files couldn't be registered
-  pthread_mutex_t mutex;
-} file_table = { .mutex = PTHREAD_MUTEX_INITIALIZER };
+  cache_mutex_t mutex;
+} file_table = { .mutex = CACHE_MUTEX_INITIALIZER };
 static int file_overflow_warned = 0;
 
 static int output_fd = -1;
 static int text_mode = 1;
 static atomic_int initialized = 0;
+#ifdef _WIN32
+static INIT_ONCE init_once = INIT_ONCE_STATIC_INIT;
+#else
 static pthread_once_t init_once = PTHREAD_ONCE_INIT;
-static pthread_mutex_t event_mutex = PTHREAD_MUTEX_INITIALIZER;
+#endif
+static cache_mutex_t event_mutex = CACHE_MUTEX_INITIALIZER;
 
 static void flush_locked(void);
 
@@ -58,12 +121,12 @@ static uint64_t progress_interval = 0;
 static atomic_uint_fast64_t progress_next = 0;
 
 static uint32_t intern_filename(const char *file) {
-  pthread_mutex_lock(&file_table.mutex);
+  cache_mutex_lock(&file_table.mutex);
 
   // Search for existing entry
   for (uint32_t i = 0; i < file_table.count; i++) {
     if (strcmp(file_table.names[i], file) == 0) {
-      pthread_mutex_unlock(&file_table.mutex);
+      cache_mutex_unlock(&file_table.mutex);
       return i;
     }
   }
@@ -73,7 +136,7 @@ static uint32_t intern_filename(const char *file) {
     uint32_t idx = file_table.count++;
     strncpy(file_table.names[idx], file, MAX_FILENAME - 1);
     file_table.names[idx][MAX_FILENAME - 1] = '\0';  // Ensure null termination
-    pthread_mutex_unlock(&file_table.mutex);
+    cache_mutex_unlock(&file_table.mutex);
     return idx;
   }
 
@@ -85,7 +148,7 @@ static uint32_t intern_filename(const char *file) {
             "Additional files will be attributed to first file. "
             "Consider using fewer source files or merging headers.\n", MAX_FILES);
   }
-  pthread_mutex_unlock(&file_table.mutex);
+  cache_mutex_unlock(&file_table.mutex);
   return 0;  // Attribute to first file when overflow
 }
 
@@ -94,7 +157,7 @@ static void emit_runtime_progress(uint64_t count) {
   int len = snprintf(buf, sizeof(buf),
     "{\"type\":\"progress\",\"phase\":\"trace\",\"eventsProcessed\":%llu,\"eventsTotal\":%llu}\n",
     (unsigned long long)count, (unsigned long long)max_events);
-  if (len > 0) write(STDERR_FILENO, buf, len);
+  if (len > 0) cache_write_bytes(cache_stderr_fileno(), buf, (size_t)len);
 }
 
 static inline void emit_event_with_src(uint64_t addr_with_flag, uint64_t src_addr,
@@ -132,7 +195,7 @@ static inline void emit_event_with_src(uint64_t addr_with_flag, uint64_t src_add
     }
   }
 
-  pthread_mutex_lock(&event_mutex);
+  cache_mutex_lock(&event_mutex);
   uint64_t head = atomic_load_explicit(&ring_buffer.head, memory_order_relaxed);
   uint64_t next = (head + 1) & BUFFER_MASK;
 
@@ -157,7 +220,7 @@ static inline void emit_event_with_src(uint64_t addr_with_flag, uint64_t src_add
   };
 
   atomic_store_explicit(&ring_buffer.head, next, memory_order_release);
-  pthread_mutex_unlock(&event_mutex);
+  cache_mutex_unlock(&event_mutex);
 }
 
 static inline void emit_event(uint64_t addr_with_flag, uint32_t size,
@@ -166,11 +229,11 @@ static inline void emit_event(uint64_t addr_with_flag, uint32_t size,
 }
 
 void __tag_mem_load(void *addr, uint32_t size, const char *file, uint32_t line) {
-  emit_event((uint64_t)addr, size, file, line);
+  emit_event((uint64_t)(uintptr_t)addr, size, file, line);
 }
 
 void __tag_mem_store(void *addr, uint32_t size, const char *file, uint32_t line) {
-  emit_event((uint64_t)addr | EVENT_STORE_FLAG, size, file, line);
+  emit_event((uint64_t)(uintptr_t)addr | EVENT_STORE_FLAG, size, file, line);
 }
 
 void __tag_bb_entry(uint64_t bb_id, uint32_t instr_count, const char *file, uint32_t line) {
@@ -190,46 +253,48 @@ void __tag_branch(uint64_t branch_id, uint32_t taken, const char *file, uint32_t
 void __tag_prefetch(void *addr, uint32_t size, uint8_t hint, const char *file, uint32_t line) {
   // Encode hint level in upper bits (P0, P1, P2, P3)
   uint64_t flags = EVENT_PREFETCH_FLAG | ((uint64_t)(hint & 0x3) << 54);
-  emit_event((uint64_t)addr | flags, size, file, line);
+  emit_event((uint64_t)(uintptr_t)addr | flags, size, file, line);
 }
 
 // Vector/SIMD operations
 void __tag_vector_load(void *addr, uint32_t size, const char *file, uint32_t line) {
-  emit_event((uint64_t)addr | EVENT_VECTOR_FLAG, size, file, line);
+  emit_event((uint64_t)(uintptr_t)addr | EVENT_VECTOR_FLAG, size, file, line);
 }
 
 void __tag_vector_store(void *addr, uint32_t size, const char *file, uint32_t line) {
-  emit_event((uint64_t)addr | EVENT_VECTOR_FLAG | EVENT_STORE_FLAG, size, file, line);
+  emit_event((uint64_t)(uintptr_t)addr | EVENT_VECTOR_FLAG | EVENT_STORE_FLAG, size, file, line);
 }
 
 // Atomic operations
 void __tag_atomic_load(void *addr, uint32_t size, const char *file, uint32_t line) {
-  emit_event((uint64_t)addr | EVENT_ATOMIC_FLAG, size, file, line);
+  emit_event((uint64_t)(uintptr_t)addr | EVENT_ATOMIC_FLAG, size, file, line);
 }
 
 void __tag_atomic_store(void *addr, uint32_t size, const char *file, uint32_t line) {
-  emit_event((uint64_t)addr | EVENT_ATOMIC_FLAG | EVENT_STORE_FLAG, size, file, line);
+  emit_event((uint64_t)(uintptr_t)addr | EVENT_ATOMIC_FLAG | EVENT_STORE_FLAG, size, file, line);
 }
 
 void __tag_atomic_rmw(void *addr, uint32_t size, const char *file, uint32_t line) {
-  emit_event((uint64_t)addr | EVENT_ATOMIC_FLAG | EVENT_ATOMIC_RMW | EVENT_STORE_FLAG, size, file, line);
+  emit_event((uint64_t)(uintptr_t)addr | EVENT_ATOMIC_FLAG | EVENT_ATOMIC_RMW | EVENT_STORE_FLAG, size, file, line);
 }
 
 void __tag_atomic_cmpxchg(void *addr, uint32_t size, const char *file, uint32_t line) {
-  emit_event((uint64_t)addr | EVENT_ATOMIC_FLAG | EVENT_ATOMIC_CMPXCHG, size, file, line);
+  emit_event((uint64_t)(uintptr_t)addr | EVENT_ATOMIC_FLAG | EVENT_ATOMIC_CMPXCHG, size, file, line);
 }
 
 // Memory intrinsics
 void __tag_memcpy(void *dest, void *src, uint32_t size, const char *file, uint32_t line) {
-  emit_event_with_src((uint64_t)dest | EVENT_MEMINTR_FLAG, (uint64_t)src, size, file, line);
+  emit_event_with_src((uint64_t)(uintptr_t)dest | EVENT_MEMINTR_FLAG,
+                      (uint64_t)(uintptr_t)src, size, file, line);
 }
 
 void __tag_memset(void *dest, uint32_t size, const char *file, uint32_t line) {
-  emit_event((uint64_t)dest | EVENT_MEMINTR_FLAG | EVENT_MEMSET_TYPE, size, file, line);
+  emit_event((uint64_t)(uintptr_t)dest | EVENT_MEMINTR_FLAG | EVENT_MEMSET_TYPE, size, file, line);
 }
 
 void __tag_memmove(void *dest, void *src, uint32_t size, const char *file, uint32_t line) {
-  emit_event_with_src((uint64_t)dest | EVENT_MEMINTR_FLAG | EVENT_MEMMOVE_TYPE, (uint64_t)src, size, file, line);
+  emit_event_with_src((uint64_t)(uintptr_t)dest | EVENT_MEMINTR_FLAG | EVENT_MEMMOVE_TYPE,
+                      (uint64_t)(uintptr_t)src, size, file, line);
 }
 
 static void initialize_runtime(void) {
@@ -263,24 +328,40 @@ static void initialize_runtime(void) {
     progress_interval = 100000;  // Every 100K events when no limit
   }
   atomic_store(&progress_next, progress_interval);
+  atexit(__cache_explorer_shutdown);
   // Emit initial progress
   emit_runtime_progress(0);
   atomic_store_explicit(&initialized, 1, memory_order_release);
 }
 
+#ifdef _WIN32
+static BOOL CALLBACK initialize_runtime_once(PINIT_ONCE once, PVOID parameter,
+                                             PVOID *context) {
+  (void)once;
+  (void)parameter;
+  (void)context;
+  initialize_runtime();
+  return TRUE;
+}
+#endif
+
 void __cache_explorer_init(void) {
+#ifdef _WIN32
+  InitOnceExecuteOnce(&init_once, initialize_runtime_once, NULL, NULL);
+#else
   pthread_once(&init_once, initialize_runtime);
+#endif
 }
 
 void __cache_explorer_set_output(const char *path) {
   if (path == NULL) {
-    output_fd = STDOUT_FILENO;
+    output_fd = cache_stdout_fileno();
     text_mode = 1;
   } else if (strcmp(path, "-") == 0) {
-    output_fd = STDOUT_FILENO;
+    output_fd = cache_stdout_fileno();
     text_mode = 1;
   } else {
-    output_fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    output_fd = cache_open_output(path);
     text_mode = 0; // binary mode for files
   }
 }
@@ -296,7 +377,7 @@ static inline void wb_flush(void) {
     const char *p = write_buf;
     int remaining = write_buf_pos;
     while (remaining > 0) {
-      ssize_t n = write(output_fd, p, remaining);
+      int n = (int)cache_write_bytes(output_fd, p, (size_t)remaining);
       if (n <= 0) break;
       p += n;
       remaining -= n;
@@ -414,7 +495,7 @@ static inline void fmt_prefetch(uint8_t hint, uint64_t addr, uint32_t size,
 
 static void flush_locked(void) {
   if (output_fd < 0)
-    output_fd = STDOUT_FILENO;
+    output_fd = cache_stdout_fileno();
 
   uint64_t tail = atomic_load_explicit(&ring_buffer.tail, memory_order_relaxed);
   uint64_t head = atomic_load_explicit(&ring_buffer.head, memory_order_acquire);
@@ -473,7 +554,7 @@ static void flush_locked(void) {
     wb_flush();
   } else {
     while (tail != head) {
-      write(output_fd, &ring_buffer.events[tail], sizeof(CacheEvent));
+      cache_write_bytes(output_fd, &ring_buffer.events[tail], sizeof(CacheEvent));
       tail = (tail + 1) & BUFFER_MASK;
     }
   }
@@ -482,9 +563,9 @@ static void flush_locked(void) {
 }
 
 void __cache_explorer_flush(void) {
-  pthread_mutex_lock(&event_mutex);
+  cache_mutex_lock(&event_mutex);
   flush_locked();
-  pthread_mutex_unlock(&event_mutex);
+  cache_mutex_unlock(&event_mutex);
 }
 
 static atomic_int shutdown_done = 0;
@@ -502,11 +583,12 @@ void __cache_explorer_shutdown(void) {
 
   __cache_explorer_flush();
   if (output_fd > 2) {
-    close(output_fd);
+    cache_close_output(output_fd);
     output_fd = -1;
   }
 }
 
+#ifndef _WIN32
 __attribute__((constructor)) static void auto_init(void) {
   __cache_explorer_init();
 }
@@ -514,3 +596,4 @@ __attribute__((constructor)) static void auto_init(void) {
 __attribute__((destructor)) static void auto_shutdown(void) {
   __cache_explorer_shutdown();
 }
+#endif

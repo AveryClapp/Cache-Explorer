@@ -17,8 +17,8 @@
 # Options:
 #   CACHE_EXPLORER_ENABLED    - ON/OFF to enable/disable profiling (default: ON)
 #   CACHE_EXPLORER_PATH       - Path to Cache Explorer installation
-#   CACHE_EXPLORER_PASS       - Path to CacheProfiler.so
-#   CACHE_EXPLORER_RUNTIME    - Path to libcache-explorer-rt.a
+#   CACHE_EXPLORER_PASS       - Path to CacheProfiler.so or CacheProfiler.dll
+#   CACHE_EXPLORER_RUNTIME    - Path to the runtime static library
 #   CACHE_EXPLORER_INCLUDE_STL - Include STL in profiling (default: OFF)
 #
 
@@ -27,8 +27,10 @@ cmake_minimum_required(VERSION 3.16)
 # Find Cache Explorer installation
 if(NOT CACHE_EXPLORER_PATH)
   # Try to find from environment or common locations
-  if(DEFINED ENV{CACHE_EXPLORER_PATH})
-    set(CACHE_EXPLORER_PATH $ENV{CACHE_EXPLORER_PATH})
+  if(DEFINED ENV{HARDWARE_EXPLORER_PATH})
+    set(CACHE_EXPLORER_PATH "$ENV{HARDWARE_EXPLORER_PATH}")
+  elseif(DEFINED ENV{CACHE_EXPLORER_PATH})
+    set(CACHE_EXPLORER_PATH "$ENV{CACHE_EXPLORER_PATH}")
   elseif(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../../../")
     # Assume we're in the installation directory
     get_filename_component(CACHE_EXPLORER_PATH "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
@@ -39,7 +41,18 @@ endif()
 
 # Find the LLVM pass
 if(NOT CACHE_EXPLORER_PASS)
-  set(CACHE_EXPLORER_PASS "${CACHE_EXPLORER_PATH}/llvm-pass/build/CacheProfiler.so")
+  if(DEFINED ENV{HARDWARE_EXPLORER_PASS})
+    set(CACHE_EXPLORER_PASS "$ENV{HARDWARE_EXPLORER_PASS}")
+  elseif(DEFINED ENV{CACHE_EXPLORER_PASS})
+    set(CACHE_EXPLORER_PASS "$ENV{CACHE_EXPLORER_PASS}")
+  elseif(WIN32)
+    set(CACHE_EXPLORER_PASS "${CACHE_EXPLORER_PATH}/llvm-pass/build/CacheProfiler.dll")
+    if(EXISTS "${CACHE_EXPLORER_PATH}/llvm-pass/build/Release/CacheProfiler.dll")
+      set(CACHE_EXPLORER_PASS "${CACHE_EXPLORER_PATH}/llvm-pass/build/Release/CacheProfiler.dll")
+    endif()
+  else()
+    set(CACHE_EXPLORER_PASS "${CACHE_EXPLORER_PATH}/llvm-pass/build/CacheProfiler.so")
+  endif()
 endif()
 
 if(NOT EXISTS "${CACHE_EXPLORER_PASS}")
@@ -49,7 +62,18 @@ endif()
 
 # Find the runtime library
 if(NOT CACHE_EXPLORER_RUNTIME)
-  set(CACHE_EXPLORER_RUNTIME "${CACHE_EXPLORER_PATH}/runtime/build/libcache-explorer-rt.a")
+  if(DEFINED ENV{HARDWARE_EXPLORER_RUNTIME})
+    set(CACHE_EXPLORER_RUNTIME "$ENV{HARDWARE_EXPLORER_RUNTIME}")
+  elseif(DEFINED ENV{CACHE_EXPLORER_RUNTIME})
+    set(CACHE_EXPLORER_RUNTIME "$ENV{CACHE_EXPLORER_RUNTIME}")
+  elseif(WIN32)
+    set(CACHE_EXPLORER_RUNTIME "${CACHE_EXPLORER_PATH}/runtime/build/cache-explorer-rt.lib")
+    if(EXISTS "${CACHE_EXPLORER_PATH}/runtime/build/Release/cache-explorer-rt.lib")
+      set(CACHE_EXPLORER_RUNTIME "${CACHE_EXPLORER_PATH}/runtime/build/Release/cache-explorer-rt.lib")
+    endif()
+  else()
+    set(CACHE_EXPLORER_RUNTIME "${CACHE_EXPLORER_PATH}/runtime/build/libcache-explorer-rt.a")
+  endif()
 endif()
 
 if(NOT EXISTS "${CACHE_EXPLORER_RUNTIME}")
@@ -65,6 +89,14 @@ endif()
 # Option to enable/disable profiling
 option(CACHE_EXPLORER_ENABLED "Enable cache profiling" ON)
 option(CACHE_EXPLORER_INCLUDE_STL "Profile STL code (increases overhead)" OFF)
+
+set(CACHE_EXPLORER_CLANG_CL OFF)
+if((CMAKE_C_COMPILER_ID MATCHES "Clang" AND
+    CMAKE_C_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC") OR
+   (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND
+    CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC"))
+  set(CACHE_EXPLORER_CLANG_CL ON)
+endif()
 
 # Mark as found
 set(CacheExplorer_FOUND TRUE)
@@ -89,16 +121,22 @@ function(cache_explorer_enable_target target)
 
   message(STATUS "Enabling cache profiling for target: ${target}")
 
-  # Add compiler flags for LLVM pass
-  target_compile_options(${target} PRIVATE
-    -fpass-plugin=${CACHE_EXPLORER_PASS}
-    -g  # Debug info for source attribution
-  )
-
-  # Disable O0 optnone for better instrumentation
-  get_target_property(OPT_LEVEL ${target} COMPILE_OPTIONS)
-  if(OPT_LEVEL MATCHES "-O0")
-    target_compile_options(${target} PRIVATE -Xclang -disable-O0-optnone)
+  # Add compiler flags for the LLVM pass and retain line information. The
+  # /clang: escape passes native Clang options through clang-cl's MSVC driver.
+  if(CACHE_EXPLORER_CLANG_CL)
+    target_compile_options(${target} PRIVATE
+      "/clang:-fpass-plugin=${CACHE_EXPLORER_PASS}"
+      /Z7
+      /clang:-Xclang
+      /clang:-disable-O0-optnone
+    )
+  else()
+    target_compile_options(${target} PRIVATE
+      "-fpass-plugin=${CACHE_EXPLORER_PASS}"
+      -g
+      -Xclang
+      -disable-O0-optnone
+    )
   endif()
 
   # Include STL if requested
@@ -124,7 +162,21 @@ function(cache_explorer_enable_project)
   endif()
 
   # Set global compile/link flags
-  add_compile_options(-fpass-plugin=${CACHE_EXPLORER_PASS} -g)
+  if(CACHE_EXPLORER_CLANG_CL)
+    add_compile_options(
+      "/clang:-fpass-plugin=${CACHE_EXPLORER_PASS}"
+      /Z7
+      /clang:-Xclang
+      /clang:-disable-O0-optnone
+    )
+  else()
+    add_compile_options(
+      "-fpass-plugin=${CACHE_EXPLORER_PASS}"
+      -g
+      -Xclang
+      -disable-O0-optnone
+    )
+  endif()
   add_link_options(${CACHE_EXPLORER_RUNTIME})
 
   if(CACHE_EXPLORER_INCLUDE_STL)

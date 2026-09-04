@@ -104,7 +104,9 @@ inline std::optional<TraceEvent> parse_trace_event(const std::string &line) {
     event.is_write = true;
     // Parse remaining location and thread
     if (iss >> location) {
-      auto colon = location.find(':');
+      // Use the final colon so Windows paths such as C:\\games\\main.cpp:42
+      // retain their drive prefix.
+      auto colon = location.rfind(':');
       if (colon != std::string::npos) {
         event.file = location.substr(0, colon);
         auto parsed_line = parse_trace_u32(location.substr(colon + 1));
@@ -203,7 +205,9 @@ inline std::optional<TraceEvent> parse_trace_event(const std::string &line) {
 
   // Parse location (file:line)
   if (iss >> location) {
-    auto colon = location.find(':');
+    // Use the final colon so Windows paths such as C:\\games\\main.cpp:42
+    // retain their drive prefix.
+    auto colon = location.rfind(':');
     if (colon != std::string::npos) {
       event.file = location.substr(0, colon);
       auto parsed_line = parse_trace_u32(location.substr(colon + 1));

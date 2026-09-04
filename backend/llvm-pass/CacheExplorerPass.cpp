@@ -89,7 +89,11 @@ bool isSystemHeader(StringRef Filename) {
   if (IncludeStdLib)
     return false;
 
-  // Skip standard library headers (angle-bracket includes become these paths)
+  // Skip standard library headers (angle-bracket includes become these paths).
+  // Windows debug locations use backslashes and may point into either the
+  // Visual Studio toolchain, the Windows SDK, or Clang's resource directory.
+  std::string LowerFilename = Filename.lower();
+  StringRef Lower(LowerFilename);
   if (Filename.starts_with("/usr/include") ||
       Filename.starts_with("/usr/lib") ||
       Filename.starts_with("/usr/local/include") ||
@@ -101,7 +105,10 @@ bool isSystemHeader(StringRef Filename) {
       Filename.contains("/include/bits/") ||             // GCC internal headers
       Filename.contains("/include/ext/") ||              // GCC extensions
       Filename.contains("/__clang/") ||                  // Clang builtin headers
-      Filename.contains("/lib/clang/"))                  // Clang resource dir
+      Filename.contains("/lib/clang/") ||                // Clang resource dir
+      Lower.contains("\\microsoft visual studio\\") || // MSVC toolchain
+      Lower.contains("\\windows kits\\") ||            // Windows SDK
+      Lower.contains("\\lib\\clang\\"))               // clang-cl resource dir
     return true;
 
   return false;
