@@ -18,7 +18,7 @@ $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.
 Import-Module (Join-Path $vs 'Common7/Tools/Microsoft.VisualStudio.DevShell.dll')
 Enter-VsDevShell -VsInstallPath $vs -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64'
 $clang = (Get-Command clang-cl).Source
-Checked cmake @('-S', "$repo/backend/cache-simulator", '-B', $simBuild, '-G', 'Ninja', "-DCMAKE_C_COMPILER=$clang", "-DCMAKE_CXX_COMPILER=$clang")
+Checked cmake @('-S', "$repo/backend/cache-simulator", '-B', $simBuild, '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release', "-DCMAKE_C_COMPILER=$clang", "-DCMAKE_CXX_COMPILER=$clang")
 Checked cmake @('--build', $simBuild, '--target', 'hardware-explorer-normalize-pin', 'cache-sim')
 $normalizer = Join-Path $simBuild 'hardware-explorer-normalize-pin.exe'
 & (Join-Path $PSScriptRoot 'test-normalizer.ps1') -Normalizer $normalizer
@@ -49,6 +49,15 @@ foreach ($badArgument in @('', 'quote"value', "line`nbreak", 'C:\space folder\')
     }
     Assert-True ($rejected -and -not (Test-Path -LiteralPath $trace)) 'Unsafe argument was launched or published output.'
 }
+$badOutputOptions = $options.Clone()
+$badOutputOptions.Output = $fixture
+$rejected = $false
+try { & "$repo/backend/scripts/hardware-explore-pin.ps1" @badOutputOptions }
+catch {
+    if ($_.Exception.Message -notmatch 'Output must be a file') { throw }
+    $rejected = $true
+}
+Assert-True $rejected 'Allowed a directory as the trace output.'
 & "$repo/backend/scripts/hardware-explore-pin.ps1" @options -ArgumentList $arguments
 $lines = [IO.File]::ReadAllLines($trace)
 $mainHash = (Get-FileHash -LiteralPath $program).Hash.ToLowerInvariant()
@@ -56,6 +65,15 @@ $dllHash = (Get-FileHash -LiteralPath $plugin).Hash.ToLowerInvariant()
 Assert-True (@($lines -match "^# image .* sha256:$mainHash ").Count -eq 1) 'Load-time executable hash does not match .NET SHA256.'
 Assert-True (@($lines -match "^# image .* sha256:$dllHash ").Count -eq 1) 'Loaded/reloaded DLL identity was lost or duplicated.'
 Assert-True (@($lines -match '^L ').Count -gt 0 -and @($lines -match '^S ').Count -gt 0) 'Missing load/store events.'
+$mainImageRecord = @($lines | Where-Object { $_ -match "^# image [0-9]+ sha256:$mainHash " })[0]
+[void]($mainImageRecord -match '^# image ([0-9]+) ')
+$mainId = $Matches[1]
+$mainSites = @($lines -match "^# site [0-9]+ $mainId ")
+Assert-True ($mainSites.Count -gt 0) 'Main executable never entered the capture window.'
+$firstEvent = @($lines -match '^[LS] ')[0]
+[void]($firstEvent -match ' K([0-9]+)$')
+$firstSite = @($lines -match "^# site $($Matches[1]) $mainId ")
+Assert-True ($firstSite.Count -eq 1) 'Capture did not start at the main executable entry point.'
 $threadIds = @($lines | Where-Object { $_ -match ' T([0-9]+)' } | ForEach-Object { [void]($_ -match ' T([0-9]+)'); $Matches[1] } | Sort-Object -Unique)
 Assert-True ($threadIds.Count -ge 4) 'Did not capture multiple application threads.'
 Assert-True (-not ($lines -match ' [CI]0x|[A-Z]:\\')) 'Raw PCs or local paths leaked into portable records.'
@@ -105,7 +123,9 @@ foreach ($mode in @('--fail', '--crash', '--hang')) {
     if ($mode -eq '--hang') { $failureOptions.TimeoutSeconds = 10 }
     try { & "$repo/backend/scripts/hardware-explore-pin.ps1" @failureOptions -ArgumentList @($mode) -WarningVariable warnings }
     catch {
-        Assert-True ($_.Exception.Message -match 'exited with code|timed out|no trace was published') "Unexpected failure: $_"
+        $expectedFailure = if ($mode -eq '--hang') { 'timed out' }
+            elseif ($mode -eq '--fail') { 'exited with code 17' } else { 'exited with code' }
+        Assert-True ($_.Exception.Message -match $expectedFailure) "Unexpected failure: $_"
         $failed = $true
     }
     Assert-True ($failed -and [IO.File]::ReadAllText($trace) -eq 'preserve existing output') 'Failed capture overwrote output.'

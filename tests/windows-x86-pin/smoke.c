@@ -5,13 +5,15 @@
 #include <wchar.h>
 
 typedef uint32_t (*Mix)(volatile uint32_t *, uint32_t);
-static volatile uint32_t values[4][256];
+// A 4-KiB stride repeatedly conflicts in L1 sets, making application sites
+// genuine hotspots instead of relying on loader traffic to exercise misses.
+static volatile uint32_t values[4][256 * 1024];
 static Mix mix;
 
 static DWORD WINAPI worker(void *argument) {
     const unsigned id = (unsigned)(uintptr_t)argument;
     for (unsigned n = 0; n < 8; ++n) {
-        for (unsigned i = 0; i < 256; ++i) values[id][i] += n + i;
+        for (unsigned i = 0; i < 256; ++i) values[id][i * 1024] += n + i;
         mix(values[id], n + id);
     }
     return 0;

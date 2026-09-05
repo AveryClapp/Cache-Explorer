@@ -31,6 +31,7 @@ $pinPath = (Resolve-Path -LiteralPath (Join-Path $PinRoot 'pin.exe')).Path
 $toolPath = (Resolve-Path -LiteralPath $PinTool).Path
 $normalizerPath = (Resolve-Path -LiteralPath $Normalizer).Path
 $outputPath = [IO.Path]::GetFullPath($Output)
+if ([IO.Directory]::Exists($outputPath)) { throw 'Output must be a file, not a directory.' }
 $workingPath = if ($WorkingDirectory) { (Resolve-Path -LiteralPath $WorkingDirectory).Path }
     else { [IO.Path]::GetDirectoryName($programPath) }
 if (-not [IO.Directory]::Exists($workingPath)) { throw 'WorkingDirectory must be an existing directory.' }
@@ -76,6 +77,9 @@ function Invoke-CaptureProcess {
 }
 
 try {
+    # Fail on an unwritable destination before launching a potentially long game.
+    $probe = [IO.File]::Open($temporary, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+    $probe.Dispose()
     Write-Host 'Hardware Explorer Preview: capturing one local PE32 process and its loaded modules.'
     Write-Host 'No child-process following. Close the target normally to finish capture.'
     Invoke-CaptureProcess $pinPath (@('-t', $toolPath, '-o', $raw, '-max', "$MaxEvents",

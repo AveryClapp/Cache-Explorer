@@ -20,6 +20,8 @@ KNOB<UINT32> sample_rate(KNOB_MODE_WRITEONCE, "pintool", "sample", "1", "Record 
 PIN_LOCK output_lock;
 std::ofstream trace;
 std::atomic<bool> at_limit{false};
+std::atomic<bool> recording{false};
+ADDRINT main_entry = 0;
 UINT32 events = 0, unresolved = 0, until_sample = 0, image_count = 0;
 // Accessed only in instrumentation callbacks, which hold Pin's VM lock.
 std::map<UINT32, bool> known_images;
@@ -86,6 +88,10 @@ VOID image_load(IMG img, VOID*) {
         fatal("invalid image metadata");
     const auto hash = image_hash(IMG_Name(img));
     const bool main_image = IMG_IsMainExecutable(img);
+    if (main_image) {
+        main_entry = IMG_EntryAddress(img);
+        if (main_entry < base || main_entry >= end) fatal("invalid main executable entry point");
+    }
     known_images[id] = hash != "-";
     PIN_GetLock(&output_lock, 1);
     trace << "# image " << id << ' ' << hash << ' ' << name << " 0x"
@@ -100,7 +106,7 @@ VOID image_load(IMG img, VOID*) {
 VOID image_unload(IMG img, VOID*) { known_images.erase(IMG_Id(img)); }
 
 VOID record(THREADID tid, ADDRINT data, UINT32 size, BOOL write, ADDRINT pc, UINT32 image) {
-    if (at_limit.load(std::memory_order_relaxed)) return;
+    if (!recording.load(std::memory_order_relaxed) || at_limit.load(std::memory_order_relaxed)) return;
     PIN_GetLock(&output_lock, tid + 1);
     // Counters, sampling decisions and output share one serialization point.
     if (events >= max_events.Value()) {
@@ -130,9 +136,13 @@ VOID record(THREADID tid, ADDRINT data, UINT32 size, BOOL write, ADDRINT pc, UIN
     if (failed) fatal("trace write failed (possibly full storage)");
 }
 
+VOID begin_recording() { recording.store(true, std::memory_order_relaxed); }
+
 VOID instruction(INS ins, VOID*) {
     if (at_limit.load(std::memory_order_relaxed)) return;
     const ADDRINT pc = INS_Address(ins);
+    if (main_entry != 0 && pc == main_entry)
+        INS_InsertCall(ins, IPOINT_BEFORE, AFUNPTR(begin_recording), IARG_END);
     const IMG img = IMG_FindByAddress(pc);
     UINT32 image = 0;
     if (IMG_Valid(img)) {

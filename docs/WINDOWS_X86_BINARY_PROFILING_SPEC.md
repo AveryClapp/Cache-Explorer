@@ -410,7 +410,9 @@ retain a `.partial.raw` diagnostic; they are not published as successful analyse
 The Pin PC is the memory instruction's address, not a clang-cl callback return
 PC. Do **not** apply the clang-cl PDB lookup's `rva - 1` adjustment to Pin sites.
 PDB enrichment for Pin and multi-image selection still require separate work.
-Capture currently includes startup/system DLL traffic and normal pre-execution
+Recording starts at the main PE entry point (without needing symbols); earlier
+OS-loader operands do not consume the event budget. Capture includes subsequent
+CRT startup/system DLL traffic and normal pre-execution
 memory operands; nonstandard operands fail closed. It is not yet a user-selectable
 game capture window or a hardware retired-instruction measurement.
 Pin's target-command-line reconstruction currently loses literal quotes and
