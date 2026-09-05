@@ -17,6 +17,14 @@ public class HardwareExplorerSmoke extends GhidraScript {
         check(currentProgram.getBookmarkManager().getBookmark(originalBase.add(0x1015), BookmarkType.NOTE, HardwareExplorer.CATEGORY) != null, "Missing original marker");
         var location = HardwareExplorer.pseudocodeLocation(currentProgram, originalBase.add(0x1015), monitor);
         check(location instanceof DecompilerLocation && ((DecompilerLocation)location).getToken() != null, "No real pseudocode token navigation");
+        DecompilerLocation navigation = (DecompilerLocation)location;
+        check(navigation.getLineNumber() == navigation.getToken().getLineParent().getLineNumber() - 1, "Pseudocode line must be zero-based for FieldPanel navigation");
+        int column = 0;
+        for (var token : navigation.getToken().getLineParent().getAllTokens()) {
+            if (token == navigation.getToken()) break;
+            column += token.getText().length();
+        }
+        check(navigation.getCharPos() == column, "Token column must exclude visual indentation");
         println("Pseudocode token: " + ((DecompilerLocation)location).getToken().getText());
         currentProgram.setImageBase(toAddr(0x710000), true);
         runScript("HardwareExplorer.java", importArgs);
@@ -30,6 +38,7 @@ public class HardwareExplorerSmoke extends GhidraScript {
         JsonObject cv = new JsonObject();
         cv.addProperty("guid", pdb.getPdbGuid().replace("{", "").replace("}", "").toLowerCase());
         cv.addProperty("age", Long.parseLong(pdb.getPdbAge(), 16));
+        Files.writeString(Path.of(args[0]).resolveSibling("ghidra-codeview.json"), cv.toString());
         wrong.getAsJsonArray("images").get(0).getAsJsonObject().add("codeView", cv);
         Path cvBundle = Files.createTempFile("hardware-explorer-codeview", ".json");
         try {

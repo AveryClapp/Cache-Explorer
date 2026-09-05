@@ -13,6 +13,7 @@ import { Header } from './components/Header'
 import { SettingsToolbar } from './components/SettingsToolbar'
 import { ExamplesSidebar } from './components/ExamplesSidebar'
 import { ResultsPanel } from './components/ResultsPanel'
+import type { HotspotBundle } from './binary/hotspots'
 
 // Types
 import type {
@@ -360,6 +361,7 @@ function App() {
   const [batchResults, setBatchResults] = useState<{config: string; result: CacheResult}[]>([])
   const [batchError, setBatchError] = useState<string | null>(null)
   const [activeProductArea, setActiveProductArea] = useState<ProductArea>(productAreaFromLocation)
+  const [binaryProfile, setBinaryProfile] = useState<HotspotBundle | null>(null)
   const [batchRunning, setBatchRunning] = useState(false)
   const [experimentResult, setExperimentResult] = useState<HardwareExperimentResult | null>(null)
   const [experimentRunning, setExperimentRunning] = useState(false)
@@ -591,7 +593,7 @@ function App() {
       // Ctrl/Cmd + Enter to run
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault()
-        if (stage === 'idle') runAnalysis()
+        if (stage === 'idle' && activeProductArea !== 'binary') runAnalysis()
       }
       // Escape to close command palette
       if (e.key === 'Escape') {
@@ -1551,7 +1553,7 @@ function App() {
       {!isEmbedMode && activeProductArea !== 'analyze' && (
         <main id="main-content" className="product-workspace" tabIndex={-1}>
           <Suspense fallback={<div className="product-loading" role="status">Loading workspace…</div>}>
-            {activeProductArea === 'binary' && <BinaryProfiles />}
+            {activeProductArea === 'binary' && <BinaryProfiles bundle={binaryProfile} onChange={setBinaryProfile} />}
             {activeProductArea === 'comparisons' && (
               <BatchResultsModal
                 results={batchResults}

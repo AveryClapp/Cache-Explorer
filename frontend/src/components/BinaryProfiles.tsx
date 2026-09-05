@@ -4,9 +4,8 @@ import type { BinaryMetrics, HotspotBundle } from '../binary/hotspots'
 import './BinaryProfiles.css'
 
 const number = (value: number) => value.toLocaleString()
-export function BinaryProfiles() {
-  const [bundle, setBundle] = useState<HotspotBundle | null>(null)
-  const [imageId, setImageId] = useState('')
+export function BinaryProfiles({ bundle, onChange }: { bundle: HotspotBundle | null; onChange: (profile: HotspotBundle | null) => void }) {
+  const [imageId, setImageId] = useState(bundle?.codeHotspots[0]?.location.imageId ?? bundle?.images[0].id ?? '')
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<keyof BinaryMetrics>('l1dMisses')
   const [error, setError] = useState('')
@@ -26,7 +25,7 @@ export function BinaryProfiles() {
       if (file.size > MAX_FILE_BYTES) throw new Error('File exceeds the 16 MiB import limit.')
       const imported = importBinaryProfile(await file.text())
       if (id !== request.current) return
-      setBundle(imported)
+      onChange(imported)
       setImageId(imported.codeHotspots[0]?.location.imageId ?? imported.images[0].id)
       setQuery('')
     } catch (failure) {
@@ -54,6 +53,7 @@ export function BinaryProfiles() {
       </label>
     </div>
     <p className="binary-privacy">Files stay in this browser tab. No uploads, source recovery, or program execution.</p>
+    {bundle && <button type="button" disabled={busy} onClick={() => { onChange(null); setError('') }}>Close profile</button>}
     {busy && <p role="status">Validating local profile…</p>}
     {error && <p className="binary-error" role="alert">{error} {bundle ? 'The previous profile is still open.' : ''}</p>}
     {!bundle ? <div className="binary-intro">

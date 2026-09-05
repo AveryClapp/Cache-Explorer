@@ -50,25 +50,37 @@ public class HardwareExplorer extends GhidraScript {
         if (isRunningHeadless()) return;
         Address importedBase = currentProgram.getImageBase();
         TableChooserDialog dialog = createTableChooserDialog("Hardware Explorer — modeled cache hotspots (Preview)", new TableChooserExecutor() {
+            private long navigationSequence;
             public String getButtonName() { return "Open pseudocode"; }
             public boolean execute(AddressableRowObject object) {
                 Row row = (Row)object;
                 try {
                     if (currentProgram.isClosed() || !currentProgram.getImageBase().equals(importedBase)) throw new IllegalStateException("Program closed or rebased; reimport before navigating.");
-                    var location = pseudocodeLocation(currentProgram, row.address(), monitor);
-                    if (location != null) {
-                        Swing.runNow(() -> {
-                            var tool = state.getTool();
-                            var provider = tool.getComponentProvider("Decompiler");
-                            if (!(provider instanceof DecompilerProvider decompiler)) throw new IllegalStateException("Enable Ghidra's Decompiler window, then retry.");
-                            tool.showComponentProvider(provider, true);
-                            if (!tool.getService(GoToService.class).goTo(decompiler, location, currentProgram)) throw new IllegalStateException("Decompiler refused navigation");
+                    Program program = currentProgram;
+                    Swing.runNow(() -> {
+                        long request = ++navigationSequence;
+                        var tool = state.getTool();
+                        var provider = tool.getComponentProvider("Decompiler");
+                        if (!(provider instanceof DecompilerProvider decompiler)) throw new IllegalStateException("Enable Ghidra's Decompiler window, then retry.");
+                        tool.showComponentProvider(provider, true);
+                        if (!tool.getService(GoToService.class).goTo(decompiler, new ProgramLocation(program, row.address()), program)) throw new IllegalStateException("Decompiler refused navigation");
+                        decompiler.doWhenNotBusy(() -> {
+                            if (request != navigationSequence || program.isClosed() || !program.getImageBase().equals(importedBase)) return;
+                            var panel = decompiler.getDecompilerPanel();
+                            Function function = program.getFunctionManager().getFunctionContaining(row.address());
+                            // Use the displayed markup, including the user's formatting options.
+                            // A separate DecompInterface can produce different token coordinates.
+                            if (panel.getController().getProgram() != program || !Objects.equals(function, panel.getController().getFunction())) return;
+                            ClangToken token = program.getListing().getInstructionAt(row.address()) == null ? null : nearestToken(panel.getLines(), function, row.address());
+                            if (token != null) {
+                                panel.goToToken(token);
+                                println("pseudocode-nearest: reconstructed code, not original source or stepping.");
+                            } else {
+                                goTo(row.address());
+                                println(row.confidence() + ": no pseudocode mapping; showing the instruction/function instead.");
+                            }
                         });
-                        println("pseudocode-nearest: reconstructed code, not original source or stepping.");
-                    } else {
-                        goTo(row.address());
-                        println("" + row.confidence() + ": no pseudocode mapping; showing the instruction/function instead.");
-                    }
+                    });
                 } catch (Exception failure) { printerr("Navigation failed: " + failure.getMessage()); }
                 return false;
             }
@@ -121,6 +133,21 @@ public class HardwareExplorer extends GhidraScript {
         return rows;
     }
     /** Verified function-only token search; never cross into an adjacent function. */
+    public static ClangToken nearestToken(List<ClangLine> lines, Function function, Address address) {
+        if (function == null || lines == null) return null;
+        ClangToken nearest = null; long distance = Long.MAX_VALUE;
+        for (ClangLine line : lines) {
+            for (ClangToken token : line.getAllTokens()) {
+                Address min = token.getMinAddress(), max = token.getMaxAddress();
+                if (min != null && function.getBody().contains(min)) {
+                    long delta = max != null && address.compareTo(min) >= 0 && address.compareTo(max) <= 0 ? 0 : Math.abs(min.subtract(address));
+                    if (delta < distance) { distance = delta; nearest = token; }
+                }
+            }
+        }
+        return nearest;
+    }
+    /** Headless equivalent, with zero-based FieldPanel coordinates. GUI uses its own tokens. */
     public static ProgramLocation pseudocodeLocation(Program program, Address address, TaskMonitor monitor) throws Exception {
         Function function = program.getFunctionManager().getFunctionContaining(address);
         if (function == null || program.getListing().getInstructionAt(address) == null) return null;
@@ -129,20 +156,15 @@ public class HardwareExplorer extends GhidraScript {
             if (!decompiler.openProgram(program)) return null;
             DecompileResults results = decompiler.decompileFunction(function, 30, monitor);
             if (!results.decompileCompleted() || results.getCCodeMarkup() == null) return null;
-            ClangToken nearest = null; long distance = Long.MAX_VALUE; int lineNo = 0, column = 0;
-            for (ClangLine line : DecompilerUtils.toLines(results.getCCodeMarkup())) {
-                int offset = line.getIndent();
-                for (ClangToken token : line.getAllTokens()) {
-                    Address min = token.getMinAddress(), max = token.getMaxAddress();
-                    if (min != null && function.getBody().contains(min)) {
-                        long delta = max != null && address.compareTo(min) >= 0 && address.compareTo(max) <= 0 ? 0 : Math.abs(min.subtract(address));
-                        if (delta < distance) { distance = delta; nearest = token; lineNo = line.getLineNumber(); column = offset; }
-                    }
-                    offset += token.getText().length();
-                }
-            }
+            ClangToken nearest = nearestToken(DecompilerUtils.toLines(results.getCCodeMarkup()), function, address);
             if (nearest == null) return null;
-            return new DefaultDecompilerLocation(program, address, new DecompilerLocationInfo(function.getEntryPoint(), results, nearest, lineNo, column));
+            ClangLine line = nearest.getLineParent();
+            int column = 0;
+            for (ClangToken token : line.getAllTokens()) {
+                if (token == nearest) break;
+                column += token.getText().length();
+            }
+            return new DefaultDecompilerLocation(program, address, new DecompilerLocationInfo(function.getEntryPoint(), results, nearest, line.getLineNumber() - 1, column));
         } finally { decompiler.dispose(); }
     }
 }

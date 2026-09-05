@@ -8,6 +8,7 @@ from pathlib import Path
 from jsonschema import Draft7Validator
 
 MAX_BYTES = 16 * 1024 * 1024
+MAX_ANNOTATION_STATE_BYTES = 1024 * 1024
 
 
 def _unique_object(pairs):
@@ -90,6 +91,55 @@ def update_annotation(comment, annotation=None):
     if annotation:
         lines.append("[Hardware Explorer Preview] " + annotation)
     return "\n".join(lines)
+
+
+def refresh_annotations(raw_state, sha256, image_base, annotations, read_comment, write_comment, save_state):
+    """Replace only owned comment lines; persist RVAs so cleanup survives IDB reload/rebase.
+
+    Keep a write-ahead union until all comment writes succeed. A failed import can
+    then be cleared/retried without losing ownership of partially written notes.
+    All validation and comment reads finish before the first write.
+    """
+    if not isinstance(sha256, str) or len(sha256) != 64 or any(c not in '0123456789abcdef' for c in sha256):
+        raise ValueError("Missing input SHA-256 for annotation ownership")
+    if type(image_base) is not int or not 0 <= image_base <= 0xffffffff:
+        raise ValueError("Expected a PE32 image base")
+    previous = []
+    if raw_state:
+        if len(raw_state) > MAX_ANNOTATION_STATE_BYTES:
+            raise ValueError("Annotation ownership state exceeds its limit")
+        state = json.loads(raw_state, object_pairs_hook=_unique_object)
+        if not isinstance(state, dict) or set(state) != {'version', 'sha256', 'rvas'} or type(state['version']) is not int or state['version'] != 1 or state['sha256'] != sha256:
+            raise ValueError("Invalid or mismatched annotation ownership state")
+        previous = state['rvas']
+        if not isinstance(previous, list) or len(previous) > 20000:
+            raise ValueError("Invalid annotation ownership list")
+    if not isinstance(annotations, dict) or len(annotations) > 10000:
+        raise ValueError("Too many new annotations")
+    if any(type(rva) is not int or not 0 <= rva <= 0xffffffff - image_base for rva in [*previous, *annotations]):
+        raise ValueError("Annotation RVA overflows PE32")
+    if any(not isinstance(note, str) or len(note) > 4096 or '\n' in note or '\r' in note for note in annotations.values()):
+        raise ValueError("Invalid annotation text")
+    owned = sorted(set(previous) | set(annotations))
+    if len(owned) > 20000:
+        raise ValueError("Clear the previous annotations before importing more sites")
+    changes = []
+    for rva in owned:
+        old = read_comment(image_base + rva) or ''
+        new = update_annotation(old, annotations.get(rva))
+        if new != old:
+            changes.append((image_base + rva, new))
+
+    def persist(rvas):
+        data = json.dumps({'version': 1, 'sha256': sha256, 'rvas': rvas}, separators=(',', ':')).encode('utf-8')
+        if not save_state(data):
+            raise RuntimeError("Could not save annotation ownership; retry or clear annotations")
+
+    persist(owned)
+    for address, comment in changes:
+        if not write_comment(address, comment):
+            raise RuntimeError("Could not update an instruction comment; retry or clear annotations")
+    persist(sorted(annotations))
 
 
 def nearest_mapping(address, mapped_addresses, function_contains):

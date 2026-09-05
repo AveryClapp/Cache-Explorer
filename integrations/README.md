@@ -100,10 +100,18 @@ a path embedded in the bundle or downloads symbols. Selecting a row tries the
 nearest mapped Hex-Rays ctree item in the same function; missing Hex-Rays or
 mapping uses an explicitly reported function/instruction fallback.
 
+Reimport replaces the plugin's own comment lines, including removing sites
+omitted by a filtered or empty import. Ownership is stored as RVAs in the IDB,
+so cleanup works after reopening or rebasing. Choose **Clear annotations** when
+launching the plugin to remove its lines while preserving other comments. A
+failed comment write retains ownership information for a retry or cleanup.
+
 **No IDA version is declared supported yet.** Schema, identity, rebasing,
-annotation preservation and nearest-address logic have SDK-independent tests.
+annotation refresh/cleanup, partial-write recovery and nearest-address logic
+have SDK-independent tests. CodeView parsing is cross-checked against Ghidra's
+identity for a real PE32 fixture.
 That is not a substitute for a licensed IDA/Hex-Rays run. SDK compatibility,
-chooser behavior, annotation refresh/cleanup, and both with/without-Hex-Rays
+chooser behavior, in-IDA annotation lifecycle, and both with/without-Hex-Rays
 smokes remain release gates. Use a copy of your IDB while this adapter is
 experimental.
 
@@ -130,4 +138,5 @@ metrics are deliberately synthetic test data, **never calibration evidence**.
 
 Primary interface references: [Ghidra source and releases](https://github.com/NationalSecurityAgency/ghidra),
 [IDAPython Hex-Rays interface](https://python.docs.hex-rays.com/ida_hexrays/index.html),
-[IDA navigation interface](https://python.docs.hex-rays.com/ida_kernwin/index.html).
+[IDA navigation interface](https://python.docs.hex-rays.com/ida_kernwin/index.html),
+[IDA database storage interface](https://python.docs.hex-rays.com/ida_netnode/index.html).

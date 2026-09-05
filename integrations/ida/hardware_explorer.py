@@ -12,11 +12,24 @@ import ida_ida
 import ida_idaapi
 import ida_kernwin
 import ida_nalt
+import ida_netnode
 
 # Load a sibling module without changing the global Python import search path.
 _spec = importlib.util.spec_from_file_location("hardware_explorer_bundle", Path(__file__).parent / "hardware_explorer_support" / "hardware_explorer_bundle.py")
 bundle_io = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(bundle_io)
+
+
+def replace_annotations(sha256, image_base, annotations):
+    node = ida_netnode.netnode('$ hardware_explorer_preview_annotations', 0, True)
+    tag = ord('B')
+    if node.blobsize(0, tag) > bundle_io.MAX_ANNOTATION_STATE_BYTES:
+        raise ValueError('Annotation ownership state exceeds its limit')
+    bundle_io.refresh_annotations(
+        node.getblob(0, tag), sha256, image_base, annotations,
+        lambda ea: ida_bytes.get_cmt(ea, False),
+        lambda ea, comment: ida_bytes.set_cmt(ea, comment, False),
+        lambda data: node.setblob(data, 0, tag))
 
 
 def navigate(address, capture_kind):
@@ -98,15 +111,29 @@ class HardwareExplorerPlugin(ida_idaapi.plugin_t):
         return ida_idaapi.PLUGIN_KEEP
 
     def run(self, arg):
-        path = ida_kernwin.ask_file(False, "*.json", "Open Hardware Explorer hotspot bundle")
-        if not path:
-            return
         try:
-            if ida_ida.inf_is_64bit() or ida_ida.inf_get_procname() != "metapc":
+            if not ida_ida.inf_is_32bit_exactly() or ida_ida.inf_get_procname() != "metapc":
                 raise ValueError("Expected a 32-bit x86 program")
+            digest = ida_nalt.retrieve_input_file_sha256()
+            if not digest or len(digest) != 32:
+                raise ValueError('The database has no trustworthy input SHA-256')
+            image_base = ida_nalt.get_imagebase()
+            action = 0 if arg == 1 else ida_kernwin.ask_buttons('Import', 'Clear annotations', 'Cancel', 1, 'Hardware Explorer Preview: import a profile or remove only its annotations?')
+            if action == -1:
+                return
+            if action == 0:
+                replace_annotations(digest.hex(), image_base, {})
+                if self.chooser:
+                    self.chooser.Close()
+                    self.chooser = None
+                ida_kernwin.msg('Hardware Explorer: removed only owned annotations; user comments are unchanged.\n')
+                return
+            path = ida_kernwin.ask_file(False, "*.json", "Open Hardware Explorer hotspot bundle")
+            if not path:
+                return
             bundle = bundle_io.read_bundle(path)
-            rows = bundle_io.map_sites(bundle, ida_nalt.retrieve_input_file_sha256(), ida_nalt.get_imagebase())
-            image = next(image for image in bundle["images"] if image["sha256"] == ida_nalt.retrieve_input_file_sha256().hex())
+            rows = bundle_io.map_sites(bundle, digest, image_base)
+            image = next(image for image in bundle["images"] if image["sha256"] == digest.hex())
             if "codeView" in image:
                 original = ida_kernwin.ask_file(False, "*.exe;*.dll", "Select the original PE for CodeView identity verification (read only)")
                 if not original:
@@ -114,6 +141,7 @@ class HardwareExplorerPlugin(ida_idaapi.plugin_t):
                 bundle_io.verify_codeview(original, image["sha256"], image["codeView"])
             # Strong SHA match is mandatory. No weak filename/timestamp fallback.
             # No automatic symbol lookup or target-file/network access.
+            annotations = {}
             for address, site in rows:
                 head = ida_bytes.get_item_head(address)
                 if not ida_bytes.is_code(ida_bytes.get_full_flags(head)):
@@ -122,8 +150,8 @@ class HardwareExplorerPlugin(ida_idaapi.plugin_t):
                     continue
                 metrics = site["metrics"]
                 note = f'modeled L1D misses={metrics["l1dMisses"]}, accesses={metrics["accesses"]}; ranked subset, not measured'
-                old = ida_bytes.get_cmt(head, False)
-                ida_bytes.set_cmt(head, bundle_io.update_annotation(old, note), False)
+                annotations[head - image_base] = note
+            replace_annotations(digest.hex(), image_base, annotations)
             for warning in bundle["warnings"]:
                 ida_kernwin.msg("Hardware Explorer: " + warning + "\n")
             ida_kernwin.msg(f'Hardware Explorer model: {bundle["profile"]}; capture: {bundle["capture"]}\n')
