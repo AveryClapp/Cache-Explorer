@@ -75,19 +75,19 @@
     flex: 1 0 100%;
     width: 100%;
     max-width: none;
-    justify-content: stretch;
-    gap: 0;
+    justify-content: flex-start;
+    gap: var(--space-1);
     overflow: visible;
     padding-inline: 0;
   }
 
   .header-nav-item {
-    flex: 1 1 0;
+    flex: 1 0 auto;
     justify-content: center;
     min-width: 0;
-    min-height: 34px;
-    padding: 0 4px;
-    font-size: var(--text-2xs);
+    min-height: 44px;
+    padding: 0 var(--space-2);
+    font-size: var(--text-xs);
   }
 
   .btn-compare,

@@ -18,6 +18,22 @@ try {
   page.on('response', async response => { if (response.url().endsWith('/compile') && response.ok()) responses.push(await response.json()) })
   await page.goto(`${base}/?view=lab`)
   await page.getByRole('heading', { name: 'Change one assumption. Follow the evidence.' }).waitFor()
+  for (const width of [320, 390, 768, 1024, 1280, 1440]) {
+    await page.setViewportSize({ width, height: 1000 })
+    const navProblems = await page.getByRole('navigation', { name: 'Product' }).evaluate(nav => {
+      return [...nav.querySelectorAll('a')].flatMap(link => {
+        const box = link.getBoundingClientRect()
+        const range = document.createRange()
+        range.selectNodeContents(link)
+        const text = range.getBoundingClientRect()
+        const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)
+        return box.left < 0 || box.right > innerWidth || text.left < box.left || text.right > box.right || !link.contains(hit)
+          ? [link.textContent] : []
+      })
+    })
+    assert.deepEqual(navProblems, [], `Navigation labels overlap or are obscured at ${width}px`)
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 })
   assert.equal(await page.evaluate(() => performance.getEntriesByType('resource').some(entry => /monaco|EditorPanel|editor\.api/.test(entry.name))), false, 'Lab must not load the editor')
   await page.getByRole('button', { name: 'Run baseline & scenario', exact: true }).click()
   await page.getByRole('status').filter({ hasText: 'Comparison complete.' }).waitFor({ timeout: 90000 })
@@ -58,6 +74,14 @@ try {
   await page.getByRole('button', { name: 'Run baseline & scenario', exact: true }).click()
   await page.getByRole('alert').waitFor()
   assert.equal(await page.getByRole('heading', { name: 'Which source lines moved?' }).count(), 0, 'A failed replay must not show stale results as current')
+  await page.unroute('**/compile')
+  let pendingRoute
+  await page.route('**/compile', route => { pendingRoute = route })
+  await page.getByRole('button', { name: 'Run baseline & scenario', exact: true }).click()
+  await page.getByRole('button', { name: 'Cancel comparison', exact: true }).click()
+  await page.getByRole('alert').filter({ hasText: 'Run cancelled or timed out.' }).waitFor()
+  assert.equal(await page.getByRole('heading', { name: 'Which source lines moved?' }).count(), 0)
+  await pendingRoute?.abort().catch(() => {})
   await context.close()
 
   const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true })
@@ -74,5 +98,5 @@ try {
   assert(await mobilePage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 2))
   await mobile.close()
   assert.deepEqual(errors, [])
-  console.log(`Hardware Lab desktop/mobile, real default run, scenario export/replay, offline import and failure recovery passed. Evidence: ${output}`)
+  console.log(`Hardware Lab responsive navigation, desktop/mobile, real default run, scenario export/replay, offline import, cancellation and failure recovery passed. Evidence: ${output}`)
 } finally { await browser.close() }
