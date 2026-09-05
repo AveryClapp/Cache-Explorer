@@ -135,13 +135,17 @@ public:
     static void write_execution_subsystem_stats(std::ostream& out,
                                                 const BranchPredictionStats& branch,
                                                 const std::vector<BranchSiteStats>& hot_branches,
-                                                const PipelineStats& pipeline);
+                                                const PipelineStats& pipeline,
+                                                const TraceProcessor* processor = nullptr);
+    static void write_memory_observations(std::ostream& out, const TraceProcessor& processor);
 
     /**
      * Write unavailable execution subsystem output.
      */
     static void write_execution_subsystem_unavailable(std::ostream& out,
-                                                      std::string_view reason);
+                                                      std::string_view reason,
+                                                      const MultiCoreCacheSystem* cache = nullptr);
+    static void write_topology(std::ostream& out, const MultiCoreCacheSystem* cache, bool has_l3);
 
     /**
      * Write top-level bottleneck summary.

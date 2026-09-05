@@ -93,6 +93,7 @@ export interface HardwareProfile {
   architecture: string
   class: string
   modelConfidence: string
+  labOverrides?: Record<string, string>
   modelCoverage?: Record<string, string>
   modelContract?: HardwareModelContract
   validation?: {
@@ -208,6 +209,8 @@ export interface HardwareProfileDetails {
     l3BandwidthBytesPerCycle?: number
     dramBandwidthGBs?: number
     maxMemoryLevelParallelism?: number
+    assumedMlp?: number
+    assumedBandwidthBytesPerCycle?: number
   }
   topology: {
     activeCores: number
@@ -296,6 +299,33 @@ export interface SourceAnnotation {
 
 export interface HardwareSubsystems {
   execution?: ExecutionStats
+  memorySystem?: MemorySystemEvidence
+  cacheEvidence?: CacheEvidence
+  topology?: TopologyEvidence
+}
+
+export interface MemorySystemEvidence {
+  available: boolean; reason?: string; model?: string
+  demandAccesses?: number; dramDemandFills?: number; dramDemandFillBytes?: number
+  assumedMlp?: number; assumedBandwidthBytesPerCycle?: number; bandwidthServiceCycles?: number
+  pressureAvailable?: boolean; bandwidthPressure?: number | null
+  saturationWarning?: boolean; classification?: string; caveats?: string[]
+}
+export interface CacheEvidenceLine {
+  file: string; line: number; accesses: number; misses: number; dramFills: number; tlbMisses: number
+  compulsory: number; capacity: number; conflict: number; unclassified: number
+  sample: { address: string; set: number; tag: string; hitLevel: number; missClass: string; prefetched: boolean
+    strideBytes: number | null; reuseGapAccesses: number | null
+    competitor: { address: string; file: string; line: number } | null }
+}
+export interface CacheEvidence {
+  available: boolean; reason?: string; model?: string; lineSize?: number
+  omittedSourceAccesses?: number; coverage?: string; caveats?: string[]; lines?: CacheEvidenceLine[]
+}
+export interface TopologyEvidence {
+  available: boolean; reason?: string; activeCores?: number; l1Scope?: string; l2Scope?: string; l3Scope?: string
+  threadMapping?: string; caveats?: string[]; observedEvents?: number; omittedEvents?: number
+  events?: { sequence: number; type: string; address: string; sourceCore: number; targetCore: number }[]
 }
 
 // =============================================================================

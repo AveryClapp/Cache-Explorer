@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -40,12 +41,12 @@ struct BranchPredictionStats {
 class BranchPredictor {
 public:
   // table_entries is rounded up to a power of two (min 2).
-  explicit BranchPredictor(size_t table_entries = 1024);
+  explicit BranchPredictor(size_t table_entries = 1024, std::string policy = "bimodal-2bit");
 
   // Feed one observed branch outcome and update predictor state.
   // Returns true if the prediction was wrong (a misprediction).
   bool process(uint64_t branch_id, bool taken, std::string_view file,
-               uint32_t line);
+               uint32_t line, std::optional<bool> backward = std::nullopt);
 
   [[nodiscard]] const BranchPredictionStats &stats() const { return stats_; }
 
@@ -56,6 +57,8 @@ public:
   void reset();
 
 private:
+  std::string policy_;
+  uint64_t history_ = 0;
   std::vector<uint8_t> counters_; // 2-bit saturating counters (0..3)
   uint64_t index_mask_;           // table_entries - 1 (power of two)
   BranchPredictionStats stats_;

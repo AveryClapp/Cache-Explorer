@@ -20,9 +20,11 @@ SnoopResult CoherenceController::request_read(int requesting_core,
 
     if (l1_caches[core]->is_present(address)) {
       result.found = true;
+      record(CoherenceEvent::BusRead, address, requesting_core, core);
       if (l1_caches[core]->is_dirty(address)) {
         result.was_modified = true;
         result.data_source_core = core;
+        record(CoherenceEvent::Writeback, address, core, requesting_core);
         // Downgrade M -> S, need writeback
         bool was_dirty;
         l1_caches[core]->get_line_for_writeback(address, was_dirty);
@@ -50,6 +52,7 @@ SnoopResult CoherenceController::request_exclusive(int requesting_core,
         result.data_source_core = core;
       }
       // Invalidate other copies
+      record(CoherenceEvent::Invalidate, address, requesting_core, core);
       l1_caches[core]->invalidate(address);
     }
   }

@@ -150,6 +150,11 @@ int main(int argc, char *argv[]) {
     ArgParser::print_usage(argv[0]);
     return 0;
   }
+  if (opts.check_config) return 0;
+  if (!opts.lab.empty() && opts.stream_mode) {
+    std::cerr << "Hardware Lab requires batch analysis; streaming uses a different multicore model.\n";
+    return 2;
+  }
 
   // Extract commonly used values for readability
   const std::string& config_name = opts.config_name;
@@ -450,9 +455,9 @@ int main(int argc, char *argv[]) {
           out, "Execution-engine estimates are not available in streaming multi-core mode yet.");
     });
     std::cout << ",";
-    write_fragment([](std::ostream &out) {
+    write_fragment([&](std::ostream &out) {
       JsonOutput::write_execution_subsystem_unavailable(
-          out, "Execution-engine estimates are not available in streaming multi-core mode yet.");
+          out, "Execution-engine estimates are not available in streaming multi-core mode yet.", &processor.get_cache_system());
     });
 
     // Prefetch stats (if enabled)
@@ -544,6 +549,10 @@ int main(int argc, char *argv[]) {
                   << " event safety limit\n";
         return 2;
       }
+      if (cfg.branch_predictor == "btfnt" && event.is_branch && !event.branch_backward.has_value()) {
+        std::cerr << "Error: BTFNT requires D0/D1 machine-target direction on every branch event. LLVM source traces do not supply it.\n";
+        return 2;
+      }
       threads.insert(event.thread_id);
       events.push_back(std::move(event));
     }
@@ -560,6 +569,10 @@ int main(int argc, char *argv[]) {
   }
 
   bool multicore = threads.size() > 1;
+  if (multicore && !opts.lab.empty()) {
+    std::cerr << "Hardware Lab sensitivity does not support multithreaded traces yet; no overrides were silently ignored.\n";
+    return 2;
+  }
   if (num_cores == 0) {
     num_cores = multicore ? std::min((int)threads.size(), 8) : 1;
   }
@@ -839,7 +852,7 @@ int main(int argc, char *argv[]) {
       std::cout << ",\n";
       JsonOutput::write_execution_subsystem_unavailable(
           std::cout,
-          "Execution-engine estimates are not available in multi-core mode yet.");
+          "Execution-engine estimates are not available in multi-core mode yet.", &processor.get_cache_system());
 
       // Prefetch stats (if enabled)
       if (prefetch_policy != PrefetchPolicy::NONE) {
@@ -1322,7 +1335,7 @@ int main(int argc, char *argv[]) {
             std::cout, branch_stats, hot_branches, pipeline_stats);
         std::cout << ",\n";
         JsonOutput::write_execution_subsystem_stats(
-            std::cout, branch_stats, hot_branches, pipeline_stats);
+            std::cout, branch_stats, hot_branches, pipeline_stats, &processor);
       }
 
       // Output L1 cache state for visualization (single core = core 0)

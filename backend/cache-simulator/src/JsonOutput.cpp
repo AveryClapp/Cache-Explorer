@@ -67,8 +67,8 @@ uint64_t estimated_memory_stall_cycles(const CodeHotspot& hotspot,
                              ? config.rob_size / config.issue_width
                              : 0;
     const auto exposed = [&](int latency) -> uint64_t {
-        return static_cast<uint64_t>(
-            std::max(0, latency - config.latency.l1_hit - hideable));
+        const auto cycles = std::max(0, latency - config.latency.l1_hit - hideable);
+        return static_cast<uint64_t>((cycles + config.assumed_mlp - 1) / config.assumed_mlp);
     };
     return hotspot.l2_hits * exposed(config.latency.l2_hit) +
            hotspot.l3_hits * exposed(config.latency.l3_hit) +
@@ -298,7 +298,7 @@ void JsonOutput::write_execution_unavailable(std::ostream& out,
 void JsonOutput::write_execution_subsystem_stats(
     std::ostream& out, const BranchPredictionStats& branch,
     const std::vector<BranchSiteStats>& hot_branches,
-    const PipelineStats& pipeline) {
+    const PipelineStats& pipeline, const TraceProcessor* processor) {
     out << "  \"subsystems\": {\n";
     out << "    \"execution\": {\n";
     out << "      \"available\": true,\n";
@@ -339,17 +339,98 @@ void JsonOutput::write_execution_subsystem_stats(
     out << "        ]\n";
     out << "      }\n";
     out << "    }\n";
+    if (processor) write_memory_observations(out, *processor);
+    if (processor) write_topology(out, nullptr, processor->get_memory_evidence().config().l3.kb_size > 0);
     out << "  }";
 }
 
+void JsonOutput::write_memory_observations(std::ostream& out, const TraceProcessor& processor) {
+    const auto& evidence = processor.get_memory_evidence();
+    const auto& cfg = evidence.config();
+    const auto pipeline = processor.get_pipeline_stats();
+    const auto bytes = evidence.dram_fills * cfg.l1_data.line_size;
+    const double service = static_cast<double>(bytes) / cfg.bandwidth_bytes_per_cycle;
+    const bool available = pipeline.instructions > 0 && pipeline.total_cycles() > 0;
+    const double pressure = available ? service / pipeline.total_cycles() : 0;
+    out << ",\"memorySystem\":{\"available\":true,\"model\":\"estimated\",\"demandAccesses\":" << evidence.accesses
+        << ",\"dramDemandFills\":" << evidence.dram_fills << ",\"dramDemandFillBytes\":" << bytes
+        << ",\"assumedMlp\":" << cfg.assumed_mlp << ",\"assumedBandwidthBytesPerCycle\":" << cfg.bandwidth_bytes_per_cycle
+        << ",\"bandwidthServiceCycles\":" << service << ",\"pressureAvailable\":" << (available ? "true" : "false")
+        << ",\"bandwidthPressure\":";
+    if (available) out << pressure; else out << "null";
+    out << ",\"saturationWarning\":" << (available && pressure >= 1 ? "true" : "false")
+        << ",\"classification\":\"" << (!available ? "insufficient-instruction-trace" : pressure >= .8 ? "bandwidth-pressure" :
+            pipeline.memory_stall_cycles() > pipeline.total_cycles() / 2 ? "latency-pressure" : "mixed") << "\""
+        << ",\"caveats\":[\"Demand line fills only; excludes prefetch traffic, dirty writebacks and bus protocol overhead.\","
+        << "\"Bandwidth is a hypothetical bytes/cycle service capacity, not measured GB/s.\","
+        << "\"MLP assumes independent misses; dependency chains, scheduling and actual overlap are not inferred.\"]}";
+    out << ",\"cacheEvidence\":{\"available\":true,\"model\":\"modeled-with-heuristics\",\"lineSize\":" << cfg.l1_data.line_size
+        << ",\"omittedSourceAccesses\":" << evidence.omitted_accesses
+        << ",\"coverage\":\"Top 24 of the first 512 source locations; one observed miss sample per location.\","
+        << "\"caveats\":[\"Capacity/conflict classes are the existing simulator heuristic, not counterfactual proof.\","
+        << "\"Reuse gap counts intervening demand accesses, not unique-line stack distance; history is bounded.\","
+        << "\"A same-set competitor is an observation, not proof of eviction causality.\","
+        << "\"Prefetch lateness and pollution are unavailable: this model installs prefetches immediately.\"],\"lines\":[";
+    bool first = true;
+    for (const auto& row : evidence.hottest()) {
+        if (!first) out << ',';
+        first = false;
+        const auto& sample = row.sample;
+        out << "{\"file\":\"" << escape(row.file) << "\",\"line\":" << row.line << ",\"accesses\":" << row.accesses
+            << ",\"misses\":" << row.misses << ",\"dramFills\":" << row.dram_fills << ",\"tlbMisses\":" << row.tlb_misses
+            << ",\"compulsory\":" << row.compulsory << ",\"capacity\":" << row.capacity << ",\"conflict\":" << row.conflict
+            << ",\"unclassified\":" << row.unclassified << ",\"sample\":{\"address\":\"" << hex_address(sample.address)
+            << "\",\"set\":" << sample.set << ",\"tag\":\"" << hex_address(sample.tag) << "\",\"hitLevel\":" << sample.hit_level
+            << ",\"missClass\":\"" << sample.miss_class << "\",\"prefetched\":" << (sample.prefetched ? "true" : "false")
+            << ",\"strideBytes\":";
+        if (sample.stride_bytes) out << *sample.stride_bytes; else out << "null";
+        out << ",\"reuseGapAccesses\":";
+        if (sample.reuse_gap) out << *sample.reuse_gap; else out << "null";
+        out << ",\"competitor\":";
+        if (sample.competing_address) out << "{\"address\":\"" << hex_address(*sample.competing_address) << "\",\"file\":\""
+            << escape(sample.competing_file) << "\",\"line\":" << sample.competing_line << '}';
+        else out << "null";
+        out << "}}";
+    }
+    out << "]}";
+}
+
 void JsonOutput::write_execution_subsystem_unavailable(std::ostream& out,
-                                                       std::string_view reason) {
+                                                       std::string_view reason,
+                                                       const MultiCoreCacheSystem* cache) {
     out << "  \"subsystems\": {\n";
     out << "    \"execution\": {\n";
     out << "      \"available\": false,\n";
     out << "      \"reason\": \"" << escape(reason) << "\"\n";
     out << "    }\n";
+    out << ",\"memorySystem\":{\"available\":false,\"reason\":\"Detailed single-core execution required\"}"
+        << ",\"cacheEvidence\":{\"available\":false,\"reason\":\"Detailed single-core execution required\"}";
+    if (cache) write_topology(out, cache, cache->has_shared_l3());
+    else out << ",\"topology\":{\"available\":false,\"reason\":\"Detailed simulation required for topology observations\"}";
     out << "  }";
+}
+
+void JsonOutput::write_topology(std::ostream& out, const MultiCoreCacheSystem* cache, bool has_l3) {
+    out << ",\"topology\":{\"available\":true,\"activeCores\":" << (cache ? cache->get_num_cores() : 1)
+        << ",\"l1Scope\":\"private\",\"l2Scope\":\"" << (cache ? "shared-all-cores" : "single-core")
+        << "\",\"l3Scope\":\"" << (has_l3 ? (cache ? "shared-all-cores" : "single-core") : "absent")
+        << "\",\"threadMapping\":\"" << (cache ? "first-seen round-robin; bounded mapping falls back to thread-id modulo cores" : "single-core")
+        << "\",\"caveats\":[\"Trace order is not wall-clock time. Timeline contains the latest 256 observed cross-core snoops, not every instruction.\","
+        << "\"Uniform cores with private L1 and shared lower caches; cluster/socket and heterogeneous scheduling are not modeled.\","
+        << "\"NUMA, interconnect timing, SMT and multi-core execution cycles are unsupported.\","
+        << "\"False-sharing reports identify byte offsets separately; an invalidation alone does not prove false sharing.\"],\"observedEvents\":"
+        << (cache ? cache->get_coherence_controller().observed_events() : 0)
+        << ",\"omittedEvents\":" << (cache ? cache->get_coherence_controller().observed_events() - cache->get_coherence_controller().history().size() : 0)
+        << ",\"events\":[";
+    bool first = true;
+    if (cache) for (const auto& event : cache->get_coherence_controller().history()) {
+        if (!first) out << ',';
+        first = false;
+        const char* type = event.type == CoherenceEvent::Invalidate ? "invalidate-for-write" : event.type == CoherenceEvent::Writeback ? "modified-data-forward" : "read-shared";
+        out << "{\"sequence\":" << event.sequence << ",\"type\":\"" << type << "\",\"address\":\"" << hex_address(event.address)
+            << "\",\"sourceCore\":" << event.source_core << ",\"targetCore\":" << event.target_core << '}';
+    }
+    out << "]}";
 }
 
 void JsonOutput::write_bottleneck_summary(std::ostream& out,
@@ -624,7 +705,15 @@ void JsonOutput::write_profile_metadata(std::ostream& out,
     out << "    \"vendor\": \"" << escape(profile.vendor) << "\",\n";
     out << "    \"architecture\": \"" << escape(profile.architecture) << "\",\n";
     out << "    \"class\": \"" << escape(profile.profile_class) << "\",\n";
-    out << "    \"modelConfidence\": \"" << escape(profile.model_confidence) << "\",\n";
+    out << "    \"modelConfidence\": \"" << (cfg.lab_overrides.empty() ? escape(profile.model_confidence) : "experimental") << "\",\n";
+    out << "    \"labOverrides\": {";
+    bool first_override = true;
+    for (const auto& [key, value] : cfg.lab_overrides) {
+        if (!first_override) out << ',';
+        first_override = false;
+        out << '"' << escape(key) << "\":\"" << escape(value) << '"';
+    }
+    out << "},\n";
     out << "    \"details\": {\n";
     out << "      \"cache\": {\n";
     out << "        \"inclusion\": \"" << inclusion_policy_name(cfg.inclusion_policy) << "\",\n";
@@ -636,8 +725,8 @@ void JsonOutput::write_profile_metadata(std::ostream& out,
     out << "        }\n";
     out << "      },\n";
     out << "      \"tlb\": {\n";
-    out << "        \"dtlb\": {\"entries\": 64, \"associativity\": 4, \"pageSize\": 4096},\n";
-    out << "        \"itlb\": {\"entries\": 64, \"associativity\": 4, \"pageSize\": 4096}\n";
+    out << "        \"dtlb\": {\"entries\":" << cfg.dtlb.entries << ",\"associativity\":" << cfg.dtlb.associativity << ",\"pageSize\":" << cfg.dtlb.page_size << "},\n";
+    out << "        \"itlb\": {\"entries\":" << cfg.itlb.entries << ",\"associativity\":" << cfg.itlb.associativity << ",\"pageSize\":" << cfg.itlb.page_size << "}\n";
     out << "      },\n";
     out << "      \"prefetch\": {\n";
     out << "        \"activePolicy\": \"" << escape(prefetch_policy_name) << "\",\n";
@@ -661,7 +750,7 @@ void JsonOutput::write_profile_metadata(std::ostream& out,
     out << "        \"hideableCycles\": " << pipeline_cfg.hideable_cycles() << ",\n";
     out << "        \"branchMispredictPenalty\": "
         << pipeline_cfg.branch_mispredict_penalty << ",\n";
-    out << "        \"branchPredictor\": \"bimodal-2bit\",\n";
+    out << "        \"branchPredictor\": \"" << escape(cfg.branch_predictor) << "\",\n";
     out << "        \"branchPredictorEntries\": 1024\n";
     out << "      },\n";
     out << "      \"memory\": {\n";
@@ -669,7 +758,8 @@ void JsonOutput::write_profile_metadata(std::ostream& out,
     out << "        \"l2HitCycles\": " << latency.l2_hit << ",\n";
     out << "        \"l3HitCycles\": " << latency.l3_hit << ",\n";
     out << "        \"dramCycles\": " << latency.memory << ",\n";
-    out << "        \"tlbMissPenaltyCycles\": " << latency.tlb_miss_penalty << "\n";
+    out << "        \"tlbMissPenaltyCycles\": " << latency.tlb_miss_penalty << ",\n";
+    out << "        \"assumedMlp\":" << cfg.assumed_mlp << ",\"assumedBandwidthBytesPerCycle\":" << cfg.bandwidth_bytes_per_cycle << '\n';
     out << "      },\n";
     out << "      \"topology\": {\n";
     out << "        \"activeCores\": " << cores << ",\n";

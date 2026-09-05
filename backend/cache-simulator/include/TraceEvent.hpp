@@ -62,6 +62,10 @@ struct TraceEvent {
   bool is_branch = false;
   uint64_t branch_id = 0;
   bool branch_taken = false;
+  // Optional static machine-code target direction, not the runtime outcome.
+  // D1 = target below branch PC; D0 = target at/above branch PC. Old LLVM
+  // traces omit this because IR block order cannot establish machine layout.
+  std::optional<bool> branch_backward;
 };
 
 struct EventResult {
@@ -104,7 +108,10 @@ inline std::optional<uint64_t> parse_trace_u64(const std::string &value,
 
 inline bool parse_trace_extension(const std::string &token,
                                   TraceEvent &event) {
-  if (token.size() > 1 && token[0] == 'T') {
+  if (!token.empty() && token[0] == 'D') {
+    if (!event.is_branch || event.branch_backward.has_value() || (token != "D0" && token != "D1")) return false;
+    event.branch_backward = token == "D1";
+  } else if (token.size() > 1 && token[0] == 'T') {
     auto parsed_thread = parse_trace_u32(token.substr(1));
     if (!parsed_thread) return false;
     event.thread_id = *parsed_thread;

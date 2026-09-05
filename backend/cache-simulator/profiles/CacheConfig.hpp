@@ -2,6 +2,9 @@
 
 #include <cstdint>
 #include <limits>
+#include <map>
+#include <string>
+#include "../include/TLB.hpp"
 
 #include "../include/EvictionPolicy.hpp"
 #include "../include/InclusionPolicy.hpp"
@@ -276,4 +279,10 @@ struct CacheHierarchyConfig {
   int issue_width = 4;
   int rob_size = 192;
   int branch_mispredict_penalty = 14;
+  TLBConfig dtlb = {};
+  TLBConfig itlb = {};
+  std::string branch_predictor = "bimodal-2bit";
+  int assumed_mlp = 1; // Scenario assumption, not inferred independence.
+  int bandwidth_bytes_per_cycle = 16; // Hypothetical service capacity, not measured GB/s.
+  std::map<std::string, std::string> lab_overrides;
 };

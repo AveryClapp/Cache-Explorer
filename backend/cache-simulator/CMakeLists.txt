@@ -84,3 +84,14 @@ target_link_libraries(BranchPredictorTest CacheSimulator)
 
 add_executable(PipelineModelTest tests/PipelineModelTest.cpp)
 target_link_libraries(PipelineModelTest CacheSimulator)
+
+add_executable(HardwareLabTest tests/HardwareLabTest.cpp)
+target_link_libraries(HardwareLabTest CacheSimulator)
+
+enable_testing()
+foreach(test CacheLevelTest CacheSystemTest MESICoherenceTest MultiCorePrefetchTest
+    AdvancedInstrumentationTest MultiCoreTLBTest MultiCoreTraceProcessorTest ArgParserTest
+    TraceProcessorTest TraceParserTest JsonOutputTest SegmentCacheTest BranchPredictorTest
+    PipelineModelTest HardwareLabTest)
+  add_test(NAME ${test} COMMAND ${test})
+endforeach()

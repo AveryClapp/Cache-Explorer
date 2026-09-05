@@ -47,7 +47,7 @@ const budgets = [
   },
   {
     label: 'lazy product modal',
-    pattern: /^(BatchResultsModal|CommandPalette|ExperimentResultsModal|HardwareExplorerModal|WorkloadCatalogModal)-[\w-]+\.js$/,
+    pattern: /^(BatchResultsModal|CommandPalette|ExperimentResultsModal|HardwareExplorerModal|WorkloadCatalogModal|HardwareLab)-[\w-]+\.js$/,
     maxBytes: 32 * 1024,
     maxGzipBytes: 10 * 1024,
     required: false,

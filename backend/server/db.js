@@ -10,7 +10,7 @@ import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = join(__dirname, 'data');
+const DATA_DIR = process.env.HARDWARE_EXPLORER_DATA_DIR || process.env.CACHE_EXPLORER_DATA_DIR || join(__dirname, 'data');
 const DB_PATH = join(DATA_DIR, 'cache-explorer.db');
 
 let db = null;

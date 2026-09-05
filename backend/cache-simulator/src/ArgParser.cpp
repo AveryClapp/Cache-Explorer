@@ -1,5 +1,6 @@
 #include "../include/ArgParser.hpp"
 #include "../profiles/HardwarePresets.hpp"
+#include "../include/HardwareLab.hpp"
 #include <iostream>
 #include <limits>
 #include <stdexcept>
@@ -48,6 +49,8 @@ void ArgParser::print_usage(const char* prog) {
               << "Options:\n"
               << "  --config <name>   intel|amd|apple|educational|custom (default: intel)\n"
               << "  --hardware <name> Alias for --config\n"
+              << "  --lab <field=value>  Override a modeled parameter (repeatable; experimental)\n"
+              << "  --check-config    Validate settings without reading or running a trace\n"
               << "  --cores <n>       Number of cores to simulate (default: auto)\n"
               << "  --prefetch <p>    Prefetch policy: none|next|stream|stride|adaptive|intel\n"
               << "  --prefetch-degree <n>  Number of lines to prefetch (default: 2)\n"
@@ -228,6 +231,11 @@ SimulatorOptions ArgParser::parse(int argc, char* argv[]) {
 
         if ((arg == "--config" || arg == "--hardware") && i + 1 < argc) {
             opts.config_name = argv[++i];
+        } else if (arg == "--lab") {
+            if (++i >= argc) throw std::invalid_argument("--lab expects field=value");
+            opts.lab.emplace_back(argv[i]);
+        } else if (arg == "--check-config") {
+            opts.check_config = true;
         } else if (arg == "--cores" && i + 1 < argc) {
             opts.num_cores = parse_int_value(argv[++i], "--cores", 0, 256);
         } else if (arg == "--verbose") {
@@ -282,6 +290,7 @@ SimulatorOptions ArgParser::parse(int argc, char* argv[]) {
 
     // Build the cache config from options
     opts.cache_config = build_cache_config(opts);
+    apply_hardware_lab(opts);
 
     // Apply preset prefetch settings if not overridden
     apply_preset_prefetch(opts);

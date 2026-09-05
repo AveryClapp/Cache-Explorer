@@ -2,11 +2,14 @@
 
 #include <climits>
 #include <cstddef>
+#include <stdexcept>
 
 TLB::TLB(const TLBConfig& cfg)
     : config(cfg)
-    , sets(cfg.num_sets(), std::vector<TLBEntry>(cfg.associativity))
-    , access_counter(0) {}
+    , access_counter(0) {
+    if (!cfg.is_valid()) throw std::invalid_argument("Invalid or excessive TLB geometry");
+    sets.assign(cfg.num_sets(), std::vector<TLBEntry>(cfg.associativity));
+}
 
 bool TLB::access(uint64_t address) {
     uint64_t page = address_to_page(address);

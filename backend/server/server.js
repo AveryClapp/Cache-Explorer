@@ -22,6 +22,7 @@ import { createTempProject, cleanupTempProject, cleanupOrphanedTempDirs } from '
 import { workloadProcessErrorResponse } from './services/workloadErrors.js';
 import { loadWorkloadHistory } from './services/workloadHistory.js';
 import { deploymentSecurityFromEnv } from './services/deploymentMode.js';
+import { applyHardwareLabTrust, hardwareLabArgs, validateHardwareLabRequest } from './services/hardwareLab.js';
 import {
   normalizeRequestTimeout,
   parseConfigList,
@@ -161,7 +162,7 @@ function attachResultProvenance(result, options) {
   if (!result || typeof result !== 'object') return result;
   attachHardwareProfile(result, options.config);
   result.provenance = resultProvenance(options, result.provenance || {});
-  return result;
+  return applyHardwareLabTrust(result);
 }
 
 function aggregateProvenance(existing = {}, next) {
@@ -396,6 +397,12 @@ app.use(cors({
   },
 }));
 app.use(express.json({ limit: '1mb' }));
+app.use((req, res, next) => {
+  if (req.body?.hardwareLab !== undefined && req.path !== '/compile') {
+    return res.status(400).json({ type: 'validation_error', error: 'Hardware Lab overrides are supported only by batch /compile.' });
+  }
+  next();
+});
 app.use(createHttpRateLimitMiddleware({ shouldLimit: isRateLimitedHttpRequest }));
 app.use(createHttpExecutionLimitMiddleware({ shouldLimit: isExecutionHttpRequest }));
 
@@ -431,6 +438,16 @@ app.get('/profiles/:id', (req, res) => {
 app.post('/compile', async (req, res) => {
   const startTime = Date.now();
   incCounter('requests', { type: 'compile' });
+
+  let hardwareLab;
+  try {
+    hardwareLab = validateHardwareLabRequest(req.body, sandboxAvailable);
+    if (Object.keys(hardwareLab).length && !getHardwareProfile(req.body.config || 'educational')) {
+      throw new Error('Hardware Lab requires a known hardware profile.');
+    }
+  } catch (error) {
+    return res.status(error.statusCode || 400).json({ error: error.message, type: 'validation_error' });
+  }
 
   const {
     code,
@@ -475,6 +492,7 @@ app.post('/compile', async (req, res) => {
     fastMode,
     segmentCaching,
     customConfig: req.body.customConfig || null,
+    hardwareLab,
     compiler: req.body.compiler || null,
     executor: sandboxAvailable ? 'sandbox' : 'direct',
   };
@@ -575,6 +593,7 @@ app.post('/compile', async (req, res) => {
     mainFile = project.mainFile;
 
     const args = [mainFile, '--config', config, optLevel, '--json'];
+    args.push(...hardwareLabArgs(hardwareLab));
 
     // Enable multi-file compilation for multi-file projects
     if (Array.isArray(inputFiles) && inputFiles.length > 1) {
@@ -1519,6 +1538,10 @@ wss.on('connection', (ws) => {
     }
 
     // Handle cancel request
+    if (data?.hardwareLab !== undefined) {
+      ws.send(JSON.stringify({ type: 'error', error: 'Hardware Lab requires batch /compile, not streaming.' }));
+      return;
+    }
     if (data.type === 'cancel') {
       await tracker.cleanup();
       ws.send(JSON.stringify({ type: 'cancelled' }));

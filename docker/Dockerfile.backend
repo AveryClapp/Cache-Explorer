@@ -141,6 +141,7 @@ COPY --from=builder /build/backend/cache-simulator/build/cache-sim ./backend/cac
 COPY backend/runtime/*.h ./backend/runtime/
 COPY backend/scripts/ ./backend/scripts/
 COPY backend/server/ ./backend/server/
+COPY frontend/src/lab/fields.json ./frontend/src/lab/fields.json
 COPY benchmarks/workloads/ ./benchmarks/workloads/
 COPY examples/ ./examples/
 

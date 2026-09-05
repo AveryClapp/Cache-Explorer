@@ -14,6 +14,7 @@ import { SettingsToolbar } from './components/SettingsToolbar'
 import { ExamplesSidebar } from './components/ExamplesSidebar'
 import { ResultsPanel } from './components/ResultsPanel'
 import type { HotspotBundle } from './binary/hotspots'
+import type { LabScenario } from './lab/scenario'
 
 // Types
 import type {
@@ -70,7 +71,7 @@ import {
   exportExperimentAsJSON,
 } from './utils/export'
 
-type ProductArea = 'analyze' | 'profiles' | 'comparisons' | 'workloads' | 'experiments' | 'binary'
+type ProductArea = 'analyze' | 'profiles' | 'comparisons' | 'workloads' | 'experiments' | 'binary' | 'lab'
 
 const loadCommandPalette = () => import('./components/CommandPalette').then(module => ({ default: module.CommandPalette }))
 const loadEditorPanel = () => import('./components/EditorPanel').then(module => ({ default: module.EditorPanel }))
@@ -79,6 +80,7 @@ const loadExperimentResults = () => import('./components/ExperimentResultsModal'
 const loadHardwareExplorer = () => import('./components/HardwareExplorerModal').then(module => ({ default: module.HardwareExplorerModal }))
 const loadWorkloadCatalog = () => import('./components/WorkloadCatalogModal').then(module => ({ default: module.WorkloadCatalogModal }))
 const loadBinaryProfiles = () => import('./components/BinaryProfiles').then(module => ({ default: module.BinaryProfiles }))
+const loadHardwareLab = () => import('./components/HardwareLab').then(module => ({ default: module.HardwareLab }))
 
 const CommandPalette = lazy(loadCommandPalette)
 const EditorPanel = lazy(loadEditorPanel)
@@ -87,6 +89,7 @@ const ExperimentResultsModal = lazy(loadExperimentResults)
 const HardwareExplorerModal = lazy(loadHardwareExplorer)
 const WorkloadCatalogModal = lazy(loadWorkloadCatalog)
 const BinaryProfiles = lazy(loadBinaryProfiles)
+const HardwareLab = lazy(loadHardwareLab)
 
 function preloadProductArea(area: ProductArea) {
   if (area === 'analyze') void loadEditorPanel()
@@ -95,6 +98,7 @@ function preloadProductArea(area: ProductArea) {
   if (area === 'workloads') void loadWorkloadCatalog()
   if (area === 'experiments') void loadExperimentResults()
   if (area === 'binary') void loadBinaryProfiles()
+  if (area === 'lab') void loadHardwareLab()
 }
 
 function annotationClass(annotation: SourceAnnotation) {
@@ -131,7 +135,7 @@ const HARDWARE_CONFIG_ALIASES: Record<string, string> = {
   raspberry: 'rpi4',
 }
 const STRESS_WORKLOAD_VARIANT_TIMEOUT_MS = 30000
-const PRODUCT_AREAS = new Set<ProductArea>(['analyze', 'profiles', 'comparisons', 'workloads', 'experiments', 'binary'])
+const PRODUCT_AREAS = new Set<ProductArea>(['analyze', 'profiles', 'comparisons', 'workloads', 'experiments', 'binary', 'lab'])
 
 function productAreaFromLocation(): ProductArea {
   if (typeof window === 'undefined') return 'analyze'
@@ -362,6 +366,7 @@ function App() {
   const [batchError, setBatchError] = useState<string | null>(null)
   const [activeProductArea, setActiveProductArea] = useState<ProductArea>(productAreaFromLocation)
   const [binaryProfile, setBinaryProfile] = useState<HotspotBundle | null>(null)
+  const [labScenario, setLabScenario] = useState<LabScenario | null>(null)
   const [batchRunning, setBatchRunning] = useState(false)
   const [experimentResult, setExperimentResult] = useState<HardwareExperimentResult | null>(null)
   const [experimentRunning, setExperimentRunning] = useState(false)
@@ -593,7 +598,7 @@ function App() {
       // Ctrl/Cmd + Enter to run
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault()
-        if (stage === 'idle' && activeProductArea !== 'binary') runAnalysis()
+        if (stage === 'idle' && activeProductArea !== 'binary' && activeProductArea !== 'lab') runAnalysis()
       }
       // Escape to close command palette
       if (e.key === 'Escape') {
@@ -1508,6 +1513,7 @@ function App() {
           onOpenWorkloads={openWorkloadCatalog}
           onRunExperiment={openExperimentModal}
           onOpenBinary={() => navigateProductArea('binary')}
+          onOpenLab={() => navigateProductArea('lab')}
           onPreloadProductArea={preloadProductArea}
           onRun={runAnalysis}
           onCancel={cancelAnalysis}
@@ -1554,6 +1560,7 @@ function App() {
         <main id="main-content" className="product-workspace" tabIndex={-1}>
           <Suspense fallback={<div className="product-loading" role="status">Loading workspace…</div>}>
             {activeProductArea === 'binary' && <BinaryProfiles bundle={binaryProfile} onChange={setBinaryProfile} />}
+            {activeProductArea === 'lab' && <HardwareLab files={files} config={config} payload={makeHardwarePayload()} scenario={labScenario} onChange={setLabScenario} onOpenSource={openAnalyzeWorkspace} hosted={environmentHealth?.sandbox === 'enabled'} />}
             {activeProductArea === 'comparisons' && (
               <BatchResultsModal
                 results={batchResults}

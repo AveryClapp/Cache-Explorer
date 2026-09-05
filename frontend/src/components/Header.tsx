@@ -1,7 +1,7 @@
 import type { CacheResult, EnvironmentHealth, Stage } from "../types";
 
 interface HeaderProps {
-  activeProductArea: "analyze" | "profiles" | "comparisons" | "workloads" | "experiments" | "binary";
+  activeProductArea: "analyze" | "profiles" | "comparisons" | "workloads" | "experiments" | "binary" | "lab";
   theme: "dark" | "light";
   diffMode: boolean;
   baselineResult: CacheResult | null;
@@ -22,6 +22,7 @@ interface HeaderProps {
   onOpenWorkloads: () => void;
   onRunExperiment: () => void;
   onOpenBinary: () => void;
+  onOpenLab: () => void;
   onPreloadProductArea: (area: HeaderProps["activeProductArea"]) => void;
   onRun: () => void;
   onCancel: () => void;
@@ -129,6 +130,7 @@ export function Header({
   onOpenWorkloads,
   onRunExperiment,
   onOpenBinary,
+  onOpenLab,
   onPreloadProductArea,
   onRun,
   onCancel,
@@ -138,6 +140,7 @@ export function Header({
     { area: "binary" as const, label: "Binary profiles", open: onOpenBinary },
     { area: "profiles" as const, label: "Profiles", open: onExploreHardware },
     { area: "comparisons" as const, label: "Comparisons", open: onCompareHardware },
+    { area: "lab" as const, label: "Hardware Lab", open: onOpenLab },
     { area: "workloads" as const, label: "Workloads", open: onOpenWorkloads },
     { area: "experiments" as const, label: "Experiments", open: onRunExperiment },
   ];
@@ -253,7 +256,7 @@ export function Header({
           </button>
         )}
 
-        {activeProductArea !== 'binary' && (isLoading ? (
+        {activeProductArea !== 'binary' && activeProductArea !== 'lab' && (isLoading ? (
           <button
             onClick={onCancel}
             className="btn-cancel"

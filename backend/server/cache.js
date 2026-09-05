@@ -20,7 +20,7 @@ let pruneInterval = null;
  */
 export function generateCacheKey(inputs) {
   const normalized = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     files: inputs.files.map(f => ({ name: f.name, code: f.code, language: f.language })),
     config: inputs.config,
     optLevel: inputs.optLevel,
@@ -31,6 +31,7 @@ export function generateCacheKey(inputs) {
     fastMode: inputs.fastMode === true,
     segmentCaching: inputs.segmentCaching === true,
     customConfig: inputs.customConfig || null,
+    hardwareLab: inputs.hardwareLab || {},
     compiler: inputs.compiler || null,
     executor: inputs.executor || 'direct',
   };

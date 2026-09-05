@@ -196,6 +196,7 @@ function hardwareProfileFromResult(result, config) {
     id: profile.id || config,
     displayName: profile.displayName || config,
     modelConfidence: profile.modelConfidence || 'unknown',
+    labOverrides: profile.labOverrides || {},
     validationConfidence: profile.validation?.confidence || profile.modelConfidence || 'unknown',
   }
 }
@@ -236,6 +237,7 @@ function mergeRunProvenance(result, config, resultKind = 'simulated') {
 
   const existing = result.provenance || {}
   const fidelity = fidelityFromEnv(existing.fidelity)
+  if (result.profile?.labOverrides?.['prefetch.policy']) fidelity.prefetch = result.profile.labOverrides['prefetch.policy']
   const toolchain = cachedToolchainFromEnv()
   const source = compactObject(sourceFromEnv(config))
 
@@ -247,7 +249,8 @@ function mergeRunProvenance(result, config, resultKind = 'simulated') {
     source: existing.source || source,
     fidelity,
     toolchain: existing.toolchain || toolchain,
-    caveats: dedupe([...(existing.caveats || []), ...defaultCaveats(fidelity)]),
+    caveats: dedupe([...(existing.caveats || []), ...defaultCaveats(fidelity),
+      ...(Object.keys(result.profile?.labOverrides || {}).length ? ['Hardware Lab overrides are hypothetical and uncalibrated; preset evidence does not validate this scenario.'] : [])]),
   })
   return result
 }

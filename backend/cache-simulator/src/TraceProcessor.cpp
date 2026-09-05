@@ -41,6 +41,8 @@ void TraceProcessor::process_line_access(const TraceEvent &event,
                                          uint64_t line_addr, bool is_write,
                                          bool is_icache) {
   SystemAccessResult result;
+  const auto before = cache.get_l1d().get_stats();
+  const auto useful_before = cache.get_prefetch_stats().prefetches_useful;
   if (is_icache) {
     result = cache.fetch(line_addr);
   } else if (is_write) {
@@ -48,6 +50,8 @@ void TraceProcessor::process_line_access(const TraceEvent &event,
   } else {
     result = cache.read(line_addr);
   }
+  if (!is_icache) memory_evidence.record(event, line_addr, result, before,
+      cache.get_l1d().get_stats(), cache.get_prefetch_stats().prefetches_useful > useful_before);
 
   // Track prefetch usefulness
   if (!is_write && prefetched_addresses.count(line_addr)) {
@@ -94,11 +98,13 @@ void TraceProcessor::process_line_access(const TraceEvent &event,
 
 TraceProcessor::TraceProcessor(const CacheHierarchyConfig &cfg)
     : cache(cfg),
+      branch_predictor(1024, cfg.branch_predictor),
       pipeline(PipelineConfig{
           .issue_width = cfg.issue_width,
           .rob_size = cfg.rob_size,
           .branch_mispredict_penalty = cfg.branch_mispredict_penalty,
-          .latency = cfg.latency}) {}
+          .latency = cfg.latency,
+          .assumed_mlp = cfg.assumed_mlp}), memory_evidence(cfg) {}
 
 void TraceProcessor::set_event_callback(
     std::function<void(const EventResult &)> cb) {
@@ -129,7 +135,7 @@ void TraceProcessor::process(const TraceEvent &event) {
   if (event.is_branch) {
     bool mispredicted = branch_predictor.process(event.branch_id,
                                                  event.branch_taken,
-                                                 event.file, event.line);
+                                                 event.file, event.line, event.branch_backward);
     uint64_t stall = pipeline.on_branch(mispredicted);
     if (SourceStats *source =
             find_or_create_source_stats(event.file, event.line)) {
@@ -254,6 +260,7 @@ TraceProcessor::get_code_hotspots(size_t limit) const {
 }
 
 void TraceProcessor::reset() {
+  memory_evidence.reset();
   cache.reset_stats();
   source_stats.clear();
   code_hotspots.reset();

@@ -132,6 +132,8 @@ public:
   [[nodiscard]] std::vector<FalseSharingReport> get_false_sharing_reports() const;
 
   [[nodiscard]] int get_num_cores() const { return num_cores; }
+  const CoherenceController& get_coherence_controller() const { return coherence; }
+  bool has_shared_l3() const { return has_l3(); }
   [[nodiscard]] uint32_t get_line_size() const { return line_size; }
 
   // MESI state query for testing/debugging

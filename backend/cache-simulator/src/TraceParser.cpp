@@ -75,7 +75,12 @@ bool valid_v2_event(const std::string &line, uint32_t address_width) {
     return false;
   if (thread.size() < 2 || thread[0] != 'T' || !parse_trace_u32(thread.substr(1))) return false;
   bool saw_site = false;
+  bool saw_direction = false;
   while (input >> token) {
+    if (type == "B" && (token == "D0" || token == "D1") && !saw_direction) {
+      saw_direction = true;
+      continue;
+    }
     // Portable v2 records carry site references, never raw capture PCs.
     if (token.size() < 2 || token[0] != 'K' || saw_site) return false;
     const auto site = parse_trace_u32(token.substr(1));

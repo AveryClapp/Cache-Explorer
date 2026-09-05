@@ -12,6 +12,7 @@
 #include "CacheSystem.hpp"
 #include "CodeHotspot.hpp"
 #include "MemoryAccess.hpp"
+#include "MemoryEvidence.hpp"
 #include "PipelineModel.hpp"
 #include "TraceEvent.hpp"
 
@@ -80,6 +81,7 @@ private:
   BranchPredictor branch_predictor;
   PipelineModel pipeline;
   CodeHotspotTracker code_hotspots;
+  MemoryEvidence memory_evidence;
   std::unordered_map<SourceKey, SourceStats, SourceKeyHash> source_stats;
   std::function<void(const EventResult &)> event_callback;
 
@@ -112,6 +114,7 @@ public:
   void process(const TraceEvent &event);
 
   [[nodiscard]] HierarchyStats get_stats() const;
+  const MemoryEvidence& get_memory_evidence() const { return memory_evidence; }
 
   [[nodiscard]] std::vector<SourceStats> get_hot_lines(size_t limit = 10) const;
   [[nodiscard]] std::vector<CodeHotspot>
