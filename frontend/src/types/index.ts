@@ -291,6 +291,7 @@ export interface SourceAnnotation {
   detail: string
   metrics: {
     cycles: number
+    totalSourceStallCycles?: number
     share: number
     misses: number
     branchMispredictions: number

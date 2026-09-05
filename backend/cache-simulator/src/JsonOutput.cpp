@@ -467,6 +467,7 @@ void JsonOutput::write_source_annotations(
             << "\"detail\": \"" << escape(annotation.detail) << "\", "
             << "\"metrics\": {"
             << "\"cycles\": " << annotation.cycles << ", "
+            << "\"totalSourceStallCycles\": " << annotation.total_source_stall_cycles << ", "
             << "\"share\": " << std::fixed << std::setprecision(3)
             << annotation.share << ", "
             << "\"misses\": " << annotation.misses << ", "

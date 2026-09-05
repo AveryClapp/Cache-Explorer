@@ -1,19 +1,32 @@
 # Hardware Explorer Spec
 
 **Date:** 2026-06-25
-**Status:** Proposed product and architecture roadmap
+**Status:** Preview implementation; release qualification remains separate
 **Starting point:** Cache Explorer v1.x with memory hierarchy simulation, TLB
 stats, timing estimates, multi-core coherence, false sharing detection, hardware
 presets, validation scripts, and an in-progress execution-engine foundation.
 
-**Implementation progress as of 2026-06-30:** Phase 0 is implemented as a
-vertical slice: branch events, branch prediction, analytical pipeline estimates,
-JSON output, frontend execution panel, docs, and integration coverage. Phase 1 is
-partially implemented: `--hardware` aliases `--config`, profile metadata is
-emitted in JSON, and the frontend has a Hardware Profile panel backed by
-`profile.details` for cache, TLB, prefetch, execution-core, memory-latency, and
-topology parameters. The examples now include both branch-heavy and
-pointer-chasing execution-engine workloads.
+**Implementation progress as of 2026-09-05 UTC:** The source workflow, first-class
+profiles/comparisons/workloads/experiments, Preview branding and compatibility
+aliases are implemented. The broader model work now includes the
+[Hardware Lab](docs/HARDWARE_LAB.md), scenario import/export/replay, selectable
+predictors, configurable translation, analytical memory assumptions, bounded
+miss explanations and an ordered coherence history. The phase descriptions
+below retain the original design intent; this matrix is the current boundary.
+
+| Phase | Implemented Preview surface | Explicit boundary |
+| --- | --- | --- |
+| 0–1 | Branch/pipeline JSON + UI, profile registry/contracts, first-class navigation, run-set comparisons, aliases | Execution estimates unavailable in segment/multi-core streaming modes |
+| 2 | Static not-taken, bimodal, gshare; native direction-gated BTFNT; source attribution and analytical pipeline | Source capture cannot supply BTFNT machine direction; no vendor predictor fidelity |
+| 3 | TLB/page/latency controls, assumed MLP and demand pressure, sampled address/set/tag/stride/reuse/competitor evidence | Not dependency analysis or measured bandwidth; prefetch lateness/pollution unavailable |
+| 4 | Uniform core/cache scopes, bounded ordered snoop history, existing false-sharing source/offset reports | No NUMA, heterogeneous scheduling, interconnect timing or multicore execution cycles |
+| 5 | Lazy Lab workspace, controlled parameter changes, source deltas, versioned runnable report files, offline import | Local detailed C/C++ only; recipe replay is not an identical trace; imports never auto-run |
+| 6 | Per-field contracts, evidence validation rules, native/schema/browser tests and fresh-install CI workflow | Real default Intel/AMD/Apple calibration and release-platform evidence are not manufactured |
+
+MacOS fresh builds, native/runtime/server tests, real CLI and desktop/mobile Lab
+journeys were exercised locally. The new Linux/Docker CI jobs must pass on the
+feature branch before release; local Docker Desktop did not respond during this
+qualification session. No stable release or merge is implied by implementation.
 
 **Performance notes:** Bottleneck source attribution is collected during the
 existing trace-processing pass. Summary selection scans aggregated source
@@ -30,10 +43,9 @@ code interacts with modeled hardware: caches, TLBs, prefetchers, branch
 predictors, an approximate out-of-order pipeline, memory latency/bandwidth, and
 multi-core coherence.
 
-Cache Explorer should remain the public name until execution-engine results are
-visible, tested, and documented in the CLI and web UI. "Hardware Explorer" is the
-umbrella concept and eventual product name once cache is one subsystem among
-several.
+The product is labeled **Hardware Explorer Preview — CPU performance modeling
+for source code**. Existing `cache-explore` and `CACHE_EXPLORER_*` interfaces stay
+compatible. Removing Preview requires the separate release-confidence gates.
 
 ## Current Baseline
 
@@ -62,9 +74,8 @@ The repository already has the right foundation:
   branch trace events, `BranchPredictor`, `PipelineModel`, and single-core text
   output for estimated execution-engine stats.
 
-The main gap is productization. Branch prediction and pipeline estimates are not
-yet first-class JSON/server/frontend concepts, and the current result schema
-still treats everything as cache-centric.
+The legacy cache-centric fields remain compatible. Additive subsystem evidence
+and explicit unavailable states carry the broader model without a breaking rename.
 
 ## Product Promise
 

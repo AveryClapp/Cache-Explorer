@@ -27,6 +27,9 @@ Every profile declares these contract fields:
 - `executionPipeline`
 - `memoryBandwidth`
 - `memoryLevelParallelism`
+- `memoryDemandPressure`
+- `assumedMemoryParallelism`
+- `cacheEvidence`
 - `simd`
 - `topology`
 - `dependencyModel`
@@ -50,6 +53,20 @@ The execution engine is analytical. Branch prediction and pipeline estimates are
 useful for directional comparisons, but they are not measured runtime and they
 do not model instruction dependencies, opcode mix, port pressure, SMT, exact
 frontend decode behavior, NUMA, or OS scheduling.
+
+[Hardware Lab](HARDWARE_LAB.md) adds effective cache/TLB overrides, selectable
+teaching predictors, bounded miss explanations, explicit assumed memory
+parallelism and demand bandwidth pressure. Physical preset bandwidth and maximum
+MLP fields remain **metadata-only**: they are not the separate hypothetical
+Lab assumptions. Pressure has no value without instruction-count evidence.
+Detailed execution/memory evidence is unavailable in the multi-core streaming
+engine; topology/coherence observations remain available there.
+
+Any nonempty `profile.labOverrides` invalidates inherited calibration claims.
+Server enrichment and cached replay label the scenario experimental/uncalibrated
+and downgrade calibrated contract/coverage fields. Imported report text is not
+accepted as calibration evidence. Prefetch lateness/pollution, NUMA and
+heterogeneous scheduling remain explicitly unavailable or unsupported.
 
 ## Calibration Depth
 

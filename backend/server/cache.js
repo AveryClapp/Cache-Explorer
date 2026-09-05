@@ -20,7 +20,7 @@ let pruneInterval = null;
  */
 export function generateCacheKey(inputs) {
   const normalized = {
-    schemaVersion: 3,
+    schemaVersion: 4, // Corrected split-fetch instruction accounting / complete source totals.
     files: inputs.files.map(f => ({ name: f.name, code: f.code, language: f.language })),
     config: inputs.config,
     optLevel: inputs.optLevel,

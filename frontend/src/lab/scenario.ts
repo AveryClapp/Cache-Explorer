@@ -13,7 +13,7 @@ export interface LabRun {
   events: number; l1Misses: number; dtlbMisses: number; branchMisses: number | null; cycles: number | null
   memoryServiceCycles: number | null
   dramBytes: number | null; bandwidthPressure: number | null
-  lines: { file: string; line: number; misses: number; stallCycles: number | null; explanation: string }[]
+  lines: { file: string; line: number; misses: number | null; stallCycles: number | null; explanation: string }[]
   caveats: string[]; provenance: Record<string, string>
 }
 export interface LabScenario {
@@ -83,7 +83,7 @@ function readRun(value: unknown): LabRun {
     branchMisses: nullable(input.branchMisses), cycles: nullable(input.cycles), memoryServiceCycles: nullable(input.memoryServiceCycles), dramBytes: nullable(input.dramBytes), bandwidthPressure: pressure as number | null,
     lines: array(input.lines, 512).map(value => {
       const row = object(value, ['file', 'line', 'misses', 'stallCycles', 'explanation'])
-      return { file: text(row.file, 256), line: number(row.line, 4294967295), misses: number(row.misses), stallCycles: nullable(row.stallCycles), explanation: text(row.explanation) }
+      return { file: text(row.file, 256), line: number(row.line, 4294967295), misses: nullable(row.misses), stallCycles: nullable(row.stallCycles), explanation: text(row.explanation) }
     }), caveats: array(input.caveats, 64).map(value => text(value)), provenance: strings(input.provenance) }
 }
 
@@ -136,10 +136,8 @@ export function projectRun(result: CacheResult): LabRun {
   const execution = result.subsystems.execution
   const memory = result.subsystems.memorySystem
   const rows = new Map<string, LabRun['lines'][number]>()
-  for (const row of result.hotLines || []) {
-    const file = basename(row.file)
-    rows.set(`${file}:${row.line}`, { file, line: row.line, misses: row.misses, stallCycles: null, explanation: '' })
-  }
+  // Legacy hotLines mix instruction and data misses. Only cacheEvidence can
+  // supply per-source L1D misses; an absent data row stays unknown, never zero.
   for (const row of result.subsystems.cacheEvidence?.lines || []) {
     const file = basename(row.file), key = `${file}:${row.line}`
     const sample = row.sample
@@ -148,8 +146,10 @@ export function projectRun(result: CacheResult): LabRun {
   }
   for (const row of result.sourceAnnotations || []) {
     const file = basename(row.file), key = `${file}:${row.line}`
-    const existing = rows.get(key) || { file, line: row.line, misses: row.metrics.misses, stallCycles: 0, explanation: row.detail }
-    existing.stallCycles = (existing.stallCycles ?? 0) + row.metrics.cycles
+    const existing = rows.get(key) || { file, line: row.line, misses: null, stallCycles: 0, explanation: row.detail }
+    // Individual subsystem annotations are ranked/truncated. Never sum them
+    // into a supposedly complete source total; the native aggregate is exact.
+    existing.stallCycles = row.metrics.totalSourceStallCycles ?? null
     rows.set(key, existing)
   }
   return readRun({ profile: result.profile.displayName, confidence: result.profile.modelConfidence,

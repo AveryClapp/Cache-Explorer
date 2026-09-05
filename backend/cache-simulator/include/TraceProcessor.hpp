@@ -63,6 +63,7 @@ struct SourceAnnotation {
   uint64_t misses = 0;
   uint64_t branch_mispredictions = 0;
   double share = 0.0;
+  uint64_t total_source_stall_cycles = 0;
 };
 
 struct BottleneckSummary {
@@ -96,7 +97,7 @@ private:
 
   // Helper to process a single cache line access
   void process_line_access(const TraceEvent &event, uint64_t line_addr,
-                           bool is_write, bool is_icache);
+                           bool is_write, bool is_icache, uint32_t instructions = 0);
   SourceStats *find_or_create_source_stats(std::string_view file,
                                            uint32_t line);
 

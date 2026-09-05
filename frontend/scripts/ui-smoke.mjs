@@ -1706,7 +1706,8 @@ try {
   browser = await chromium.launch({
     executablePath,
     headless: true,
-    args: ['--no-sandbox', '--disable-dev-shm-usage'],
+    chromiumSandbox: true,
+    args: ['--disable-dev-shm-usage'],
   })
   page = await browser.newPage()
   page.on('pageerror', error => {

@@ -83,6 +83,10 @@ HARDWARE_EXPLORER_REQUIRE_CHECKSUM=0 ./backend/scripts/cache-explore-download-pa
 - **6 prefetch policies** - None, Next-line, Stream, Stride, Adaptive, Intel DCU
 - **14 CPU profiles** - Intel, AMD, Apple Silicon, ARM, and Educational models
 - **Hardware bottleneck summaries** - Estimated memory, branch, and front-end stalls
+- **[Hardware Lab](docs/HARDWARE_LAB.md)** - Local C/C++ parameter sensitivity,
+  source-line deltas, bounded miss explanations, and runnable scenario reports
+- **Coherence history** - Bounded ordered cross-core snoops alongside existing
+  false-sharing source/thread/offset evidence
 - **Live run progress** - WebSocket progress with interactive result panels
 - **Local-first and offline-capable** - Bundled frontend assets; analysis stays on the local machine by default
 

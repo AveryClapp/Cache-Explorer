@@ -39,7 +39,7 @@ SourceStats *TraceProcessor::find_or_create_source_stats(std::string_view file,
 
 void TraceProcessor::process_line_access(const TraceEvent &event,
                                          uint64_t line_addr, bool is_write,
-                                         bool is_icache) {
+                                         bool is_icache, uint32_t instructions) {
   SystemAccessResult result;
   const auto before = cache.get_l1d().get_stats();
   const auto useful_before = cache.get_prefetch_stats().prefetches_useful;
@@ -71,7 +71,6 @@ void TraceProcessor::process_line_access(const TraceEvent &event,
   // instruction count and front-end stalls; data accesses supply back-end
   // memory stalls.
   if (is_icache) {
-    uint32_t instructions = event.size / 4;
     uint64_t stall =
         pipeline.on_inst_fetch(result.l1_hit, result.l2_hit, result.l3_hit,
                                instructions);
@@ -234,9 +233,13 @@ void TraceProcessor::process(const TraceEvent &event) {
     vector_stats.cross_line_accesses++;
   }
 
+  // A block's dynamic instruction count is independent of cache-line size.
+  // Charge fetch stalls for every touched line, but count the block only once.
+  bool first_line = true;
   for (const auto &line_access : lines) {
     process_line_access(event, line_access.line_address, event.is_write,
-                        event.is_icache);
+                        event.is_icache, first_line && event.is_icache ? event.size / 4 : 0);
+    first_line = false;
   }
 }
 
@@ -331,6 +334,7 @@ TraceProcessor::get_source_annotations(size_t limit) const {
           .misses = stats.misses,
           .branch_mispredictions = 0,
           .share = s,
+          .total_source_stall_cycles = stats.total_stall_cycles(),
       });
     }
     if (stats.frontend_stall_cycles > 0) {
@@ -347,6 +351,7 @@ TraceProcessor::get_source_annotations(size_t limit) const {
           .misses = stats.misses,
           .branch_mispredictions = 0,
           .share = s,
+          .total_source_stall_cycles = stats.total_stall_cycles(),
       });
     }
     if (stats.branch_stall_cycles > 0) {
@@ -363,6 +368,7 @@ TraceProcessor::get_source_annotations(size_t limit) const {
           .misses = 0,
           .branch_mispredictions = stats.branch_mispredictions,
           .share = s,
+          .total_source_stall_cycles = stats.total_stall_cycles(),
       });
     }
   }

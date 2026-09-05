@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
+import { projectRun } from '../../frontend/src/lab/scenario.ts'
 
 const simulator = process.env.HARDWARE_EXPLORER_SIM
 if (!simulator) throw new Error('Set HARDWARE_EXPLORER_SIM to the freshly built cache-sim.')
@@ -39,6 +40,29 @@ test('bandwidth service floor can signal pressure without pretending to measure 
   const noInstructions = run('L 0x1000 4 raw.c:1 T1')
   assert.equal(noInstructions.subsystems.memorySystem.bandwidthPressure, null)
   assert.equal(noInstructions.subsystems.memorySystem.pressureAvailable, false)
+})
+test('instruction counts and base cycles do not depend on fetch splitting or line size', () => {
+  for (const address of ['0x100000', '0x10000f']) {
+    const trace = `I ${address} 64 test.c:2 T1\nL 0x200000 4 test.c:5 T1`
+    for (const size of [16, 32, 64, 128]) {
+      const result = run(trace, ['--lab', `cache.lineSize=${size}`])
+      assert.equal(result.execution.pipeline.instructions, 16)
+      assert.equal(result.execution.pipeline.breakdown.baseCycles, 8)
+      assert.equal(result.subsystems.execution.pipeline.instructions, 16)
+    }
+  }
+})
+test('source deltas use complete native totals even when subsystem annotations are truncated', () => {
+  const trace = ['I 0x100000 4 test.c:1 T1', 'I 0x100040 4 test.c:1 T1',
+    'L 0x200000 4 test.c:1 T1', 'L 0x200040 4 test.c:1 T1',
+    ...Array.from({ length: 11 }, (_, i) => `I 0x${(0x110000 + i * 64).toString(16)} 4 test.c:${i + 2} T1`)].join('\n')
+  const baseline = run(trace), variant = run(trace, ['--lab', 'memory.assumedMlp=4'])
+  assert.equal(variant.sourceAnnotations.some(row => row.line === 1 && row.subsystem === 'memory'), false)
+  assert.equal(projectRun(baseline).lines.find(row => row.line === 1).stallCycles, 332)
+  assert.equal(projectRun(variant).lines.find(row => row.line === 1).stallCycles, 232)
+  const legacy = structuredClone(variant)
+  for (const row of legacy.sourceAnnotations) delete row.metrics.totalSourceStallCycles
+  assert.equal(projectRun(legacy).lines.find(row => row.line === 1).stallCycles, null)
 })
 test('prefetch explanation does not fabricate late or pollution measurements', () => {
   const result = run(memoryTrace, ['--lab', 'prefetch.policy=stride'])
