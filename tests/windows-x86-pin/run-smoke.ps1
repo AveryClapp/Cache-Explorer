@@ -19,7 +19,7 @@ Import-Module (Join-Path $vs 'Common7/Tools/Microsoft.VisualStudio.DevShell.dll'
 Enter-VsDevShell -VsInstallPath $vs -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64'
 $clang = (Get-Command clang-cl).Source
 Checked cmake @('-S', "$repo/backend/cache-simulator", '-B', $simBuild, '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release', "-DCMAKE_C_COMPILER=$clang", "-DCMAKE_CXX_COMPILER=$clang")
-Checked cmake @('--build', $simBuild, '--target', 'hardware-explorer-normalize-pin', 'cache-sim')
+Checked cmake @('--build', $simBuild, '--target', 'hardware-explorer-normalize-pin', 'cache-sim', 'hardware-explorer-symbolize-pdb')
 $normalizer = Join-Path $simBuild 'hardware-explorer-normalize-pin.exe'
 & (Join-Path $PSScriptRoot 'test-normalizer.ps1') -Normalizer $normalizer
 
@@ -95,6 +95,33 @@ Assert-True ($result.capture.kind -eq 'intel-pin' -and $result.capture.addressWi
 Assert-True (@($result.codeHotspots | Where-Object { $_.location.imageId -eq "sha256:$mainHash" }).Count -gt 0) 'Main executable hotspots missing.'
 Assert-True (@($result.codeHotspots | Where-Object { $_.location.imageId -eq "sha256:$dllHash" }).Count -gt 0) 'DLL hotspots missing.'
 Assert-True (@($result.codeHotspots | Where-Object { $_.navigationConfidence -ne 'unresolved' }).Count -eq 0) 'Capture invented source-level confidence.'
+
+# Enrich the EXE and then the DLL independently. Pin addresses must not be decremented.
+$analysisPath = Join-Path $root 'analysis.json'
+[IO.File]::WriteAllText($analysisPath, ($result | ConvertTo-Json -Depth 64))
+$symbolOptions = @{ Symbolizer = (Join-Path $simBuild 'hardware-explorer-symbolize-pdb.exe') }
+$exeResult = Join-Path $root 'exe-symbols.json'
+$dllResult = Join-Path $root 'dll-symbols.json'
+& "$repo/backend/scripts/hardware-explore-symbolize.ps1" @symbolOptions -Result $analysisPath -Image $program -Pdb (Join-Path $fixture 'pin smoke.pdb') -Output $exeResult
+& "$repo/backend/scripts/hardware-explore-symbolize.ps1" @symbolOptions -Result $exeResult -Image $plugin -Pdb (Join-Path $fixture 'pin smoke plugin.pdb') -Output $dllResult
+$enriched = [IO.File]::ReadAllText($dllResult) | ConvertFrom-Json
+foreach ($hash in @($mainHash, $dllHash)) {
+    $sites = @($enriched.codeHotspots | Where-Object { $_.location.imageId -eq "sha256:$hash" })
+    Assert-True (@($sites | Where-Object { $_.navigationConfidence -eq 'source-nearest' }).Count -gt 0) 'Missing EXE/DLL source mapping.'
+    foreach ($site in $sites) {
+        Assert-True ($site.attribution.method -eq 'instruction-pc') 'Pin incorrectly used a return-PC lookup.'
+        Assert-True ([Convert]::ToUInt32($site.location.rva.Substring(2), 16) -eq [Convert]::ToUInt32($site.attribution.lookupRva.Substring(2), 16)) 'Pin lookup decremented the instruction RVA.'
+    }
+}
+Assert-True ($enriched.imageSymbolization.Count -eq 2) 'Multi-image attribution provenance lost.'
+for ($index = 0; $index -lt $result.codeHotspots.Count; ++$index) {
+    Assert-True (($result.codeHotspots[$index].metrics | ConvertTo-Json -Compress) -eq ($enriched.codeHotspots[$index].metrics | ConvertTo-Json -Compress)) 'Symbolization changed modeled metrics.'
+}
+$mismatched = $false
+try { & "$repo/backend/scripts/hardware-explore-symbolize.ps1" @symbolOptions -Result $analysisPath -Image $plugin -Pdb (Join-Path $fixture 'pin smoke.pdb') -Output $dllResult }
+catch { if ($_.Exception.Message -notmatch 'GUID/age') { throw }; $mismatched = $true }
+Assert-True $mismatched 'Allowed a mismatched PDB for a DLL.'
+Assert-True (([IO.File]::ReadAllText($dllResult) | ConvertFrom-Json).imageSymbolization.Count -eq 2) 'Failed enrichment damaged the previous result.'
 
 # The no-debug-directory executable must retain attributed sites with no PDBs present.
 $pdbs = Join-Path $root 'unused symbols'

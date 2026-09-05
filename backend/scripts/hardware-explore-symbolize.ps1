@@ -1,5 +1,5 @@
 #requires -Version 7.2
-# Enrich a completed clang-cl analysis locally; never execute the target image.
+# Enrich one SHA-selected image in a completed analysis; never execute it.
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)] [string] $Result,
@@ -28,18 +28,21 @@ if ((Get-Item -LiteralPath $resultPath).Length -gt 16MB) {
 $analysis = [IO.File]::ReadAllText($resultPath) | ConvertFrom-Json -AsHashtable -Depth 64
 if ($analysis -isnot [Collections.IDictionary] -or
     $analysis.capture -isnot [Collections.IDictionary] -or
-    $analysis.capture.traceFormat -ne 2 -or $analysis.capture.kind -ne 'clang-cl' -or
+    $analysis.capture.traceFormat -ne 2 -or $analysis.capture.kind -notin @('clang-cl', 'intel-pin') -or
     $analysis.capture.addressWidth -ne 32 -or
-    $analysis.images -isnot [Collections.IList] -or $analysis.images.Count -ne 1 -or
+    $analysis.images -isnot [Collections.IList] -or $analysis.images.Count -lt 1 -or $analysis.images.Count -gt 4096 -or
     $analysis.codeHotspots -isnot [Collections.IList] -or
     $analysis.codeHotspots.Count -lt 1 -or $analysis.codeHotspots.Count -gt 10000) {
-    throw 'Expected a completed clang-cl PE32 analysis with one image and 1–10000 code hotspots.'
+    throw 'Expected a completed clang-cl or Intel Pin PE32 analysis with 1–10000 code hotspots.'
 }
-$peSize = (Get-HardwareExplorerPeImage $imagePath).SizeOfImage
+$instructionPc = $analysis.capture.kind -eq 'intel-pin'
+$lookupMethod = if ($instructionPc) { 'instruction-pc' } else { 'return-pc-minus-one' }
+$peSize = (Get-HardwareExplorerPeImage $imagePath -AllowDll:$instructionPc).SizeOfImage
 $imageHash = (Get-FileHash -LiteralPath $imagePath -Algorithm SHA256).Hash.ToLowerInvariant()
 $pdbHash = (Get-FileHash -LiteralPath $pdbPath -Algorithm SHA256).Hash.ToLowerInvariant()
 $imageId = "sha256:$imageHash"
-if ($analysis.images[0].id -ne $imageId -or $analysis.images[0].sha256 -ne $imageHash) {
+$selectedImages = @($analysis.images | Where-Object { $_.id -eq $imageId -and $_.sha256 -eq $imageHash })
+if ($selectedImages.Count -ne 1) {
     throw 'The executable SHA-256 does not match the captured image.'
 }
 
@@ -49,7 +52,7 @@ function Convert-SiteRva {
         throw 'Invalid PE32 code-site RVA.'
     }
     $rva = [Convert]::ToUInt32($Value.Substring(2), 16)
-    if ($rva -eq 0 -or $rva -ge $peSize) { throw 'Code-site RVA falls outside the executable.' }
+    if ((-not $instructionPc -and $rva -eq 0) -or $rva -ge $peSize) { throw 'Code-site RVA falls outside the executable.' }
     return '0x{0:x}' -f $rva
 }
 
@@ -57,16 +60,18 @@ $rvas = [Collections.Generic.HashSet[string]]::new()
 foreach ($hotspot in $analysis.codeHotspots) {
     if ($hotspot -isnot [Collections.IDictionary] -or
         $hotspot.location -isnot [Collections.IDictionary] -or
-        $hotspot.location.imageId -ne $imageId) {
+        $hotspot.location.imageId -notin $analysis.images.id) {
         throw 'A hotspot refers to an unexpected image.'
     }
-    [void] $rvas.Add((Convert-SiteRva $hotspot.location.rva))
+    if ($hotspot.location.imageId -eq $imageId) { [void] $rvas.Add((Convert-SiteRva $hotspot.location.rva)) }
 }
+if ($rvas.Count -eq 0) { throw 'The selected image has no exported code hotspots to symbolize.' }
 
 $start = [Diagnostics.ProcessStartInfo]::new()
 $start.FileName = $symbolizerPath
 $start.ArgumentList.Add($imagePath)
 $start.ArgumentList.Add($pdbPath)
+if ($instructionPc) { $start.ArgumentList.Add('instruction-pc') }
 $start.UseShellExecute = $false
 $start.RedirectStandardInput = $true
 $start.RedirectStandardOutput = $true
@@ -120,7 +125,7 @@ $records = @($symbolText.Trim() -split '\r?\n')
 if ($records.Count -ne $rvas.Count + 1) { throw 'The symbolizer returned an incomplete result.' }
 $metadata = $records[0] | ConvertFrom-Json -AsHashtable -Depth 8
 if ($metadata.type -ne 'symbols' -or $metadata.format -ne 1 -or
-    $metadata.provider -ne 'dbghelp' -or $metadata.lookupMethod -ne 'return-pc-minus-one' -or
+    $metadata.provider -ne 'dbghelp' -or $metadata.lookupMethod -ne $lookupMethod -or
     $metadata.imageSize -ne $peSize -or
     $metadata.guid -notmatch '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' -or
     $metadata.age -isnot [long] -or $metadata.age -lt 0 -or $metadata.age -gt [UInt32]::MaxValue) {
@@ -130,7 +135,7 @@ $sites = @{}
 foreach ($record in $records[1..($records.Count - 1)]) {
     $site = $record | ConvertFrom-Json -AsHashtable -Depth 8
     $rva = Convert-SiteRva $site.rva
-    $lookupRva = '0x{0:x}' -f ([Convert]::ToUInt32($rva.Substring(2), 16) - 1)
+    $lookupRva = if ($instructionPc) { $rva } else { '0x{0:x}' -f ([Convert]::ToUInt32($rva.Substring(2), 16) - 1) }
     if ($site.type -ne 'site' -or -not $rvas.Contains($rva) -or $sites.ContainsKey($rva) -or
         $site.lookupRva -ne $lookupRva -or
         $site.navigationConfidence -notin @('unresolved', 'function-exact', 'source-nearest')) {
@@ -157,10 +162,11 @@ if ((Get-FileHash -LiteralPath $imagePath -Algorithm SHA256).Hash -ne $imageHash
     (Get-FileHash -LiteralPath $pdbPath -Algorithm SHA256).Hash -ne $pdbHash) {
     throw 'The executable or PDB changed during symbolization.'
 }
-$analysis.images[0].codeView = @{ guid = $metadata.guid; age = $metadata.age }
+$selectedImages[0].codeView = @{ guid = $metadata.guid; age = $metadata.age }
 $sourceCount = 0
 $functionCount = 0
 foreach ($hotspot in $analysis.codeHotspots) {
+    if ($hotspot.location.imageId -ne $imageId) { continue }
     $site = $sites[(Convert-SiteRva $hotspot.location.rva)]
     [void] $hotspot.Remove('symbol')
     [void] $hotspot.Remove('source')
@@ -175,11 +181,15 @@ foreach ($hotspot in $analysis.codeHotspots) {
         ++$sourceCount
     }
 }
-$analysis.symbolization = @{
+$summary = @{
+    imageId = $imageId
     provider = 'dbghelp'; pdbSha256 = $pdbHash; sourceSites = $sourceCount
-    functionSites = $functionCount; unresolvedSites = $analysis.codeHotspots.Count - $functionCount
-    sourceMapping = 'nearest-debug-line-to-instrumentation-call'
+    functionSites = $functionCount; unresolvedSites = $rvas.Count - $functionCount
+    sourceMapping = if ($instructionPc) { 'nearest-debug-line-to-instruction' } else { 'nearest-debug-line-to-instrumentation-call' }
 }
+$analysis.symbolization = $summary # Compatibility: most recently enriched image.
+$previous = if ($analysis.ContainsKey('imageSymbolization')) { @($analysis.imageSymbolization | Where-Object { $_.imageId -ne $imageId }) } else { @() }
+$analysis.imageSymbolization = @($previous) + @($summary)
 $outputDirectory = [IO.Path]::GetDirectoryName($outputPath)
 [IO.Directory]::CreateDirectory($outputDirectory) | Out-Null
 $temporary = Join-Path $outputDirectory ".hardware-explorer-symbols-$([Guid]::NewGuid().ToString('N')).tmp"

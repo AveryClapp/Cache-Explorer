@@ -1,6 +1,6 @@
 # Shared, bounded PE32 validation for local x86 capture scripts.
 function Get-HardwareExplorerPeImage {
-    param([Parameter(Mandatory = $true)] [string] $Path)
+    param([Parameter(Mandatory = $true)] [string] $Path, [switch] $AllowDll)
 
     $stream = [IO.File]::OpenRead($Path)
     $reader = [IO.BinaryReader]::new($stream)
@@ -24,8 +24,8 @@ function Get-HardwareExplorerPeImage {
             $reader.ReadUInt16() -ne 0x10b) {
             throw "'$Path' has an invalid PE32 optional header."
         }
-        if (($characteristics -band 0x2000) -ne 0 -or ($characteristics -band 0x2) -eq 0) {
-            throw "'$Path' must be an executable, not a DLL. Multi-image capture is not available yet."
+        if ((-not $AllowDll -and ($characteristics -band 0x2000) -ne 0) -or ($characteristics -band 0x2) -eq 0) {
+            throw "'$Path' must be an executable, not a DLL. Launch the main EXE to capture its loaded DLLs."
         }
         $stream.Position = $peOffset + 24 + 56
         [UInt64] $sizeOfImage = $reader.ReadUInt32()

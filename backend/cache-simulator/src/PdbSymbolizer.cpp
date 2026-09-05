@@ -51,7 +51,7 @@ std::string guid_text(const GUID &guid) {
   return out.str();
 }
 
-DWORD image_size(const std::filesystem::path &path) {
+DWORD image_size(const std::filesystem::path &path, bool allow_dll) {
   std::ifstream file(path, std::ios::binary | std::ios::ate);
   if (!file) throw std::runtime_error("Cannot open the PE image");
   const auto length = static_cast<std::streamoff>(file.tellg());
@@ -74,7 +74,7 @@ DWORD image_size(const std::filesystem::path &path) {
   if (signature != IMAGE_NT_SIGNATURE || coff.Machine != IMAGE_FILE_MACHINE_I386 ||
       coff.SizeOfOptionalHeader < sizeof(IMAGE_OPTIONAL_HEADER32) ||
       !(coff.Characteristics & IMAGE_FILE_EXECUTABLE_IMAGE) ||
-      (coff.Characteristics & IMAGE_FILE_DLL))
+      (!allow_dll && (coff.Characteristics & IMAGE_FILE_DLL)))
     throw std::runtime_error("Expected an x86 PE32 executable");
   IMAGE_OPTIONAL_HEADER32 optional{};
   read(static_cast<std::streamoff>(dos.e_lfanew) + 4 + sizeof(coff), optional);
@@ -133,10 +133,10 @@ public:
   PdbSession(const PdbSession &) = delete;
   PdbSession &operator=(const PdbSession &) = delete;
 
-  void write_site(uint32_t rva) const {
+  void write_site(uint32_t rva, bool instruction_pc) const {
     // A return PC can be on the next source line or even past the function.
     // Query inside its preceding call, but keep the original portable identity.
-    const uint32_t lookup_rva = rva - 1;
+    const uint32_t lookup_rva = instruction_pc ? rva : rva - 1;
     const DWORD64 address = kLookupBase + lookup_rva;
     alignas(SYMBOL_INFOW) std::array<unsigned char,
         sizeof(SYMBOL_INFOW) + kMaxName * sizeof(wchar_t)> storage{};
@@ -188,11 +188,13 @@ private:
 
 int wmain(int argc, wchar_t **argv) {
   try {
-    if (argc != 3)
-      throw std::runtime_error("Usage: hardware-explorer-symbolize-pdb.exe image.exe symbols.pdb < rvas.txt");
+    if (argc != 3 && argc != 4)
+      throw std::runtime_error("Usage: hardware-explorer-symbolize-pdb.exe image symbols.pdb [instruction-pc] < rvas.txt");
+    const bool instruction_pc = argc == 4 && std::wstring(argv[3]) == L"instruction-pc";
+    if (argc == 4 && !instruction_pc) throw std::runtime_error("Unknown code-site lookup mode");
     const auto image = std::filesystem::absolute(argv[1]);
     const auto pdb = std::filesystem::absolute(argv[2]);
-    const DWORD size = image_size(image);
+    const DWORD size = image_size(image, instruction_pc);
     const auto image_id = identity(image.wstring());
     const auto pdb_id = identity(pdb.wstring());
     if (image_id.age != pdb_id.age ||
@@ -213,7 +215,7 @@ int wmain(int argc, wchar_t **argv) {
           token.find_first_not_of("0123456789abcdefABCDEF", 2) != std::string::npos)
         throw std::runtime_error("Malformed PE32 code RVA");
       const auto rva = std::stoull(token.substr(2), nullptr, 16);
-      if (rva == 0 || rva >= size || rvas.size() >= kMaxSites)
+      if ((!instruction_pc && rva == 0) || rva >= size || rvas.size() >= kMaxSites)
         throw std::runtime_error("RVA or code-site count exceeds its bounds");
       rvas.push_back(static_cast<uint32_t>(rva));
     }
@@ -221,10 +223,10 @@ int wmain(int argc, wchar_t **argv) {
     if (rvas.empty()) throw std::runtime_error("No code sites supplied");
     PdbSession session(pdb.wstring(), size, image_id);
     std::cout << "{\"type\":\"symbols\",\"format\":1,\"provider\":\"dbghelp\","
-              << "\"lookupMethod\":\"return-pc-minus-one\",\"guid\":\""
+              << "\"lookupMethod\":\"" << (instruction_pc ? "instruction-pc" : "return-pc-minus-one") << "\",\"guid\":\""
               << guid_text(image_id.guid) << "\",\"age\":" << image_id.age
               << ",\"imageSize\":" << size << "}\n";
-    for (const auto rva : rvas) session.write_site(rva);
+    for (const auto rva : rvas) session.write_site(rva, instruction_pc);
     if (!std::cout) throw std::runtime_error("Cannot write symbol results");
     return 0;
   } catch (const std::exception &error) {
