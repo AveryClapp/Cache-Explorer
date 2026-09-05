@@ -113,7 +113,7 @@ try {
     Assert-Fails { & $command -Result $Result -Image $Image -Pdb $Pdb -Output $Image -Symbolizer $Symbolizer } 'different file'
     Assert-Fails { & $command -Result $Result -Image $Image -Pdb $Pdb -Output $Result -Symbolizer $Symbolizer } 'different file'
     $badResult = Join-Path $testRoot 'bad-result.json'
-    $before.capture.kind = 'intel-pin'
+    $before.capture.kind = 'unsupported-capture'
     Write-Analysis $before $badResult
     Assert-Fails { & $command -Result $badResult -Image $Image -Pdb $Pdb -Output $output -Symbolizer $Symbolizer } 'completed clang-cl'
     $before.capture.kind = 'clang-cl'
