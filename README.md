@@ -221,8 +221,11 @@ Get-Content .\game-trace-v2.txt | cache-sim.exe --config intel --json
 
 This produces stable executable SHA-256 + RVA `codeHotspots`. An optional
 [local PDB attribution step](docs/CMAKE_INTEGRATION.md#optional-local-pdb-attribution-windows-preview)
-adds function names and approximate source locations. Profiling PE32 binaries
-that cannot be rebuilt and Ghidra/IDA navigation are still in development.
+adds function names and approximate source locations. Existing PE32 EXE/DLL
+capture is available through the experimental [Pin CLI](backend/pin-tool/README.md).
+The [binary hotspot workflow](integrations/README.md) adds a local results page,
+validated exports, a Ghidra script adapter and an experimental IDA adapter.
+Ghidra headed UI and licensed IDA/Hex-Rays verification remain release gates.
 See [the Windows x86 profiling specification](docs/WINDOWS_X86_BINARY_PROFILING_SPEC.md).
 The current path accepts one instrumented PE32 executable, not instrumented
 DLLs, and captures up to two million sampled events. Hotspots identify

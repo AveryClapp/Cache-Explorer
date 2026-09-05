@@ -450,6 +450,7 @@ void JsonOutput::write_binary_attribution(
         out << "{\"id\":\"" << escape(image.image_id) << "\""
             << ",\"name\":\"" << escape(image.name) << "\""
             << ",\"sha256\":\"" << escape(image.image_id.substr(7)) << "\""
+            << ",\"imageSize\":" << image.end_address - image.loaded_base
             << ",\"loadedBase\":\"" << hex_address(image.loaded_base) << "\""
             << ",\"endAddress\":\"" << hex_address(image.end_address) << "\"}";
     }

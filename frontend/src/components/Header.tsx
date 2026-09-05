@@ -1,7 +1,7 @@
 import type { CacheResult, EnvironmentHealth, Stage } from "../types";
 
 interface HeaderProps {
-  activeProductArea: "analyze" | "profiles" | "comparisons" | "workloads" | "experiments";
+  activeProductArea: "analyze" | "profiles" | "comparisons" | "workloads" | "experiments" | "binary";
   theme: "dark" | "light";
   diffMode: boolean;
   baselineResult: CacheResult | null;
@@ -21,6 +21,7 @@ interface HeaderProps {
   onExploreHardware: () => void;
   onOpenWorkloads: () => void;
   onRunExperiment: () => void;
+  onOpenBinary: () => void;
   onPreloadProductArea: (area: HeaderProps["activeProductArea"]) => void;
   onRun: () => void;
   onCancel: () => void;
@@ -127,12 +128,14 @@ export function Header({
   onExploreHardware,
   onOpenWorkloads,
   onRunExperiment,
+  onOpenBinary,
   onPreloadProductArea,
   onRun,
   onCancel,
 }: HeaderProps) {
   const productLinks = [
     { area: "analyze" as const, label: "Analyze", open: onOpenAnalyze },
+    { area: "binary" as const, label: "Binary profiles", open: onOpenBinary },
     { area: "profiles" as const, label: "Profiles", open: onExploreHardware },
     { area: "comparisons" as const, label: "Comparisons", open: onCompareHardware },
     { area: "workloads" as const, label: "Workloads", open: onOpenWorkloads },
@@ -178,12 +181,13 @@ export function Header({
       </nav>
 
       <div className="header-center">
+        {activeProductArea !== 'binary' &&
         <EnvironmentStatus
           health={environmentHealth}
           error={environmentHealthError}
           selectedCompiler={selectedCompiler}
           compilerCount={compilerCount}
-        />
+        />}
         {diffMode && baselineResult && (
           <div className="diff-mode-badge" title="Comparing against baseline">
             <span className="diff-mode-icon">⇄</span>
@@ -211,7 +215,7 @@ export function Header({
         </button>
 
         {/* Compare button - visible when result exists */}
-        {result && !isLoading && (
+        {activeProductArea !== 'binary' && result && !isLoading && (
           <button
             onClick={() => {
               if (!baselineResult) {
@@ -238,7 +242,7 @@ export function Header({
                 : "Compare"}
           </button>
         )}
-        {baselineResult && !diffMode && (
+        {activeProductArea !== 'binary' && baselineResult && !diffMode && (
           <button
             onClick={onClearBaseline}
             className="btn-icon btn-clear-baseline"
@@ -249,7 +253,7 @@ export function Header({
           </button>
         )}
 
-        {isLoading ? (
+        {activeProductArea !== 'binary' && (isLoading ? (
           <button
             onClick={onCancel}
             className="btn-cancel"
@@ -264,7 +268,7 @@ export function Header({
           <button onClick={onRun} className="btn-primary">
             Execute
           </button>
-        )}
+        ))}
       </div>
     </header>
   );

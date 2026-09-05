@@ -69,7 +69,7 @@ import {
   exportExperimentAsJSON,
 } from './utils/export'
 
-type ProductArea = 'analyze' | 'profiles' | 'comparisons' | 'workloads' | 'experiments'
+type ProductArea = 'analyze' | 'profiles' | 'comparisons' | 'workloads' | 'experiments' | 'binary'
 
 const loadCommandPalette = () => import('./components/CommandPalette').then(module => ({ default: module.CommandPalette }))
 const loadEditorPanel = () => import('./components/EditorPanel').then(module => ({ default: module.EditorPanel }))
@@ -77,6 +77,7 @@ const loadBatchResults = () => import('./components/BatchResultsModal').then(mod
 const loadExperimentResults = () => import('./components/ExperimentResultsModal').then(module => ({ default: module.ExperimentResultsModal }))
 const loadHardwareExplorer = () => import('./components/HardwareExplorerModal').then(module => ({ default: module.HardwareExplorerModal }))
 const loadWorkloadCatalog = () => import('./components/WorkloadCatalogModal').then(module => ({ default: module.WorkloadCatalogModal }))
+const loadBinaryProfiles = () => import('./components/BinaryProfiles').then(module => ({ default: module.BinaryProfiles }))
 
 const CommandPalette = lazy(loadCommandPalette)
 const EditorPanel = lazy(loadEditorPanel)
@@ -84,6 +85,7 @@ const BatchResultsModal = lazy(loadBatchResults)
 const ExperimentResultsModal = lazy(loadExperimentResults)
 const HardwareExplorerModal = lazy(loadHardwareExplorer)
 const WorkloadCatalogModal = lazy(loadWorkloadCatalog)
+const BinaryProfiles = lazy(loadBinaryProfiles)
 
 function preloadProductArea(area: ProductArea) {
   if (area === 'analyze') void loadEditorPanel()
@@ -91,6 +93,7 @@ function preloadProductArea(area: ProductArea) {
   if (area === 'comparisons') void loadBatchResults()
   if (area === 'workloads') void loadWorkloadCatalog()
   if (area === 'experiments') void loadExperimentResults()
+  if (area === 'binary') void loadBinaryProfiles()
 }
 
 function annotationClass(annotation: SourceAnnotation) {
@@ -127,7 +130,7 @@ const HARDWARE_CONFIG_ALIASES: Record<string, string> = {
   raspberry: 'rpi4',
 }
 const STRESS_WORKLOAD_VARIANT_TIMEOUT_MS = 30000
-const PRODUCT_AREAS = new Set<ProductArea>(['analyze', 'profiles', 'comparisons', 'workloads', 'experiments'])
+const PRODUCT_AREAS = new Set<ProductArea>(['analyze', 'profiles', 'comparisons', 'workloads', 'experiments', 'binary'])
 
 function productAreaFromLocation(): ProductArea {
   if (typeof window === 'undefined') return 'analyze'
@@ -1502,6 +1505,7 @@ function App() {
           onExploreHardware={openHardwareExplorer}
           onOpenWorkloads={openWorkloadCatalog}
           onRunExperiment={openExperimentModal}
+          onOpenBinary={() => navigateProductArea('binary')}
           onPreloadProductArea={preloadProductArea}
           onRun={runAnalysis}
           onCancel={cancelAnalysis}
@@ -1547,6 +1551,7 @@ function App() {
       {!isEmbedMode && activeProductArea !== 'analyze' && (
         <main id="main-content" className="product-workspace" tabIndex={-1}>
           <Suspense fallback={<div className="product-loading" role="status">Loading workspace…</div>}>
+            {activeProductArea === 'binary' && <BinaryProfiles />}
             {activeProductArea === 'comparisons' && (
               <BatchResultsModal
                 results={batchResults}

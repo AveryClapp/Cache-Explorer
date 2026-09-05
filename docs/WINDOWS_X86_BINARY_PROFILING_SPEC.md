@@ -1,6 +1,6 @@
 # Windows x86 Binary Profiling and Decompiler Navigation
 
-Status: In progress — clang-cl/PDB Preview plus experimental Pin IA-32 capture; remaining milestones below are gated.
+Status: Preview implementation — capture, multi-image PDB, local binary UI/export, Ghidra script and experimental IDA adapter. GUI/product compatibility remains gated below.
 
 Tracking issue: [#73](https://github.com/AveryClapp/Cache-Explorer/issues/73)  
 Target: Hardware Explorer Preview
@@ -30,10 +30,14 @@ batch/streaming analysis and legacy trace compatibility. An optional Windows
 post-processing step resolves functions and approximate source lines using an
 explicit, identity-matched PDB. A separate experimental Windows Pin CLI now
 captures uninstrumented PE32 executables and loaded DLLs into the same trace
-format. Pin results have image/RVA sites, but no PDB or decompiler mapping yet.
+format. Pin results support per-image EXE/DLL PDB enrichment with instruction-PC
+lookup. The Binary profiles workspace imports completed local analyses, groups
+ranked sites by module/function and exports schema-validated v1 bundles. The
+Ghidra 12.1.3 script adapter has real headless PE32/token/rebase coverage; its
+headed UI smoke remains open. The IDA adapter has SDK-independent coverage but
+no licensed-runtime sign-off. See [the workflow guide](../integrations/README.md).
 Instrumented clang-cl DLLs, named JIT attribution, exact statement/inline-stack
-mapping, binary results UI, hotspot bundle export, and both decompiler adapters
-are not implemented here.
+mapping and complete function/basic-block aggregation are not implemented here.
 The `clang-cl` site is an instrumentation return PC; it is not yet a verified
 memory-instruction or pseudocode location. Without PDB lookup it remains
 `unresolved`; a debug-line match is deliberately labeled `source-nearest`.
@@ -69,8 +73,8 @@ memory-instruction or pseudocode location. Without PDB lookup it remains
 | Input | Capture path | Primary navigation | Initial status |
 |---|---|---|---|
 | Source built with `clang-cl` for Win32 | Built-in load/store instrumentation and Windows x86 runtime | Original file and line after PDB attribution | M1 capture, M2 attribution |
-| PE32 executable with PDB | Intel Pin IA-32 | Image/RVA now; PDB and pseudocode navigation pending | Experimental CLI |
-| PE32 executable without PDB | Intel Pin IA-32 | Image/RVA now; function/pseudocode navigation pending | Experimental CLI |
+| PE32 EXE/DLL with PDB | Intel Pin IA-32 | Image/RVA, containing function and approximate debug line | Preview CLI + local results |
+| PE32 EXE/DLL without PDB | Intel Pin IA-32 | Image/RVA; Ghidra token mapping headless-verified | Preview; decompiler GUI gates open |
 | Protected or anti-cheat process | None | None | Unsupported |
 | 16-bit executable | None | None | Unsupported |
 
@@ -103,7 +107,10 @@ Hotspots: module -> function -> block -> instruction
  Highlight and navigate to decompiled pseudocode
 ```
 
-The results page defaults to functions, not millions of individual accesses.
+The current results page groups the simulator's ranked top 100 sites by module
+and function (or explicitly unresolved function). These are **subset sums**, not
+whole-function totals; full block/function aggregation remains a stable gate.
+The target results page defaults to functions, not millions of individual accesses.
 Selecting a function reveals its hottest basic blocks and instruction sites.
 The user can then export the entire result or one selected hotspot set.
 
@@ -242,7 +249,8 @@ does not load a decompiler SDK or emit tool-specific project files.
 
 Ghidra and IDA/Hex-Rays are two adapters at the hotspot-export seam:
 
-- The Ghidra adapter is an installable extension.
+- The current Ghidra adapter is an installable script directory; a dedicated
+  extension and its headed UI sign-off remain separate packaging gates.
 - The IDA/Hex-Rays adapter is a plugin that uses IDAPython and Hex-Rays when the
   decompiler is available.
 
@@ -409,7 +417,8 @@ retain a `.partial.raw` diagnostic; they are not published as successful analyse
 
 The Pin PC is the memory instruction's address, not a clang-cl callback return
 PC. Do **not** apply the clang-cl PDB lookup's `rva - 1` adjustment to Pin sites.
-PDB enrichment for Pin and multi-image selection still require separate work.
+PDB enrichment now selects a single EXE/DLL by SHA-256 per invocation and uses
+`instruction-pc` for Pin, preserving other images and their attribution.
 Recording starts at the main PE entry point (without needing symbols); earlier
 OS-loader operands do not consume the event budget. Capture includes subsequent
 CRT startup/system DLL traffic and normal pre-execution
@@ -425,7 +434,8 @@ full Windows argument parity is still a stable-release gate.
 The first decompiler adapter should be Ghidra because it can be developed and
 tested in an open environment.
 
-Required behavior:
+Target behavior (the shipped script and remaining GUI gates are documented in
+[the workflow guide](../integrations/README.md)):
 
 - Import `hardware-explorer-hotspots-v1.json`.
 - Compare the active program with the selected image using SHA-256 and CodeView
@@ -591,6 +601,9 @@ Decisions:
   requiring an LLVM build with Windows plugin exports enabled.
 - Use Pin 4.3.1 kit 99850 and clang-cl 16.0.6 as the initial CI configuration.
 - Keep the initial Pin process scope to the launched process and loaded DLLs.
+- Keep the first decompiler rollout as a script-based Preview; do not advertise
+  GUI compatibility from headless token tests or licensed IDA support from mocks.
+- Block binary identity mismatches without an unsafe override in this Preview.
 
 Remaining questions for stable binary profiling:
 

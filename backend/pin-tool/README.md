@@ -11,9 +11,11 @@ The new Windows CLI captures an existing **PE32/i386 executable and loaded DLLs
 without source instrumentation or PDBs**. It records memory operands, issuing
 instruction PCs, thread IDs and load-time file hashes. The normalizer converts
 PCs to stable image SHA-256 + RVA sites in trace v2, including DLL reloads.
-Code hotspots remain `unresolved` for source/decompiler navigation: the current
-PDB post-processor only accepts clang-cl instrumentation traces, and Ghidra/
-IDA adapters and binary hotspot UI/export are still pending.
+Bare simulator sites remain `unresolved`. The optional PDB post-processor now
+enriches an EXE or DLL independently using its SHA-256 and matching symbols.
+The [local binary hotspot workflow](../../integrations/README.md) provides the
+results page, validated export and decompiler adapters. Ghidra headed UI and
+licensed IDA/Hex-Rays verification remain explicit release gates.
 
 Prerequisites:
 
