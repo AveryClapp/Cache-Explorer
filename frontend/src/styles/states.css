@@ -3,10 +3,10 @@
    ══════════════════════════════════════════════════════════════════════════ */
 .empty-state {
   display: flex;
-  align-items: center;
+  align-items: safe center;
   justify-content: center;
   height: 100%;
-  padding: var(--space-3);
+  padding: 0;
   text-align: center;
   overflow: auto;
 }
@@ -19,6 +19,7 @@
 }
 
 .empty-state-logo {
+  display: none;
   position: relative;
   width: 24px;
   height: 24px;
@@ -155,7 +156,7 @@
   display: grid;
   grid-template-columns: 40px minmax(0, 1fr);
   align-items: center;
-  min-height: 60px;
+  min-height: 52px;
   padding: var(--space-2) var(--space-3);
   gap: var(--space-3);
   background: color-mix(in srgb, var(--surface) 86%, var(--panel));
@@ -218,7 +219,7 @@
 @media (max-width: 620px) {
   .empty-state {
     justify-content: flex-start;
-    padding: var(--space-4);
+    padding: var(--space-2);
   }
 
   .empty-state-logo {
@@ -258,7 +259,7 @@
 
   .empty-state-path {
     grid-template-columns: 36px minmax(0, 1fr);
-    min-height: 64px;
+    min-height: 52px;
     padding: var(--space-2);
   }
 
