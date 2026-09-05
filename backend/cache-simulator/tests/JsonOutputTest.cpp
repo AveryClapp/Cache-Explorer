@@ -109,6 +109,42 @@ void test_write_timing_stats() {
   std::cout << "[PASS] test_write_timing_stats\n";
 }
 
+void test_write_binary_attribution() {
+  TraceManifest manifest;
+  manifest.version = 2;
+  manifest.capture =
+      TraceCapture{"clang-cl", "i686-pc-windows-msvc", 32, 2, 10000000, true};
+  manifest.images.push_back(
+      {1, "sha256:" + std::string(64, 'a'), "old game.exe", 0x400000,
+       0x420000});
+
+  CodeHotspot hotspot;
+  hotspot.location = {1, 0x12f40};
+  hotspot.accesses = 10;
+  hotspot.reads = 8;
+  hotspot.writes = 2;
+  hotspot.l1d_hits = 7;
+  hotspot.l1d_misses = 3;
+  hotspot.l2_hits = 1;
+  hotspot.memory_accesses = 2;
+
+  std::ostringstream out;
+  JsonOutput::write_binary_attribution(
+      out, manifest, {hotspot}, make_educational_config());
+  const std::string json = out.str();
+  assert(json.find("\"traceFormat\":2") != std::string::npos);
+  assert(json.find("\"sampleRate\":2") != std::string::npos);
+  assert(json.find("\"truncated\":true") != std::string::npos);
+  assert(json.find("\"name\":\"old game.exe\"") != std::string::npos);
+  assert(json.find("\"rva\":\"0x00012f40\"") != std::string::npos);
+  assert(json.find("\"accesses\":10") != std::string::npos);
+  assert(json.find("\"l1dMisses\":3") != std::string::npos);
+  assert(json.find("\"estimatedMemoryStallCycles\"") != std::string::npos);
+  assert(json.find("\"navigationConfidence\":\"unresolved\"") != std::string::npos);
+  assert(json.find("instruction-exact") == std::string::npos);
+  std::cout << "[PASS] test_write_binary_attribution\n";
+}
+
 void test_write_execution_stats() {
   std::ostringstream out;
   BranchPredictionStats branch;
@@ -410,6 +446,7 @@ int main() {
   test_write_cache_stats();
   test_write_tlb_stats();
   test_write_timing_stats();
+  test_write_binary_attribution();
   test_write_execution_stats();
   test_write_execution_unavailable();
   test_write_execution_subsystem_stats();
@@ -425,6 +462,6 @@ int main() {
   test_write_stream_start();
   test_write_stream_progress();
 
-  std::cout << "\n=== All 23 JsonOutput tests passed! ===\n";
+  std::cout << "\n=== All 24 JsonOutput tests passed! ===\n";
   return 0;
 }

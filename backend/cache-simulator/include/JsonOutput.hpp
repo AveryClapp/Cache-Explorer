@@ -14,6 +14,7 @@
 #include "OptimizationSuggester.hpp"
 #include "Prefetcher.hpp"
 #include "TLB.hpp"
+#include "TraceParser.hpp"
 #include "TraceProcessor.hpp"
 
 /**
@@ -167,6 +168,16 @@ public:
      */
     static void write_hot_lines_multicore(std::ostream& out,
                                           const std::vector<MultiCoreSourceStats>& hot);
+
+    /**
+     * Write v2 capture provenance, image identities, and code hotspots.
+     * This is omitted by callers for v1 traces so legacy result fields remain
+     * byte-for-byte compatible.
+     */
+    static void write_binary_attribution(
+        std::ostream& out, const TraceManifest& manifest,
+        const std::vector<CodeHotspot>& hotspots,
+        const CacheHierarchyConfig& config);
 
     // ========== Optimization Suggestions ==========
 

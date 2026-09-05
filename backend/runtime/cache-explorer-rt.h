@@ -36,7 +36,9 @@ typedef struct {
 #define EVENT_MEMSET_TYPE   (1ULL << 54)    // Bit 55-54 = 01
 #define EVENT_MEMMOVE_TYPE  (2ULL << 54)    // Bit 55-54 = 10
 #define EVENT_BRANCH_FLAG   (1ULL << 53)
-#define EVENT_ADDR_MASK     0x00FFFFFFFFFFFFFFULL  // Lower 56 bits for address
+// Bits 53-63 are reserved for event kind and subtype encoding. User-space
+// addresses on currently supported targets fit in the remaining low bits.
+#define EVENT_ADDR_MASK     ((1ULL << 53) - 1ULL)
 
 void __tag_mem_load(void *addr, uint32_t size, const char *file, uint32_t line);
 void __tag_mem_store(void *addr, uint32_t size, const char *file,
@@ -68,6 +70,20 @@ void __tag_atomic_cmpxchg(void *addr, uint32_t size, const char *file, uint32_t 
 void __tag_memcpy(void *dest, void *src, uint32_t size, const char *file, uint32_t line);
 void __tag_memset(void *dest, uint32_t size, const char *file, uint32_t line);
 void __tag_memmove(void *dest, void *src, uint32_t size, const char *file, uint32_t line);
+
+// Clang SanitizerCoverage callbacks used by the stock clang-cl integration.
+// The compiler supplies the access width through the callback name.
+void __sanitizer_cov_trace_pc(void);
+void __sanitizer_cov_load1(void *addr);
+void __sanitizer_cov_load2(void *addr);
+void __sanitizer_cov_load4(void *addr);
+void __sanitizer_cov_load8(void *addr);
+void __sanitizer_cov_load16(void *addr);
+void __sanitizer_cov_store1(void *addr);
+void __sanitizer_cov_store2(void *addr);
+void __sanitizer_cov_store4(void *addr);
+void __sanitizer_cov_store8(void *addr);
+void __sanitizer_cov_store16(void *addr);
 
 void __cache_explorer_init(void);
 void __cache_explorer_flush(void);

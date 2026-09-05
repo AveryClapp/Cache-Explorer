@@ -37,9 +37,9 @@ SourceStats *TraceProcessor::find_or_create_source_stats(std::string_view file,
   return &it->second;
 }
 
-void TraceProcessor::process_line_access(uint64_t line_addr, bool is_write,
-                                         bool is_icache, std::string_view file,
-                                         uint32_t line, uint32_t event_size) {
+void TraceProcessor::process_line_access(const TraceEvent &event,
+                                         uint64_t line_addr, bool is_write,
+                                         bool is_icache) {
   SystemAccessResult result;
   if (is_icache) {
     result = cache.fetch(line_addr);
@@ -55,7 +55,7 @@ void TraceProcessor::process_line_access(uint64_t line_addr, bool is_write,
     prefetched_addresses.erase(line_addr);
   }
 
-  SourceStats *source = find_or_create_source_stats(file, line);
+  SourceStats *source = find_or_create_source_stats(event.file, event.line);
   if (source != nullptr) {
     if (result.l1_hit)
       source->hits++;
@@ -67,7 +67,7 @@ void TraceProcessor::process_line_access(uint64_t line_addr, bool is_write,
   // instruction count and front-end stalls; data accesses supply back-end
   // memory stalls.
   if (is_icache) {
-    uint32_t instructions = event_size / 4;
+    uint32_t instructions = event.size / 4;
     uint64_t stall =
         pipeline.on_inst_fetch(result.l1_hit, result.l2_hit, result.l3_hit,
                                instructions);
@@ -83,9 +83,12 @@ void TraceProcessor::process_line_access(uint64_t line_addr, bool is_write,
     }
   }
 
+  code_hotspots.record(event, is_write, result.l1_hit, result.l2_hit,
+                       result.l3_hit);
+
   if (event_callback) {
     event_callback({result.l1_hit, result.l2_hit, result.l3_hit, line_addr,
-                    event_size, std::string(file), line});
+                    event.size, event.file, event.line});
   }
 }
 
@@ -167,16 +170,14 @@ void TraceProcessor::process(const TraceEvent &event) {
     auto src_lines = split_access_to_cache_lines(
         {event.src_address, event.size, false}, line_size);
     for (const auto &line_access : src_lines) {
-      process_line_access(line_access.line_address, false, false, event.file,
-                          event.line, event.size);
+      process_line_access(event, line_access.line_address, false, false);
     }
 
     // Process dest writes
     auto dst_lines = split_access_to_cache_lines(
         {event.address, event.size, true}, line_size);
     for (const auto &line_access : dst_lines) {
-      process_line_access(line_access.line_address, true, false, event.file,
-                          event.line, event.size);
+      process_line_access(event, line_access.line_address, true, false);
     }
     return;
   }
@@ -189,8 +190,7 @@ void TraceProcessor::process(const TraceEvent &event) {
     auto lines =
         split_access_to_cache_lines({event.address, event.size, true}, line_size);
     for (const auto &line_access : lines) {
-      process_line_access(line_access.line_address, true, false, event.file,
-                          event.line, event.size);
+      process_line_access(event, line_access.line_address, true, false);
     }
     return;
   }
@@ -229,8 +229,8 @@ void TraceProcessor::process(const TraceEvent &event) {
   }
 
   for (const auto &line_access : lines) {
-    process_line_access(line_access.line_address, event.is_write,
-                        event.is_icache, event.file, event.line, event.size);
+    process_line_access(event, line_access.line_address, event.is_write,
+                        event.is_icache);
   }
 }
 
@@ -248,9 +248,15 @@ std::vector<SourceStats> TraceProcessor::get_hot_lines(size_t limit) const {
   return sorted;
 }
 
+std::vector<CodeHotspot>
+TraceProcessor::get_code_hotspots(size_t limit) const {
+  return code_hotspots.hottest(limit);
+}
+
 void TraceProcessor::reset() {
   cache.reset_stats();
   source_stats.clear();
+  code_hotspots.reset();
   sw_prefetch_stats = {};
   vector_stats = {};
   atomic_stats = {};

@@ -13,16 +13,19 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/cache-explorer-rt.c)
     target_include_directories(cache-explorer-rt PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}
     )
-    find_package(Threads REQUIRED)
-    target_link_libraries(cache-explorer-rt PUBLIC Threads::Threads)
+    if(NOT WIN32)
+        find_package(Threads REQUIRED)
+        target_link_libraries(cache-explorer-rt PUBLIC Threads::Threads)
+    endif()
 
     # Optimize for size and speed
-    target_compile_options(cache-explorer-rt PRIVATE
-        -Os -fno-exceptions
-        -Wall -Wextra
-    )
+    if(CMAKE_C_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+        target_compile_options(cache-explorer-rt PRIVATE /O1 /W4)
+    else()
+        target_compile_options(cache-explorer-rt PRIVATE -Os -Wall -Wextra)
+    endif()
 
-    message(STATUS "Building runtime library: libcache-explorer-rt.a")
+    message(STATUS "Building runtime library: cache-explorer-rt")
 
     if(BUILD_TESTING)
         add_executable(cache-explorer-runtime-test tests/test_rt.c)
@@ -32,6 +35,10 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/cache-explorer-rt.c)
         add_executable(cache-explorer-runtime-thread-test tests/test_rt_threads.c)
         target_link_libraries(cache-explorer-runtime-thread-test PRIVATE cache-explorer-rt)
         add_test(NAME cache-explorer-runtime-thread-test COMMAND cache-explorer-runtime-thread-test)
+
+        add_executable(cache-explorer-runtime-address-test tests/test_rt_address_encoding.c)
+        target_link_libraries(cache-explorer-runtime-address-test PRIVATE cache-explorer-rt)
+        add_test(NAME cache-explorer-runtime-address-test COMMAND cache-explorer-runtime-address-test)
     endif()
 else()
     message(STATUS "Skipping runtime library - no cache-explorer-rt.c yet")

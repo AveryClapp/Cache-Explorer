@@ -1,7 +1,9 @@
 #include "../include/JsonOutput.hpp"
 #include <cstdio>
 #include "../include/PipelineModel.hpp"
+#include <algorithm>
 #include <iomanip>
+#include <sstream>
 #include <unordered_map>
 
 namespace {
@@ -50,6 +52,27 @@ void write_cache_level_detail(std::ostream& out, const char* name,
 void write_bool_field(std::ostream& out, const char* name, bool value, bool last) {
     out << "      \"" << name << "\": " << (value ? "true" : "false")
         << (last ? "\n" : ",\n");
+}
+
+std::string hex_address(uint64_t value, int minimum_digits = 1) {
+    std::ostringstream out;
+    out << "0x" << std::hex << std::nouppercase << std::setfill('0')
+        << std::setw(minimum_digits) << value;
+    return out.str();
+}
+
+uint64_t estimated_memory_stall_cycles(const CodeHotspot& hotspot,
+                                       const CacheHierarchyConfig& config) {
+    const int hideable = config.issue_width > 0
+                             ? config.rob_size / config.issue_width
+                             : 0;
+    const auto exposed = [&](int latency) -> uint64_t {
+        return static_cast<uint64_t>(
+            std::max(0, latency - config.latency.l1_hit - hideable));
+    };
+    return hotspot.l2_hits * exposed(config.latency.l2_hit) +
+           hotspot.l3_hits * exposed(config.latency.l3_hit) +
+           hotspot.memory_accesses * exposed(config.latency.memory);
 }
 
 } // namespace
@@ -403,6 +426,63 @@ void JsonOutput::write_hot_lines_multicore(std::ostream& out,
             << (i + 1 < hot.size() ? ",\n" : "\n");
     }
     out << "  ],\n";
+}
+
+void JsonOutput::write_binary_attribution(
+    std::ostream& out, const TraceManifest& manifest,
+    const std::vector<CodeHotspot>& hotspots,
+    const CacheHierarchyConfig& config) {
+    out << "\"capture\":{\"traceFormat\":" << manifest.version;
+    if (manifest.capture) {
+        const auto& capture = *manifest.capture;
+        out << ",\"kind\":\"" << escape(capture.kind) << "\""
+            << ",\"target\":\"" << escape(capture.target) << "\""
+            << ",\"addressWidth\":" << capture.address_width
+            << ",\"sampleRate\":" << capture.sample_rate
+            << ",\"eventLimit\":" << capture.event_limit
+            << ",\"truncated\":" << (capture.truncated ? "true" : "false");
+    }
+    out << "},";
+    out << "\"images\":[";
+    for (size_t i = 0; i < manifest.images.size(); ++i) {
+        const auto& image = manifest.images[i];
+        if (i > 0) out << ",";
+        out << "{\"id\":\"" << escape(image.image_id) << "\""
+            << ",\"name\":\"" << escape(image.name) << "\""
+            << ",\"sha256\":\"" << escape(image.image_id.substr(7)) << "\""
+            << ",\"imageSize\":" << image.end_address - image.loaded_base
+            << ",\"loadedBase\":\"" << hex_address(image.loaded_base) << "\""
+            << ",\"endAddress\":\"" << hex_address(image.end_address) << "\"}";
+    }
+    out << "],\"codeHotspots\":[";
+    bool first_hotspot = true;
+    for (size_t i = 0; i < hotspots.size(); ++i) {
+        const auto& hotspot = hotspots[i];
+        const auto image = std::find_if(
+            manifest.images.begin(), manifest.images.end(), [&](const auto& candidate) {
+                return candidate.table_id == hotspot.location.image_table_id;
+            });
+        if (image == manifest.images.end()) continue;
+        if (!first_hotspot) out << ",";
+        first_hotspot = false;
+        out << "{\"location\":{\"imageId\":\""
+            << escape(image->image_id) << "\",\"rva\":\""
+            << hex_address(hotspot.location.rva, 8) << "\"}"
+            << ",\"navigationConfidence\":\"unresolved\""
+            << ",\"metrics\":{\"accesses\":" << hotspot.accesses
+            << ",\"reads\":" << hotspot.reads
+            << ",\"writes\":" << hotspot.writes
+            << ",\"l1dHits\":" << hotspot.l1d_hits
+            << ",\"l1dMisses\":" << hotspot.l1d_misses
+            << ",\"l1dMissRate\":" << std::fixed << std::setprecision(4)
+            << hotspot.l1d_miss_rate()
+            << ",\"l2Hits\":" << hotspot.l2_hits
+            << ",\"l3Hits\":" << hotspot.l3_hits
+            << ",\"memoryAccesses\":" << hotspot.memory_accesses
+            << ",\"estimatedMemoryStallCycles\":"
+            << estimated_memory_stall_cycles(hotspot, config) << "}}";
+    }
+    out << "]";
 }
 
 // ========== Optimization Suggestions ==========

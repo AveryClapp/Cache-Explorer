@@ -60,6 +60,10 @@ cd cache-explorer
 ./backend/scripts/cache-explore mycode.c --config intel --json
 ```
 
+An experimental [Windows IA-32 Pin CLI](backend/pin-tool/README.md#windows-ia-32-preview)
+also captures existing PE32 executables and DLLs without rebuilding. This is a
+local developer workflow, not yet a binary-profiling UI or decompiler integration.
+
 Release builds publish pre-built `CacheProfiler` LLVM passes for supported LLVM
 versions. The download helper uses the official release repo by default and
 fails closed unless the binary matches the release `SHA256SUMS` manifest:
@@ -207,6 +211,27 @@ CACHE_EXPLORER_CC=/opt/llvm/bin/clang ./backend/scripts/cache-explore code.c
 `cache-explore` command, `CACHE_EXPLORER_*` variables, file formats, and existing
 integration names remain supported during the Preview rebrand.
 
+Windows PE32 programs rebuilt with `clang-cl` can use the Preview capture path:
+
+```powershell
+.\backend\scripts\hardware-explore-run-x86.ps1 `
+  -Program .\build\game.exe -Output .\game-trace-v2.txt
+Get-Content .\game-trace-v2.txt | cache-sim.exe --config intel --json
+```
+
+This produces stable executable SHA-256 + RVA `codeHotspots`. An optional
+[local PDB attribution step](docs/CMAKE_INTEGRATION.md#optional-local-pdb-attribution-windows-preview)
+adds function names and approximate source locations. Existing PE32 EXE/DLL
+capture is available through the experimental [Pin CLI](backend/pin-tool/README.md).
+The [binary hotspot workflow](integrations/README.md) adds a local results page,
+validated exports, a Ghidra script adapter and an experimental IDA adapter.
+Ghidra headed UI and licensed IDA/Hex-Rays verification remain release gates.
+See [the Windows x86 profiling specification](docs/WINDOWS_X86_BINARY_PROFILING_SPEC.md).
+The current path accepts one instrumented PE32 executable, not instrumented
+DLLs, and captures up to two million sampled events. Hotspots identify
+instrumentation return sites, not verified source statements or decompiler
+locations. These are modeled cache results, not hardware-counter measurements.
+
 ## Running Tests
 
 ```bash
@@ -218,6 +243,7 @@ cd backend/cache-simulator/build
 ./MultiCoreTLBTest      # 8 tests
 ./MultiCoreTraceProcessorTest # 3 tests
 ./AdvancedInstrumentationTest # 31 tests
+./TraceParserTest       # v1/v2 trace attribution tests
 ```
 
 Frontend build and browser smoke:
@@ -299,7 +325,7 @@ should use the [Release And Install Runbook](docs/RELEASE_INSTALL_RUNBOOK.md).
 
 ## Limitations
 
-- **Requires recompilation** - Can't trace pre-compiled binaries (use Intel Pin for that)
+- **Source workflow requires recompilation** - Existing PE32 binaries have a separate experimental [Intel Pin CLI](backend/pin-tool/README.md#windows-ia-32-preview)
 - **No speculative execution** - All accesses treated as committed
 - **Single socket** - No NUMA simulation
 - **CPU scope only** - No GPU, storage, or network performance modeling

@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
+    "ajv": "^8.20.0",
     "lz-string": "^1.5.0",
     "monaco-editor": "^0.55.1",
     "monaco-vim": "^0.4.4",

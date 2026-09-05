@@ -9,6 +9,7 @@ add_library(CacheSimulator
   src/BranchPredictor.cpp
   src/CacheLevel.cpp
   src/CacheSystem.cpp
+  src/CodeHotspot.cpp
   src/CoherenceController.cpp
   src/JsonOutput.cpp
   src/MultiCoreCacheSystem.cpp
@@ -18,6 +19,7 @@ add_library(CacheSimulator
   src/Prefetcher.cpp
   src/SegmentCache.cpp
   src/TLB.cpp
+  src/TraceParser.cpp
   src/TraceProcessor.cpp
 )
 target_include_directories(CacheSimulator PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
@@ -29,6 +31,16 @@ target_link_libraries(CacheSimulator PUBLIC Threads::Threads)
 # CLI tool
 add_executable(cache-sim src/main.cpp)
 target_link_libraries(cache-sim CacheSimulator)
+
+add_executable(hardware-explorer-normalize-pin src/PinNormalizer.cpp)
+target_include_directories(hardware-explorer-normalize-pin PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+# Offline PDB lookup stays out of the portable simulator and capture runtime.
+if(WIN32)
+  add_executable(hardware-explorer-symbolize-pdb src/PdbSymbolizer.cpp)
+  target_link_libraries(hardware-explorer-symbolize-pdb CacheSimulator dbghelp)
+  target_compile_definitions(hardware-explorer-symbolize-pdb PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+endif()
 
 # Tests
 add_executable(CacheLevelTest tests/CacheLevelTest.cpp)
@@ -57,6 +69,9 @@ target_link_libraries(ArgParserTest CacheSimulator)
 
 add_executable(TraceProcessorTest tests/TraceProcessorTest.cpp)
 target_link_libraries(TraceProcessorTest CacheSimulator)
+
+add_executable(TraceParserTest tests/TraceParserTest.cpp)
+target_link_libraries(TraceParserTest CacheSimulator)
 
 add_executable(JsonOutputTest tests/JsonOutputTest.cpp)
 target_link_libraries(JsonOutputTest CacheSimulator)

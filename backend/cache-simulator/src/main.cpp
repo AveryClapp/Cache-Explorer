@@ -3,9 +3,12 @@
 #include "../include/MultiCoreTraceProcessor.hpp"
 #include "../include/OptimizationSuggester.hpp"
 #include "../include/SegmentCache.hpp"
+#include "../include/TraceParser.hpp"
 #include "../include/TraceProcessor.hpp"
+#include <algorithm>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -164,9 +167,21 @@ int main(int argc, char *argv[]) {
   // Streaming mode: process events as they arrive and output JSON for each
   // Uses MultiCoreTraceProcessor to handle both single and multi-threaded code
   if (stream_mode) {
-    // Use 8 cores max - handles both single and multi-threaded transparently
-    MultiCoreTraceProcessor processor(8, cfg.l1_data, cfg.l2, cfg.l3,
+    // The auto default accommodates threads discovered as the trace arrives.
+    MultiCoreTraceProcessor processor(num_cores == 0 ? 8 : num_cores,
+                                       cfg.l1_data, cfg.l2, cfg.l3,
                                        prefetch_policy, prefetch_degree);
+    // Pretty-printed JSON fragments must not split a streaming NDJSON record.
+    // Serialized string newlines are already escaped by JsonOutput::escape.
+    const auto write_fragment = [](auto writer) {
+      std::ostringstream fragment;
+      writer(fragment);
+      std::string text = fragment.str();
+      text.erase(std::remove_if(text.begin(), text.end(), [](char c) {
+        return c == '\n' || c == '\r';
+      }), text.end());
+      std::cout << text;
+    };
     if (fast_mode) {
       processor.set_fast_mode(true);
     }
@@ -215,10 +230,16 @@ int main(int argc, char *argv[]) {
     // Output header with multicore info
     JsonOutput::write_stream_start(std::cout, config_name, true);
 
-    std::string line;
-    while (std::getline(std::cin, line)) {
-      auto event = parse_trace_event(line);
-      if (!event) continue;
+    TraceParser trace_parser;
+    while (auto input = trace_parser.next(std::cin)) {
+      auto &parsed = *input;
+      if (parsed.kind == TraceLineKind::Error) {
+        std::cout << "{\"type\":\"error\",\"message\":\""
+                  << JsonOutput::escape(parsed.error) << "\"}\n";
+        return 2;
+      }
+      if (parsed.kind != TraceLineKind::Event) continue;
+      TraceEvent &event = *parsed.event;
 
       if (event_count >= kMaxTraceEvents) {
         std::cout << "{\"type\":\"error\",\"message\":\"Trace exceeds the 2000000 event safety limit\"}\n";
@@ -227,8 +248,8 @@ int main(int argc, char *argv[]) {
 
       event_count++;
       current_index = event_count;
-      current_event = &(*event);
-      processor.process(*event);
+      current_event = &event;
+      processor.process(event);
       current_event = nullptr;
       batch_count++;
 
@@ -340,9 +361,11 @@ int main(int argc, char *argv[]) {
     std::cout << "}";
 
     std::cout << ",";
-    JsonOutput::write_profile_metadata(std::cout, profile, cfg,
-                                       ArgParser::prefetch_policy_name(prefetch_policy),
-                                       prefetch_degree, processor.get_num_cores());
+    write_fragment([&](std::ostream &out) {
+      JsonOutput::write_profile_metadata(out, profile, cfg,
+                                         ArgParser::prefetch_policy_name(prefetch_policy),
+                                         prefetch_degree, processor.get_num_cores());
+    });
 
     // Coherence stats
     std::cout << ",\"coherence\":{\"invalidations\":" << stats.coherence_invalidations
@@ -422,13 +445,15 @@ int main(int argc, char *argv[]) {
               << "}}";
 
     std::cout << ",";
-    JsonOutput::write_execution_unavailable(
-        std::cout,
-        "Execution-engine estimates are not available in streaming multi-core mode yet.");
+    write_fragment([](std::ostream &out) {
+      JsonOutput::write_execution_unavailable(
+          out, "Execution-engine estimates are not available in streaming multi-core mode yet.");
+    });
     std::cout << ",";
-    JsonOutput::write_execution_subsystem_unavailable(
-        std::cout,
-        "Execution-engine estimates are not available in streaming multi-core mode yet.");
+    write_fragment([](std::ostream &out) {
+      JsonOutput::write_execution_subsystem_unavailable(
+          out, "Execution-engine estimates are not available in streaming multi-core mode yet.");
+    });
 
     // Prefetch stats (if enabled)
     if (prefetch_policy != PrefetchPolicy::NONE) {
@@ -490,6 +515,12 @@ int main(int argc, char *argv[]) {
       std::cout << "}";
     }
 
+    if (trace_parser.manifest().version == 2) {
+      std::cout << ",";
+      JsonOutput::write_binary_attribution(
+          std::cout, trace_parser.manifest(), processor.get_code_hotspots(), cfg);
+    }
+
     std::cout << "}\n" << std::flush;
     return 0;
   }
@@ -499,18 +530,33 @@ int main(int argc, char *argv[]) {
   std::unordered_set<uint32_t> threads;
 
   // Parse trace events
-  std::string line;
-  while (std::getline(std::cin, line)) {
-    auto event = parse_trace_event(line);
-    if (event) {
+  TraceParser trace_parser;
+  while (auto input = trace_parser.next(std::cin)) {
+    auto &parsed = *input;
+    if (parsed.kind == TraceLineKind::Error) {
+      std::cerr << "Error: " << parsed.error << "\n";
+      return 2;
+    }
+    if (parsed.kind == TraceLineKind::Event) {
+      TraceEvent &event = *parsed.event;
       if (events.size() >= kMaxTraceEvents) {
         std::cerr << "Error: trace exceeds the " << kMaxTraceEvents
                   << " event safety limit\n";
         return 2;
       }
-      threads.insert(event->thread_id);
-      events.push_back(*event);
+      threads.insert(event.thread_id);
+      events.push_back(std::move(event));
     }
+  }
+
+  const bool has_code_locations =
+      std::any_of(events.begin(), events.end(), [](const TraceEvent &event) {
+        return event.code_location.has_value();
+      });
+  if (opts.cache_segments && has_code_locations) {
+    std::cerr << "Warning: segment caching is disabled for attributed traces "
+                 "to preserve per-code-location metrics.\n";
+    opts.cache_segments = false;
   }
 
   bool multicore = threads.size() > 1;
@@ -862,6 +908,12 @@ int main(int argc, char *argv[]) {
       }
 
       // Output L1 cache state for visualization
+      if (trace_parser.manifest().version == 2) {
+        std::cout << ",\n  ";
+        JsonOutput::write_binary_attribution(
+            std::cout, trace_parser.manifest(), processor.get_code_hotspots(), cfg);
+      }
+
       std::cout << ",\n  \"cacheState\": {\"l1d\": [";
       const auto& cache_sys = processor.get_cache_system();
       for (int core = 0; core < num_cores; core++) {
@@ -1274,6 +1326,12 @@ int main(int argc, char *argv[]) {
       }
 
       // Output L1 cache state for visualization (single core = core 0)
+      if (trace_parser.manifest().version == 2) {
+        std::cout << ",\n  ";
+        JsonOutput::write_binary_attribution(
+            std::cout, trace_parser.manifest(), processor.get_code_hotspots(), cfg);
+      }
+
       std::cout << ",\n  \"cacheState\": {\"l1d\": [";
       const auto& cache_sys = processor.get_cache_system();
       JsonOutput::write_cache_state(std::cout, cache_sys.get_l1d(), 0, true, false);  // false = single-core mode

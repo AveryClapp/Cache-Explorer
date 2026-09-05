@@ -1,5 +1,6 @@
 #include "../include/TraceProcessor.hpp"
 #include "../include/TraceEvent.hpp"
+#include "../include/FastIO.hpp"
 #include "../profiles/HardwarePresets.hpp"
 #include <cassert>
 #include <iostream>
@@ -199,6 +200,28 @@ void test_prefetching_enabled() {
   std::cout << "[PASS] test_prefetching_enabled\n";
 }
 
+void test_code_hotspot_tracking() {
+  TraceProcessor processor(make_test_hierarchy());
+  TraceEvent event;
+  event.address = 0x4000;
+  event.size = 4;
+  event.code_location = TraceCodeLocation{1, 0x1234};
+
+  processor.process(event);
+  event.is_write = true;
+  processor.process(event);
+
+  const auto hotspots = processor.get_code_hotspots();
+  assert(hotspots.size() == 1);
+  assert(hotspots[0].location == *event.code_location);
+  assert(hotspots[0].accesses == 2);
+  assert(hotspots[0].reads == 1);
+  assert(hotspots[0].writes == 1);
+  assert(hotspots[0].l1d_hits == 1);
+  assert(hotspots[0].l1d_misses == 1);
+  std::cout << "[PASS] test_code_hotspot_tracking\n";
+}
+
 void test_parse_trace_event_read() {
   auto event = parse_trace_event("L 0x7fff1234 4 main.c:10 T0");
   assert(event.has_value());
@@ -250,6 +273,55 @@ void test_parse_trace_event_comment() {
   auto event = parse_trace_event("# This is a comment");
   assert(!event.has_value());
   std::cout << "[PASS] test_parse_trace_event_comment\n";
+}
+
+void test_parse_trace_event_capture_pc() {
+  auto event = parse_trace_event(
+      "L 0x1000 4 unknown:0 T3 C0x4012f4 B0x400000 R0x12f4");
+  assert(event.has_value());
+  assert(event->thread_id == 3);
+  assert(event->code_address.has_value());
+  assert(*event->code_address == 0x4012f4ULL);
+  assert(event->code_image_base == 0x400000ULL);
+  assert(event->code_rva == 0x12f4ULL);
+  assert(!event->code_site_id.has_value());
+  std::cout << "[PASS] test_parse_trace_event_capture_pc\n";
+}
+
+void test_parse_trace_event_v2_site() {
+  auto event = parse_trace_event(
+      "S 0x2000 8 unknown:0 T4 K7 future-extension");
+  assert(event.has_value());
+  assert(event->thread_id == 4);
+  assert(event->code_site_id.has_value());
+  assert(*event->code_site_id == 7);
+  assert(!event->code_address.has_value());
+  std::cout << "[PASS] test_parse_trace_event_v2_site\n";
+}
+
+void test_parse_trace_event_invalid_attribution() {
+  assert(!parse_trace_event(
+      "L 0x1000 4 unknown:0 T1 C401000").has_value());
+  assert(!parse_trace_event(
+      "L 0x1000 4 unknown:0 T1 K4294967296").has_value());
+  assert(!parse_trace_event(
+      "L 0x1000 4 unknown:0 T1 C0x1 C0x2").has_value());
+  std::cout << "[PASS] test_parse_trace_event_invalid_attribution\n";
+}
+
+void test_fast_parser_capture_pc() {
+  const std::string line =
+      "L 0x1000 4 unknown:0 T5 C0x4012f4 B0x400000 R0x12f4 K9";
+  auto event = parse_trace_event_fast(line.data(), line.data() + line.size());
+  assert(event.has_value());
+  assert(event->thread_id == 5);
+  assert(event->code_address.has_value());
+  assert(*event->code_address == 0x4012f4ULL);
+  assert(event->code_image_base == 0x400000ULL);
+  assert(event->code_rva == 0x12f4ULL);
+  assert(event->code_site_id.has_value());
+  assert(*event->code_site_id == 9);
+  std::cout << "[PASS] test_fast_parser_capture_pc\n";
 }
 
 void test_cross_cache_line_access() {
@@ -364,6 +436,17 @@ void test_pin_store_format_with_source() {
   std::cout << "[PASS] test_pin_store_format_with_source\n";
 }
 
+void test_pin_windows_path_source() {
+  auto event = parse_trace_event(
+      "L 0x401000 4 C:\\games\\engine\\renderer.cpp:314 T3");
+  assert(event.has_value());
+  assert(event->address == 0x401000ULL);
+  assert(event->file == "C:\\games\\engine\\renderer.cpp");
+  assert(event->line == 314);
+  assert(event->thread_id == 3);
+  std::cout << "[PASS] test_pin_windows_path_source\n";
+}
+
 void test_pin_multibyte_access() {
   // 16-byte access (e.g. XMM register load)
   auto event = parse_trace_event("L 0x1000 16 memops.c:7 T0");
@@ -402,6 +485,7 @@ int main() {
   test_bottleneck_summary_and_source_annotations();
   test_event_callback();
   test_prefetching_enabled();
+  test_code_hotspot_tracking();
 
   // Trace parsing
   test_parse_trace_event_read();
@@ -410,6 +494,10 @@ int main() {
   test_parse_trace_event_invalid();
   test_parse_trace_event_empty();
   test_parse_trace_event_comment();
+  test_parse_trace_event_capture_pc();
+  test_parse_trace_event_v2_site();
+  test_parse_trace_event_invalid_attribution();
+  test_fast_parser_capture_pc();
 
   // Advanced features
   test_cross_cache_line_access();
@@ -421,9 +509,10 @@ int main() {
   test_pin_store_format_no_source();
   test_pin_load_path_qualified_source();
   test_pin_store_format_with_source();
+  test_pin_windows_path_source();
   test_pin_multibyte_access();
   test_pin_high_thread_id();
 
-  std::cout << "\n=== All 23 TraceProcessor tests passed! ===\n";
+  std::cout << "\n=== All 29 TraceProcessor tests passed! ===\n";
   return 0;
 }

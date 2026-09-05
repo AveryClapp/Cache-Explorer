@@ -1,0 +1,58 @@
+name: Windows x86 Pin Preview
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/windows-x86-pin.yml'
+      - 'backend/pin-tool/**'
+      - 'backend/cache-simulator/CMakeLists.txt'
+      - 'backend/cache-simulator/src/PinNormalizer.cpp'
+      - 'backend/cache-simulator/src/PdbSymbolizer.cpp'
+      - 'backend/scripts/*symbolize.ps1'
+      - 'backend/scripts/*pin.ps1'
+      - 'backend/scripts/hardware-explorer-pe.ps1'
+      - 'tests/windows-x86-pin/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  normalize:
+    name: Portable Pin format validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - run: cmake -S backend/cache-simulator -B build-pin && cmake --build build-pin --target hardware-explorer-normalize-pin
+      - shell: pwsh
+        run: ./tests/windows-x86-pin/test-normalizer.ps1 -Normalizer ./build-pin/hardware-explorer-normalize-pin
+
+  capture:
+    name: Capture an uninstrumented PE32 executable and DLL
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Download pinned Intel Pin and supported LLVM toolchain
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $kit = Join-Path $env:RUNNER_TEMP 'intel-pin-sdk'
+          $llvm = Join-Path $env:RUNNER_TEMP 'llvm16'
+          $zip = Join-Path $env:RUNNER_TEMP 'pin.zip'
+          $installer = Join-Path $env:RUNNER_TEMP 'llvm16.exe'
+          & curl.exe --fail --location --retry 3 --max-time 120 --output $zip 'https://software.intel.com/sites/landingpage/pintool/downloads/pin-external-4.3-99850-gce5652921-clang-windows.zip'
+          if ($LASTEXITCODE -ne 0) { throw 'Intel Pin SDK download failed' }
+          if ((Get-FileHash $zip).Hash -ne '286f07529a895f3c24a61b42ddd2228280214370fb7b1e6481cf3db85f265d90') { throw 'Pin SDK checksum mismatch' }
+          Expand-Archive -LiteralPath $zip -DestinationPath $kit
+          Invoke-WebRequest 'https://github.com/llvm/llvm-project/releases/download/llvmorg-16.0.6/LLVM-16.0.6-win64.exe' -OutFile $installer
+          if ((Get-FileHash $installer).Hash -ne '9a8cd30cc92fdf403d96217347861545a5bbff7a1a1a8527b5785ff0e9101111') { throw 'LLVM checksum mismatch' }
+          & 7z x $installer "-o$llvm" -y | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'LLVM extraction failed' }
+          "PIN_TEST_ROOT=$kit/pin-external-4.3-99850-gce5652921-clang-windows" >> $env:GITHUB_ENV
+          "PIN_TEST_TOOLCHAIN=$llvm" >> $env:GITHUB_ENV
+          Get-CimInstance Win32_Processor | Select-Object Name
+      - name: Build, capture, normalize and analyze without source instrumentation
+        shell: pwsh
+        run: ./tests/windows-x86-pin/run-smoke.ps1 -PinRoot $env:PIN_TEST_ROOT -Toolchain $env:PIN_TEST_TOOLCHAIN
