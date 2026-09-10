@@ -49,7 +49,7 @@ jobs:
           ./backend/scripts/build-passes.sh ${{ matrix.llvm-version }} ./passes
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: CacheProfiler-llvm${{ matrix.llvm-version }}-${{ matrix.platform }}
           path: ./passes/CacheProfiler-llvm${{ matrix.llvm-version }}-*.so
