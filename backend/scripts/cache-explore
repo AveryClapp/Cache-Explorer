@@ -1009,8 +1009,10 @@ else
   PIPE_CODES=("${PIPESTATUS[@]}")
 fi
 set -e
+# PIPE_CODES[0] is the analyzed program's own exit status (e.g. `return sum;`),
+# which is not an analysis failure. Only simulator/enrichment failures are.
 EXIT_CODE=0
-for pipeline_code in "${PIPE_CODES[@]}"; do
+for pipeline_code in "${PIPE_CODES[@]:1}"; do
   if [[ "$pipeline_code" -ne 0 ]]; then EXIT_CODE="$pipeline_code"; fi
 done
 

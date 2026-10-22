@@ -111,7 +111,8 @@ export function HardwareLab({ files, config, payload, scenario, onChange, onOpen
         setStatus(index === 0 ? 'Running baseline (1 of 2)…' : 'Running scenario (2 of 2)…')
         const response = await fetch(`${API_BASE}/compile`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
           body: JSON.stringify({ ...snapshot.settings, files: snapshot.files, language: snapshot.files[0].language, config: snapshot.config, hardwareLab, cacheSegments: false, timeout: 60000 }) })
-        const data = await response.json()
+        // A proxy or crashed backend can answer with HTML; report the status, not a JSON parse error.
+        const data = await response.json().catch(() => ({ error: `Analysis failed (${response.status}); the backend did not return JSON.` }))
         if (!response.ok || data.error) throw new Error(data.message || data.error || `Analysis failed (${response.status}).`)
         results.push(projectRun(data as CacheResult))
       }
@@ -159,7 +160,7 @@ export function HardwareLab({ files, config, payload, scenario, onChange, onOpen
         {running ? <button className="btn" onClick={() => abortRef.current?.abort()}>Cancel comparison</button> : <button className="btn btn-primary" disabled={hosted} onClick={() => void run()}>Run baseline &amp; scenario</button>}
       </aside>
       <section className="lab-results" aria-label="Scenario evidence"><h2>3. Inspect the difference</h2>
-        {current.report ? <><p className="lab-note">Saved report · {current.report.generatedAt}. Imported reports are unverified until replayed.</p><Comparison baseline={current.report.baseline} variant={current.report.variant} /></>
+        {current.report ? <><p className="lab-note">Saved report · <time dateTime={current.report.generatedAt}>{new Date(current.report.generatedAt).toLocaleString()}</time>. Imported reports are unverified until replayed.</p><Comparison baseline={current.report.baseline} variant={current.report.variant} /></>
           : <div className="lab-empty"><h3>One baseline, one controlled change</h3><p>Run both models to compare cache misses, translation pressure and estimated execution cost. Source-level evidence will appear here.</p><p>Imports and exports work offline. Running code requires your local compiler and backend. Review imported source before running it.</p></div>}
       </section>
     </div>}

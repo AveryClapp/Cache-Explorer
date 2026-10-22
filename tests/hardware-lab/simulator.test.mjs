@@ -13,6 +13,18 @@ const memoryTrace = Array.from({ length: 256 }, (_, i) => `I 0x100000 16 test.c:
 test('every web parameter initial value is accepted by the native model', () => {
   for (const field of fields) execFileSync(simulator, ['--config', 'intel', '--check-config', '--lab', `${field.key}=${field.initial}`]);
 })
+test('web parameter bounds and choices match the native validator', () => {
+  const check = entry => spawnSync(simulator, ['--config', 'intel', '--check-config', '--lab', entry], { encoding: 'utf8' })
+  for (const field of fields) {
+    if (field.values) {
+      for (const value of field.values) assert.equal(check(`${field.key}=${value}`).status, 0, `${field.key}=${value}`)
+      continue
+    }
+    // An in-range value can still form invalid geometry with the preset, so only the range verdict is compared.
+    for (const value of [field.min, field.max]) assert.doesNotMatch(check(`${field.key}=${value}`).stderr, /outside supported range/, `${field.key}=${value}`)
+    for (const value of [field.min - 1, field.max + 1]) assert.match(check(`${field.key}=${value}`).stderr, /outside supported range/, `${field.key}=${value}`)
+  }
+})
 test('legacy output stays stable while effective settings and evidence are additive', () => {
   const base = run(memoryTrace)
   const changed = run(memoryTrace, ['--lab', 'memory.assumedMlp=4', '--lab', 'tlb.pageSize=2097152'])

@@ -33,6 +33,17 @@ try {
     })
     assert.deepEqual(navProblems, [], `Navigation labels overlap or are obscured at ${width}px`)
   }
+  // Playwright clicks scroll programmatically, even inside overflow:hidden.
+  // Reach the run action the way a user does: with the wheel, on a laptop-height viewport.
+  for (const [width, height] of [[1280, 720], [390, 844]]) {
+    await page.setViewportSize({ width, height })
+    await page.mouse.move(width / 2, height / 2)
+    await page.mouse.wheel(0, 5000)
+    await page.waitForTimeout(200)
+    const run = await page.getByRole('button', { name: 'Run baseline & scenario', exact: true }).boundingBox()
+    assert(run && run.y >= 0 && run.y + run.height <= height, `Run action cannot be scrolled into view at ${width}x${height}`)
+    await page.mouse.wheel(0, -5000)
+  }
   await page.setViewportSize({ width: 1440, height: 1000 })
   assert.equal(await page.evaluate(() => performance.getEntriesByType('resource').some(entry => /monaco|EditorPanel|editor\.api/.test(entry.name))), false, 'Lab must not load the editor')
   await page.getByRole('button', { name: 'Run baseline & scenario', exact: true }).click()

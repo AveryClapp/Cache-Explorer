@@ -1,4 +1,4 @@
-.hardware-lab { max-width: 1440px; width: 100%; margin: 0 auto; padding: 28px; }
+.hardware-lab { max-width: 1440px; width: 100%; margin: 0 auto; padding: 28px; overflow: auto; }
 .lab-heading { display: flex; justify-content: space-between; gap: 24px; align-items: start; margin-bottom: 24px; }
 .lab-heading h1 { font-size: 24px; font-weight: 600; letter-spacing: -.02em; margin: 6px 0 12px; color: var(--text-bright); }
 .lab-eyebrow { color: var(--accent); font-size: 12px; }
@@ -10,7 +10,8 @@
 .lab-card { border: 1px solid var(--border); background: var(--panel); border-radius: 8px; padding: 16px; min-width: 0; margin: 0; }
 .lab-card legend { padding: 0 6px; color: var(--text-bright); font-weight: 600; }
 .lab-card label { display: grid; gap: 6px; font-size: 12px; margin: 12px 0; min-width: 0; }
-.lab-card input, .lab-card select { width: 100%; min-width: 0; padding: 8px; background: var(--void); color: var(--text-bright); border: 1px solid var(--border); border-radius: 4px; font: inherit; }
+.lab-card input, .lab-card select { width: 100%; min-width: 0; padding: 8px; background-color: var(--void); color: var(--text-bright); border: 1px solid var(--border); border-radius: 4px; font: inherit; }
+.lab-card select { padding-right: 28px; }
 .lab-card input:focus-visible, .lab-card select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .lab-card p { font-size: 12px; margin: 12px 0; }
 .lab-card details { margin-top: 12px; }

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { captureScenario, parseScenario, sourceDeltas, validateOverrides } from '../../frontend/src/lab/scenario.ts'
+import { captureScenario, fields, parseScenario, sourceDeltas, validateOverrides } from '../../frontend/src/lab/scenario.ts'
+import { normalizeHardwareLab } from '../../backend/server/services/hardwareLab.js'
 
 const source = [{ name: 'main.c', code: 'int main(void) { return 0; }', language: 'c' }]
 const scenario = () => captureScenario(source, 'educational', { optLevel: '-O0', limit: 1000000 })
@@ -27,6 +28,17 @@ test('scenario import strictly bounds files, names, settings, reports and unknow
   for (const patch of bad) assert.throws(() => parseScenario(JSON.stringify({ ...scenario(), ...patch })))
   assert.throws(() => parseScenario(' '.repeat(1024 * 1024 + 1)))
   assert.throws(() => validateOverrides({ 'cache.lineSize': '63' }))
+})
+test('browser and server override validation agree on every field boundary', () => {
+  const cases = [{}, { unknown: '1' }, { 'cache.lineSize': '48' }, { 'tlb.pageSize': '12288' }]
+  for (const field of fields) {
+    const values = field.values ? [...field.values, 'btfnt', ''] : [field.min - 1, field.min, `0${field.min}`, field.max, field.max + 1, '0x10', ' 1', '1.5']
+    for (const value of values) cases.push({ [field.key]: String(value) })
+  }
+  const verdict = validate => { try { return validate() } catch { return 'rejected' } }
+  for (const input of cases) {
+    assert.deepEqual(verdict(() => validateOverrides(input)), verdict(() => normalizeHardwareLab(input)), JSON.stringify(input))
+  }
 })
 test('report snapshots round trip but missing source rows never imply zero cost', () => {
   const baseline = { ...run(), lines: [{ file: 'main.c', line: 5, misses: 5, stallCycles: 10, explanation: 'bounded sample' }] }

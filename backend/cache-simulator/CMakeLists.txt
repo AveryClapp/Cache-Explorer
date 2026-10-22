@@ -93,5 +93,8 @@ foreach(test CacheLevelTest CacheSystemTest MESICoherenceTest MultiCorePrefetchT
     AdvancedInstrumentationTest MultiCoreTLBTest MultiCoreTraceProcessorTest ArgParserTest
     TraceProcessorTest TraceParserTest JsonOutputTest SegmentCacheTest BranchPredictorTest
     PipelineModelTest HardwareLabTest)
+  # Tests check with assert(); keep it active in Release, where NDEBUG would
+  # otherwise compile every check (and its side effects) out.
+  target_compile_options(${test} PRIVATE -UNDEBUG)
   add_test(NAME ${test} COMMAND ${test})
 endforeach()
