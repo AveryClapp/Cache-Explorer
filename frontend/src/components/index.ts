@@ -40,7 +40,6 @@ export { LoadingState } from './LoadingState'
 export { EmptyState } from './EmptyState'
 export { ErrorDisplay } from './ErrorDisplay'
 export { ResultsPanel } from './ResultsPanel'
-export { EditorPanel } from './EditorPanel'
 
 // File Management
 export { FileManager } from './FileManager'

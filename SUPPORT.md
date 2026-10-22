@@ -1,6 +1,6 @@
 # Support
 
-Cache Explorer is a community-maintained open-source project. The best support
+Hardware Explorer Preview is a community-maintained open-source project. The best support
 path depends on what you need.
 
 ## Questions and Ideas

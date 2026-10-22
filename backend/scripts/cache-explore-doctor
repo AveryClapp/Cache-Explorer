@@ -103,8 +103,8 @@ compiler_cmd() {
   fi
 }
 
-echo "Cache Explorer Doctor"
-echo "====================="
+echo "Hardware Explorer Preview Doctor"
+echo "================================"
 echo ""
 
 CLANG_CMD="$(compiler_cmd)"

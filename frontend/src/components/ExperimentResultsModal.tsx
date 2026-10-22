@@ -12,13 +12,13 @@ interface ExperimentResultsModalProps {
   hardwareConfigIds: string[]
   templates: ExperimentTemplate[]
   selectedTemplateId: string
+  templatePending: boolean
   onVariantsTextChange: (value: string) => void
   onTemplateChange: (value: string) => void
   onApplyTemplate: () => void
   onRun: () => void
   onExportCSV?: () => void
   onExportJSON?: () => void
-  onClose: () => void
 }
 
 function formatCycles(value: number | null | undefined) {
@@ -85,29 +85,30 @@ export function ExperimentResultsModal({
   hardwareConfigIds,
   templates,
   selectedTemplateId,
+  templatePending,
   onVariantsTextChange,
   onTemplateChange,
   onApplyTemplate,
   onRun,
   onExportCSV,
   onExportJSON,
-  onClose,
 }: ExperimentResultsModalProps) {
   const winners = winnerRows(result)
   const overall = overallWinner(result)
   const selectedTemplate = templates.find(template => template.id === selectedTemplateId)
 
   return (
-    <div className="batch-modal-overlay" onClick={() => !running && onClose()}>
+    <section className="batch-modal-overlay product-surface-overlay" aria-labelledby="hardware-experiment-title">
       <div
-        className="batch-modal experiment-modal"
-        onClick={event => event.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
+        className="batch-modal experiment-modal product-surface-panel"
+        role="region"
         aria-labelledby="hardware-experiment-title"
       >
         <div className="batch-modal-header">
-          <span className="batch-modal-title" id="hardware-experiment-title">Hardware Experiment</span>
+          <div className="product-surface-title">
+            <h1 className="batch-modal-title" id="hardware-experiment-title">Hardware Experiment</h1>
+            <p>Compare source variants across the CPU profiles in your run set.</p>
+          </div>
           <div className="batch-modal-header-actions">
             {onExportCSV && (
               <button className="btn" onClick={onExportCSV} disabled={!result}>
@@ -119,7 +120,6 @@ export function ExperimentResultsModal({
                 Export JSON
               </button>
             )}
-            <button className="batch-modal-close" onClick={onClose} aria-label="Close hardware experiment">×</button>
           </div>
         </div>
         <div className="batch-modal-content">
@@ -141,12 +141,12 @@ export function ExperimentResultsModal({
                 {selectedTemplate?.description || ''}
                 {selectedTemplate?.verifiedWorkloadId && (
                   <span className="experiment-template-verified">
-                    Verified {selectedTemplate.verifiedWorkloadId}
+                    Workload fixture {selectedTemplate.verifiedWorkloadId}
                   </span>
                 )}
               </div>
               <button className="btn experiment-template-apply" onClick={onApplyTemplate} disabled={running || !selectedTemplate}>
-                Apply
+                {templatePending ? 'Apply' : 'Applied'}
               </button>
             </div>
           )}
@@ -173,10 +173,16 @@ export function ExperimentResultsModal({
                 ))}
               </div>
             </div>
-            <button className="btn-primary experiment-run" onClick={onRun} disabled={running}>
+            <button className="btn-primary experiment-run" onClick={onRun} disabled={running || templatePending}>
               {running ? 'Running...' : 'Run'}
             </button>
           </div>
+
+          {templatePending && (
+            <div className="experiment-setup-notice" role="status">
+              Apply this template to load its matching source and run settings before running the experiment.
+            </div>
+          )}
 
           {error && <div className="experiment-error" role="alert">{error}</div>}
 
@@ -252,6 +258,6 @@ export function ExperimentResultsModal({
           )}
         </div>
       </div>
-    </div>
+    </section>
   )
 }

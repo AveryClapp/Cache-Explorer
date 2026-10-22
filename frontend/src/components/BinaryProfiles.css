@@ -1,0 +1,54 @@
+.binary-profiles { width: min(1200px, 100%); margin: 0 auto; padding: 28px; color: var(--text-primary); overflow: auto; }
+.binary-heading, .binary-export, .binary-filters { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.binary-heading h1 { font-size: 28px; color: var(--text-bright); margin: 6px 0 10px; }
+.binary-eyebrow, .binary-muted, .binary-privacy, .binary-profiles small { color: var(--text-muted); }
+.binary-eyebrow { font-size: 11px; letter-spacing: .1em; }
+.binary-privacy { margin: 18px 0 24px; font-size: 12px; }
+.binary-file { display: flex; flex-direction: column; gap: 8px; }
+.binary-file input { max-width: 280px; }
+.binary-profiles h2 { font-size: 16px; color: var(--text-bright); }
+.binary-intro { max-width: 800px; padding: 26px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; line-height: 1.8; }
+.binary-intro ol { padding-left: 20px; }
+.binary-profiles code { font-family: var(--font-code); overflow-wrap: anywhere; }
+.binary-provenance { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.binary-provenance > div { background: var(--panel); padding: 18px; display: grid; gap: 8px; }
+.binary-provenance span { font-size: 12px; color: var(--text-muted); }
+.binary-provenance strong { color: var(--text-bright); }
+.binary-notes { margin: 20px 0; font-size: 12px; line-height: 1.7; }
+.binary-notes summary { cursor: pointer; }
+.binary-notes pre { max-height: 220px; overflow: auto; }
+.binary-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; }
+.binary-layout aside { max-height: 650px; overflow: auto; }
+.binary-layout aside button { width: 100%; text-align: left; padding: 12px; background: transparent; color: var(--text-primary); border: 1px solid transparent; border-radius: 6px; cursor: pointer; }
+.binary-layout aside button[aria-pressed="true"] { background: var(--panel); border-color: var(--border); color: var(--text-bright); }
+.binary-layout aside span { display: block; overflow-wrap: anywhere; }
+.binary-profiles small { display: block; font-size: 11px; font-weight: 400; margin-top: 6px; }
+.binary-filters { align-items: end; }
+.binary-filters label { display: grid; gap: 7px; font-size: 12px; }
+.binary-filters input, .binary-filters select { background: var(--panel); border: 1px solid var(--border); border-radius: 5px; color: var(--text-bright); padding: 10px; }
+.binary-muted { font-size: 11px; margin: 16px 0; }
+.binary-function { border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; overflow: hidden; }
+.binary-function summary { display: flex; justify-content: space-between; align-items: center; gap: 12px; cursor: pointer; padding: 15px; background: var(--panel); }
+.binary-function summary > span:first-child { overflow-wrap: anywhere; min-width: 0; }
+.binary-function summary > span:first-child::before { content: '▸ '; color: var(--text-muted); }
+.binary-function[open] summary > span:first-child::before { content: '▾ '; }
+.binary-function summary > span:last-child { text-align: right; flex-shrink: 0; }
+.binary-table-scroll { max-height: 420px; overflow: auto; }
+.binary-profiles table { border-collapse: collapse; width: 100%; font-size: 12px; }
+.binary-profiles caption { text-align: left; padding: 10px; color: var(--text-muted); }
+.binary-profiles th, .binary-profiles td { padding: 10px; text-align: left; white-space: nowrap; border-top: 1px solid var(--border); }
+.binary-export { border-top: 1px solid var(--border); margin-top: 28px; padding-top: 22px; font-size: 12px; }
+.binary-export > div { flex: 1 1 320px; }
+.binary-export p { color: var(--text-muted); line-height: 1.6; }
+.binary-export button:not(.btn-primary) { background: var(--panel); color: var(--text-primary); padding: 10px 14px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; }
+.binary-error { border: 1px solid var(--border); padding: 14px; color: var(--text-bright); }
+.binary-profiles :focus-visible { outline: 2px solid var(--phosphor); outline-offset: 3px; }
+@media (max-width: 700px) {
+  .binary-profiles { padding: 18px; }
+  .binary-provenance { grid-template-columns: 1fr; }
+  .binary-layout { grid-template-columns: 1fr; gap: 14px; }
+  .binary-layout aside { max-height: 180px; }
+  .binary-heading h1 { font-size: 24px; }
+  .binary-filters label { min-width: 0; flex: 1 1 160px; }
+  .binary-filters input { min-width: 0; }
+}

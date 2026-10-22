@@ -7,9 +7,11 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
+        // Keep the app shell's shared React runtime in a stable chunk. Monaco is
+        // reached only through the lazy EditorPanel boundary and is intentionally
+        // left to Rollup's dynamic-import chunking.
+        onlyExplicitManualChunks: true,
         manualChunks: {
-          // Split Monaco editor into its own chunk (~2.5MB)
-          monaco: ['monaco-editor', '@monaco-editor/react'],
           // Split React into its own chunk
           react: ['react', 'react-dom'],
         },

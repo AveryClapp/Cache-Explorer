@@ -23,7 +23,7 @@ export const EXPERIMENT_TEMPLATES: ExperimentTemplate[] = [
     exampleKey: 'conv2d_kernel',
     optLevel: '-O2',
     prefetchPolicy: 'adaptive',
-    eventLimit: 1000000,
+    eventLimit: 100000,
     fastMode: true,
     cacheSegments: true,
     verifiedWorkloadId: 'conv2d-intel14',

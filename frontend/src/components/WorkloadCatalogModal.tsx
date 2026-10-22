@@ -25,7 +25,6 @@ interface WorkloadCatalogModalProps {
   onRefreshHistory: () => void
   onIncludeStressChange: (includeStress: boolean) => void
   onLoadWorkload: (workload: WorkloadSnapshot) => void
-  onClose: () => void
 }
 
 function formatLimit(limit: number | undefined) {
@@ -188,7 +187,6 @@ export function WorkloadCatalogModal({
   onRefreshHistory,
   onIncludeStressChange,
   onLoadWorkload,
-  onClose,
 }: WorkloadCatalogModalProps) {
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<WorkloadStatusFilter>('all')
@@ -197,7 +195,10 @@ export function WorkloadCatalogModal({
   const hasWorkloads = workloads.length > 0
   const historyAvailable = history?.available && history.latest
   const normalizedQuery = query.trim().toLowerCase()
-  const durationDeltas = history?.durationDeltas || []
+  const durationDeltas = useMemo(
+    () => history?.durationDeltas || [],
+    [history?.durationDeltas],
+  )
   const deltaByWorkload = useMemo(() => (
     new Map(durationDeltas.map(delta => [delta.id, delta]))
   ), [durationDeltas])
@@ -223,16 +224,17 @@ export function WorkloadCatalogModal({
   }
 
   return (
-    <div className="batch-modal-overlay" onClick={() => !verifying && onClose()}>
+    <section className="batch-modal-overlay product-surface-overlay" aria-labelledby="verified-workloads-title">
       <div
-        className="batch-modal workload-modal"
-        onClick={event => event.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
+        className="batch-modal workload-modal product-surface-panel"
+        role="region"
         aria-labelledby="verified-workloads-title"
       >
         <div className="batch-modal-header">
-          <span className="batch-modal-title" id="verified-workloads-title">Verified Workloads</span>
+          <div className="product-surface-title">
+            <h1 className="batch-modal-title" id="verified-workloads-title">Verified Workloads</h1>
+            <p>Load and verify reproducible CPU modeling scenarios.</p>
+          </div>
           <div className="batch-modal-header-actions">
             {verification && (
               <span className={`workload-summary-chip ${verification.ok ? 'ok' : 'fail'}`}>
@@ -254,7 +256,6 @@ export function WorkloadCatalogModal({
             >
               {historyLoading ? 'History...' : 'History'}
             </button>
-            <button className="batch-modal-close" onClick={onClose} aria-label="Close verified workloads">×</button>
           </div>
         </div>
         <div className="batch-modal-content workload-modal-content">
@@ -539,6 +540,6 @@ export function WorkloadCatalogModal({
           </div>}
         </div>
       </div>
-    </div>
+    </section>
   )
 }

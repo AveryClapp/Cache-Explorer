@@ -1,13 +1,14 @@
 #include "../include/CacheLevel.hpp"
 
 CacheLevel::CacheLevel(const CacheConfig &cfg)
-    : config(cfg),
-      cached_offset_bits_(cfg.offset_bits()),
-      cached_index_bits_(cfg.index_bits()),
-      cached_tag_shift_(cfg.offset_bits() + cfg.index_bits()) {
+    : config(cfg), cached_offset_bits_(0), cached_index_bits_(0),
+      cached_tag_shift_(0) {
   if (!config.is_valid()) {
     throw std::invalid_argument("Invalid cache configuration");
   }
+  cached_offset_bits_ = config.offset_bits();
+  cached_index_bits_ = config.index_bits();
+  cached_tag_shift_ = cached_offset_bits_ + cached_index_bits_;
   int num_sets = config.num_sets();
   sets.resize(num_sets, std::vector<CacheLine>(config.associativity));
   plru_bits.resize(num_sets, 0);

@@ -24,11 +24,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Install LLVM 18
         run: |
-          wget https://apt.llvm.org/llvm.sh
+          curl --proto '=https' --tlsv1.2 --connect-timeout 10 --max-time 60 -fsSLo llvm.sh https://apt.llvm.org/llvm.sh
+          echo '03878e08f47b66cc95bc4b544b0db3c6d9ce8d60e6cf2492ae357984330a9eae  llvm.sh' | sha256sum -c -
           chmod +x llvm.sh
           sudo ./llvm.sh 18
           sudo apt-get install -y llvm-18-dev clang-18 lld-18
@@ -53,7 +54,7 @@ jobs:
         run: ./scripts/build.sh Release
 
       - name: Restore retained workload history
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: reports/workloads/history-cache
           key: workload-history-${{ github.run_id }}
@@ -147,13 +148,13 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
 
       - name: Upload dashboard artifact
-        uses: actions/upload-pages-artifact@v5
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
         with:
           path: site
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4

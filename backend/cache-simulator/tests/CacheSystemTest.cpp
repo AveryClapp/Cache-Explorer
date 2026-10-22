@@ -164,6 +164,32 @@ void test_single_line_access() {
   std::cout << "[PASS] test_single_line_access\n";
 }
 
+void test_empty_and_wrapping_accesses_are_bounded() {
+  MemoryAccess empty = {.address = 0, .size = 0, .is_write = false};
+  assert(split_access_to_cache_lines(empty, 64).empty());
+
+  MemoryAccess wrapping = {
+      .address = UINT64_MAX - 70, .size = 128, .is_write = true};
+  auto lines = split_access_to_cache_lines(wrapping, 64);
+  assert(lines.size() == 2);
+  assert(lines[0].line_address == UINT64_MAX - 127);
+  assert(lines[1].line_address == UINT64_MAX - 63);
+
+  assert(split_access_to_cache_lines(wrapping, 0).empty());
+  assert(split_access_to_cache_lines(wrapping, 63).empty());
+
+  bool rejected = false;
+  try {
+    MemoryAccess oversized = {
+        .address = 0, .size = UINT32_MAX, .is_write = false};
+    (void)split_access_to_cache_lines(oversized, 1);
+  } catch (const std::length_error &) {
+    rejected = true;
+  }
+  assert(rejected);
+  std::cout << "[PASS] test_empty_and_wrapping_accesses_are_bounded\n";
+}
+
 void test_hardware_presets_valid() {
   auto intel = make_intel_12th_gen_config();
   assert(intel.l1_data.is_valid());
@@ -525,6 +551,7 @@ int main() {
   test_exclusive_victim_behavior();
   test_cross_line_access();
   test_single_line_access();
+  test_empty_and_wrapping_accesses_are_bounded();
   test_hardware_presets_valid();
 
   // Eviction policy tests
@@ -548,6 +575,6 @@ int main() {
   test_hit_rate_bounds();
   test_miss_count_consistency();
 
-  std::cout << "\n=== All 25 tests passed! ===\n";
+  std::cout << "\n=== All 26 tests passed! ===\n";
   return 0;
 }

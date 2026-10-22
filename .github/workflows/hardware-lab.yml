@@ -1,0 +1,121 @@
+name: Hardware Lab Preview
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/hardware-lab.yml'
+      - 'backend/**'
+      - 'frontend/**'
+      - 'tests/hardware-lab/**'
+      - 'docker/**'
+      - 'docker-compose.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  fresh-install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            backend/server/package-lock.json
+      - name: Install LLVM (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-18 llvm-18-dev cmake ninja-build bc
+          echo '/usr/lib/llvm-18/bin' >> "$GITHUB_PATH"
+          echo 'LLVM_DIR=/usr/lib/llvm-18/lib/cmake/llvm' >> "$GITHUB_ENV"
+      - name: Install LLVM (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install llvm@21
+          llvm_prefix="$(brew --prefix llvm@21)"
+          echo "$llvm_prefix/bin" >> "$GITHUB_PATH"
+          echo "LLVM_DIR=$llvm_prefix/lib/cmake/llvm" >> "$GITHUB_ENV"
+          echo "SDKROOT=$(xcrun --show-sdk-path)" >> "$GITHUB_ENV"
+      - name: Fresh dependencies and native builds
+        run: |
+          npm ci --prefix frontend
+          npm ci --prefix backend/server
+          cmake -S backend/cache-simulator -B "$RUNNER_TEMP/lab-simulator" -DCMAKE_BUILD_TYPE=Debug
+          cmake --build "$RUNNER_TEMP/lab-simulator" --parallel 4
+          cmake -S backend/runtime -B "$RUNNER_TEMP/lab-runtime" -DCMAKE_BUILD_TYPE=Debug
+          cmake --build "$RUNNER_TEMP/lab-runtime" --parallel 4
+          cmake -S backend/llvm-pass -B "$RUNNER_TEMP/lab-pass" -DLLVM_DIR="$LLVM_DIR"
+          cmake --build "$RUNNER_TEMP/lab-pass" --parallel 4
+          echo "HARDWARE_EXPLORER_SIM=$RUNNER_TEMP/lab-simulator/cache-sim" >> "$GITHUB_ENV"
+          echo "HARDWARE_EXPLORER_PASS=$RUNNER_TEMP/lab-pass/CacheProfiler.so" >> "$GITHUB_ENV"
+          echo "HARDWARE_EXPLORER_RUNTIME=$RUNNER_TEMP/lab-runtime/libcache-explorer-rt.a" >> "$GITHUB_ENV"
+          echo "HARDWARE_EXPLORER_DATA_DIR=$RUNNER_TEMP/lab-data" >> "$GITHUB_ENV"
+          echo "HARDWARE_EXPLORER_CLI_PATH=$GITHUB_WORKSPACE/backend/scripts/cache-explore" >> "$GITHUB_ENV"
+      - name: Model contracts, native tests and actual source capture
+        run: |
+          ctest --test-dir "$RUNNER_TEMP/lab-simulator" --output-on-failure
+          ctest --test-dir "$RUNNER_TEMP/lab-runtime" --output-on-failure
+          npm test --prefix backend/server
+          node --test tests/hardware-lab/simulator.test.mjs tests/hardware-lab/cli.test.mjs
+          node --experimental-strip-types --test tests/hardware-lab/scenario.test.mjs
+          node tests/integration/check-profile-drift.mjs
+      - name: Frontend build, lint and performance budgets
+        run: |
+          npm run build --prefix frontend
+          npm run lint --prefix frontend
+          npm run tokens:check --prefix frontend
+          npm run bundle:check --prefix frontend
+      - name: Live default desktop/mobile and saved-scenario journey
+        env:
+          HARDWARE_EXPLORER_PORT: '3002'
+          VITE_API_BASE: http://127.0.0.1:3002
+          VITE_WS_URL: ws://127.0.0.1:3002/ws
+        run: |
+          node backend/server/server.js > "$RUNNER_TEMP/lab-backend.log" 2>&1 &
+          backend_pid=$!
+          npm run dev --prefix frontend -- --host 127.0.0.1 --port 5194 --strictPort > "$RUNNER_TEMP/lab-frontend.log" 2>&1 &
+          frontend_pid=$!
+          trap 'kill "$backend_pid" "$frontend_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3002/health >/dev/null && curl --fail --silent http://127.0.0.1:5194/ >/dev/null; then break; fi
+            sleep 1
+          done
+          node --experimental-strip-types frontend/scripts/hardware-lab-smoke.mjs
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        if: always()
+        with:
+          name: hardware-lab-logs-${{ matrix.os }}
+          path: ${{ runner.temp }}/lab-*.log
+          if-no-files-found: ignore
+
+  local-docker:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - name: Build and run the local Docker product (no publishing)
+        run: |
+          npm ci --prefix frontend
+          docker compose --project-name hardware-lab-ci build
+          docker compose --project-name hardware-lab-ci up --detach --wait --wait-timeout 180
+      - name: Real default scenario and replay through the production frontend
+        env:
+          HARDWARE_EXPLORER_LAB_URL: http://127.0.0.1:8080
+        run: node --experimental-strip-types frontend/scripts/hardware-lab-smoke.mjs
+      - name: Container logs and cleanup
+        if: always()
+        run: |
+          docker compose --project-name hardware-lab-ci logs --no-color
+          docker compose --project-name hardware-lab-ci down

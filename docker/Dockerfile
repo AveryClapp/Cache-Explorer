@@ -1,11 +1,11 @@
-# Cache Explorer Sandbox Container
+# Hardware Explorer Preview sandbox container
 # Isolated environment for compiling and running untrusted user code
 # Multi-stage build: compiles components from source for Linux compatibility
 
 # ============================================================
 # Stage 1: Build Cache Explorer components
 # ============================================================
-FROM ubuntu:22.04 AS builder
+FROM ubuntu:22.04@sha256:2edbbc5dc405e9612ba3584ce95480277e3eb374407b5505fe26f17df77c7dbc AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -23,6 +23,7 @@ RUN for attempt in 1 2 3 4 5; do \
       if [ "$attempt" -eq 5 ]; then exit 1; fi; \
       sleep 5; \
     done \
+    && echo "8b2a587ffd672c4687e7581dad4b2f6c1bb2ad6b480cd9771ba2ff48e0b8c75d  /etc/apt/trusted.gpg.d/apt.llvm.org.asc" | sha256sum --check --strict \
     && echo "deb https://apt.llvm.org/jammy/ llvm-toolchain-jammy-20 main" > /etc/apt/sources.list.d/llvm.list
 
 # Install build dependencies
@@ -58,6 +59,7 @@ RUN mkdir -p /build/runtime/build && cd /build/runtime/build \
     && cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release \
        -DCMAKE_C_FLAGS="-mno-outline-atomics" \
     && ninja \
+    && ctest --output-on-failure \
     && clang -c /build/runtime/zig_stubs.c -o /build/runtime/build/zig_stubs.o
 
 # Build cache simulator
@@ -68,7 +70,7 @@ RUN mkdir -p /build/cache-simulator/build && cd /build/cache-simulator/build \
 # ============================================================
 # Stage 2: Runtime image (minimal)
 # ============================================================
-FROM ubuntu:22.04
+FROM ubuntu:22.04@sha256:2edbbc5dc405e9612ba3584ce95480277e3eb374407b5505fe26f17df77c7dbc
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -85,6 +87,7 @@ RUN for attempt in 1 2 3 4 5; do \
       if [ "$attempt" -eq 5 ]; then exit 1; fi; \
       sleep 5; \
     done \
+    && echo "8b2a587ffd672c4687e7581dad4b2f6c1bb2ad6b480cd9771ba2ff48e0b8c75d  /etc/apt/trusted.gpg.d/apt.llvm.org.asc" | sha256sum --check --strict \
     && echo "deb https://apt.llvm.org/jammy/ llvm-toolchain-jammy-20 main" > /etc/apt/sources.list.d/llvm.list
 
 # Install runtime dependencies including opt for bitcode pipeline
@@ -107,11 +110,23 @@ RUN apt-get -o Acquire::Retries=5 update \
     && ln -s /usr/bin/llc-20 /usr/bin/llc \
     && ln -s /usr/bin/clang /usr/bin/cc
 
-# Install Zig 0.15.2 (uses LLVM 20, matching our toolchain)
-RUN ARCH=$(uname -m) \
-    && curl -fsSL "https://ziglang.org/download/0.15.2/zig-${ARCH}-linux-0.15.2.tar.xz" \
-    | tar xJf - -C /opt \
-    && ln -s "/opt/zig-${ARCH}-linux-0.15.2/zig" /usr/local/bin/zig
+# Install the pinned Zig archive only after verifying the upstream checksum.
+ARG ZIG_VERSION=0.15.2
+RUN ARCH="$(uname -m)" \
+    && case "$ARCH" in \
+      x86_64) ZIG_SHA256="02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239" ;; \
+      aarch64) ZIG_SHA256="958ed7d1e00d0ea76590d27666efbf7a932281b3d7ba0c6b01b0ff26498f667f" ;; \
+      *) echo "Unsupported architecture: $ARCH" >&2; exit 1 ;; \
+    esac \
+    && ZIG_ARCHIVE="zig-${ARCH}-linux-${ZIG_VERSION}.tar.xz" \
+    && curl --fail --show-error --location --proto '=https' --tlsv1.2 \
+      --connect-timeout 15 --max-time 300 \
+      "https://ziglang.org/download/${ZIG_VERSION}/${ZIG_ARCHIVE}" \
+      --output "/tmp/${ZIG_ARCHIVE}" \
+    && echo "${ZIG_SHA256}  /tmp/${ZIG_ARCHIVE}" | sha256sum --check --strict \
+    && tar xJf "/tmp/${ZIG_ARCHIVE}" -C /opt \
+    && rm "/tmp/${ZIG_ARCHIVE}" \
+    && ln -s "/opt/zig-${ARCH}-linux-${ZIG_VERSION}/zig" /usr/local/bin/zig
 
 # Create app directory
 RUN mkdir -p /opt/cache-explorer

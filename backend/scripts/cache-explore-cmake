@@ -10,7 +10,7 @@ TOOLCHAIN="$CMAKE_MODULE/CacheExplorerToolchain.cmake"
 usage() {
   echo "Usage: cache-explore cmake [options] <project-path> [cmake-args...]"
   echo ""
-  echo "Configure a CMake project with Cache Explorer instrumentation."
+  echo "Configure a CMake project with Hardware Explorer instrumentation."
   echo "After configuration, build normally and run the binary to get cache traces."
   echo ""
   echo "Options:"
@@ -86,7 +86,7 @@ if [[ ! -f "$TOOLCHAIN" ]]; then
   exit 1
 fi
 
-echo "=== Cache Explorer CMake Integration ===" >&2
+echo "=== Hardware Explorer Preview CMake Integration ===" >&2
 echo "Project: $PROJECT_PATH" >&2
 echo "Build:   $BUILD_DIR" >&2
 echo "" >&2

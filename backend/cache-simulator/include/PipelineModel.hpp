@@ -10,6 +10,7 @@ struct PipelineConfig {
   int rob_size = 192;              // reorder-buffer entries (OoO instruction window)
   int branch_mispredict_penalty = 14; // front-end refill cycles on a misprediction
   LatencyConfig latency = {};      // per-level access latencies (cycles)
+  int assumed_mlp = 1;             // Explicit what-if assumption, not dependency analysis.
 
   // Cycles of miss latency the OoO window can hide by executing independent
   // work: draining a full ROB at the issue width.

@@ -22,11 +22,6 @@
       "metric": "coherence.falseSharingEvents",
       "relationship": "packed > padded",
       "missingValue": 0
-    },
-    {
-      "metric": "coherence.invalidations",
-      "relationship": "packed > padded",
-      "missingValue": 0
     }
   ]
 }

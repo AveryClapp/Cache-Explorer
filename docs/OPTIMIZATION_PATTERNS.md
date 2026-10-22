@@ -1,6 +1,6 @@
 # Cache Optimization Patterns
 
-A practical guide to common cache optimization techniques with before/after examples you can test in Cache Explorer.
+A practical guide to common cache optimization techniques with before/after examples you can test in Hardware Explorer Preview.
 
 ## 1. Loop Order (Row vs Column Major)
 

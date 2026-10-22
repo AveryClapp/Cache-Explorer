@@ -1,11 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
 
 import { CONFIG } from '../config.js';
 import {
+  activeExecutionCount,
   ConnectionResourceTracker,
+  createHttpExecutionLimitMiddleware,
   createHttpRateLimitMiddleware,
   httpRateTrackers,
+  reserveGlobalExecution,
 } from './resourceTracker.js';
 
 test('ConnectionResourceTracker enforces per-window request limits', () => {
@@ -31,6 +35,61 @@ test('ConnectionResourceTracker enforces concurrent process limits', () => {
 
   cleanupFns[0]();
   assert.equal(tracker.canStartProcess(), true);
+});
+
+test('global execution reservations are atomic and idempotent', () => {
+  const releases = [];
+  for (let i = 0; i < 3; i += 1) releases.push(reserveGlobalExecution(3));
+  assert.equal(activeExecutionCount(), 3);
+  assert.equal(reserveGlobalExecution(3), null);
+
+  releases[0]();
+  releases[0]();
+  assert.equal(activeExecutionCount(), 2);
+  const replacement = reserveGlobalExecution(3);
+  assert.equal(typeof replacement, 'function');
+
+  for (const release of releases.slice(1)) release();
+  replacement();
+  assert.equal(activeExecutionCount(), 0);
+});
+
+function executionResponse() {
+  const res = new EventEmitter();
+  res.writableFinished = false;
+  res.set = () => res;
+  res.status = () => res;
+  res.json = () => res;
+  return res;
+}
+
+test('HTTP execution lease survives disconnect until active work finishes', () => {
+  const middleware = createHttpExecutionLimitMiddleware();
+  const req = {};
+  const res = executionResponse();
+
+  middleware(req, res, () => {});
+  req.markExecutionStarted();
+  assert.equal(activeExecutionCount(), 1);
+
+  res.emit('close');
+  assert.equal(req.executionSignal.aborted, true);
+  assert.equal(activeExecutionCount(), 1);
+
+  req.finishExecution();
+  assert.equal(activeExecutionCount(), 0);
+});
+
+test('HTTP execution lease releases an unstarted disconnected request', () => {
+  const middleware = createHttpExecutionLimitMiddleware();
+  const req = {};
+  const res = executionResponse();
+
+  middleware(req, res, () => {});
+  res.emit('close');
+
+  assert.equal(req.executionSignal.aborted, true);
+  assert.equal(activeExecutionCount(), 0);
 });
 
 test('ConnectionResourceTracker cleanup kills processes and removes temp dirs', async () => {

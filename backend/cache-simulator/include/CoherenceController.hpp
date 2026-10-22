@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <deque>
 #include <unordered_map>
 #include <vector>
 
@@ -18,6 +19,8 @@ struct CoherenceEvent {
   Type type;
   uint64_t address;
   int source_core;
+  int target_core = -1;
+  uint64_t sequence = 0;
 };
 
 class CoherenceController {
@@ -28,6 +31,12 @@ private:
   // Directory: tracks which cores have each line
   std::unordered_map<uint64_t, std::vector<int>> sharers;
   std::unordered_map<uint64_t, int> owner;
+  std::deque<CoherenceEvent> history_;
+  uint64_t observed_events_ = 0;
+  void record(CoherenceEvent::Type type, uint64_t address, int source, int target) {
+    if (history_.size() == 256) history_.pop_front();
+    history_.push_back({type, address, source, target, ++observed_events_});
+  }
 
 public:
   explicit CoherenceController(int cores);
@@ -47,4 +56,6 @@ public:
   void evict_line(int core_id, uint64_t address);
 
   [[nodiscard]] int get_sharer_count(uint64_t address) const;
+  const std::deque<CoherenceEvent>& history() const { return history_; }
+  uint64_t observed_events() const { return observed_events_; }
 };

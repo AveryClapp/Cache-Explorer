@@ -1,5 +1,5 @@
 name: Bug Report
-description: Report a reproducible bug in Cache Explorer.
+description: Report a reproducible bug in Hardware Explorer Preview.
 title: "[Bug]: "
 labels: ["bug", "needs-triage"]
 body:

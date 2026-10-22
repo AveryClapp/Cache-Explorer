@@ -46,6 +46,9 @@ void MultiCoreTraceProcessor::process_line_access(const TraceEvent &event,
             stats.misses++;
     }
 
+    code_hotspots.record(event, is_write, result.l1_hit, result.l2_hit,
+                         result.l3_hit);
+
     if (event_callback) {
         event_callback({result.l1_hit, result.l2_hit, result.l3_hit,
                         line_addr, event.size, event.file, event.line});
@@ -163,6 +166,11 @@ std::vector<MultiCoreSourceStats> MultiCoreTraceProcessor::get_hot_lines(size_t 
     }
 
     return sorted;
+}
+
+std::vector<CodeHotspot>
+MultiCoreTraceProcessor::get_code_hotspots(size_t limit) const {
+    return code_hotspots.hottest(limit);
 }
 
 std::vector<FalseSharingReport> MultiCoreTraceProcessor::get_false_sharing_reports() const {

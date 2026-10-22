@@ -38,25 +38,67 @@ interface Suggestion {
   fix?: string;
 }
 
+function validatedServerUrl(value: string) {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error('Server URL must be a valid ws:// or wss:// URL');
+  }
+  if (url.protocol !== 'ws:' && url.protocol !== 'wss:') {
+    throw new Error('Server URL must use ws:// or wss://');
+  }
+  return url;
+}
+
+function isLoopbackServer(url: URL) {
+  return url.hostname === 'localhost' || url.hostname === '::1' || /^127\./.test(url.hostname);
+}
+
+const LEGACY_PROFILE_ALIASES: Record<string, string> = {
+  'modern-desktop': 'intel',
+  laptop: 'intel14',
+  server: 'xeon',
+};
+
 export async function profileCurrentFile(
-  document: vscode.TextDocument
+  document: vscode.TextDocument,
+  options: { allowRemotePrompt?: boolean } = {},
 ): Promise<CacheResult | null> {
   const config = vscode.workspace.getConfiguration('cacheExplorer');
   const serverUrl = config.get<string>('serverUrl') || 'ws://localhost:3001/ws';
-  const hardwarePreset = config.get<string>('hardwarePreset') || 'modern-desktop';
+  const endpoint = validatedServerUrl(serverUrl);
+  if (!isLoopbackServer(endpoint)) {
+    if (options.allowRemotePrompt === false) {
+      throw new Error(`Automatic profiling will not send source to remote server ${endpoint.origin}`);
+    }
+    const choice = await vscode.window.showWarningMessage(
+      `Send the complete source file to ${endpoint.origin}?`,
+      { modal: true, detail: 'Only continue if you trust and control this Hardware Explorer server.' },
+      'Send Source',
+    );
+    if (choice !== 'Send Source') return null;
+  }
+  const configuredProfile = config.get<string>('hardwarePreset') || 'educational';
+  const hardwarePreset = LEGACY_PROFILE_ALIASES[configuredProfile] || configuredProfile;
 
   return vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: 'Cache Explorer',
+      title: 'Hardware Explorer',
       cancellable: true,
     },
     async (progress, token) => {
       return new Promise<CacheResult | null>((resolve, reject) => {
         let ws: WebSocket | null = null;
         let resolved = false;
+        let timeoutHandle: NodeJS.Timeout | undefined;
 
         const cleanup = () => {
+          if (timeoutHandle) {
+            clearTimeout(timeoutHandle);
+            timeoutHandle = undefined;
+          }
           if (ws) {
             try {
               ws.close();
@@ -68,7 +110,7 @@ export async function profileCurrentFile(
         };
 
         token.onCancellationRequested(() => {
-          if (ws) {
+          if (ws?.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: 'cancel' }));
           }
           cleanup();
@@ -81,7 +123,7 @@ export async function profileCurrentFile(
         try {
           progress.report({ message: 'Connecting to server...' });
 
-          ws = new WebSocket(serverUrl);
+          ws = new WebSocket(endpoint.toString());
 
           ws.on('open', () => {
             progress.report({ message: 'Sending code...' });
@@ -159,7 +201,7 @@ export async function profileCurrentFile(
           });
 
           // Timeout after 5 minutes
-          setTimeout(() => {
+          timeoutHandle = setTimeout(() => {
             if (!resolved) {
               cleanup();
               resolved = true;

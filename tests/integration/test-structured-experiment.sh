@@ -29,12 +29,27 @@ echo -n "Test: backend accepts per-variant source experiments... "
 ) &
 SERVER_PID=$!
 
-for _ in {1..80}; do
+SERVER_READY=0
+for _ in {1..160}; do
   if curl -fsS "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
+    SERVER_READY=1
     break
+  fi
+  if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+    echo "FAIL"
+    echo "Temporary server exited before becoming healthy:" >&2
+    cat "$SERVER_LOG" >&2
+    exit 1
   fi
   sleep 0.25
 done
+
+if [[ "$SERVER_READY" != "1" ]]; then
+  echo "FAIL"
+  echo "Temporary server did not become healthy on port $PORT:" >&2
+  cat "$SERVER_LOG" >&2
+  exit 1
+fi
 
 OUTPUT=$(cd "$PROJECT_ROOT" && TEST_PORT="$PORT" node --input-type=module <<'NODE'
 import { readFileSync } from 'fs'
@@ -106,6 +121,38 @@ if (!prefetchOk) {
   process.exit(1)
 }
 
+const conv2d = readFileSync('examples/conv2d_kernel.c', 'utf8')
+const defaultData = await postExperiment({
+  code: conv2d,
+  language: 'c',
+  optLevel: '-O2',
+  configs: ['educational', 'intel', 'amd', 'apple'],
+  prefetch: 'adaptive',
+  limit: 100000,
+  fast: true,
+  cacheSegments: true,
+  variants: ['direct', 'tiled:RUN_TILED=1'],
+})
+
+const defaultConfigs = ['educational', 'intel', 'amd', 'apple']
+const tiledSummary = defaultData.summary?.find(item => item.variant === 'tiled')
+const defaultOk = defaultData.baselineVariant === 'direct'
+  && defaultData.summary?.length === 8
+  && tiledSummary?.variantSpec === 'tiled:RUN_TILED=1'
+  && defaultData.provenance?.source?.variants?.includes('tiled:RUN_TILED=1')
+  && defaultConfigs.every(config => defaultData.variants?.direct?.configs?.[config])
+  && defaultConfigs.every(config => defaultData.variants?.tiled?.configs?.[config])
+  && defaultConfigs.some(config => {
+    const direct = defaultData.summary.find(item => item.variant === 'direct' && item.config === config)
+    const tiled = defaultData.summary.find(item => item.variant === 'tiled' && item.config === config)
+    return direct?.estimatedCycles !== tiled?.estimatedCycles
+  })
+
+if (!defaultOk) {
+  console.error(JSON.stringify(defaultData, null, 2))
+  process.exit(1)
+}
+
 console.log(JSON.stringify({
   sourceVariants: {
     baseline: data.baselineVariant,
@@ -118,6 +165,12 @@ console.log(JSON.stringify({
     baseline: prefetchData.baselineVariant,
     noneCycles: noneSummary.estimatedCycles,
     streamCycles: streamSummary.estimatedCycles,
+  },
+  defaultJourney: {
+    configs: defaultConfigs,
+    variants: Object.keys(defaultData.variants),
+    rows: defaultData.summary.length,
+    eventLimit: 100000,
   },
 }))
 NODE

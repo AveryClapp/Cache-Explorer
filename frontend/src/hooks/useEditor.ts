@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react'
 import type { FileTab, Language } from '../types'
-import type { ProjectFile } from '../components'
+import type { ProjectFile } from '../components/FileManager'
 
 // File ID generation
 let fileIdCounter = 0

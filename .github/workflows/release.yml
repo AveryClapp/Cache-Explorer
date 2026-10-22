@@ -1,4 +1,4 @@
-name: Release
+name: Hardware Explorer Release
 
 on:
   push:
@@ -7,9 +7,14 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to release (e.g., v1.0.0)'
+        description: 'Tag to release (for example, v1.8.0-preview.1)'
         required: true
         type: string
+      prerelease:
+        description: 'Publish as a Preview prerelease'
+        required: true
+        default: true
+        type: boolean
 
 jobs:
   build:
@@ -28,12 +33,13 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Install LLVM (Linux)
         if: runner.os == 'Linux'
         run: |
-          wget https://apt.llvm.org/llvm.sh
+          curl --proto '=https' --tlsv1.2 --connect-timeout 10 --max-time 60 -fsSLo llvm.sh https://apt.llvm.org/llvm.sh
+          echo '03878e08f47b66cc95bc4b544b0db3c6d9ce8d60e6cf2492ae357984330a9eae  llvm.sh' | sha256sum -c -
           chmod +x llvm.sh
           sudo ./llvm.sh ${{ matrix.llvm-version }}
           sudo apt-get install -y llvm-${{ matrix.llvm-version }}-dev ninja-build
@@ -49,7 +55,7 @@ jobs:
           ./backend/scripts/build-passes.sh ${{ matrix.llvm-version }} ./passes
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: CacheProfiler-llvm${{ matrix.llvm-version }}-${{ matrix.platform }}
           path: ./passes/CacheProfiler-llvm${{ matrix.llvm-version }}-*.so
@@ -68,10 +74,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           path: ./artifacts
 
@@ -95,20 +101,20 @@ jobs:
           fi
 
       - name: Attest release assets
-        uses: actions/attest@v4
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
           subject-checksums: ./release-assets/SHA256SUMS
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
           tag_name: ${{ steps.get-tag.outputs.tag }}
-          name: Cache Explorer ${{ steps.get-tag.outputs.tag }}
+          name: Hardware Explorer ${{ steps.get-tag.outputs.tag }}
           files: |
             ./release-assets/*.so
             ./release-assets/SHA256SUMS
           draft: false
-          prerelease: false
+          prerelease: ${{ contains(steps.get-tag.outputs.tag, '-') || (github.event_name == 'workflow_dispatch' && inputs.prerelease) }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

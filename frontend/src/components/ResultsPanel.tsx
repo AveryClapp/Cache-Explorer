@@ -1,5 +1,7 @@
 import type { editor } from 'monaco-editor'
 import type { CacheResult, ErrorResult, Stage } from '../types'
+import { MemoryEvidencePanel } from './MemoryEvidencePanel'
+import { TopologyPanel } from './TopologyPanel'
 import {
   ErrorDisplay,
   MetricCards,
@@ -132,6 +134,8 @@ export function ResultsPanel({
 
             {/* Execution Engine */}
             {execution && <ExecutionEnginePanel execution={execution} />}
+            <MemoryEvidencePanel result={result} />
+            <TopologyPanel topology={result.subsystems?.topology} />
 
             {/* Source Annotations */}
             {result.sourceAnnotations && <SourceAnnotationsPanel annotations={result.sourceAnnotations} />}

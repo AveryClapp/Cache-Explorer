@@ -63,7 +63,7 @@ body:
     id: observed
     attributes:
       label: Observed relationship
-      description: What did Cache Explorer report?
+      description: What did Hardware Explorer report?
       placeholder: direct appeared faster or had fewer misses
     validations:
       required: true

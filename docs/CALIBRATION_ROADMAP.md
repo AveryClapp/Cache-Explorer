@@ -1,6 +1,6 @@
-# Calibration Roadmap
+# Hardware Explorer Preview Calibration Roadmap
 
-Cache Explorer is product-nailed-down when it tells the truth about what it
+Hardware Explorer is product-ready when it tells the truth about what it
 models. It becomes lab-calibrated only when many profiles have repeatable
 measurements backing the model contract.
 

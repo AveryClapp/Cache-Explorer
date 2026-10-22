@@ -243,6 +243,12 @@ export function createErrorResponse(error, mainFile, options = {}) {
   if (error.stderr) {
     const errorFile = error.mainFile || mainFile;
     const cleanedStderr = filterBashWarnings(error.stderr);
+    // Native Hardware Lab rejections are input validation, not crashes. Return the
+    // reason alone; the simulator's usage text that follows it is noise here.
+    const labRejection = cleanedStderr.match(/^(?:Error: )?([^\n]*Hardware Lab[^\n]*)$/m);
+    if (labRejection) {
+      return { type: 'validation_error', message: labRejection[1], exitCode: error.exitCode };
+    }
     const parsed = parseCompileErrors(cleanedStderr, errorFile);
     parsed.raw = cleanedStderr;
     if (error.exitCode !== undefined) {

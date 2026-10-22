@@ -55,8 +55,8 @@ public:
       : inclusion_policy(cfg.inclusion_policy), l1d(cfg.l1_data),
         l1i(cfg.l1_inst), l2(cfg.l2),
         l3_(cfg.l3.is_valid() ? std::optional<CacheLevel>(cfg.l3) : std::nullopt),
-        dtlb(TLBConfig{64, 4, 4096}),   // 64-entry, 4-way, 4KB pages
-        itlb(TLBConfig{64, 4, 4096}),   // 64-entry, 4-way, 4KB pages
+        dtlb(cfg.dtlb),
+        itlb(cfg.itlb),
         prefetcher(PrefetchPolicy::NONE, 2, cfg.l1_data.line_size),
         prefetch_enabled(false), tlb_enabled(true),
         latency_config(cfg.latency), timing_stats() {}

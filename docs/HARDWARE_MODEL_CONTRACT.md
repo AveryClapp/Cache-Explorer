@@ -1,6 +1,6 @@
 # Hardware Model Contract
 
-Cache Explorer profiles now expose an explicit model contract. The contract is
+Hardware Explorer Preview profiles expose an explicit model contract. The contract is
 the product boundary between hardware facts, simulator behavior, estimates, and
 profile metadata.
 
@@ -27,6 +27,9 @@ Every profile declares these contract fields:
 - `executionPipeline`
 - `memoryBandwidth`
 - `memoryLevelParallelism`
+- `memoryDemandPressure`
+- `assumedMemoryParallelism`
+- `cacheEvidence`
 - `simd`
 - `topology`
 - `dependencyModel`
@@ -37,7 +40,7 @@ Every profile declares these contract fields:
 UI panels, exports, and docs should not imply that a field affects results unless
 its contract has `drivesSimulation: true`.
 
-This keeps Cache Explorer honest while it grows toward a Compiler Explorer-level
+This keeps Hardware Explorer honest while it grows toward a Compiler Explorer-level
 tool: users can inspect what was modeled, what was estimated, what was only
 descriptive metadata, and what is not supported yet.
 
@@ -51,13 +54,27 @@ useful for directional comparisons, but they are not measured runtime and they
 do not model instruction dependencies, opcode mix, port pressure, SMT, exact
 frontend decode behavior, NUMA, or OS scheduling.
 
+[Hardware Lab](HARDWARE_LAB.md) adds effective cache/TLB overrides, selectable
+teaching predictors, bounded miss explanations, explicit assumed memory
+parallelism and demand bandwidth pressure. Physical preset bandwidth and maximum
+MLP fields remain **metadata-only**: they are not the separate hypothetical
+Lab assumptions. Pressure has no value without instruction-count evidence.
+Detailed execution/memory evidence is unavailable in the multi-core streaming
+engine; topology/coherence observations remain available there.
+
+Any nonempty `profile.labOverrides` invalidates inherited calibration claims.
+Server enrichment and cached replay label the scenario experimental/uncalibrated
+and downgrade calibrated contract/coverage fields. Imported report text is not
+accepted as calibration evidence. Prefetch lateness/pollution, NUMA and
+heterogeneous scheduling remain explicitly unavailable or unsupported.
+
 ## Calibration Depth
 
 The model contract is the product truth boundary. The calibration ladder in
 [Calibration Roadmap](CALIBRATION_ROADMAP.md) defines when an individual field
 can move from modeled or estimated to calibrated.
 
-Cache Explorer should stay honest if a profile is only partially calibrated: the
+Hardware Explorer should stay honest if a profile is only partially calibrated: the
 profile can expose calibrated cache geometry while keeping branch prediction,
 pipeline timing, memory bandwidth, SIMD, topology, or NUMA as estimated,
 metadata-only, or unsupported.

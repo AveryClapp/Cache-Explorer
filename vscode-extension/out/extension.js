@@ -40,7 +40,7 @@ const cacheExplorerProvider_1 = require("./cacheExplorerProvider");
 const profileCommand_1 = require("./profileCommand");
 let cacheExplorerProvider;
 function activate(context) {
-    console.log('Cache Explorer extension is now active');
+    console.log('Hardware Explorer extension is now active');
     // Create the provider for the results panel
     cacheExplorerProvider = new cacheExplorerProvider_1.CacheExplorerProvider(context.extensionUri);
     // Register the webview provider
@@ -52,11 +52,15 @@ function activate(context) {
             vscode.window.showWarningMessage('No file is currently open');
             return;
         }
+        if (!vscode.workspace.isTrusted) {
+            vscode.window.showWarningMessage('Hardware Explorer is disabled in untrusted workspaces because analysis sends and executes source code.');
+            return;
+        }
         const document = editor.document;
         const languageId = document.languageId;
         // Check if the language is supported
         if (!['c', 'cpp', 'rust'].includes(languageId)) {
-            vscode.window.showWarningMessage(`Cache Explorer doesn't support ${languageId} files. Supported: C, C++, Rust`);
+            vscode.window.showWarningMessage(`Hardware Explorer doesn't support ${languageId} files. Supported: C, C++, Rust`);
             return;
         }
         try {
@@ -67,7 +71,7 @@ function activate(context) {
         }
         catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown error';
-            vscode.window.showErrorMessage(`Cache Explorer: ${message}`);
+            vscode.window.showErrorMessage(`Hardware Explorer: ${message}`);
         }
     }));
     context.subscriptions.push(vscode.commands.registerCommand('cacheExplorer.showResults', () => {
@@ -76,9 +80,9 @@ function activate(context) {
     // Auto-profile on save if enabled
     context.subscriptions.push(vscode.workspace.onDidSaveTextDocument(async (document) => {
         const config = vscode.workspace.getConfiguration('cacheExplorer');
-        if (config.get('autoProfile') && ['c', 'cpp', 'rust'].includes(document.languageId)) {
+        if (vscode.workspace.isTrusted && config.get('autoProfile') && ['c', 'cpp', 'rust'].includes(document.languageId)) {
             try {
-                const results = await (0, profileCommand_1.profileCurrentFile)(document);
+                const results = await (0, profileCommand_1.profileCurrentFile)(document, { allowRemotePrompt: false });
                 if (results && cacheExplorerProvider) {
                     cacheExplorerProvider.updateResults(results);
                 }
@@ -92,11 +96,11 @@ function activate(context) {
     // Show welcome message on first activation
     const hasShownWelcome = context.globalState.get('hasShownWelcome');
     if (!hasShownWelcome) {
-        vscode.window.showInformationMessage('Cache Explorer: Profile your code with "Cache Explorer: Profile Current File" command', 'Got it');
+        vscode.window.showInformationMessage('Hardware Explorer Preview: profile source with the “Hardware Explorer: Profile Current File” command.', 'Got it');
         context.globalState.update('hasShownWelcome', true);
     }
 }
 function deactivate() {
-    console.log('Cache Explorer extension deactivated');
+    console.log('Hardware Explorer extension deactivated');
 }
 //# sourceMappingURL=extension.js.map

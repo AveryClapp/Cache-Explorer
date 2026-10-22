@@ -13,7 +13,7 @@ CACHE_SIM="${CACHE_EXPLORER_SIM:-$BACKEND_DIR/cache-simulator/build/cache-sim}"
 usage() {
   echo "Usage: cache-explore make [options] [target] [make-args...]"
   echo ""
-  echo "Build a Makefile target with Cache Explorer instrumentation."
+  echo "Build a Makefile target with Hardware Explorer instrumentation."
   echo "This overrides CC/CXX to use instrumented compilation."
   echo ""
   echo "Options:"
@@ -60,7 +60,7 @@ else
   CFLAGS="$CFLAGS -DCACHE_EXPLORER_INCLUDE_STL=1"
 fi
 
-echo "=== Cache Explorer Make Integration ===" >&2
+echo "=== Hardware Explorer Preview Make Integration ===" >&2
 echo "Building with instrumentation..." >&2
 echo "" >&2
 

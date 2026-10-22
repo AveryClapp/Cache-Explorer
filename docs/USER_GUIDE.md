@@ -1,15 +1,15 @@
-# Cache Explorer User Guide
+# Hardware Explorer Preview User Guide
 
-A complete guide to understanding and using Cache Explorer for cache performance analysis.
+A guide to CPU cache and performance modeling from source code. Existing Cache
+Explorer commands and environment variables remain supported.
 
 ## Table of Contents
 
-1. [What is Cache Explorer?](#what-is-cache-explorer)
+1. [What is Hardware Explorer?](#what-is-hardware-explorer)
 2. [Getting Started](#getting-started)
    - [Web UI Quick Start](#web-ui-quick-start)
    - [CLI Quick Start](#cli-quick-start)
 3. [Understanding the Visualization](#understanding-the-visualization)
-   - [Timeline View](#timeline-view)
    - [Cache State Grid](#cache-state-grid)
    - [Source Annotations](#source-annotations)
 4. [Interpreting Results](#interpreting-results)
@@ -20,24 +20,31 @@ A complete guide to understanding and using Cache Explorer for cache performance
    - [Profiling a New Codebase](#profiling-a-new-codebase)
    - [Optimization Iteration](#optimization-iteration)
    - [Comparing Configurations](#comparing-configurations)
-6. [Hardware Configurations](#hardware-configurations)
-7. [When to Use Cache Explorer](#when-to-use-cache-explorer)
-8. [Limitations](#limitations)
+6. [Understanding the Results](#understanding-the-results)
+7. [Common Patterns and Fixes](#common-patterns-and-fixes)
+8. [Hardware Configurations](#hardware-configurations)
+9. [Tips for Effective Analysis](#tips-for-effective-analysis)
+10. [Keyboard Shortcuts](#keyboard-shortcuts-web-ui)
+11. [Model Confidence](#model-confidence)
+12. [Limitations](#limitations)
 
 ---
 
-## What is Cache Explorer?
+## What is Hardware Explorer?
 
-Cache Explorer is a visual cache profiler that shows how your code interacts with CPU cache hierarchies. Think of it as "Compiler Explorer for cache behavior" - you paste code, instantly see cache hits/misses with source-level attribution, and learn optimization techniques.
+Hardware Explorer is a local-first CPU performance modeling workbench. It
+instruments supported source code and reports cache, TLB, prefetch, coherence,
+branch, and pipeline evidence with explicit confidence and provenance. It does
+not model GPUs, storage, or networks, and it is not cycle-accurate.
 
 **Key capabilities:**
 - See exactly which lines cause cache misses
-- Visualize cache state changes over time
+- Inspect modeled cache state
 - Compare different access patterns
 - Get actionable optimization suggestions
 - Test "what if" scenarios with different hardware configs
 - Detect false sharing in multi-threaded code
-- Simulate different CPU architectures (Intel, AMD, Apple Silicon, ARM)
+- Compare directional CPU profiles (Intel, AMD, Apple Silicon, ARM)
 
 ---
 
@@ -75,7 +82,7 @@ int main() {
 - **Config**: Hardware preset (Intel, AMD, Apple, Educational)
 - **Prefetch**: Prefetching strategy (none, stream, stride, adaptive)
 
-**5. Click "Run"** and view results in real-time.
+**5. Click "Execute"** and inspect the result and provenance panels.
 
 **Web UI Features:**
 - **Dark/Light Mode**: Toggle in settings, persists across sessions
@@ -174,34 +181,6 @@ matrix.c:8  - 64 misses  (12.5%)
 ---
 
 ## Understanding the Visualization
-
-### Timeline View
-
-The timeline shows memory access patterns over time:
-
-```
-Time →
-████████████░░░░░░████████████████░░████████
- ^-- L1 hits --^  ^misses^  ^-- hits --^  ^miss^
-```
-
-**Color coding:**
-- **Green**: L1 cache hit (fastest, ~4 cycles)
-- **Yellow**: L2 cache hit (~12 cycles)
-- **Orange**: L3 cache hit (~40 cycles)
-- **Red**: Memory access (~200+ cycles)
-
-**What to look for:**
-- **Solid green**: Excellent locality - data stays in cache
-- **Periodic red spikes**: Working set exceeds cache size
-- **Red at start, then green**: Normal cold-start misses
-- **Random red throughout**: Poor spatial locality
-
-**Using the timeline scrubber:**
-1. Click and drag to select a time range
-2. Use arrow keys to step through events one at a time
-3. Observe the cache grid update in real-time
-4. Correlate events with source lines (highlighted in editor)
 
 ### Cache State Grid
 
@@ -316,7 +295,7 @@ So a 95% L1 hit rate with 50% L2 hit rate is often better than 90% L1 with 90% L
 
 ### 3C Miss Classification
 
-Cache Explorer classifies misses into three categories:
+Hardware Explorer classifies misses into three categories:
 
 **Compulsory (Cold) Misses:**
 - First access to data that has never been in cache
@@ -422,8 +401,6 @@ This helps answer:
 
 ---
 
-## Hardware Configurations
-
 ## Understanding the Results
 
 ### Summary Panel
@@ -489,7 +466,7 @@ For simulations with multiple cores, use the **Core** dropdown above the grid to
 
 ### Optimization Suggestions
 
-Cache Explorer analyzes patterns and suggests fixes:
+Hardware Explorer analyzes patterns and suggests fixes:
 
 - **HIGH severity** (red): Major performance issue
 - **MEDIUM severity** (yellow): Noticeable impact
@@ -598,7 +575,7 @@ struct {
 
 ## Hardware Configurations
 
-Cache Explorer includes 14+ presets for common processors:
+Hardware Explorer includes 14 CPU profiles:
 
 | Config | L1d | L2 | L3 | Prefetch Model |
 |--------|-----|----|----|----------------|
@@ -619,12 +596,15 @@ Cache Explorer includes 14+ presets for common processors:
 | `rpi4` | 32KB | 1MB | None | Basic stream |
 | `embedded` | 16KB | 64KB | None | None |
 
-Each preset includes vendor-accurate cache sizes, associativity, and prefetch behavior. Use `--config <name>` in CLI or select from the Config panel in the web UI.
+Each profile records cache metadata and a model contract. Cache hierarchy,
+prefetch, branch, pipeline, and topology fields can have different confidence;
+inspect the Profiles trust packet before drawing conclusions. Use
+`--config <name>` in the CLI or select a profile in the web UI.
 
 ## Tips for Effective Analysis
 
 1. **Start with small examples** - The cache grid is most useful with small working sets
-2. **Use the timeline scrubber** - Step through to see exactly when misses occur
+2. **Inspect source attribution** - Focus on lines responsible for the largest miss share
 3. **Compare configurations** - Same code can behave differently on different hardware
 4. **Check the suggestions** - They often point directly to the problem
 5. **Iterate** - Make one change, re-run, see the improvement
@@ -641,27 +621,17 @@ Each preset includes vendor-accurate cache sizes, associativity, and prefetch be
 | `@` in palette | Filter to actions |
 | `*` in palette | Filter to config |
 
-## Simulation Accuracy
+## Model Confidence
 
-Cache Explorer is validated against real hardware using Linux `perf` performance counters.
-
-**Achieved Accuracy** (Intel Xeon Platinum 8488C):
-
-| Cache Level | Average Delta | Max Delta | Status |
-|-------------|---------------|-----------|--------|
-| L1 Data | ±4.6% | 8.2% | Within ±5% target |
-| L2 | ±9.3% | 22.7% | Within ±10% target (avg) |
-
-At ±5% L1 accuracy, you can:
-- Trust that simulated improvements translate to real hardware
-- Restructure code based on simulator feedback
-- Compare different algorithms' cache behavior
-
-See [VALIDATION.md](VALIDATION.md) for detailed methodology and per-benchmark results.
+Checked-in calibration packets for the default Intel, AMD, and Apple profiles
+are currently schema fixtures. The Preview label remains until those packets
+contain reproducible measurements. Historical Intel Xeon measurements are
+documented in [VALIDATION.md](VALIDATION.md), but do not establish accuracy for
+other profiles, workloads, or estimated cycle results.
 
 ## Limitations
 
-Cache Explorer is a **simulation**, not hardware measurement:
+Hardware Explorer is a **model**, not hardware measurement:
 
 - **Timing is approximate** - Real cache latencies vary with frequency, contention
 - **Prefetching is simplified** - Hardware prefetchers use smart backoff; simulation uses fixed degree

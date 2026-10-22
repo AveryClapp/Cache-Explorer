@@ -13,7 +13,7 @@
 .cache-line {
   aspect-ratio: 1;
   border-radius: 1px;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
 }
 
 .cache-line.invalid {
@@ -37,4 +37,3 @@
   z-index: 1;
   box-shadow: 0 0 8px currentColor;
 }
-

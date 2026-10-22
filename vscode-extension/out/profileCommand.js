@@ -39,19 +39,55 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.profileCurrentFile = profileCurrentFile;
 const vscode = __importStar(require("vscode"));
 const ws_1 = __importDefault(require("ws"));
-async function profileCurrentFile(document) {
+function validatedServerUrl(value) {
+    let url;
+    try {
+        url = new URL(value);
+    }
+    catch {
+        throw new Error('Server URL must be a valid ws:// or wss:// URL');
+    }
+    if (url.protocol !== 'ws:' && url.protocol !== 'wss:') {
+        throw new Error('Server URL must use ws:// or wss://');
+    }
+    return url;
+}
+function isLoopbackServer(url) {
+    return url.hostname === 'localhost' || url.hostname === '::1' || /^127\./.test(url.hostname);
+}
+const LEGACY_PROFILE_ALIASES = {
+    'modern-desktop': 'intel',
+    laptop: 'intel14',
+    server: 'xeon',
+};
+async function profileCurrentFile(document, options = {}) {
     const config = vscode.workspace.getConfiguration('cacheExplorer');
     const serverUrl = config.get('serverUrl') || 'ws://localhost:3001/ws';
-    const hardwarePreset = config.get('hardwarePreset') || 'modern-desktop';
+    const endpoint = validatedServerUrl(serverUrl);
+    if (!isLoopbackServer(endpoint)) {
+        if (options.allowRemotePrompt === false) {
+            throw new Error(`Automatic profiling will not send source to remote server ${endpoint.origin}`);
+        }
+        const choice = await vscode.window.showWarningMessage(`Send the complete source file to ${endpoint.origin}?`, { modal: true, detail: 'Only continue if you trust and control this Hardware Explorer server.' }, 'Send Source');
+        if (choice !== 'Send Source')
+            return null;
+    }
+    const configuredProfile = config.get('hardwarePreset') || 'educational';
+    const hardwarePreset = LEGACY_PROFILE_ALIASES[configuredProfile] || configuredProfile;
     return vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
-        title: 'Cache Explorer',
+        title: 'Hardware Explorer',
         cancellable: true,
     }, async (progress, token) => {
         return new Promise((resolve, reject) => {
             let ws = null;
             let resolved = false;
+            let timeoutHandle;
             const cleanup = () => {
+                if (timeoutHandle) {
+                    clearTimeout(timeoutHandle);
+                    timeoutHandle = undefined;
+                }
                 if (ws) {
                     try {
                         ws.close();
@@ -63,7 +99,7 @@ async function profileCurrentFile(document) {
                 }
             };
             token.onCancellationRequested(() => {
-                if (ws) {
+                if (ws?.readyState === ws_1.default.OPEN) {
                     ws.send(JSON.stringify({ type: 'cancel' }));
                 }
                 cleanup();
@@ -74,7 +110,7 @@ async function profileCurrentFile(document) {
             });
             try {
                 progress.report({ message: 'Connecting to server...' });
-                ws = new ws_1.default(serverUrl);
+                ws = new ws_1.default(endpoint.toString());
                 ws.on('open', () => {
                     progress.report({ message: 'Sending code...' });
                     const code = document.getText();
@@ -138,7 +174,7 @@ async function profileCurrentFile(document) {
                     }
                 });
                 // Timeout after 5 minutes
-                setTimeout(() => {
+                timeoutHandle = setTimeout(() => {
                     if (!resolved) {
                         cleanup();
                         resolved = true;

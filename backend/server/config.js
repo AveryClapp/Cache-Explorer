@@ -3,6 +3,13 @@
  * Centralized configuration with environment variable overrides
  */
 
+function firstEnv(...names) {
+  for (const name of names) {
+    if (process.env[name] !== undefined && process.env[name] !== '') return process.env[name];
+  }
+  return undefined;
+}
+
 export const CONFIG = {
   // Timeout settings (in milliseconds)
   timeouts: {
@@ -17,13 +24,25 @@ export const CONFIG = {
   memory: {
     maxOutputBuffer: parseInt(process.env.MAX_OUTPUT_BUFFER) || 50 * 1024 * 1024,
     maxEventBatch: parseInt(process.env.MAX_EVENT_BATCH) || 1000,
+    maxWebSocketPayload: parseInt(process.env.MAX_WEBSOCKET_PAYLOAD) || 1024 * 1024,
   },
 
   // Rate limiting
   rateLimit: {
     maxRequestsPerMinute: parseInt(process.env.RATE_LIMIT_RPM) || 30,
     maxConcurrentProcesses: parseInt(process.env.MAX_CONCURRENT_PROCESSES) || 5,
+    maxWebSocketConnections: parseInt(firstEnv(
+      'HARDWARE_EXPLORER_MAX_WEBSOCKET_CONNECTIONS',
+      'CACHE_EXPLORER_MAX_WEBSOCKET_CONNECTIONS',
+    )) || 100,
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW) || 60000,
+  },
+
+  // Bound the amount of compiler/simulator work one request can fan out into.
+  workPlan: {
+    maxConfigs: parseInt(process.env.MAX_COMPARE_CONFIGS) || 16,
+    maxVariants: parseInt(process.env.MAX_EXPERIMENT_VARIANTS) || 16,
+    maxRuns: parseInt(process.env.MAX_EXPERIMENT_RUNS) || 64,
   },
 
   // Event streaming
@@ -41,22 +60,32 @@ export const CONFIG = {
 
   // Server
   server: {
-    port: parseInt(process.env.PORT) || 3001,
-    host: process.env.HOST || '0.0.0.0',
-    trustProxy: process.env.TRUST_PROXY === '1' || process.env.TRUST_PROXY === 'true',
+    port: parseInt(firstEnv('HARDWARE_EXPLORER_PORT', 'CACHE_EXPLORER_PORT', 'PORT')) || 3001,
+    host: firstEnv('HARDWARE_EXPLORER_HOST', 'CACHE_EXPLORER_HOST', 'HOST') || '127.0.0.1',
+    trustProxy: ['1', 'true'].includes(firstEnv('HARDWARE_EXPLORER_TRUST_PROXY', 'CACHE_EXPLORER_TRUST_PROXY', 'TRUST_PROXY') || ''),
+    allowedOrigins: (firstEnv('HARDWARE_EXPLORER_ALLOWED_ORIGINS', 'CACHE_EXPLORER_ALLOWED_ORIGINS') || '')
+      .split(',').map(value => value.trim()).filter(Boolean),
+    allowNonLoopbackDirect: ['1', 'true'].includes(firstEnv('HARDWARE_EXPLORER_ALLOW_NON_LOOPBACK_DIRECT', 'CACHE_EXPLORER_ALLOW_NON_LOOPBACK_DIRECT') || ''),
   },
 
   // Paths
   paths: {
-    cacheExplore: process.env.CACHE_EXPLORE_PATH || null, // Auto-detected if null
+    cacheExplore: firstEnv('HARDWARE_EXPLORER_CLI_PATH', 'CACHE_EXPLORE_PATH') || null, // Auto-detected if null
   },
 
   // Published workload benchmark history
   workloads: {
-    dashboardBaseUrl: (process.env.CACHE_EXPLORER_DASHBOARD_BASE_URL || '').replace(/\/+$/, ''),
-    historySummaryPath: process.env.CACHE_EXPLORER_WORKLOAD_HISTORY_SUMMARY_PATH || null,
-    historyFetchTimeoutMs: parseInt(process.env.CACHE_EXPLORER_WORKLOAD_HISTORY_TIMEOUT) || 5000,
-    variantTimeoutMs: parseInt(process.env.CACHE_EXPLORER_WORKLOAD_VARIANT_TIMEOUT_MS) || 120000,
+    dashboardBaseUrl: (firstEnv('HARDWARE_EXPLORER_DASHBOARD_BASE_URL', 'CACHE_EXPLORER_DASHBOARD_BASE_URL') || '').replace(/\/+$/, ''),
+    historySummaryPath: firstEnv('HARDWARE_EXPLORER_WORKLOAD_HISTORY_SUMMARY_PATH', 'CACHE_EXPLORER_WORKLOAD_HISTORY_SUMMARY_PATH') || null,
+    historyFetchTimeoutMs: parseInt(firstEnv('HARDWARE_EXPLORER_WORKLOAD_HISTORY_TIMEOUT', 'CACHE_EXPLORER_WORKLOAD_HISTORY_TIMEOUT')) || 5000,
+    variantTimeoutMs: parseInt(firstEnv('HARDWARE_EXPLORER_WORKLOAD_VARIANT_TIMEOUT_MS', 'CACHE_EXPLORER_WORKLOAD_VARIANT_TIMEOUT_MS')) || 120000,
+  },
+
+  persistence: {
+    maxShareBytes: parseInt(firstEnv('HARDWARE_EXPLORER_MAX_SHARE_BYTES', 'CACHE_EXPLORER_MAX_SHARE_BYTES')) || 256 * 1024,
+    maxShareEntries: parseInt(firstEnv('HARDWARE_EXPLORER_MAX_SHARE_ENTRIES', 'CACHE_EXPLORER_MAX_SHARE_ENTRIES')) || 10000,
+    maxShareTotalBytes: parseInt(firstEnv('HARDWARE_EXPLORER_MAX_SHARE_TOTAL_BYTES', 'CACHE_EXPLORER_MAX_SHARE_TOTAL_BYTES')) || 64 * 1024 * 1024,
+    shareMaxAgeDays: parseInt(firstEnv('HARDWARE_EXPLORER_SHARE_MAX_AGE_DAYS', 'CACHE_EXPLORER_SHARE_MAX_AGE_DAYS')) || 30,
   },
 };
 

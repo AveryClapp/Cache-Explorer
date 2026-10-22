@@ -2,6 +2,7 @@
 
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "../profiles/CacheConfig.hpp"
 #include "Prefetcher.hpp"
@@ -31,6 +32,8 @@ struct SimulatorOptions {
     bool cache_segments = false;  // Enable segment caching for repetitive code
     size_t segment_size = 20;  // Number of events per cached segment
     bool show_help = false;
+    bool check_config = false;
+    std::vector<std::string> lab;
     bool prefetch_policy_set = false;
     bool prefetch_degree_set = false;
 

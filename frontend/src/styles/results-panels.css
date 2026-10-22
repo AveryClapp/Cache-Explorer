@@ -412,3 +412,8 @@
 .hotline-rate.low {
   color: var(--signal-good);
 }
+.memory-evidence-row { padding: 10px 0; border-bottom: 1px solid var(--border); }
+.coherence-timeline { max-height: 320px; overflow: auto; padding: 12px 24px; }
+.coherence-timeline li { margin: 8px 0; line-height: 1.6; overflow-wrap: anywhere; }
+.memory-evidence-row summary { cursor: pointer; }
+.memory-evidence-row p { line-height: 1.6; margin: 8px 0; overflow-wrap: anywhere; }

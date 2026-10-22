@@ -1,0 +1,45 @@
+name: Windows x86 clang-cl
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/windows-x86.yml'
+      - 'backend/cache-simulator/**'
+      - 'backend/integration/cmake/**'
+      - 'backend/runtime/**'
+      - 'backend/scripts/*clang-cl.ps1'
+      - 'backend/scripts/*run-x86.ps1'
+      - 'backend/scripts/*normalize-trace.ps1'
+      - 'backend/scripts/hardware-explorer-pe.ps1'
+      - 'backend/scripts/*symbolize.ps1'
+      - 'tests/windows-x86-clang-cl/**'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/windows-x86.yml'
+      - 'backend/cache-simulator/**'
+      - 'backend/integration/cmake/**'
+      - 'backend/runtime/**'
+      - 'backend/scripts/*clang-cl.ps1'
+      - 'backend/scripts/*run-x86.ps1'
+      - 'backend/scripts/*normalize-trace.ps1'
+      - 'backend/scripts/hardware-explorer-pe.ps1'
+      - 'backend/scripts/*symbolize.ps1'
+      - 'tests/windows-x86-clang-cl/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Instrument and analyze Win32 executable
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Build and run Windows x86 smoke
+        shell: pwsh
+        run: ./tests/windows-x86-clang-cl/run-smoke.ps1
