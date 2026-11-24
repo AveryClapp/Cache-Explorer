@@ -106,7 +106,7 @@ export function ExperimentResultsModal({
       >
         <div className="batch-modal-header">
           <div className="product-surface-title">
-            <h1 className="batch-modal-title" id="hardware-experiment-title">Hardware Experiment</h1>
+            <h1 className="batch-modal-title" id="hardware-experiment-title">Compare code variants</h1>
             <p>Compare source variants across the CPU profiles in your run set.</p>
           </div>
           <div className="batch-modal-header-actions">

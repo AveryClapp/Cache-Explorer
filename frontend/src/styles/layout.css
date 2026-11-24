@@ -281,6 +281,110 @@
   color: var(--text-bright);
 }
 
+/* Secondary destinations sit behind one disclosure. */
+.header-more {
+  position: relative;
+  display: flex;
+  align-self: stretch;
+}
+
+.header-more > summary {
+  gap: var(--space-1);
+  cursor: pointer;
+  list-style: none;
+}
+
+.header-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.header-more-caret {
+  font-size: 9px;
+  opacity: 0.7;
+}
+
+.header-more-menu {
+  position: absolute;
+  inset-block-start: calc(100% + 2px);
+  inset-inline-end: 0;
+  z-index: 50;
+  display: grid;
+  min-width: 180px;
+  padding: var(--space-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  box-shadow: var(--shadow-panel);
+}
+
+.header-more-item {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.header-more-item:hover,
+.header-more-item:focus-visible,
+.header-more-item.active {
+  background: var(--surface);
+  color: var(--text-bright);
+}
+
+/* Compare: one destination, three views. */
+.product-workspace.has-tabs {
+  flex-direction: column;
+}
+
+.product-workspace.has-tabs > :not(.compare-tabs) {
+  flex: 1;
+  min-height: 0;
+}
+
+.compare-tabs {
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-5) 0;
+  border-block-end: 1px solid var(--border);
+  background: var(--void);
+  overflow-x: auto;
+}
+
+.compare-tab {
+  padding: var(--space-2) var(--space-3);
+  border-block-end: 2px solid transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.compare-tab:hover,
+.compare-tab:focus-visible {
+  color: var(--text-bright);
+}
+
+.compare-tab.active {
+  border-block-end-color: var(--accent);
+  color: var(--text-bright);
+}
+
+@media (max-width: 768px) {
+  .compare-tabs {
+    padding-inline: var(--space-3);
+  }
+
+  .compare-tab {
+    flex: 1 0 auto;
+    min-height: 44px;
+    text-align: center;
+  }
+}
+
 /* Keep every destination visible when the title, status and actions need room. */
 @media (max-width: 1360px) {
   .header {

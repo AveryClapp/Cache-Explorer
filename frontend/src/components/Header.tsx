@@ -1,7 +1,10 @@
+import { useEffect, useRef } from "react";
 import type { CacheResult, EnvironmentHealth, Stage } from "../types";
+import { isCompareArea, productHref, type ProductArea } from "../utils/productArea";
 
 interface HeaderProps {
-  activeProductArea: "analyze" | "profiles" | "comparisons" | "workloads" | "experiments" | "binary" | "lab";
+  activeProductArea: ProductArea;
+  compareArea: ProductArea;
   theme: "dark" | "light";
   diffMode: boolean;
   baselineResult: CacheResult | null;
@@ -17,13 +20,10 @@ interface HeaderProps {
   onSetBaseline: (result: CacheResult) => void;
   onClearBaseline: () => void;
   onOpenAnalyze: () => void;
-  onCompareHardware: () => void;
+  onNavigate: (area: ProductArea) => void;
   onExploreHardware: () => void;
   onOpenWorkloads: () => void;
-  onRunExperiment: () => void;
-  onOpenBinary: () => void;
-  onOpenLab: () => void;
-  onPreloadProductArea: (area: HeaderProps["activeProductArea"]) => void;
+  onPreloadProductArea: (area: ProductArea) => void;
   onRun: () => void;
   onCancel: () => void;
 }
@@ -67,13 +67,6 @@ function checksLabel(health: EnvironmentHealth | null) {
     .join("\n");
 }
 
-function productHref(area: HeaderProps["activeProductArea"]) {
-  const url = new URL(window.location.href);
-  if (area === "analyze") url.searchParams.delete("view");
-  else url.searchParams.set("view", area);
-  return `${url.pathname}${url.search}${url.hash}`;
-}
-
 function EnvironmentStatus({
   health,
   error,
@@ -107,8 +100,70 @@ function EnvironmentStatus({
   );
 }
 
+function MoreMenu({
+  links,
+  activeProductArea,
+  onPreload,
+}: {
+  links: { area: ProductArea; label: string; open: () => void }[];
+  activeProductArea: ProductArea;
+  onPreload: (area: ProductArea) => void;
+}) {
+  const ref = useRef<HTMLDetailsElement>(null);
+  const active = links.find((link) => link.area === activeProductArea);
+
+  useEffect(() => {
+    const close = (event: Event) => {
+      const menu = ref.current;
+      if (!menu?.open) return;
+      if (event instanceof KeyboardEvent) {
+        if (event.key !== "Escape") return;
+        menu.open = false;
+        menu.querySelector("summary")?.focus();
+        return;
+      }
+      if (!menu.contains(event.target as Node)) menu.open = false;
+    };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, []);
+
+  return (
+    <details ref={ref} className="header-more">
+      <summary className={`header-nav-item${active ? " active" : ""}`}>
+        {active ? active.label : "More"}
+        <span className="header-more-caret" aria-hidden="true">▾</span>
+      </summary>
+      <div className="header-more-menu">
+        {links.map(({ area, label, open }) => (
+          <a
+            key={area}
+            href={productHref(area)}
+            className={`header-more-item${activeProductArea === area ? " active" : ""}`}
+            aria-current={activeProductArea === area ? "page" : undefined}
+            onClick={(event) => {
+              event.preventDefault();
+              if (ref.current) ref.current.open = false;
+              open();
+            }}
+            onPointerEnter={() => onPreload(area)}
+            onFocus={() => onPreload(area)}
+          >
+            {label}
+          </a>
+        ))}
+      </div>
+    </details>
+  );
+}
+
 export function Header({
   activeProductArea,
+  compareArea,
   theme,
   diffMode,
   baselineResult,
@@ -124,24 +179,23 @@ export function Header({
   onSetBaseline,
   onClearBaseline,
   onOpenAnalyze,
-  onCompareHardware,
+  onNavigate,
   onExploreHardware,
   onOpenWorkloads,
-  onRunExperiment,
-  onOpenBinary,
-  onOpenLab,
   onPreloadProductArea,
   onRun,
   onCancel,
 }: HeaderProps) {
+  // Compare groups the cross-CPU, code-variant and what-if views; its link
+  // returns to whichever of them was used last.
   const productLinks = [
-    { area: "analyze" as const, label: "Analyze", open: onOpenAnalyze },
-    { area: "lab" as const, label: "Hardware Lab", open: onOpenLab },
-    { area: "comparisons" as const, label: "Comparisons", open: onCompareHardware },
-    { area: "experiments" as const, label: "Experiments", open: onRunExperiment },
-    { area: "profiles" as const, label: "Profiles", open: onExploreHardware },
-    { area: "workloads" as const, label: "Workloads", open: onOpenWorkloads },
-    { area: "binary" as const, label: "Binary profiles", open: onOpenBinary },
+    { area: "analyze" as ProductArea, label: "Analyze", open: onOpenAnalyze, active: activeProductArea === "analyze" },
+    { area: compareArea, label: "Compare", open: () => onNavigate(compareArea), active: isCompareArea(activeProductArea) },
+    { area: "profiles" as ProductArea, label: "CPU profiles", open: onExploreHardware, active: activeProductArea === "profiles" },
+  ];
+  const moreLinks = [
+    { area: "workloads" as ProductArea, label: "Workloads", open: onOpenWorkloads },
+    { area: "binary" as ProductArea, label: "Binary profiles", open: () => onNavigate("binary") },
   ];
 
   return (
@@ -163,22 +217,23 @@ export function Header({
       </div>
 
       <nav className="header-nav" aria-label="Product">
-        {productLinks.map(({ area, label, open }) => (
+        {productLinks.map(({ area, label, open, active }) => (
           <a
-            key={area}
+            key={label}
             href={productHref(area)}
-            className={`header-nav-item${activeProductArea === area ? " active" : ""}`}
+            className={`header-nav-item${active ? " active" : ""}`}
             onClick={(event) => {
               event.preventDefault();
               open();
             }}
             onPointerEnter={() => onPreloadProductArea(area)}
             onFocus={() => onPreloadProductArea(area)}
-            aria-current={activeProductArea === area ? "page" : undefined}
+            aria-current={active ? "page" : undefined}
           >
             {label}
           </a>
         ))}
+        <MoreMenu links={moreLinks} activeProductArea={activeProductArea} onPreload={onPreloadProductArea} />
       </nav>
 
       <div className="header-center">

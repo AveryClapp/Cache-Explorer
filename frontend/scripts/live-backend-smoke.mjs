@@ -89,20 +89,22 @@ try {
   await visible(page.getByText('Run details', { exact: true }), 'default analysis result', 90000)
 
   const nav = page.getByRole('navigation', { name: 'Product' })
-  await nav.getByRole('link', { name: 'Profiles', exact: true }).click()
+  await nav.getByRole('link', { name: 'CPU profiles', exact: true }).click()
   await visible(page.getByText('CPU Profiles', { exact: true }), 'profiles workspace')
   assert(new URL(page.url()).searchParams.get('view') === 'profiles', 'Profiles did not produce a durable URL')
 
-  await nav.getByRole('link', { name: 'Comparisons', exact: true }).click()
-  await visible(page.getByText('Hardware Comparison', { exact: true }), 'comparison workspace')
+  await nav.getByRole('link', { name: 'Compare', exact: true }).click()
+  await visible(page.getByText('Compare across CPUs', { exact: true }), 'comparison workspace')
 
+  await nav.locator('.header-more > summary').click()
   await nav.getByRole('link', { name: 'Workloads', exact: true }).click()
   await visible(page.getByText('Verified Workloads', { exact: true }), 'workload workspace')
   await visible(page.getByText('conv2d-intel14', { exact: true }).first(), 'default verified workload')
 
-  await nav.getByRole('link', { name: 'Experiments', exact: true }).click()
+  await nav.getByRole('link', { name: 'Compare', exact: true }).click()
+  await page.getByRole('navigation', { name: 'Compare' }).getByRole('link', { name: 'Code variants', exact: true }).click()
   const experiment = page.locator('.experiment-modal')
-  await visible(experiment.getByText('Hardware Experiment', { exact: true }), 'experiment workspace')
+  await visible(experiment.getByText('Compare code variants', { exact: true }), 'experiment workspace')
   await experiment.getByRole('button', { name: 'Apply', exact: true }).click()
   await experiment.getByRole('button', { name: 'Run', exact: true }).click()
   await visible(experiment.getByText('Overall', { exact: true }), 'default experiment result', 120000)

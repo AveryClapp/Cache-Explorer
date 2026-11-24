@@ -522,14 +522,16 @@ async function closeModal() {
 }
 
 async function openProductArea(name) {
-  const navigationLabels = {
-    Explore: 'Profiles',
-    Compare: 'Comparisons',
-    Workloads: 'Workloads',
-    Experiments: 'Experiments',
+  const nav = page.getByRole('navigation', { name: 'Product' })
+  if (name === 'Workloads') {
+    await nav.locator('.header-more > summary').click()
+    await nav.getByRole('link', { name: 'Workloads', exact: true }).click()
+    return
   }
-  const label = navigationLabels[name] || name
-  await page.getByRole('navigation', { name: 'Product' }).getByRole('link', { name: label, exact: true }).click()
+  await nav.getByRole('link', { name: name === 'Explore' ? 'CPU profiles' : 'Compare', exact: true }).click()
+  if (name === 'Experiments') {
+    await page.getByRole('navigation', { name: 'Compare' }).getByRole('link', { name: 'Code variants', exact: true }).click()
+  }
 }
 
 async function runVisualFlow(url, outputDir) {

@@ -10,6 +10,8 @@ import {
 import type { CommandItem } from './components/CommandPalette'
 import type { ExampleLangFilter } from './components/ExamplesSidebar'
 import { Header } from './components/Header'
+import { isCompareArea, type ProductArea } from './utils/productArea'
+import { CompareTabs } from './components/CompareTabs'
 import { SettingsToolbar } from './components/SettingsToolbar'
 import { ExamplesSidebar } from './components/ExamplesSidebar'
 import { ResultsPanel } from './components/ResultsPanel'
@@ -71,7 +73,6 @@ import {
   exportExperimentAsJSON,
 } from './utils/export'
 
-type ProductArea = 'analyze' | 'profiles' | 'comparisons' | 'workloads' | 'experiments' | 'binary' | 'lab'
 
 const loadCommandPalette = () => import('./components/CommandPalette').then(module => ({ default: module.CommandPalette }))
 const loadEditorPanel = () => import('./components/EditorPanel').then(module => ({ default: module.EditorPanel }))
@@ -423,6 +424,14 @@ function App() {
   const decorationsRef = useRef<string[]>([])  // For hover/miss decorations
   const vimStatusRef = useRef<HTMLDivElement>(null)
   const vimModeRef = useRef<{ dispose: () => void } | null>(null)
+
+  const [compareArea, setCompareArea] = useState<ProductArea>(() => {
+    const initial = productAreaFromLocation()
+    return isCompareArea(initial) ? initial : 'comparisons'
+  })
+  useEffect(() => {
+    if (isCompareArea(activeProductArea)) setCompareArea(activeProductArea)
+  }, [activeProductArea])
 
   const navigateProductArea = useCallback((area: ProductArea, historyMode: 'push' | 'replace' = 'push') => {
     setActiveProductArea(area)
@@ -1442,10 +1451,13 @@ function App() {
     { id: 'diff-clear', icon: '@', label: 'Clear diff baseline', action: () => { clearBaselineHook(); setBaselineCode(null) }, category: 'actions' },
     { id: 'export-json', icon: '@', label: 'Export results as JSON', action: () => result && exportAsJSON(result), category: 'actions' },
     { id: 'export-csv', icon: '@', label: 'Export results as CSV', action: () => result && exportAsCSV(result), category: 'actions' },
-    { id: 'batch-analyze', icon: '@', label: 'Compare hardware presets', action: runBatchAnalysis, category: 'actions' },
-    { id: 'hardware-experiment', icon: '@', label: 'Open hardware experiment', action: openExperimentModal, category: 'actions' },
-    { id: 'hardware-explorer', icon: '@', label: 'Open hardware explorer', action: openHardwareExplorer, category: 'actions' },
+    { id: 'batch-analyze', icon: '@', label: 'Run this code across CPUs', action: runBatchAnalysis, category: 'actions' },
+    { id: 'compare-cpus', icon: '@', label: 'Compare: across CPUs', action: openComparisonWorkspace, category: 'actions' },
+    { id: 'hardware-experiment', icon: '@', label: 'Compare: code variants', action: openExperimentModal, category: 'actions' },
+    { id: 'hardware-lab', icon: '@', label: 'Compare: Hardware Lab', action: () => navigateProductArea('lab'), category: 'actions' },
+    { id: 'hardware-explorer', icon: '@', label: 'Open CPU profiles', action: openHardwareExplorer, category: 'actions' },
     { id: 'workloads', icon: '@', label: 'Open verified workloads', action: openWorkloadCatalog, category: 'actions' },
+    { id: 'binary', icon: '@', label: 'Open binary profiles', action: () => navigateProductArea('binary'), category: 'actions' },
     // Settings (:)
     { id: 'vim', icon: ':', label: vimMode ? 'Disable Vim mode' : 'Enable Vim mode', action: () => setVimMode(!vimMode), category: 'settings' },
     { id: 'lang-c', icon: ':', label: 'Language: C', action: () => updateActiveLanguage('c'), category: 'settings' },
@@ -1502,6 +1514,7 @@ function App() {
       {!isEmbedMode && (
         <Header
           activeProductArea={activeProductArea}
+          compareArea={compareArea}
           theme={theme}
           diffMode={diffMode}
           baselineResult={baselineResult}
@@ -1517,12 +1530,9 @@ function App() {
           onSetBaseline={(r) => { setBaselineFromHook(r, config, files); setBaselineCode(code) }}
           onClearBaseline={() => { clearBaselineHook(); setBaselineCode(null) }}
           onOpenAnalyze={openAnalyzeWorkspace}
-          onCompareHardware={openComparisonWorkspace}
+          onNavigate={navigateProductArea}
           onExploreHardware={openHardwareExplorer}
           onOpenWorkloads={openWorkloadCatalog}
-          onRunExperiment={openExperimentModal}
-          onOpenBinary={() => navigateProductArea('binary')}
-          onOpenLab={() => navigateProductArea('lab')}
           onPreloadProductArea={preloadProductArea}
           onRun={runAnalysis}
           onCancel={cancelAnalysis}
@@ -1566,7 +1576,10 @@ function App() {
       )}
 
       {!isEmbedMode && activeProductArea !== 'analyze' && (
-        <main id="main-content" className="product-workspace" tabIndex={-1}>
+        <main id="main-content" className={`product-workspace${isCompareArea(activeProductArea) ? ' has-tabs' : ''}`} tabIndex={-1}>
+          {isCompareArea(activeProductArea) && (
+            <CompareTabs active={activeProductArea} onNavigate={navigateProductArea} onPreload={preloadProductArea} />
+          )}
           <Suspense fallback={<div className="product-loading" role="status">Loading workspace…</div>}>
             {activeProductArea === 'binary' && <BinaryProfiles bundle={binaryProfile} onChange={setBinaryProfile} />}
             {activeProductArea === 'lab' && <HardwareLab files={files} config={config} payload={makeHardwarePayload()} scenario={labScenario} onChange={setLabScenario} onOpenSource={openAnalyzeWorkspace} hosted={environmentHealth?.sandbox === 'enabled'} />}

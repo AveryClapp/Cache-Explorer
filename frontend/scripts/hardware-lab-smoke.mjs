@@ -21,7 +21,8 @@ try {
   for (const width of [320, 390, 768, 1024, 1280, 1440]) {
     await page.setViewportSize({ width, height: 1000 })
     const navProblems = await page.getByRole('navigation', { name: 'Product' }).evaluate(nav => {
-      return [...nav.querySelectorAll('a')].flatMap(link => {
+      // Links inside the closed More menu are not rendered; check what is on screen.
+      return [...nav.querySelectorAll('a, summary')].filter(link => link.checkVisibility()).flatMap(link => {
         const box = link.getBoundingClientRect()
         const range = document.createRange()
         range.selectNodeContents(link)
@@ -61,8 +62,9 @@ try {
   const path = join(output, 'scenario.json'); await download.saveAs(path)
   const exported = parseScenario(await readFile(path, 'utf8'))
   assert(exported.report && exported.files[0].code.includes('matrix'))
-  await page.getByRole('link', { name: 'Profiles', exact: true }).click()
-  await page.getByRole('link', { name: 'Hardware Lab', exact: true }).click()
+  await page.getByRole('link', { name: 'CPU profiles', exact: true }).click()
+  // Compare returns to the view used last.
+  await page.getByRole('link', { name: 'Compare', exact: true }).click()
   await page.getByRole('heading', { name: 'Source lines that changed' }).waitFor()
   const input = page.getByLabel('Import Hardware Lab scenario', { exact: true })
   await input.setInputFiles({ name: 'invalid.json', mimeType: 'application/json', buffer: Buffer.from('{"schemaVersion":999}') })

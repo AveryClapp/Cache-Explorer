@@ -144,16 +144,25 @@ function workloadName(id) {
 }
 
 async function openHeaderTool(name) {
-  const navigationLabels = {
-    Hardware: 'Comparisons',
-    Explore: 'Profiles',
-    Workloads: 'Workloads',
-    Experiment: 'Experiments',
+  const routes = {
+    Hardware: { view: 'comparisons', primary: 'Compare', tab: 'Across CPUs' },
+    Experiment: { view: 'experiments', primary: 'Compare', tab: 'Code variants' },
+    Explore: { view: 'profiles', primary: 'CPU profiles' },
+    Workloads: { view: 'workloads', more: 'Workloads' },
   }
-  const label = navigationLabels[name] || name
-  await page.getByRole('navigation', { name: 'Product' }).getByRole('link', { name: label, exact: true }).click()
-  const expectedView = label.toLowerCase()
-  assert(new URL(page.url()).searchParams.get('view') === expectedView, `${label} navigation did not update the URL`)
+  const route = routes[name]
+  assert(route, `unknown header tool ${name}`)
+  const nav = page.getByRole('navigation', { name: 'Product' })
+  if (route.more) {
+    await nav.locator('.header-more > summary').click()
+    await nav.getByRole('link', { name: route.more, exact: true }).click()
+  } else {
+    await nav.getByRole('link', { name: route.primary, exact: true }).click()
+  }
+  if (route.tab) {
+    await page.getByRole('navigation', { name: 'Compare' }).getByRole('link', { name: route.tab, exact: true }).click()
+  }
+  assert(new URL(page.url()).searchParams.get('view') === route.view, `${name} navigation did not update the URL`)
 }
 
 async function openAdvancedSettings() {
@@ -211,7 +220,7 @@ async function verifyProductDeepLinks(url) {
     `direct workload navigation loaded editor code: ${JSON.stringify(scriptRequests)}`,
   )
 
-  await page.getByRole('navigation', { name: 'Product' }).getByRole('link', { name: 'Profiles', exact: true }).click()
+  await page.getByRole('navigation', { name: 'Product' }).getByRole('link', { name: 'CPU profiles', exact: true }).click()
   await assertVisible(page.getByText('CPU Profiles', { exact: true }), 'profile workspace navigation')
   assert(new URL(page.url()).searchParams.get('view') === 'profiles', 'profile workspace URL mismatch')
 
@@ -322,7 +331,7 @@ async function verifyLaunchSurface(url) {
   await closeModal()
 
   await page.getByRole('button', { name: /^Experiments/ }).click()
-  await assertVisible(page.getByText('Hardware Experiment', { exact: true }), 'experiment modal')
+  await assertVisible(page.getByText('Compare code variants', { exact: true }), 'experiment modal')
   await closeModal()
 
   await page.setViewportSize({ width: 390, height: 844 })
@@ -674,7 +683,7 @@ async function verifyWorkloadCatalogControls(url) {
   await prefetchRow.getByRole('button', { name: 'Experiment' }).click()
 
   const experimentModal = page.locator('.experiment-modal')
-  await assertVisible(experimentModal.getByText('Hardware Experiment', { exact: true }), 'workload experiment modal')
+  await assertVisible(experimentModal.getByText('Compare code variants', { exact: true }), 'workload experiment modal')
   await assertVisible(experimentModal.getByText('Variant set prefetch-stream-intel', { exact: true }), 'workload variant source label')
   assert(await experimentModal.locator('textarea').inputValue() === 'prefetch-off\nprefetch-stream', 'workload variants should populate experiment textarea')
   await assertVisible(experimentModal.getByText('intel14', { exact: true }), 'workload hardware chip')
@@ -996,8 +1005,8 @@ async function verifyHardwareComparison(url) {
   await page.goto(url, { waitUntil: 'domcontentloaded' })
   await openHeaderTool('Hardware')
 
-  const modal = page.locator('.batch-modal').filter({ hasText: 'Hardware Comparison' })
-  await assertVisible(modal.getByText('Hardware Comparison', { exact: true }), 'hardware comparison modal')
+  const modal = page.locator('.batch-modal').filter({ hasText: 'Compare across CPUs' })
+  await assertVisible(modal.getByText('Compare across CPUs', { exact: true }), 'hardware comparison modal')
   await assertVisible(modal.getByText('Ready to compare', { exact: true }), 'comparison ready state')
   await modal.getByRole('button', { name: 'Run Comparison', exact: true }).click()
   await assertVisible(modal.getByText('Educational', { exact: true }), 'comparison educational row')
@@ -1044,7 +1053,7 @@ async function verifyHardwareComparisonEmptyState(url) {
   await page.goto(url, { waitUntil: 'domcontentloaded' })
   await openHeaderTool('Hardware')
 
-  const modal = page.locator('.batch-modal').filter({ hasText: 'Hardware Comparison' })
+  const modal = page.locator('.batch-modal').filter({ hasText: 'Compare across CPUs' })
   await modal.getByRole('button', { name: 'Run Comparison', exact: true }).click()
   await assertVisible(modal.getByText('No hardware results', { exact: true }), 'comparison empty-state title')
   await assertVisible(modal.getByText(failureMessage, { exact: true }), 'comparison empty-state message')
@@ -1118,7 +1127,7 @@ async function verifyEditRunCompareShareReopen(url) {
   assert(compilePayload?.code?.includes('EDIT_RUN_MARKER'), `edited compile payload missing marker: ${compilePayload?.code}`)
 
   await openHeaderTool('Hardware')
-  const editedComparison = page.locator('.batch-modal').filter({ hasText: 'Hardware Comparison' })
+  const editedComparison = page.locator('.batch-modal').filter({ hasText: 'Compare across CPUs' })
   await assertVisible(editedComparison, 'edited comparison modal')
   await editedComparison.getByRole('button', { name: 'Run Comparison', exact: true }).click()
   assert(comparePayload?.code?.includes('EDIT_RUN_MARKER'), `edited compare payload missing marker: ${comparePayload?.code}`)
@@ -1309,7 +1318,7 @@ async function verifyShareRoundTrip(url) {
   assert(shortenedState?.runHardwareConfigIds?.join(',') === 'intel,amd', `empty-state share run set mismatch: ${JSON.stringify(shortenedState?.runHardwareConfigIds)}`)
 
   await openHeaderTool('Hardware')
-  const restoredComparison = page.locator('.batch-modal').filter({ hasText: 'Hardware Comparison' })
+  const restoredComparison = page.locator('.batch-modal').filter({ hasText: 'Compare across CPUs' })
   await assertVisible(restoredComparison, 'restored hardware comparison modal')
   await restoredComparison.getByRole('button', { name: 'Run Comparison', exact: true }).click()
   assert(restoredCompareRequest?.configs?.join(',') === 'intel,amd', `restored comparison configs mismatch: ${JSON.stringify(restoredCompareRequest?.configs)}`)
@@ -1509,13 +1518,14 @@ async function verifyExperimentResults(url) {
   await page.goto(url, { waitUntil: 'domcontentloaded' })
   await assertVisible(page.getByText('Hardware Explorer', { exact: true }).first(), 'Hardware Explorer product name')
   await assertVisible(page.getByText('Preview', { exact: true }).first(), 'Preview badge')
-  for (const label of ['Profiles', 'Comparisons', 'Workloads', 'Experiments']) {
+  for (const label of ['Analyze', 'Compare', 'CPU profiles']) {
     await assertVisible(page.getByRole('navigation', { name: 'Product' }).getByRole('link', { name: label, exact: true }), `${label} primary navigation`)
   }
+  await assertVisible(page.getByRole('navigation', { name: 'Product' }).locator('.header-more > summary'), 'More navigation menu')
   await openHeaderTool('Experiment')
 
   const modal = page.locator('.experiment-modal')
-  await assertVisible(modal.getByText('Hardware Experiment', { exact: true }), 'experiment modal')
+  await assertVisible(modal.getByText('Compare code variants', { exact: true }), 'experiment modal')
   const runButton = modal.getByRole('button', { name: 'Run', exact: true })
   assert(await runButton.isDisabled(), 'default experiment should require applying its matching template')
   await assertVisible(modal.getByText(/Apply this template to load its matching source/), 'template apply guidance')
@@ -1611,7 +1621,7 @@ async function verifyExperimentShareReopen(url) {
   await openHeaderTool('Experiment')
 
   let modal = page.locator('.experiment-modal')
-  await assertVisible(modal.getByText('Hardware Experiment', { exact: true }), 'shared experiment modal')
+  await assertVisible(modal.getByText('Compare code variants', { exact: true }), 'shared experiment modal')
   assert(await modal.locator('textarea').inputValue() === experimentVariants, 'shared experiment variants should restore before run')
   await assertVisible(modal.getByText('intel', { exact: true }), 'shared experiment intel chip')
   await assertVisible(modal.getByText('amd', { exact: true }), 'shared experiment amd chip')
@@ -1634,7 +1644,7 @@ async function verifyExperimentShareReopen(url) {
   await page.goto(copiedUrl, { waitUntil: 'domcontentloaded' })
   await openHeaderTool('Experiment')
   modal = page.locator('.experiment-modal')
-  await assertVisible(modal.getByText('Hardware Experiment', { exact: true }), 'reopened experiment modal')
+  await assertVisible(modal.getByText('Compare code variants', { exact: true }), 'reopened experiment modal')
   assert(await modal.locator('textarea').inputValue() === experimentVariants, 'short-link experiment variants should restore')
 
   await closeModal()

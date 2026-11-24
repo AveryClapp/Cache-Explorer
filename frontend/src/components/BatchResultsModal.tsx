@@ -54,7 +54,7 @@ export function BatchResultsModal({ results, error, running, total, onRun, onExp
       >
         <div className="batch-modal-header">
           <div className="product-surface-title">
-            <h1 className="batch-modal-title" id="hardware-comparison-title">Hardware Comparison</h1>
+            <h1 className="batch-modal-title" id="hardware-comparison-title">Compare across CPUs</h1>
             <p>Run the current source across the CPU profiles in your run set.</p>
           </div>
           <div className="batch-modal-header-actions">
