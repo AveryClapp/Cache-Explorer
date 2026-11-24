@@ -1,3 +1,4 @@
+import type { LineMetric } from '../utils/lineMetrics'
 import type { editor } from 'monaco-editor'
 import type { CacheResult, ErrorResult, Stage } from '../types'
 import { MemoryEvidencePanel } from './MemoryEvidencePanel'
@@ -38,6 +39,8 @@ interface ResultsPanelProps {
   code: string
   selectedHotLineFile: string
   onHotLineFileChange: (file: string) => void
+  lineMetric: LineMetric
+  onLineMetricChange: (metric: LineMetric) => void
   editorRef: React.RefObject<editor.IStandaloneCodeEditor | null>
   copied: boolean
   onShare: () => void
@@ -66,6 +69,8 @@ export function ResultsPanel({
   code,
   selectedHotLineFile,
   onHotLineFileChange,
+  lineMetric,
+  onLineMetricChange,
   editorRef,
   copied,
   onShare,
@@ -125,6 +130,8 @@ export function ResultsPanel({
               code={code}
               selectedFile={selectedHotLineFile}
               onFileChange={onHotLineFileChange}
+              metric={lineMetric}
+              onMetricChange={onLineMetricChange}
               editorRef={editorRef}
             />
 

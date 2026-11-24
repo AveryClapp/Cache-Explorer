@@ -1593,7 +1593,9 @@ components:
             $ref: '#/components/schemas/CacheEvent'
         hotLines:
           type: array
-          description: Source lines with most cache activity
+          description: >-
+            Top source lines by each per-line metric (L1 misses, memory misses,
+            stall cycles, branch mispredictions), ordered by L1 misses
           items:
             $ref: '#/components/schemas/HotLine'
         suggestions:
@@ -1867,15 +1869,36 @@ components:
           type: string
           description: Source file name
           example: main.c
-        accesses:
+        hits:
           type: integer
-          description: Number of accesses from this line
-          example: 500
-        hitRate:
+          description: L1 hits from this line
+          example: 460
+        misses:
+          type: integer
+          description: L1 misses from this line
+          example: 40
+        missRate:
           type: number
           format: float
-          description: Hit rate for this line
-          example: 0.92
+          description: L1 miss rate for this line
+          example: 0.08
+        memoryMisses:
+          type: integer
+          description: Accesses from this line that missed every cache level
+          example: 12
+        stallCycles:
+          type: integer
+          description: >-
+            Estimated stall cycles charged to this line (memory, front end and
+            branch). Absent when the execution model is off (cache segments).
+          example: 4800
+        branchMispredictions:
+          type: integer
+          description: Branch mispredictions at this line. Absent when the execution model is off.
+          example: 3
+        threads:
+          type: integer
+          description: Threads that touched this line (multi-core runs only)
 
     CompileError:
       type: object

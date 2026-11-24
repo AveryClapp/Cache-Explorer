@@ -224,7 +224,11 @@ function mockResult() {
       l2: mockCacheLevel(5200, 800),
       l3: mockCacheLevel(700, 100),
     },
-    hotLines: [],
+    hotLines: [
+      { file: '/tmp/cache-explorer-visual/main.c', line: 6, hits: 9000, misses: 4000, missRate: 0.308, memoryMisses: 40, stallCycles: 2000, branchMispredictions: 0 },
+      { file: '/tmp/cache-explorer-visual/main.c', line: 9, hits: 12000, misses: 900, missRate: 0.07, memoryMisses: 700, stallCycles: 30000, branchMispredictions: 12 },
+      { file: '/tmp/cache-explorer-visual/main.c', line: 12, hits: 500, misses: 0, missRate: 0, memoryMisses: 0, stallCycles: 9000, branchMispredictions: 600 },
+    ],
     summary: {
       primaryBottleneck: 'memory',
       estimatedCycles: 120000,
@@ -534,6 +538,19 @@ async function openProductArea(name) {
   }
 }
 
+async function verifyLineMetricSelector() {
+  const panel = page.locator('.hotlines-panel')
+  const select = panel.getByLabel('Rank hot lines by')
+  const firstLocation = () => panel.locator('.hotspot-location').first().innerText()
+  if ((await firstLocation()).trim() !== 'main.c:6') throw new Error('L1 misses should rank main.c:6 first')
+  await select.selectOption('stallCycles')
+  if ((await firstLocation()).trim() !== 'main.c:9') throw new Error('Stall cycles should rank main.c:9 first')
+  await select.selectOption('branchMispredictions')
+  if ((await firstLocation()).trim() !== 'main.c:12') throw new Error('Branch mispredicts should rank main.c:12 first')
+  if (await panel.locator('.hotspot').count() !== 2) throw new Error('Lines without mispredicts should be hidden')
+  await select.selectOption('l1Misses')
+}
+
 async function runVisualFlow(url, outputDir) {
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto(url, { waitUntil: 'domcontentloaded' })
@@ -543,6 +560,7 @@ async function runVisualFlow(url, outputDir) {
   await page.getByRole('button', { name: 'Execute', exact: true }).click()
   await page.getByText('Run details', { exact: true }).waitFor({ state: 'visible', timeout: 8000 })
   await capture(outputDir, 'desktop-result')
+  await verifyLineMetricSelector()
 
   await openProductArea('Explore')
   await page.getByText('CPU Profiles', { exact: true }).waitFor({ state: 'visible', timeout: 8000 })

@@ -1,6 +1,7 @@
 #include "include/TraceProcessor.hpp"
 #include <algorithm>
 #include <sstream>
+#include <unordered_set>
 
 namespace {
 
@@ -65,6 +66,8 @@ void TraceProcessor::process_line_access(const TraceEvent &event,
       source->hits++;
     else
       source->misses++;
+    if (!result.l1_hit && !result.l2_hit && !result.l3_hit)
+      source->memory_misses++;
   }
 
   // Feed the OoO pipeline model: instruction fetches supply the dynamic
@@ -255,6 +258,40 @@ std::vector<SourceStats> TraceProcessor::get_hot_lines(size_t limit) const {
   if (sorted.size() > limit)
     sorted.resize(limit);
   return sorted;
+}
+
+std::vector<SourceStats>
+TraceProcessor::get_reported_lines(size_t per_metric) const {
+  std::vector<const SourceStats *> all;
+  all.reserve(source_stats.size());
+  for (const auto &[key, stats] : source_stats) all.push_back(&stats);
+
+  std::unordered_set<const SourceStats *> picked;
+  auto take_top = [&](auto metric) {
+    std::vector<const SourceStats *> ranked;
+    for (const auto *stats : all)
+      if (metric(*stats) > 0) ranked.push_back(stats);
+    const size_t n = std::min(per_metric, ranked.size());
+    std::partial_sort(ranked.begin(), ranked.begin() + n, ranked.end(),
+                      [&](const auto *a, const auto *b) {
+                        return metric(*a) > metric(*b);
+                      });
+    for (size_t i = 0; i < n; i++) picked.insert(ranked[i]);
+  };
+  take_top([](const SourceStats &s) { return s.misses; });
+  take_top([](const SourceStats &s) { return s.memory_misses; });
+  take_top([](const SourceStats &s) { return s.total_stall_cycles(); });
+  take_top([](const SourceStats &s) { return s.branch_mispredictions; });
+
+  std::vector<SourceStats> lines;
+  lines.reserve(picked.size());
+  for (const auto *stats : picked) lines.push_back(*stats);
+  std::sort(lines.begin(), lines.end(), [](const auto &a, const auto &b) {
+    if (a.misses != b.misses) return a.misses > b.misses;
+    if (a.file != b.file) return a.file < b.file;
+    return a.line < b.line;
+  });
+  return lines;
 }
 
 std::vector<CodeHotspot>

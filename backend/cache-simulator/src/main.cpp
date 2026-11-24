@@ -1225,14 +1225,22 @@ int main(int argc, char *argv[]) {
       std::cout << "  },\n";
       std::cout << "  \"hotLines\": [\n";
 
-      for (size_t i = 0; i < hot.size(); i++) {
-        const auto &h = hot[i];
+      // Stall and branch counts come from the execution model, which cache
+      // segments turn off; omit them rather than report zeros.
+      const auto reported = processor.get_reported_lines(10);
+      for (size_t i = 0; i < reported.size(); i++) {
+        const auto &h = reported[i];
         std::cout << "    {\"file\": \"" << JsonOutput::escape(h.file) << "\", "
                   << "\"line\": " << h.line << ", "
                   << "\"hits\": " << h.hits << ", "
                   << "\"misses\": " << h.misses << ", "
-                  << "\"missRate\": " << std::fixed << std::setprecision(3) << h.miss_rate() << "}"
-                  << (i + 1 < hot.size() ? ",\n" : "\n");
+                  << "\"missRate\": " << std::fixed << std::setprecision(3) << h.miss_rate() << ", "
+                  << "\"memoryMisses\": " << h.memory_misses;
+        if (!opts.cache_segments) {
+          std::cout << ", \"stallCycles\": " << h.total_stall_cycles()
+                    << ", \"branchMispredictions\": " << h.branch_mispredictions;
+        }
+        std::cout << "}" << (i + 1 < reported.size() ? ",\n" : "\n");
       }
 
       std::cout << "  ],\n";

@@ -36,6 +36,7 @@ import type {
   WorkloadSnapshot,
   WorkloadVerificationResponse,
   WorkloadHistoryResponse,
+  HotLine,
 } from './types'
 
 // Constants
@@ -64,6 +65,15 @@ import {
 import { fuzzyMatch } from './utils/formatting'
 import { decodeState } from './utils/state'
 import { matchesEditorFile } from './utils/sourcePath'
+import {
+  DEFAULT_LINE_METRIC,
+  availableLineMetrics,
+  formatMetricCount,
+  isLineMetric,
+  lineMetricInfo,
+  lineMetricValue,
+  type LineMetric,
+} from './utils/lineMetrics'
 import {
   exportAsJSON,
   exportAsCSV,
@@ -150,6 +160,7 @@ const HARDWARE_CONFIG_ALIASES: Record<string, string> = {
   raspberry: 'rpi4',
 }
 const STRESS_WORKLOAD_VARIANT_TIMEOUT_MS = 30000
+const LINE_METRIC_STORAGE_KEY = 'cache-explorer-line-metric'
 const PRODUCT_AREAS = new Set<ProductArea>(['analyze', 'profiles', 'comparisons', 'workloads', 'experiments', 'binary', 'lab'])
 
 function productAreaFromLocation(): ProductArea {
@@ -389,6 +400,22 @@ function App() {
     if (isMobile && (result || error)) setMobilePane('results')
   }, [isMobile, result, error])
   const [selectedHotLineFile, setSelectedHotLineFile] = useState<string>('')  // File filter for hot lines
+  // One per-line metric drives both the hot-lines list and the editor gutter.
+  const [preferredLineMetric, setPreferredLineMetric] = useState<LineMetric>(() => {
+    try {
+      const stored = localStorage.getItem(LINE_METRIC_STORAGE_KEY)
+      return isLineMetric(stored) ? stored : DEFAULT_LINE_METRIC
+    } catch {
+      return DEFAULT_LINE_METRIC
+    }
+  })
+  const lineMetric: LineMetric = result && availableLineMetrics(result.hotLines).includes(preferredLineMetric)
+    ? preferredLineMetric
+    : DEFAULT_LINE_METRIC
+  const updateLineMetric = useCallback((metric: LineMetric) => {
+    setPreferredLineMetric(metric)
+    try { localStorage.setItem(LINE_METRIC_STORAGE_KEY, metric) } catch { /* per-viewer convenience only */ }
+  }, [])
   const [batchResults, setBatchResults] = useState<{config: string; result: CacheResult}[]>([])
   const [batchError, setBatchError] = useState<string | null>(null)
   const [activeProductArea, setActiveProductArea] = useState<ProductArea>(productAreaFromLocation)
@@ -810,18 +837,20 @@ function App() {
     const editorFileName = activeFile?.name || ''
     const lineCount = model.getLineCount()
     const inRange = (lineNumber: number) => lineNumber > 0 && lineNumber <= lineCount
+    const metricLabel = lineMetricInfo(lineMetric).label.toLowerCase()
+    const valueOf = (line: HotLine) => lineMetricValue(line, lineMetric)
     const hotLines = result.hotLines.filter(line =>
-      line.misses > 0 && inRange(line.line) && matchesEditorFile(line.file, editorFileName, files.length))
+      valueOf(line) > 0 && inRange(line.line) && matchesEditorFile(line.file, editorFileName, files.length))
     const annotations = (result.sourceAnnotations || []).filter(annotation =>
       annotation.severity !== 'low' && inRange(annotation.line) &&
       matchesEditorFile(annotation.file, editorFileName, files.length))
 
-    const totalMisses = result.hotLines.reduce((sum, line) => sum + line.misses, 0) || 1
-    const byLine = new Map<number, { misses: number; hover: string[] }>()
+    const total = result.hotLines.reduce((sum, line) => sum + valueOf(line), 0) || 1
+    const byLine = new Map<number, { value: number; hover: string[] }>()
     const entry = (lineNumber: number) => {
       let current = byLine.get(lineNumber)
       if (!current) {
-        current = { misses: 0, hover: [] }
+        current = { value: 0, hover: [] }
         byLine.set(lineNumber, current)
       }
       return current
@@ -829,11 +858,17 @@ function App() {
 
     for (const line of hotLines) {
       const current = entry(line.line)
-      current.misses += line.misses
+      const value = valueOf(line)
+      current.value += value
       const accesses = line.hits + line.misses
+      const evidence = [
+        `${accesses.toLocaleString()} accesses, ${(line.missRate * 100).toFixed(1)}% L1 miss rate`,
+        lineMetric !== 'memoryMisses' && line.memoryMisses ? formatMetricCount(line.memoryMisses, 'memoryMisses') + ' to memory' : '',
+        lineMetric !== 'stallCycles' && line.stallCycles ? `${line.stallCycles.toLocaleString()} stall cycles` : '',
+        lineMetric !== 'branchMispredictions' && line.branchMispredictions ? formatMetricCount(line.branchMispredictions, 'branchMispredictions') : '',
+      ].filter(Boolean).join(' · ')
       current.hover.push(
-        `**${line.misses.toLocaleString()} misses** · ${formatShare(line.misses / totalMisses)} of all misses\n\n` +
-        `${accesses.toLocaleString()} accesses, ${(line.missRate * 100).toFixed(1)}% miss rate`,
+        `**${value.toLocaleString()} ${metricLabel}** · ${formatShare(value / total)} of the total on hot lines\n\n${evidence}`,
       )
     }
     for (const annotation of annotations) {
@@ -845,29 +880,29 @@ function App() {
     const decorations: editor.IModelDeltaDecoration[] = []
     const gutterRules: string[] = []
     for (const [lineNumber, current] of byLine) {
-      const share = current.misses / totalMisses
+      const share = current.value / total
       const tint = share >= 0.25 ? 'bad' : share >= 0.05 ? 'warn' : undefined
       decorations.push({
         range: new monaco.Range(lineNumber, 1, lineNumber, 1),
         options: {
           isWholeLine: true,
           className: tint ? `line-${tint}` : undefined,
-          linesDecorationsClassName: current.misses > 0
+          linesDecorationsClassName: current.value > 0
             ? `miss-gutter miss-gutter-${tint || 'low'} miss-gutter-l${lineNumber}`
             : undefined,
           glyphMarginClassName: tint ? `glyph-${tint}` : 'glyph-info',
           glyphMarginHoverMessage: { value: current.hover.join('\n\n---\n\n') },
         },
       })
-      if (current.misses > 0) {
-        gutterRules.push(`.monaco-editor .miss-gutter-l${lineNumber}::after{content:"${compactCount(current.misses)}"}`)
+      if (current.value > 0) {
+        gutterRules.push(`.monaco-editor .miss-gutter-l${lineNumber}::after{content:"${compactCount(current.value)}"}`)
       }
     }
 
     editor.updateOptions({ lineDecorationsWidth: gutterRules.length > 0 ? 48 : 10 })
     setMissGutterRules(gutterRules.join('\n'))
     decorationsRef.current = editor.deltaDecorations(decorationsRef.current, decorations)
-  }, [result, activeFile?.name, files.length])
+  }, [result, activeFile?.name, files.length, lineMetric])
 
   const cancelAnalysis = useCallback(() => {
     analysisActiveRef.current = false
@@ -1743,6 +1778,8 @@ function App() {
           code={code}
           selectedHotLineFile={selectedHotLineFile}
           onHotLineFileChange={setSelectedHotLineFile}
+          lineMetric={lineMetric}
+          onLineMetricChange={updateLineMetric}
           editorRef={editorRef}
           copied={copied}
           onShare={handleShare}

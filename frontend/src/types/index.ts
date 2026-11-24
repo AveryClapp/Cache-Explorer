@@ -364,8 +364,14 @@ export interface HotLine {
   file: string
   line: number
   hits: number
+  /** L1 misses */
   misses: number
   missRate: number
+  /** Accesses that missed every cache level */
+  memoryMisses?: number
+  /** Estimated stall cycles; absent when the execution model is off */
+  stallCycles?: number
+  branchMispredictions?: number
   threads?: number
 }
 

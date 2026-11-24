@@ -104,6 +104,50 @@ void test_hot_lines_tracking() {
   std::cout << "[PASS] test_hot_lines_tracking\n";
 }
 
+void test_reported_lines_carry_memory_misses() {
+  TraceProcessor processor(make_test_hierarchy());
+
+  auto access = [&](uint64_t address, uint32_t line) {
+    TraceEvent event;
+    event.address = address;
+    event.size = 4;
+    event.file = "metric.c";
+    event.line = line;
+    processor.process(event);
+  };
+
+  // Line 10: three cold lines, each misses every level.
+  access(0x10000, 10);
+  access(0x20000, 10);
+  access(0x30000, 10);
+  // Line 20: one cold line.
+  access(0x40000, 20);
+  // Line 30: re-reads a resident line, so it never misses.
+  access(0x10000, 30);
+
+  const auto top = processor.get_reported_lines(1);
+  assert(!top.empty());
+  assert(top.front().line == 10);
+  assert(top.front().misses == 3);
+  assert(top.front().memory_misses == 3);
+
+  const auto all = processor.get_reported_lines(10);
+  bool saw_line_20 = false;
+  for (const auto &entry : all) {
+    // Every reported line leads on at least one metric.
+    assert(entry.misses > 0 || entry.memory_misses > 0 ||
+           entry.total_stall_cycles() > 0 || entry.branch_mispredictions > 0);
+    if (entry.line == 20) {
+      saw_line_20 = true;
+      assert(entry.memory_misses == 1);
+    }
+  }
+  assert(saw_line_20);
+  // Ordered by L1 misses.
+  for (size_t i = 1; i < all.size(); i++) assert(all[i - 1].misses >= all[i].misses);
+  std::cout << "[PASS] test_reported_lines_carry_memory_misses\n";
+}
+
 void test_source_keys_own_short_filename_storage() {
   TraceProcessor processor(make_test_hierarchy());
 
@@ -482,6 +526,7 @@ int main() {
   test_repeated_access_hits();
   test_hot_lines_tracking();
   test_source_keys_own_short_filename_storage();
+  test_reported_lines_carry_memory_misses();
   test_bottleneck_summary_and_source_annotations();
   test_event_callback();
   test_prefetching_enabled();
@@ -513,6 +558,6 @@ int main() {
   test_pin_multibyte_access();
   test_pin_high_thread_id();
 
-  std::cout << "\n=== All 29 TraceProcessor tests passed! ===\n";
+  std::cout << "\n=== All 30 TraceProcessor tests passed! ===\n";
   return 0;
 }

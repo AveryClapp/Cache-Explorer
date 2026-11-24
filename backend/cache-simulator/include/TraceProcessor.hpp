@@ -39,6 +39,7 @@ struct SourceStats {
   uint32_t line;
   uint64_t hits = 0;
   uint64_t misses = 0;
+  uint64_t memory_misses = 0;  // accesses that missed every cache level
   uint64_t instructions = 0;
   uint64_t memory_stall_cycles = 0;
   uint64_t frontend_stall_cycles = 0;
@@ -118,6 +119,11 @@ public:
   const MemoryEvidence& get_memory_evidence() const { return memory_evidence; }
 
   [[nodiscard]] std::vector<SourceStats> get_hot_lines(size_t limit = 10) const;
+  // Top lines by each per-line metric (L1 misses, memory misses, stall
+  // cycles, branch mispredictions), merged and ordered by L1 misses, so a
+  // client can rank by any one of them.
+  [[nodiscard]] std::vector<SourceStats>
+  get_reported_lines(size_t per_metric = 10) const;
   [[nodiscard]] std::vector<CodeHotspot>
   get_code_hotspots(size_t limit = 100) const;
 
