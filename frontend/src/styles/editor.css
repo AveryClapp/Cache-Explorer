@@ -192,84 +192,53 @@
   100% { transform: translateX(260%); }
 }
 
-/* Analysis Decorations */
-.line-good {
-  background: rgba(78, 201, 176, 0.08);
-}
-
+/* Analysis decorations: tint lines that own a real share of the misses. */
 .line-warn {
-  background: rgba(220, 220, 170, 0.10);
+  background: color-mix(in srgb, var(--signal-warning) 9%, transparent);
 }
 
 .line-bad {
-  background: rgba(241, 76, 76, 0.10);
+  background: color-mix(in srgb, var(--signal-critical) 12%, transparent);
 }
 
-.line-hw-memory {
-  background: rgba(241, 76, 76, 0.14);
-}
-
-.line-hw-branch {
-  background: rgba(220, 220, 170, 0.12);
-}
-
-.line-hw-frontend {
-  background: rgba(78, 201, 176, 0.12);
-}
-
-.glyph-good,
 .glyph-warn,
 .glyph-bad,
-.glyph-hw-memory,
-.glyph-hw-branch,
-.glyph-hw-frontend {
+.glyph-info {
   border-left: 3px solid currentColor;
 }
 
-.glyph-good {
-  color: var(--signal-good);
-}
-
-.glyph-warn,
-.glyph-hw-branch {
+.glyph-warn {
   color: var(--signal-warning);
 }
 
-.glyph-bad,
-.glyph-hw-memory {
+.glyph-bad {
   color: var(--signal-critical);
 }
 
-.glyph-hw-frontend {
-  color: var(--signal-info);
+.glyph-info {
+  color: var(--text-muted);
+  opacity: 0.6;
 }
 
-.inline-good,
-.inline-warn,
-.inline-bad,
-.inline-hw-memory,
-.inline-hw-branch,
-.inline-hw-frontend {
-  margin-left: 12px;
+/* Miss-count column beside the line numbers; the per-line count comes from
+   generated ::after rules (see setMissGutterRules in App.tsx). */
+.monaco-editor .miss-gutter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 6px;
   font-family: var(--font-code);
   font-size: 11px;
-  opacity: 0.88;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  box-sizing: border-box;
 }
 
-.inline-good {
-  color: var(--signal-good);
-}
-
-.inline-warn,
-.inline-hw-branch {
+.monaco-editor .miss-gutter-warn {
   color: var(--signal-warning);
 }
 
-.inline-bad,
-.inline-hw-memory {
+.monaco-editor .miss-gutter-bad {
   color: var(--signal-critical);
-}
-
-.inline-hw-frontend {
-  color: var(--signal-info);
+  font-weight: 600;
 }

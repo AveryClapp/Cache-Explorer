@@ -29,7 +29,6 @@ import type {
   DefineEntry,
   CustomCacheConfig,
   PrefetchPolicy,
-  SourceAnnotation,
   ShareableState,
   ExperimentVariantSource,
   WorkloadSnapshot,
@@ -62,6 +61,7 @@ import {
 // Utilities
 import { fuzzyMatch } from './utils/formatting'
 import { decodeState } from './utils/state'
+import { matchesEditorFile } from './utils/sourcePath'
 import {
   exportAsJSON,
   exportAsCSV,
@@ -101,16 +101,28 @@ function preloadProductArea(area: ProductArea) {
   if (area === 'lab') void loadHardwareLab()
 }
 
-function annotationClass(annotation: SourceAnnotation) {
-  return `hw-${annotation.subsystem} ${annotation.severity}`
+function compactCount(value: number) {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
+  if (value >= 10_000) return `${Math.round(value / 1000)}k`
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}k`
+  return String(value)
 }
 
-function annotationBadge(annotation: SourceAnnotation) {
-  const subsystem = annotation.subsystem
-    ? annotation.subsystem[0].toUpperCase() + annotation.subsystem.slice(1)
-    : 'Hardware'
-  const share = (annotation.metrics.share * 100).toFixed(0)
-  return `${subsystem} ${share}%`
+function formatShare(share: number) {
+  return share >= 0.1 ? `${Math.round(share * 100)}%` : `${(share * 100).toFixed(1)}%`
+}
+
+// Per-line miss counts render through generated ::after rules so they sit in
+// Monaco's line-decoration gutter next to the line numbers.
+function setMissGutterRules(css: string) {
+  const id = 'miss-gutter-rules'
+  let style = document.getElementById(id)
+  if (!style) {
+    style = document.createElement('style')
+    style.id = id
+    document.head.appendChild(style)
+  }
+  style.textContent = css
 }
 
 function readApiFailureMessage(data: unknown, fallback: string) {
@@ -749,107 +761,84 @@ function App() {
     monaco.editor.setModelMarkers(model, 'cache-explorer', markers)
   }, [error])
 
-  // Apply decorations for cache analysis results
+  // Apply decorations for cache analysis results: a miss-count column beside
+  // the line numbers, a tint on lines that own a real share of the misses, and
+  // a hover with the per-line evidence.
   useEffect(() => {
-    if (!editorRef.current || !monacoRef.current || !result) {
-      if (editorRef.current && decorationsRef.current.length > 0) {
-        decorationsRef.current = editorRef.current.deltaDecorations(decorationsRef.current, [])
+    const editor = editorRef.current
+    const monaco = monacoRef.current
+    if (!editor || !monaco || !result) {
+      if (editor && decorationsRef.current.length > 0) {
+        decorationsRef.current = editor.deltaDecorations(decorationsRef.current, [])
       }
+      editor?.updateOptions({ lineDecorationsWidth: 10 })
+      setMissGutterRules('')
       return
     }
-
-    const monaco = monacoRef.current
-    const editor = editorRef.current
     const model = editor.getModel()
     if (!model) return
 
+    const editorFileName = activeFile?.name || ''
+    const lineCount = model.getLineCount()
+    const inRange = (lineNumber: number) => lineNumber > 0 && lineNumber <= lineCount
+    const hotLines = result.hotLines.filter(line =>
+      line.misses > 0 && inRange(line.line) && matchesEditorFile(line.file, editorFileName, files.length))
+    const annotations = (result.sourceAnnotations || []).filter(annotation =>
+      annotation.severity !== 'low' && inRange(annotation.line) &&
+      matchesEditorFile(annotation.file, editorFileName, files.length))
+
+    const totalMisses = result.hotLines.reduce((sum, line) => sum + line.misses, 0) || 1
+    const byLine = new Map<number, { misses: number; hover: string[] }>()
+    const entry = (lineNumber: number) => {
+      let current = byLine.get(lineNumber)
+      if (!current) {
+        current = { misses: 0, hover: [] }
+        byLine.set(lineNumber, current)
+      }
+      return current
+    }
+
+    for (const line of hotLines) {
+      const current = entry(line.line)
+      current.misses += line.misses
+      const accesses = line.hits + line.misses
+      current.hover.push(
+        `**${line.misses.toLocaleString()} misses** · ${formatShare(line.misses / totalMisses)} of all misses\n\n` +
+        `${accesses.toLocaleString()} accesses, ${(line.missRate * 100).toFixed(1)}% miss rate`,
+      )
+    }
+    for (const annotation of annotations) {
+      entry(annotation.line).hover.push(
+        `**${annotation.label}**\n\n${annotation.detail}\n\n${annotation.metrics.cycles.toLocaleString()} estimated cycles`,
+      )
+    }
+
     const decorations: editor.IModelDeltaDecoration[] = []
-    const inlineBadges = new Map<number, { parts: string[]; className: string }>()
-
-    const addInlineBadge = (lineNumber: number, text: string, className: string) => {
-      const current = inlineBadges.get(lineNumber)
-      if (current) {
-        current.parts.push(text)
-        if (className.startsWith('inline-hw')) current.className = className
-      } else {
-        inlineBadges.set(lineNumber, { parts: [text], className })
-      }
-    }
-
-    for (const line of result.hotLines) {
-      const fileName = line.file.split('/').pop() || line.file
-      if (fileName.includes('cache-explorer') || fileName.startsWith('/tmp/')) {
-        const lineNum = line.line
-        if (lineNum > 0 && lineNum <= model.getLineCount()) {
-          let className = 'line-good'
-          let inlineClass = 'inline-good'
-          if (line.missRate > 0.5) {
-            className = 'line-bad'
-            inlineClass = 'inline-bad'
-          } else if (line.missRate > 0.2) {
-            className = 'line-warn'
-            inlineClass = 'inline-warn'
-          }
-
-          // Background highlight for the whole line
-          decorations.push({
-            range: new monaco.Range(lineNum, 1, lineNum, 1),
-            options: {
-              isWholeLine: true,
-              className,
-              glyphMarginClassName: className.replace('line-', 'glyph-'),
-              glyphMarginHoverMessage: {
-                value: `**${line.misses.toLocaleString()} misses** (${(line.missRate * 100).toFixed(1)}% miss rate)\n\n${line.hits.toLocaleString()} hits total`
-              }
-            }
-          })
-
-          addInlineBadge(
-            lineNum,
-            `${line.misses} misses (${(line.missRate * 100).toFixed(0)}%)`,
-            inlineClass,
-          )
-        }
-      }
-    }
-
-    for (const annotation of result.sourceAnnotations || []) {
-      const fileName = annotation.file.split('/').pop() || annotation.file
-      if (fileName.includes('cache-explorer') || annotation.file.startsWith('/tmp/')) {
-        const lineNum = annotation.line
-        if (lineNum > 0 && lineNum <= model.getLineCount()) {
-          const className = `line-${annotationClass(annotation)}`
-          decorations.push({
-            range: new monaco.Range(lineNum, 1, lineNum, 1),
-            options: {
-              isWholeLine: true,
-              className,
-              glyphMarginClassName: `glyph-${annotationClass(annotation)}`,
-              glyphMarginHoverMessage: {
-                value: `**${annotation.label}**\n\n${annotation.detail}\n\n${annotation.metrics.cycles.toLocaleString()} cycles`
-              }
-            }
-          })
-          addInlineBadge(lineNum, annotationBadge(annotation), `inline-${annotationClass(annotation)}`)
-        }
-      }
-    }
-
-    for (const [lineNum, badge] of inlineBadges) {
-      const lineContent = model.getLineContent(lineNum)
+    const gutterRules: string[] = []
+    for (const [lineNumber, current] of byLine) {
+      const share = current.misses / totalMisses
+      const tint = share >= 0.25 ? 'bad' : share >= 0.05 ? 'warn' : undefined
       decorations.push({
-        range: new monaco.Range(lineNum, lineContent.length + 1, lineNum, lineContent.length + 1),
+        range: new monaco.Range(lineNumber, 1, lineNumber, 1),
         options: {
-          after: {
-            content: ` // ${badge.parts.join(' | ')}`,
-            inlineClassName: badge.className
-          }
-        }
+          isWholeLine: true,
+          className: tint ? `line-${tint}` : undefined,
+          linesDecorationsClassName: current.misses > 0
+            ? `miss-gutter miss-gutter-${tint || 'low'} miss-gutter-l${lineNumber}`
+            : undefined,
+          glyphMarginClassName: tint ? `glyph-${tint}` : 'glyph-info',
+          glyphMarginHoverMessage: { value: current.hover.join('\n\n---\n\n') },
+        },
       })
+      if (current.misses > 0) {
+        gutterRules.push(`.monaco-editor .miss-gutter-l${lineNumber}::after{content:"${compactCount(current.misses)}"}`)
+      }
     }
 
+    editor.updateOptions({ lineDecorationsWidth: gutterRules.length > 0 ? 48 : 10 })
+    setMissGutterRules(gutterRules.join('\n'))
     decorationsRef.current = editor.deltaDecorations(decorationsRef.current, decorations)
-  }, [result])
+  }, [result, activeFile?.name, files.length])
 
   const cancelAnalysis = useCallback(() => {
     analysisActiveRef.current = false

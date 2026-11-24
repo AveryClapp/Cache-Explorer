@@ -1,4 +1,5 @@
 import { formatPercent } from '../utils/formatting'
+import { sourceLineKey } from '../utils/sourcePath'
 import type { HotLine } from '../types'
 import type { editor } from 'monaco-editor'
 
@@ -19,8 +20,8 @@ interface HotLineWithDelta extends HotLine {
 }
 
 export function HotLinesPanel({ hotLines, baselineHotLines, diffMode, code, selectedFile, onFileChange, editorRef }: HotLinesPanelProps) {
-  // Filter hotlines to only show those with more than 1 total access
-  const significantHotLines = hotLines.filter(h => (h.hits + h.misses) > 1)
+  // Lines without misses are not hot; a single access is noise.
+  const significantHotLines = hotLines.filter(h => h.misses > 0 && (h.hits + h.misses) > 1)
 
   if (significantHotLines.length === 0) return null
 
@@ -28,7 +29,7 @@ export function HotLinesPanel({ hotLines, baselineHotLines, diffMode, code, sele
   const baselineLookup = new Map<string, HotLine>()
   if (diffMode && baselineHotLines) {
     for (const line of baselineHotLines) {
-      const key = `${line.file}:${line.line}`
+      const key = sourceLineKey(line.file, line.line)
       baselineLookup.set(key, line)
     }
   }
@@ -36,7 +37,7 @@ export function HotLinesPanel({ hotLines, baselineHotLines, diffMode, code, sele
   // Compute deltas and track matched baseline lines
   const matchedKeys = new Set<string>()
   const hotLinesWithDelta: HotLineWithDelta[] = significantHotLines.map(h => {
-    const key = `${h.file}:${h.line}`
+    const key = sourceLineKey(h.file, h.line)
     const baseline = baselineLookup.get(key)
     if (baseline) {
       matchedKeys.add(key)
@@ -49,8 +50,8 @@ export function HotLinesPanel({ hotLines, baselineHotLines, diffMode, code, sele
   const resolvedLines: HotLineWithDelta[] = diffMode && baselineHotLines
     ? baselineHotLines
         .filter(h => {
-          const key = `${h.file}:${h.line}`
-          return !matchedKeys.has(key) && (h.hits + h.misses) > 1
+          const key = sourceLineKey(h.file, h.line)
+          return !matchedKeys.has(key) && h.misses > 0 && (h.hits + h.misses) > 1
         })
         .map(h => ({ ...h, isResolved: true, delta: -h.misses }))
     : []
@@ -134,7 +135,7 @@ export function HotLinesPanel({ hotLines, baselineHotLines, diffMode, code, sele
                       {hotLine.delta > 0 ? '\u25B2' : '\u25BC'} {Math.abs(hotLine.delta).toLocaleString()}
                     </span>
                   )}
-                  <span className="hotspot-rate">({formatPercent(hotLine.missRate)})</span>
+                  <span className="hotspot-rate">({formatPercent(hotLine.missRate)} miss rate)</span>
                 </span>
               </div>
               {/* Source code preview - only show if from current file */}

@@ -185,6 +185,12 @@ jobs:
         working-directory: frontend
         run: npm run tokens:check
 
+      - name: Check frontend unit helpers
+        working-directory: frontend
+        run: |
+          npm run paths:check
+          npm run diagnostics:check
+
       - name: Lint frontend
         working-directory: frontend
         run: npm run lint
