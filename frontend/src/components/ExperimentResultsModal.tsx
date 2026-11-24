@@ -241,7 +241,11 @@ export function ExperimentResultsModal({
                           {formatTrustLabel(rowResult?.provenance)}
                         </span>
                       </td>
-                      <td><span className={bottleneckClass(row.primaryBottleneck)}>{row.primaryBottleneck}</span></td>
+                      <td>
+                        {row.primaryBottleneck && row.primaryBottleneck !== 'unknown'
+                          ? <span className={bottleneckClass(row.primaryBottleneck)}>{row.primaryBottleneck}</span>
+                          : <span title="The execution model is off for this run (loop caching skips events), so there is no bottleneck estimate.">Not estimated</span>}
+                      </td>
                       <td>{formatCycles(row.estimatedCycles)}</td>
                       <td className={deltaClass(row.cycleDelta)}>
                         {formatDelta(row.cycleDelta, row.cycleDeltaPercent)}

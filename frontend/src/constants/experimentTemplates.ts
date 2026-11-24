@@ -25,7 +25,7 @@ export const EXPERIMENT_TEMPLATES: ExperimentTemplate[] = [
     prefetchPolicy: 'adaptive',
     eventLimit: 100000,
     fastMode: true,
-    cacheSegments: true,
+    cacheSegments: false,
     verifiedWorkloadId: 'conv2d-intel14',
   },
   {
@@ -38,7 +38,7 @@ export const EXPERIMENT_TEMPLATES: ExperimentTemplate[] = [
     prefetchPolicy: 'stream',
     eventLimit: 1000000,
     fastMode: true,
-    cacheSegments: true,
+    cacheSegments: false,
   },
   {
     id: 'branch-predictor',
