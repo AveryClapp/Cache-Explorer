@@ -17,7 +17,7 @@
 
 **After:** Exact line-by-line cache miss attribution
 
-<video src="https://github.com/user-attachments/assets/649aeef7-319c-4778-af70-9df88674da3b" controls width="600"></video>
+[▶ Watch the 50-second demo](assets/demo-vid.mp4)
 
 ## Quick Start
 
