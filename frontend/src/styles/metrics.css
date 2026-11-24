@@ -244,8 +244,8 @@
 
 .bottleneck-detail-row {
   display: flex;
-  justify-content: space-between;
-  gap: var(--space-2);
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
   padding: var(--space-2) var(--space-3);
   background: var(--surface);
@@ -257,12 +257,15 @@
 
 .bottleneck-detail-row span:first-child {
   color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: var(--text-2xs);
 }
 
 .bottleneck-detail-row span:last-child {
   color: var(--text-bright);
-  overflow-wrap: anywhere;
-  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ─── Advanced Stats Grid ─── */

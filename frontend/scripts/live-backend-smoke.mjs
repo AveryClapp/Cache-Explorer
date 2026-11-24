@@ -86,7 +86,7 @@ try {
   const rootVisibleMs = Date.now() - rootStartedAt
 
   await page.getByRole('button', { name: 'Execute', exact: true }).click()
-  await visible(page.getByText('Evidence & Fidelity', { exact: true }), 'default analysis result', 90000)
+  await visible(page.getByText('Run details', { exact: true }), 'default analysis result', 90000)
 
   const nav = page.getByRole('navigation', { name: 'Product' })
   await nav.getByRole('link', { name: 'Profiles', exact: true }).click()

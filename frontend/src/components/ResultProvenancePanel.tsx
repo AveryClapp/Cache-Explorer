@@ -38,7 +38,7 @@ export function ResultProvenancePanel({ result }: ResultProvenancePanelProps) {
   return (
     <div className="panel result-provenance-panel">
       <div className="panel-header">
-        <span className="panel-title">Evidence & Fidelity</span>
+        <span className="panel-title">Run details</span>
         <span className={`provenance-chip ${provenanceClass(provenance)}`}>
           {formatTrustLabel(provenance)}
         </span>
@@ -104,7 +104,7 @@ export function ResultProvenancePanel({ result }: ResultProvenancePanelProps) {
         {reproCommand && (
           <div className="provenance-repro">
             <div className="provenance-repro-header">
-              <span className="provenance-label">Local Repro Command</span>
+              <span className="provenance-label">Reproduce locally</span>
               <button
                 type="button"
                 className="provenance-copy"

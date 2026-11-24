@@ -21,8 +21,6 @@ button,
 .metric-label,
 .provenance-label,
 .provenance-contract-label,
-.empty-state-kicker,
-.empty-state-trust-item span,
 .command-group-header,
 .cache-viz-title,
 .cache-level-name,
@@ -74,7 +72,6 @@ button,
 .toolbar-toggle,
 .language-filter-btn,
 .styled-select-trigger,
-.empty-state-path,
 .example-item,
 .panel,
 .metric-card,
@@ -104,7 +101,6 @@ button,
 }
 
 .environment-status,
-.empty-state-target,
 .provenance-chip,
 .provenance-inline,
 .btn,
@@ -118,7 +114,6 @@ button,
 }
 
 .example-item.active,
-.empty-state-path.primary,
 .run-setup-capsule.active,
 .toolbar-toggle.active,
 .command-item.selected,
@@ -184,11 +179,6 @@ button,
   background: color-mix(in srgb, var(--surface) 72%, var(--panel));
 }
 
-.empty-state-logo {
-  opacity: 0.72;
-}
-
-.empty-state-evidence span,
 .provenance-chip,
 .provenance-inline {
   color: var(--text-primary);

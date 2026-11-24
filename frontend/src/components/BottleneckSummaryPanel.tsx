@@ -42,13 +42,13 @@ export function BottleneckSummaryPanel({ summary }: BottleneckSummaryPanelProps)
           </div>
           {topSource && (
             <div className="bottleneck-detail-row">
-              <span>Top Source</span>
+              <span>Top source</span>
               <span>{formatLocation(topSource.file, topSource.line)}</span>
             </div>
           )}
           {topSource && (
             <div className="bottleneck-detail-row">
-              <span>Source Cycles</span>
+              <span>Source cycles</span>
               <span>{topSource.cycles.toLocaleString()}</span>
             </div>
           )}

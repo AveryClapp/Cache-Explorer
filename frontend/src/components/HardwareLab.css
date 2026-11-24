@@ -1,7 +1,7 @@
 .hardware-lab { max-width: 1440px; width: 100%; margin: 0 auto; padding: 28px; overflow: auto; }
 .lab-heading { display: flex; justify-content: space-between; gap: 24px; align-items: start; margin-bottom: 24px; }
-.lab-heading h1 { font-size: 24px; font-weight: 600; letter-spacing: -.02em; margin: 6px 0 12px; color: var(--text-bright); }
-.lab-eyebrow { color: var(--accent); font-size: 12px; }
+.lab-heading h1 { font-size: 20px; font-weight: 600; margin: 0 0 6px; color: var(--text-bright); }
+.lab-heading p { margin: 0; max-width: 70ch; }
 .lab-heading p, .lab-note, .lab-card p, .lab-empty p { color: var(--text-secondary); line-height: 1.6; }
 .lab-actions, .lab-presets { display: flex; gap: 8px; flex-wrap: wrap; }
 .lab-actions { flex-shrink: 0; }
@@ -20,7 +20,8 @@
 .lab-results { min-width: 0; }
 .lab-results h2 { margin: 0 0 16px; font-size: 18px; color: var(--text-bright); }
 .lab-results h3 { margin: 24px 0 8px; font-size: 16px; color: var(--text-bright); }
-.lab-empty { padding: 36px; border: 1px dashed var(--border); border-radius: 8px; }
+.lab-empty { padding: 24px; border: 1px solid var(--border); border-radius: 8px; }
+.lab-empty p { margin: 0; }
 .lab-empty h3 { margin-top: 0; }
 .lab-table-scroll { overflow-x: auto; }
 .lab-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; text-align: left; }
@@ -41,3 +42,10 @@
 .lab-status { color: var(--text-primary); }
 @media (max-width: 1000px) { .lab-heading { flex-direction: column; } .lab-layout { gap: 20px; grid-template-columns: minmax(250px, 300px) minmax(0, 1fr); } }
 @media (max-width: 720px) { .hardware-lab { padding: 18px 14px; } .lab-layout { grid-template-columns: minmax(0, 1fr); } .lab-heading h1 { font-size: 21px; } .lab-empty { padding: 20px; } .lab-table th, .lab-table td { padding: 10px 6px; font-size: 12px; } }
+.lab-run { position: sticky; bottom: 0; padding: 12px 0; background: var(--void); }
+.lab-run .btn { width: 100%; }
+.lab-change { font-weight: 500; }
+.lab-change.better { color: var(--signal-success); }
+.lab-change.worse { color: var(--signal-critical); }
+.lab-change.same { color: var(--text-muted); }
+.lab-table td:not(:first-child), .lab-table thead th:not(:first-child) { text-align: right; }

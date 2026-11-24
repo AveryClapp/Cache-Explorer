@@ -114,11 +114,19 @@ export function ResultsPanel({
             {/* Metric Cards */}
             <MetricCards result={result} baselineResult={baselineResult} diffMode={diffMode} />
 
-            {/* Result Fidelity */}
-            <ResultProvenancePanel result={result} />
-
             {/* Hardware Bottleneck Summary */}
             {result.summary && <BottleneckSummaryPanel summary={result.summary} />}
+
+            {/* Source lines with the most misses: the primary answer */}
+            <HotLinesPanel
+              hotLines={result.hotLines}
+              baselineHotLines={diffMode && baselineResult ? baselineResult.hotLines : undefined}
+              diffMode={diffMode}
+              code={code}
+              selectedFile={selectedHotLineFile}
+              onFileChange={onHotLineFileChange}
+              editorRef={editorRef}
+            />
 
             {/* Hardware Profile */}
             {result.profile && <HardwareProfilePanel profile={result.profile} cacheConfig={result.cacheConfig} />}
@@ -185,17 +193,10 @@ export function ResultsPanel({
               />
             )}
 
-            <HotLinesPanel
-              hotLines={result.hotLines}
-              baselineHotLines={diffMode && baselineResult ? baselineResult.hotLines : undefined}
-              diffMode={diffMode}
-              code={code}
-              selectedFile={selectedHotLineFile}
-              onFileChange={onHotLineFileChange}
-              editorRef={editorRef}
-            />
-
             {result.suggestions && <SuggestionsPanel suggestions={result.suggestions} />}
+
+            {/* How this result was produced */}
+            <ResultProvenancePanel result={result} />
 
             {result.cacheState && (
               <div className="panel">

@@ -539,7 +539,7 @@ async function runVisualFlow(url, outputDir) {
   await capture(outputDir, 'desktop-launch')
 
   await page.getByRole('button', { name: 'Execute', exact: true }).click()
-  await page.getByText('Evidence & Fidelity', { exact: true }).waitFor({ state: 'visible', timeout: 8000 })
+  await page.getByText('Run details', { exact: true }).waitFor({ state: 'visible', timeout: 8000 })
   await capture(outputDir, 'desktop-result')
 
   await openProductArea('Explore')

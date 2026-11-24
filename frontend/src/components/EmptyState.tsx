@@ -6,6 +6,8 @@ interface EmptyStateProps {
   onOpenExperiment: () => void
 }
 
+const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent)
+
 export function EmptyState({
   targetSummary,
   onRun,
@@ -16,66 +18,30 @@ export function EmptyState({
   return (
     <div className="empty-state">
       <div className="empty-state-shell">
-        <div className="empty-state-logo">
-          <div className="logo-layer l3"></div>
-          <div className="logo-layer l2"></div>
-          <div className="logo-layer l1"></div>
-        </div>
-        <div className="empty-state-kicker">Current target</div>
-        <div className="empty-state-target">{targetSummary}</div>
-        <div className="empty-state-trust-strip" aria-label="First-run trust summary">
-          <div className="empty-state-trust-item">
-            <span>First step</span>
-            <strong>Run current code</strong>
-          </div>
-          <div className="empty-state-trust-item">
-            <span>Trust packet</span>
-            <strong>Compiler / profile / fidelity</strong>
-          </div>
-          <div className="empty-state-trust-item">
-            <span>Hand off</span>
-            <strong>Share exact setup</strong>
-          </div>
-        </div>
-        <div className="empty-state-title">Choose a run path</div>
-        <div className="empty-state-desc">
-          The result includes the hardware contract, caveats, and a local repro command.
-        </div>
-        <div className="empty-state-evidence" aria-label="Result evidence preview">
-          <span>Toolchain</span>
-          <span>Model contract</span>
-          <span>Repro command</span>
-        </div>
-        <div className="empty-state-paths">
-          <button className="empty-state-path primary" onClick={onRun}>
-            <span className="empty-state-path-index">01</span>
-            <span className="empty-state-path-copy">
-              <span className="empty-state-path-title">Analyze current code</span>
-              <span className="empty-state-path-desc">Run the active source project.</span>
-            </span>
+        <h2 className="empty-state-title">No results yet</h2>
+        <p className="empty-state-target">{targetSummary}</p>
+        <button className="btn-primary empty-state-run" onClick={onRun}>
+          Analyze current code
+          <kbd>{isMac ? '⌘' : 'Ctrl'} ↵</kbd>
+        </button>
+        <p className="empty-state-desc">
+          You'll get cache misses by source line, the CPU model's assumptions, and a command to
+          reproduce the run.
+        </p>
+        <nav className="empty-state-links" aria-label="Other starting points">
+          <button className="empty-state-link" onClick={onOpenWorkloads}>
+            <span>Verified workloads</span>
+            <span>Known kernels with saved results</span>
           </button>
-          <button className="empty-state-path" onClick={onOpenWorkloads}>
-            <span className="empty-state-path-index">02</span>
-            <span className="empty-state-path-copy">
-              <span className="empty-state-path-title">Verified workloads</span>
-              <span className="empty-state-path-desc">Load a snapshot-backed case.</span>
-            </span>
+          <button className="empty-state-link" onClick={onOpenHardware}>
+            <span>CPU profiles</span>
+            <span>What each model covers</span>
           </button>
-          <button className="empty-state-path" onClick={onOpenHardware}>
-            <span className="empty-state-path-index">03</span>
-            <span className="empty-state-path-copy">
-              <span className="empty-state-path-title">CPU profiles</span>
-              <span className="empty-state-path-desc">Inspect model coverage and run sets.</span>
-            </span>
+          <button className="empty-state-link" onClick={onOpenExperiment}>
+            <span>Experiments</span>
+            <span>Compare code variants across CPUs</span>
           </button>
-          <button className="empty-state-path" onClick={onOpenExperiment}>
-            <span className="empty-state-path-index">04</span>
-            <span className="empty-state-path-copy">
-              <span className="empty-state-path-title">Source experiments</span>
-              <span className="empty-state-path-desc">Compare variants across CPU profiles.</span>
-            </span>
-          </button>
-        </div>
+        </nav>
       </div>
     </div>
   )

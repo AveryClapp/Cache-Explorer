@@ -167,37 +167,20 @@ async function openAdvancedSettings() {
 async function layoutMetrics() {
   return page.evaluate(() => {
     const empty = document.querySelector('.empty-state')
-    const paths = Array.from(document.querySelectorAll('.empty-state-path')).map(element => ({
+    const links = Array.from(document.querySelectorAll('.empty-state-link')).map(element => ({
       text: element.textContent?.replace(/\s+/g, ' ').trim(),
       overflow: element.scrollWidth > element.clientWidth || element.scrollHeight > element.clientHeight,
       width: Math.round(element.getBoundingClientRect().width),
       height: Math.round(element.getBoundingClientRect().height),
     }))
-    const trustItems = Array.from(document.querySelectorAll('.empty-state-trust-item')).map(element => ({
-      text: element.textContent?.replace(/\s+/g, ' ').trim(),
-      overflow: element.scrollWidth > element.clientWidth || element.scrollHeight > element.clientHeight,
-      width: Math.round(element.getBoundingClientRect().width),
-      height: Math.round(element.getBoundingClientRect().height),
-    }))
-    const evidenceItems = Array.from(document.querySelectorAll('.empty-state-evidence span')).map(element => ({
-      text: element.textContent?.replace(/\s+/g, ' ').trim(),
-      overflow: element.scrollWidth > element.clientWidth || element.scrollHeight > element.clientHeight,
-      width: Math.round(element.getBoundingClientRect().width),
-      height: Math.round(element.getBoundingClientRect().height),
-    }))
-
+    const run = document.querySelector('.empty-state-run')
     return {
       target: document.querySelector('.empty-state-target')?.textContent?.trim(),
-      pathCount: paths.length,
-      pathOverflow: paths.some(path => path.overflow),
-      trustCount: trustItems.length,
-      trustOverflow: trustItems.some(item => item.overflow),
-      evidenceCount: evidenceItems.length,
-      evidenceOverflow: evidenceItems.some(item => item.overflow),
+      linkCount: links.length,
+      linkOverflow: links.some(link => link.overflow),
+      runOverflow: run ? run.scrollWidth > run.clientWidth : true,
       emptyScrollDelta: empty ? empty.scrollHeight - empty.clientHeight : null,
-      paths,
-      trustItems,
-      evidenceItems,
+      links,
     }
   })
 }
@@ -309,24 +292,16 @@ async function verifyLaunchSurface(url) {
     }
   })
   assert(!environmentLayout.overflow, `environment status overflows: ${JSON.stringify(environmentLayout)}`)
-  await assertVisible(page.getByText('Choose a run path', { exact: true }), 'launch heading')
-  await assertVisible(page.getByText('Current target', { exact: true }), 'target label')
-  await assertVisible(page.getByText('Trust packet', { exact: true }), 'launch trust packet label')
-  await assertVisible(page.getByText('Compiler / profile / fidelity', { exact: true }), 'launch trust packet value')
-  await assertVisible(page.getByText('Model contract', { exact: true }), 'launch model-contract evidence')
-  await assertVisible(page.getByText('Repro command', { exact: true }), 'launch repro evidence')
+  await assertVisible(page.getByText('No results yet', { exact: true }), 'launch heading')
   await assertVisible(page.getByRole('button', { name: 'Share', exact: true }), 'launch share action')
-  await assertVisible(page.getByRole('button', { name: /Analyze current code/ }), 'analyze current code path')
+  await assertVisible(page.getByRole('button', { name: /Analyze current code/ }), 'analyze current code action')
 
   const desktopLayout = await layoutMetrics()
-  assert(desktopLayout.pathCount === 4, `expected 4 launch paths, saw ${desktopLayout.pathCount}`)
-  assert(desktopLayout.trustCount === 3, `expected 3 launch trust items, saw ${desktopLayout.trustCount}`)
-  assert(desktopLayout.evidenceCount === 3, `expected 3 launch evidence items, saw ${desktopLayout.evidenceCount}`)
+  assert(desktopLayout.linkCount === 3, `expected 3 launch links, saw ${desktopLayout.linkCount}`)
   assert(desktopLayout.target?.includes('Educational'), `unexpected target summary: ${desktopLayout.target}`)
   assert(desktopLayout.target?.includes('1M events'), `target summary should use compact limit: ${desktopLayout.target}`)
-  assert(!desktopLayout.pathOverflow, `desktop launch paths overflow: ${JSON.stringify(desktopLayout.paths)}`)
-  assert(!desktopLayout.trustOverflow, `desktop launch trust strip overflows: ${JSON.stringify(desktopLayout.trustItems)}`)
-  assert(!desktopLayout.evidenceOverflow, `desktop launch evidence overflows: ${JSON.stringify(desktopLayout.evidenceItems)}`)
+  assert(!desktopLayout.linkOverflow, `desktop launch links overflow: ${JSON.stringify(desktopLayout.links)}`)
+  assert(!desktopLayout.runOverflow, 'desktop launch run action overflows')
   assert((desktopLayout.emptyScrollDelta ?? 0) <= maxLayoutScrollDelta, `desktop launch surface scrolls by ${desktopLayout.emptyScrollDelta}px`)
 
   await page.getByRole('button', { name: /Run setup|Advanced/ }).click()
@@ -334,7 +309,7 @@ async function verifyLaunchSurface(url) {
   assert(await page.getByText('Defines:', { exact: true }).count() === 0, 'advanced settings should not expose compiler defines')
   await page.getByRole('button', { name: /Run setup/ }).click()
 
-  await page.getByRole('button', { name: /^03 CPU profiles/ }).click()
+  await page.getByRole('button', { name: /^CPU profiles/ }).click()
   const hardwareModal = page.locator('.hardware-explorer-modal')
   await assertVisible(hardwareModal.getByText('CPU Profiles', { exact: true }), 'profile workspace')
   await assertVisible(hardwareModal.getByText('Trust Snapshot', { exact: true }), 'hardware trust snapshot')
@@ -344,7 +319,7 @@ async function verifyLaunchSurface(url) {
   await assertVisible(hardwareModal.getByText('L1 validated on local perf counters', { exact: true }), 'hardware validation caveat')
   await closeModal()
 
-  await page.getByRole('button', { name: /^04 Source experiments/ }).click()
+  await page.getByRole('button', { name: /^Experiments/ }).click()
   await assertVisible(page.getByText('Hardware Experiment', { exact: true }), 'experiment modal')
   await closeModal()
 
@@ -352,15 +327,12 @@ async function verifyLaunchSurface(url) {
   await page.goto(url, { waitUntil: 'domcontentloaded' })
   assert(!(await page.locator('.environment-status').isVisible()), 'environment status should collapse on mobile')
   await page.getByRole('button', { name: 'Results' }).click()
-  await assertVisible(page.getByText('Choose a run path', { exact: true }), 'mobile launch heading')
+  await assertVisible(page.getByText('No results yet', { exact: true }), 'mobile launch heading')
 
   const mobileLayout = await layoutMetrics()
-  assert(mobileLayout.pathCount === 4, `expected 4 mobile launch paths, saw ${mobileLayout.pathCount}`)
-  assert(mobileLayout.trustCount === 3, `expected 3 mobile launch trust items, saw ${mobileLayout.trustCount}`)
-  assert(mobileLayout.evidenceCount === 3, `expected 3 mobile launch evidence items, saw ${mobileLayout.evidenceCount}`)
-  assert(!mobileLayout.pathOverflow, `mobile launch paths overflow: ${JSON.stringify(mobileLayout.paths)}`)
-  assert(!mobileLayout.trustOverflow, `mobile launch trust strip overflows: ${JSON.stringify(mobileLayout.trustItems)}`)
-  assert(!mobileLayout.evidenceOverflow, `mobile launch evidence overflows: ${JSON.stringify(mobileLayout.evidenceItems)}`)
+  assert(mobileLayout.linkCount === 3, `expected 3 mobile launch links, saw ${mobileLayout.linkCount}`)
+  assert(!mobileLayout.linkOverflow, `mobile launch links overflow: ${JSON.stringify(mobileLayout.links)}`)
+  assert(!mobileLayout.runOverflow, 'mobile launch run action overflows')
   assert((mobileLayout.emptyScrollDelta ?? 0) <= maxLayoutScrollDelta, `mobile launch surface scrolls by ${mobileLayout.emptyScrollDelta}px`)
 
   await page.unroute('**/profiles')
@@ -967,7 +939,7 @@ async function verifyResultTrustPanel(url) {
   await page.getByRole('button', { name: 'Execute' }).click()
 
   const panel = page.locator('.result-provenance-panel')
-  await assertVisible(panel.getByText('Evidence & Fidelity', { exact: true }), 'evidence and fidelity panel')
+  await assertVisible(panel.getByText('Run details', { exact: true }), 'evidence and fidelity panel')
   await assertVisible(panel.getByText('Modeled', { exact: true }), 'modeled contract bucket')
   await assertVisible(panel.getByText('1 drive simulation', { exact: true }), 'modeled contract count')
   await assertVisible(panel.getByText('Estimated', { exact: true }), 'estimated contract bucket')
@@ -976,7 +948,7 @@ async function verifyResultTrustPanel(url) {
   await assertVisible(panel.getByText('1 display only', { exact: true }), 'metadata contract count')
   await assertVisible(panel.getByText('Unsupported', { exact: true }), 'unsupported contract bucket')
   await assertVisible(panel.getByText('1 not modeled', { exact: true }), 'unsupported contract count')
-  await assertVisible(panel.getByText('Local Repro Command', { exact: true }), 'local repro command')
+  await assertVisible(panel.getByText('Reproduce locally', { exact: true }), 'local repro command')
 
   await page.unroute('**/compile')
 }
@@ -995,11 +967,11 @@ async function verifyLegacyResultTrustPanel(url) {
   await page.getByRole('button', { name: 'Execute' }).click()
 
   const panel = page.locator('.result-provenance-panel')
-  await assertVisible(panel.getByText('Evidence & Fidelity', { exact: true }), 'legacy evidence and fidelity panel')
+  await assertVisible(panel.getByText('Run details', { exact: true }), 'legacy evidence and fidelity panel')
   await assertVisible(panel.getByText('Legacy', { exact: true }), 'legacy fidelity chip')
   await assertVisible(panel.getByText('Provenance metadata unavailable for this result.', { exact: true }), 'legacy provenance caveat')
   await assertVisible(panel.getByText('Modeled', { exact: true }), 'legacy modeled contract bucket')
-  assert(await panel.getByText('Local Repro Command', { exact: true }).count() === 0, 'legacy result should not show repro command')
+  assert(await panel.getByText('Reproduce locally', { exact: true }).count() === 0, 'legacy result should not show repro command')
 
   await page.unroute('**/compile')
 }
@@ -1140,7 +1112,7 @@ async function verifyEditRunCompareShareReopen(url) {
   await replaceEditorText(editedCode)
   await page.getByRole('button', { name: 'Execute' }).click()
 
-  await assertVisible(page.locator('.result-provenance-panel').getByText('Evidence & Fidelity', { exact: true }), 'edited run evidence and fidelity')
+  await assertVisible(page.locator('.result-provenance-panel').getByText('Run details', { exact: true }), 'edited run evidence and fidelity')
   assert(compilePayload?.code?.includes('EDIT_RUN_MARKER'), `edited compile payload missing marker: ${compilePayload?.code}`)
 
   await openHeaderTool('Hardware')
@@ -1213,7 +1185,7 @@ async function verifySocketCloseFallback(url) {
   await page.goto(url, { waitUntil: 'domcontentloaded' })
   await page.getByRole('button', { name: 'Execute' }).click()
 
-  await assertVisible(page.locator('.result-provenance-panel').getByText('Evidence & Fidelity', { exact: true }), 'fallback evidence and fidelity panel')
+  await assertVisible(page.locator('.result-provenance-panel').getByText('Run details', { exact: true }), 'fallback evidence and fidelity panel')
   assert(compilePayload?.config === 'educational', `fallback compile config mismatch: ${JSON.stringify(compilePayload)}`)
   assert(compilePayload?.limit === 1000000, `fallback compile limit mismatch: ${JSON.stringify(compilePayload)}`)
 

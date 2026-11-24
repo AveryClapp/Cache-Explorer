@@ -124,7 +124,7 @@ export function HotLinesPanel({ hotLines, baselineHotLines, diffMode, code, sele
             >
               <div className="hotspot-header">
                 <span className="hotspot-location">
-                  {hotLine.file ? `${hotLine.file.split('/').pop()}:` : ''}Line {hotLine.line}
+                  {hotLine.file ? `${hotLine.file.split('/').pop()}:${hotLine.line}` : `Line ${hotLine.line}`}
                   {hotLine.isNew && <span className="hotspot-badge new">NEW</span>}
                 </span>
                 <span className="hotspot-stats">
@@ -166,7 +166,7 @@ export function HotLinesPanel({ hotLines, baselineHotLines, diffMode, code, sele
               <div key={i} className="hotspot hotspot-resolved">
                 <div className="hotspot-header">
                   <span className="hotspot-location">
-                    {hotLine.file ? `${hotLine.file.split('/').pop()}:` : ''}Line {hotLine.line}
+                    {hotLine.file ? `${hotLine.file.split('/').pop()}:${hotLine.line}` : `Line ${hotLine.line}`}
                   </span>
                   <span className="hotspot-stats resolved">
                     Was {hotLine.misses.toLocaleString()} misses

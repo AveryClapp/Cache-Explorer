@@ -159,7 +159,6 @@ export function Header({
               <span className="logo-title">Hardware Explorer</span>
               <span className="preview-badge">Preview</span>
             </span>
-            <span className="logo-subtitle">CPU performance modeling for source code</span>
           </span>
         </div>
       </div>
