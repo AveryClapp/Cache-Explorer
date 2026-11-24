@@ -57,7 +57,7 @@
 /* Active tab - mimics VS Code style with bottom border removal illusion */
 .editor-tab.active {
   background: var(--panel);
-  border-bottom: 2px solid var(--phosphor);
+  border-bottom: 2px solid var(--accent);
   margin-bottom: -1px;
 }
 
@@ -108,7 +108,7 @@
 
 /* Main file asterisk indicator */
 .tab-main-indicator {
-  color: var(--phosphor);
+  color: var(--accent);
   font-size: 14px;
   font-weight: bold;
   line-height: 1;
@@ -141,7 +141,7 @@
 }
 
 .tab-close:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: color-mix(in srgb, var(--text-bright) 10%, transparent);
   color: var(--text-primary);
   opacity: 1 !important;
 }
@@ -158,7 +158,7 @@
   width: 100%;
   max-width: 140px;
   background: var(--void);
-  border: 1px solid var(--phosphor);
+  border: 1px solid var(--accent);
   border-radius: 3px;
   color: var(--text-primary);
   font-size: 12px;
@@ -168,7 +168,7 @@
 
 .tab-rename-input:focus,
 .tab-new-input:focus {
-  box-shadow: 0 0 0 2px var(--phosphor-glow);
+  box-shadow: 0 0 0 2px var(--accent-glow);
 }
 
 /* Add new file button */
@@ -191,16 +191,16 @@
 
 .tab-add-btn:hover {
   background: var(--elevated);
-  color: var(--phosphor);
+  color: var(--accent);
 }
 
 /* Context menu */
 .tab-context-menu {
   position: fixed;
   background: var(--elevated);
-  border: 1px solid var(--border-glow);
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 1px rgba(0, 255, 136, 0.1);
+  box-shadow: var(--shadow-popover);
   z-index: 1000;
   min-width: 160px;
   padding: 4px 0;
@@ -234,7 +234,7 @@
 }
 
 .tab-context-menu button:hover {
-  background: var(--phosphor-subtle);
+  background: var(--accent-subtle);
   color: var(--text-bright);
 }
 
@@ -243,7 +243,7 @@
 }
 
 .tab-context-menu button.delete-action:hover {
-  background: rgba(255, 68, 68, 0.15);
+  background: color-mix(in srgb, var(--signal-critical) 15%, transparent);
 }
 
 .tab-context-menu button.delete-action:disabled {

@@ -20,12 +20,12 @@
 }
 
 .results-title {
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-size: var(--text-xs);
-  font-weight: 600;
+  font-weight: 650;
   color: var(--text-bright);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .results-actions {

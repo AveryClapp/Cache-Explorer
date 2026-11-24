@@ -1,6 +1,7 @@
 /* Cache Explorer Styles - Entry Point */
 
-/* Base */
+/* Tokens, then base */
+@import './tokens.css';
 @import './base.css';
 @import './layout.css';
 
@@ -22,8 +23,7 @@
 @import './panels.css';
 @import './modals.css';
 
-/* Overrides */
+/* Late: responsive tweaks, palette, motion */
 @import './mobile.css';
-@import './themes.css';
-@import './animations.css';
-@import './humanize.css';
+@import './command-palette.css';
+@import './motion.css';

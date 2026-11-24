@@ -1,7 +1,7 @@
 .cache-grid-container {
   font-family: 'Monaco', 'Menlo', monospace;
   font-size: 12px;
-  background: var(--bg-panel);
+  background: var(--panel);
   border-radius: 8px;
   padding: 12px;
   overflow: auto;
@@ -29,9 +29,9 @@
 }
 
 .core-selector select {
-  background: var(--bg-elevated);
+  background: var(--elevated);
   color: var(--text-primary);
-  border: 1px solid var(--border-light);
+  border: 1px solid var(--border-strong);
   border-radius: 4px;
   padding: 4px 8px;
   font-size: 12px;
@@ -101,7 +101,7 @@
 
 .cache-cell:hover {
   transform: scale(1.1);
-  box-shadow: 0 0 8px rgba(25, 103, 210, 0.4);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--signal-info) 40%, transparent);
   z-index: 1;
 }
 
@@ -140,12 +140,12 @@
 
 .cache-tooltip {
   position: fixed;
-  background: var(--bg-panel);
+  background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 10px;
   z-index: 1000;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-raised);
   pointer-events: none;
   max-width: 250px;
 }

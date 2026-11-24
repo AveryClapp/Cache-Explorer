@@ -12,8 +12,6 @@ export { TimingDisplay } from './TimingDisplay'
 // Cache Visualization Components
 export { CacheGrid } from './CacheGrid'
 export type { CacheLineState, CoreCacheState } from './CacheGrid'
-export { MemoryLayout } from './MemoryLayout'
-export type { MemoryRegion, MemoryAccess } from './MemoryLayout'
 
 // Results Display Components
 export { CacheHierarchyLevel } from './CacheHierarchyDisplay'
@@ -34,7 +32,6 @@ export { HardwareExplorerModal } from './HardwareExplorerModal'
 export { WorkloadCatalogModal } from './WorkloadCatalogModal'
 export { CacheStatsDisplay } from './CacheStatsDisplay'
 export { FalseSharingDisplay } from './FalseSharingDisplay'
-export { HotLinesTable } from './HotLinesTable'
 export { HotLinesPanel } from './HotLinesPanel'
 export { LoadingState } from './LoadingState'
 export { EmptyState } from './EmptyState'

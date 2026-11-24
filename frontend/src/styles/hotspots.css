@@ -15,7 +15,7 @@
 
 .hotspot:hover {
   background: var(--surface);
-  border-color: var(--phosphor-dim);
+  border-color: var(--accent-dim);
 }
 
 .hotspot:last-child {
@@ -36,7 +36,7 @@
 }
 
 .hotspot-stats {
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-size: var(--text-xs);
   color: var(--text-secondary);
 }
@@ -101,7 +101,7 @@
 }
 
 .hotspot-badge.new {
-  background: rgba(220, 220, 170, 0.2);
+  background: color-mix(in srgb, var(--signal-warning) 20%, transparent);
   color: var(--signal-warning);
 }
 
@@ -143,7 +143,7 @@
 }
 
 .hotspot-resolved {
-  background: rgba(76, 175, 80, 0.05);
+  background: color-mix(in srgb, var(--signal-excellent) 5%, transparent);
   border-left: 3px solid var(--signal-good);
 }
 
@@ -153,11 +153,6 @@
 }
 
 /* ─── Toggle Buttons ─── */
-.toggle-buttons {
-  display: flex;
-  gap: var(--space-2);
-  margin: var(--space-4) 0;
-}
 
 /* Hot lines: metric selector and file filter */
 .hotlines-panel .panel-header {

@@ -20,9 +20,9 @@
 
 .empty-state-title {
   margin: 0;
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-size: var(--text-md);
-  font-weight: 600;
+  font-weight: 650;
   color: var(--text-bright);
 }
 
@@ -90,11 +90,11 @@
 
 .empty-state-link:hover span:first-child,
 .empty-state-link:focus-visible span:first-child {
-  color: var(--phosphor);
+  color: var(--accent);
 }
 
 .empty-state-link:focus-visible {
-  outline: 1px solid var(--phosphor-dim);
+  outline: 1px solid var(--accent-dim);
   outline-offset: 2px;
 }
 
@@ -125,7 +125,7 @@
   width: 48px;
   height: 48px;
   border: 2px solid var(--border);
-  border-top-color: var(--phosphor);
+  border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-bottom: var(--space-4);
@@ -136,7 +136,7 @@
 }
 
 .loading-text {
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-size: var(--text-sm);
   color: var(--text-secondary);
   animation: blink 1s ease-in-out infinite;
@@ -180,7 +180,7 @@
 }
 
 .error-title {
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-size: var(--text-md);
   font-weight: 600;
 }
@@ -197,7 +197,7 @@
   border: 1px solid color-mix(in srgb, var(--signal-critical) 45%, var(--border));
   border-radius: var(--radius-sm);
   color: var(--signal-critical);
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-size: var(--text-2xs);
   font-weight: 600;
   text-transform: uppercase;
@@ -224,7 +224,7 @@
 }
 
 .error-loc {
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   font-size: var(--text-xs);
   color: var(--text-muted);
 }
@@ -237,12 +237,12 @@
 }
 
 .error-severity.error {
-  background: rgba(239, 68, 68, 0.2);
+  background: color-mix(in srgb, var(--signal-critical) 20%, transparent);
   color: var(--signal-critical);
 }
 
 .error-severity.warning {
-  background: rgba(245, 158, 11, 0.2);
+  background: color-mix(in srgb, var(--signal-warning) 20%, transparent);
   color: var(--signal-warning);
 }
 
@@ -256,7 +256,7 @@
   padding: var(--space-2);
   background: var(--surface);
   border-radius: var(--radius-sm);
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   font-size: var(--text-xs);
   overflow-x: auto;
 }
@@ -300,7 +300,7 @@
   padding: var(--space-3);
   background: var(--elevated);
   border-radius: var(--radius-sm);
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   font-size: var(--text-xs);
   color: var(--text-primary);
   white-space: pre-wrap;

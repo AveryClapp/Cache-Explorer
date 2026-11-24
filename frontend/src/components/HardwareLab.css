@@ -35,7 +35,7 @@
 .lab-source-deltas summary span + span { color: var(--text-secondary); font-size: 12px; }
 .lab-source-deltas p, .lab-report-details p { margin: 12px 0; line-height: 1.6; overflow-wrap: anywhere; }
 .lab-report-details { margin-top: 24px; }
-.hardware-lab pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--void); padding: 12px; max-height: 420px; overflow: auto; font: 12px/1.6 var(--font-mono); }
+.hardware-lab pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--void); padding: 12px; max-height: 420px; overflow: auto; font: 12px/1.6 var(--font-code); }
 .hardware-lab summary { cursor: pointer; line-height: 1.5; }
 .lab-error, .lab-status { padding: 12px 16px; margin: 16px 0; border: 1px solid var(--border); border-radius: 6px; line-height: 1.5; }
 .lab-error { color: var(--signal-critical); }
@@ -45,7 +45,7 @@
 .lab-run { position: sticky; bottom: 0; padding: 12px 0; background: var(--void); border-top: 1px solid var(--border); }
 .lab-run .btn { width: 100%; }
 .lab-change { font-weight: 500; }
-.lab-change.better { color: var(--signal-success); }
+.lab-change.better { color: var(--signal-excellent); }
 .lab-change.worse { color: var(--signal-critical); }
 .lab-change.same { color: var(--text-muted); }
 .lab-table td:not(:first-child), .lab-table thead th:not(:first-child) { text-align: right; }

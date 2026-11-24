@@ -1,32 +1,4 @@
 /* ─── TLB Stats ─── */
-.tlb-stats {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: var(--space-3);
-}
-
-.tlb-stat {
-  background: var(--elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: var(--space-3);
-}
-
-.tlb-stat-label {
-  font-family: var(--font-display);
-  font-size: var(--text-2xs);
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: var(--space-1);
-}
-
-.tlb-stat-value {
-  font-family: var(--font-display);
-  font-size: var(--text-lg);
-  font-weight: 600;
-  color: var(--text-bright);
-}
 
 /* ─── Suggestions ─── */
 .suggestions {
@@ -44,8 +16,8 @@
 }
 
 .suggestion:hover {
-  border-color: var(--border-active);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  border-color: var(--accent-dim);
+  box-shadow: var(--shadow-raised);
 }
 
 .suggestion.high {
@@ -82,30 +54,30 @@
 
 .suggestion-severity.high {
   color: var(--signal-critical);
-  background: rgba(255, 77, 77, 0.15);
-  border: 1px solid rgba(255, 77, 77, 0.3);
+  background: color-mix(in srgb, var(--signal-critical) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--signal-critical) 30%, transparent);
 }
 
 .suggestion-severity.medium {
   color: var(--signal-warning);
-  background: rgba(255, 170, 0, 0.15);
-  border: 1px solid rgba(255, 170, 0, 0.3);
+  background: color-mix(in srgb, var(--signal-warning) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--signal-warning) 30%, transparent);
 }
 
 .suggestion-severity.low {
   color: var(--signal-good);
-  background: rgba(0, 255, 136, 0.15);
-  border: 1px solid rgba(0, 255, 136, 0.3);
+  background: color-mix(in srgb, var(--signal-excellent) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--signal-excellent) 30%, transparent);
 }
 
 .suggestion-location {
   font-family: var(--font-code);
   font-size: var(--text-xs);
-  color: var(--phosphor);
-  background: var(--phosphor-subtle);
+  color: var(--accent);
+  background: var(--accent-subtle);
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-sm);
-  border: 1px solid var(--phosphor-dim);
+  border: 1px solid var(--accent-dim);
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -131,7 +103,7 @@
 
 .suggestion-fix::before {
   content: '→';
-  color: var(--phosphor);
+  color: var(--accent);
   font-weight: 600;
   flex-shrink: 0;
 }

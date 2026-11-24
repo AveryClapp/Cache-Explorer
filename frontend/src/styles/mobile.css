@@ -1,14 +1,6 @@
 /* ══════════════════════════════════════════════════════════════════════════
    CACHE STATE VISUALIZATION (Grid)
    ══════════════════════════════════════════════════════════════════════════ */
-.cache-state-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(8px, 1fr));
-  gap: 2px;
-  padding: var(--space-3);
-  background: var(--void);
-  border-radius: var(--radius-md);
-}
 
 .cache-line {
   aspect-ratio: 1;
@@ -22,10 +14,6 @@
 
 .cache-line.shared {
   background: var(--signal-info);
-}
-
-.cache-line.exclusive {
-  background: var(--signal-good);
 }
 
 .cache-line.modified {

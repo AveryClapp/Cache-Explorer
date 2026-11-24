@@ -42,7 +42,7 @@
 .binary-export p { color: var(--text-muted); line-height: 1.6; }
 .binary-export button:not(.btn-primary) { background: var(--panel); color: var(--text-primary); padding: 10px 14px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; }
 .binary-error { border: 1px solid var(--border); padding: 14px; color: var(--text-bright); }
-.binary-profiles :focus-visible { outline: 2px solid var(--phosphor); outline-offset: 3px; }
+.binary-profiles :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 @media (max-width: 700px) {
   .binary-profiles { padding: 18px; }
   .binary-provenance { grid-template-columns: 1fr; }
