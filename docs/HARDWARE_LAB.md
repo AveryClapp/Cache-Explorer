@@ -7,7 +7,7 @@ that profile with explicit what-if overrides. Presets are never mutated.
 ## Use it
 
 1. Put your C/C++ source and capture settings in **Analyze**.
-2. Open **Hardware Lab**. Review the copied source and baseline profile.
+2. Open **Compare → Hardware Lab**. Review the copied source and baseline profile.
 3. Choose a starter change or add individual parameters.
 4. Run **baseline & scenario**. Inspect aggregate deltas, source-line changes,
    sampled miss explanations, effective configuration and provenance.
