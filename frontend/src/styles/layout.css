@@ -124,31 +124,11 @@
   text-transform: uppercase;
 }
 
-.environment-status-chip,
 .environment-status-compiler {
   max-width: 140px;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding: 2px 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
   color: var(--text-secondary);
-}
-
-.environment-status.healthy .environment-status-chip {
-  color: var(--signal-good);
-  border-color: color-mix(in srgb, var(--signal-good) 40%, var(--border));
-}
-
-.environment-status.degraded .environment-status-chip,
-.environment-status.checking .environment-status-chip {
-  color: var(--signal-warning);
-  border-color: color-mix(in srgb, var(--signal-warning) 40%, var(--border));
-}
-
-.environment-status.offline .environment-status-chip {
-  color: var(--signal-critical);
-  border-color: color-mix(in srgb, var(--signal-critical) 40%, var(--border));
 }
 
 @media (max-width: 1180px) {
@@ -163,49 +143,10 @@
   }
 }
 
-.diff-mode-badge {
+.compare-control {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  background: linear-gradient(135deg, rgba(99, 140, 255, 0.15), rgba(140, 99, 255, 0.15));
-  border: 1px solid rgba(99, 140, 255, 0.4);
-  border-radius: var(--radius-md);
-  font-family: var(--font-code);
-  font-size: var(--text-xs);
-  color: #638cff;
-  animation: diff-badge-pulse 2s ease-in-out infinite;
-}
-
-/* Animation disabled for minimal look */
-@keyframes diff-badge-pulse {
-  0%, 100% { border-color: var(--phosphor); }
-}
-
-.diff-mode-icon {
-  font-size: var(--text-sm);
-}
-
-.diff-mode-text {
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.diff-mode-exit {
-  background: transparent;
-  border: none;
-  color: rgba(99, 140, 255, 0.7);
-  font-size: var(--text-md);
-  cursor: pointer;
-  padding: 0 2px;
-  margin-left: var(--space-1);
-  line-height: 1;
-  transition: color 0.15s ease;
-}
-
-.diff-mode-exit:hover {
-  color: #ff6b6b;
+  gap: 2px;
 }
 
 .header-right {
@@ -448,10 +389,10 @@ button {
   line-height: 1;
 }
 
+/* Running is a normal state: stay neutral, hint at cancel only on hover. */
 .btn-cancel:hover {
-  background: var(--signal-critical);
   border-color: var(--signal-critical);
-  color: white;
+  color: var(--signal-critical);
 }
 
 .btn-cancel .cancel-x {
@@ -486,8 +427,7 @@ button {
   transition: background-color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
   font-family: var(--font-display);
   font-size: var(--text-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  white-space: nowrap;
 }
 
 .btn-compare:hover {

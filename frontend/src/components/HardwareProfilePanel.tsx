@@ -1,4 +1,5 @@
 import type { HardwareProfile, CacheConfig, HardwareProfileCacheLevel } from '../types'
+import { humanizeKey } from '../utils/formatting'
 
 interface HardwareProfilePanelProps {
   profile: HardwareProfile
@@ -40,6 +41,16 @@ function formatToken(value?: string) {
   return value ? value.replace(/-/g, ' ') : 'Unknown'
 }
 
+function uniqueTokens(values: (string | undefined)[]) {
+  const seen = new Set<string>()
+  return values.filter((value): value is string => Boolean(value)).map(formatToken).filter(value => {
+    const key = value.toLowerCase()
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 function formatBool(value: boolean) {
   return value ? 'on' : 'off'
 }
@@ -49,7 +60,7 @@ function formatOptional(value: string | number | undefined, suffix = '') {
 }
 
 function formatContractLabel(id: string) {
-  return contractLabels[id] || formatToken(id)
+  return contractLabels[id] || humanizeKey(id)
 }
 
 function formatContractStatus(status: string, drivesSimulation: boolean) {
@@ -164,7 +175,7 @@ export function HardwareProfilePanel({ profile, cacheConfig }: HardwareProfilePa
   return (
     <div className="panel hardware-profile-panel">
       <div className="panel-header">
-        <span className="panel-title">Hardware Profile</span>
+        <span className="panel-title">CPU profile</span>
         <span className={`profile-confidence ${profile.modelConfidence}`}>
           {profile.modelConfidence}
         </span>
@@ -172,12 +183,11 @@ export function HardwareProfilePanel({ profile, cacheConfig }: HardwareProfilePa
       <div className="panel-content">
         <div className="profile-summary">
           <div>
-            <div className="profile-name">{profile.displayName}</div>
+            <div className="profile-name" title={profile.id}>{profile.displayName}</div>
             <div className="profile-meta">
-              {profile.vendor} / {profile.architecture} / {profile.class}
+              {uniqueTokens([profile.vendor, profile.architecture, profile.class]).join(' · ')}
             </div>
           </div>
-          <div className="profile-id">{profile.id}</div>
         </div>
         {cacheRows.length > 0 && <DetailSection title="Cache" rows={cacheRows} />}
         {details && (

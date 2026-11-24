@@ -126,7 +126,6 @@ export function CommandPalette({
                 onClick={() => onSelect(cmd)}
                 onMouseEnter={() => onNavigate(idx - selectedIndex)}
               >
-                <span className="command-item-icon">{cmd.icon}</span>
                 <span className="command-item-label">{cmd.label}</span>
                 {cmd.shortcut && <span className="command-item-shortcut">{cmd.shortcut}</span>}
               </div>
@@ -142,7 +141,6 @@ export function CommandPalette({
         onClick={() => onSelect(cmd)}
         onMouseEnter={() => onNavigate(i - selectedIndex)}
       >
-        <span className="command-item-icon">{cmd.icon}</span>
         <span className="command-item-label">{cmd.label}</span>
         {cmd.shortcut && <span className="command-item-shortcut">{cmd.shortcut}</span>}
       </div>
@@ -165,7 +163,7 @@ export function CommandPalette({
             ref={inputRef}
             type="text"
             className="command-input"
-            placeholder={activePrefix ? `Search ${CATEGORY_LABELS[activeCategory!].toLowerCase()}...` : '> examples  : settings  @ actions  * config'}
+            placeholder={activePrefix ? `Search ${CATEGORY_LABELS[activeCategory!].toLowerCase()}...` : 'Search commands and examples'}
             value={query}
             onChange={e => onQueryChange(e.target.value)}
             onKeyDown={handleKeyDown}

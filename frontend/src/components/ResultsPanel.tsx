@@ -128,54 +128,7 @@ export function ResultsPanel({
               editorRef={editorRef}
             />
 
-            {/* Hardware Profile */}
-            {result.profile && <HardwareProfilePanel profile={result.profile} cacheConfig={result.cacheConfig} />}
-
-            {/* Cache Hierarchy Visualization */}
-            <CacheHierarchyViz result={result} baselineResult={baselineResult} diffMode={diffMode} />
-
-            {/* Prefetch Stats */}
-            {result.prefetch && <PrefetchStatsPanel stats={result.prefetch} />}
-
-            {/* Advanced Stats */}
-            {result.advancedStats && <AdvancedStatsPanel stats={result.advancedStats} />}
-
-            {/* Execution Engine */}
-            {execution && <ExecutionEnginePanel execution={execution} />}
-            <MemoryEvidencePanel result={result} />
-            <TopologyPanel topology={result.subsystems?.topology} />
-
-            {/* Source Annotations */}
-            {result.sourceAnnotations && <SourceAnnotationsPanel annotations={result.sourceAnnotations} />}
-
-            {/* Toggle Buttons */}
-            <div className="toggle-buttons" style={{ margin: 'var(--space-4) 0' }}>
-              <button
-                className={`btn ${showDetails ? 'active' : ''}`}
-                onClick={onToggleDetails}
-                aria-expanded={showDetails}
-                aria-controls="result-detail-sections"
-              >
-                {showDetails ? '▼ Details' : '▶ Details'}
-              </button>
-            </div>
-
-            {showDetails && (
-              <div id="result-detail-sections">
-                <div className="details-grid">
-                  <LevelDetail name="L1 Data" stats={result.levels.l1d || result.levels.l1!} />
-                  {result.levels.l1i && <LevelDetail name="L1 Instruction" stats={result.levels.l1i} />}
-                  <LevelDetail name="L2" stats={result.levels.l2} />
-                  {(result.cacheConfig?.l3?.sizeKB ?? 0) > 0 && <LevelDetail name="L3" stats={result.levels.l3} />}
-                </div>
-                {result.tlb && (
-                  <div className="tlb-grid">
-                    <TLBDetail name="Data TLB" stats={result.tlb.dtlb} />
-                    <TLBDetail name="Instruction TLB" stats={result.tlb.itlb} />
-                  </div>
-                )}
-              </div>
-            )}
+            {result.suggestions && <SuggestionsPanel suggestions={result.suggestions} />}
 
             {result.coherence && result.coherence.falseSharingEvents > 0 && (
               <div className="panel warning">
@@ -193,20 +146,55 @@ export function ResultsPanel({
               />
             )}
 
-            {result.suggestions && <SuggestionsPanel suggestions={result.suggestions} />}
+            {/* Cache Hierarchy Visualization */}
+            <CacheHierarchyViz result={result} baselineResult={baselineResult} diffMode={diffMode} />
+
+            <button
+              type="button"
+              className="btn results-more-toggle"
+              onClick={onToggleDetails}
+              aria-expanded={showDetails}
+              aria-controls="result-detail-sections"
+            >
+              {showDetails ? 'Hide detail' : 'More detail'}
+              <span className="results-more-hint">CPU model, execution engine, per-level stats</span>
+            </button>
+
+            {showDetails && (
+              <div id="result-detail-sections" className="result-detail-sections">
+                {execution && <ExecutionEnginePanel execution={execution} />}
+                {result.sourceAnnotations && <SourceAnnotationsPanel annotations={result.sourceAnnotations} />}
+                <MemoryEvidencePanel result={result} />
+                {result.prefetch && <PrefetchStatsPanel stats={result.prefetch} />}
+                {result.advancedStats && <AdvancedStatsPanel stats={result.advancedStats} />}
+                <TopologyPanel topology={result.subsystems?.topology} />
+                <div className="details-grid">
+                  <LevelDetail name="L1 Data" stats={result.levels.l1d || result.levels.l1!} />
+                  {result.levels.l1i && <LevelDetail name="L1 Instruction" stats={result.levels.l1i} />}
+                  <LevelDetail name="L2" stats={result.levels.l2} />
+                  {(result.cacheConfig?.l3?.sizeKB ?? 0) > 0 && <LevelDetail name="L3" stats={result.levels.l3} />}
+                </div>
+                {result.tlb && (
+                  <div className="tlb-grid">
+                    <TLBDetail name="Data TLB" stats={result.tlb.dtlb} />
+                    <TLBDetail name="Instruction TLB" stats={result.tlb.itlb} />
+                  </div>
+                )}
+                {result.profile && <HardwareProfilePanel profile={result.profile} cacheConfig={result.cacheConfig} />}
+                {result.cacheState && (
+                  <div className="panel">
+                    <div className="panel-header">
+                      <span className="panel-title">L1 Cache Grid</span>
+                      <span className="panel-badge">Final State</span>
+                    </div>
+                    <CacheGrid cacheState={result.cacheState.l1d} />
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* How this result was produced */}
             <ResultProvenancePanel result={result} />
-
-            {result.cacheState && (
-              <div className="panel">
-                <div className="panel-header">
-                  <span className="panel-title">L1 Cache Grid</span>
-                  <span className="panel-badge">Final State</span>
-                </div>
-                <CacheGrid cacheState={result.cacheState.l1d} />
-              </div>
-            )}
           </>
         )}
 

@@ -1,4 +1,5 @@
 import type { CacheResult, HardwareModelContractField, HardwareProfile, ResultProvenance } from '../types'
+import { displaySourcePath } from './sourcePath'
 
 function titleize(value: string | undefined) {
   if (!value) return 'Unknown'
@@ -161,7 +162,8 @@ export function buildReproCommand(result: CacheResult) {
   const source = provenance?.source
   if (!source) return null
 
-  const sourcePath = source.path || 'main.c'
+  // Temp run directories do not exist on the reader's machine; use the file name.
+  const sourcePath = source.path ? displaySourcePath(source.path) : 'main.c'
   const args = ['cache-explore', sourcePath]
   const optLevel = source.optLevel || provenance?.toolchain?.compiler?.optLevel
   if (optLevel) args.push(optLevel)

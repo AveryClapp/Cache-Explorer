@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { humanizeKey } from '../utils/formatting'
 import type {
   WorkloadHistoryDurationDelta,
   WorkloadHistoryResponse,
@@ -67,10 +68,6 @@ function formatDate(value: string | undefined) {
     hour: '2-digit',
     minute: '2-digit',
   })
-}
-
-function shortDigest(value: string | undefined) {
-  return value ? value.slice(0, 12) : ''
 }
 
 function isStressWorkload(workload: WorkloadSnapshot) {
@@ -321,17 +318,12 @@ export function WorkloadCatalogModal({
                     {(history.failures || []).slice(0, 3).map(failure => (
                       <span className="workload-history-pill fail" key={`${failure.workload}-${failure.metric}-${failure.relationship}`}>
                         <span>{failure.workload}</span>
-                        <strong>{failure.metric} {failure.relationship}</strong>
+                        <strong title={failure.metric}>{humanizeKey(failure.metric)} {failure.relationship}</strong>
                       </span>
                     ))}
                   </div>
                 </div>
               )}
-            </div>
-          )}
-          {!historyLoading && history?.available === false && (
-            <div className="workload-history-empty">
-              <span>{history.message || 'Published workload history is not configured.'}</span>
             </div>
           )}
           {!historyLoading && history?.available === true && !history.latest && (
@@ -460,12 +452,6 @@ export function WorkloadCatalogModal({
                       {isStressWorkload(workload) && (
                         <span className="workload-tag stress">stress</span>
                       )}
-                      {workload.identity?.manifestSha256 && (
-                        <span title={workload.identity.manifestSha256}>manifest {shortDigest(workload.identity.manifestSha256)}</span>
-                      )}
-                      {workload.identity?.sourceFiles[workload.example]?.sha256 && (
-                        <span title={workload.identity.sourceFiles[workload.example].sha256}>source {shortDigest(workload.identity.sourceFiles[workload.example].sha256)}</span>
-                      )}
                     </div>
                     <div className="workload-variants">
                       {workload.variants.map(variant => {
@@ -494,9 +480,9 @@ export function WorkloadCatalogModal({
                           <span
                             className={`workload-check ${observed ? (observed.passed ? 'ok' : 'fail') : ''}`}
                             key={`${check.metric}-${check.relationship}`}
-                            title={observed?.error}
+                            title={observed?.error || check.metric}
                           >
-                            {check.metric} {check.relationship}
+                            {humanizeKey(check.metric)} {check.relationship}
                             {observed && ` (${formatValue(observed.leftValue)} vs ${formatValue(observed.rightValue)})`}
                           </span>
                         )

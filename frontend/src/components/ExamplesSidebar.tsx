@@ -64,9 +64,11 @@ export function ExamplesSidebar({
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span className="example-name">{ex.name}</span>
-                  <span className={`example-lang ${ex.language}`}>
-                    {ex.language === 'cpp' ? 'C++' : ex.language === 'zig' ? 'Zig' : ex.language === 'rust' ? 'Rust' : 'C'}
-                  </span>
+                  {langFilter === 'all' && ex.language !== 'c' && (
+                    <span className={`example-lang ${ex.language}`}>
+                      {ex.language === 'cpp' ? 'C++' : ex.language === 'zig' ? 'Zig' : 'Rust'}
+                    </span>
+                  )}
                 </div>
                 <span className="example-desc">{ex.description}</span>
               </button>

@@ -382,7 +382,7 @@
 
 .profile-detail-columns {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: var(--space-4);
 }
 
@@ -401,7 +401,7 @@
 .profile-detail-grid,
 .profile-cache-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: var(--space-2);
 }
 
@@ -431,7 +431,7 @@
 .profile-detail-row span:last-child,
 .profile-cache-row span:last-child {
   color: var(--text-bright);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   text-align: right;
 }
 
@@ -467,7 +467,7 @@
 
 .execution-metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
   gap: var(--space-3);
 }
 
@@ -494,7 +494,8 @@
   font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-bright);
-  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .execution-bar {

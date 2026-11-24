@@ -42,7 +42,7 @@
 .lab-status { color: var(--text-primary); }
 @media (max-width: 1000px) { .lab-heading { flex-direction: column; } .lab-layout { gap: 20px; grid-template-columns: minmax(250px, 300px) minmax(0, 1fr); } }
 @media (max-width: 720px) { .hardware-lab { padding: 18px 14px; } .lab-layout { grid-template-columns: minmax(0, 1fr); } .lab-heading h1 { font-size: 21px; } .lab-empty { padding: 20px; } .lab-table th, .lab-table td { padding: 10px 6px; font-size: 12px; } }
-.lab-run { position: sticky; bottom: 0; padding: 12px 0; background: var(--void); }
+.lab-run { position: sticky; bottom: 0; padding: 12px 0; background: var(--void); border-top: 1px solid var(--border); }
 .lab-run .btn { width: 100%; }
 .lab-change { font-weight: 500; }
 .lab-change.better { color: var(--signal-success); }

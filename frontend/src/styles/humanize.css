@@ -7,7 +7,6 @@
 button,
 .logo-title,
 .environment-status-main,
-.diff-mode-text,
 .btn-compare,
 .btn-tools,
 .btn-export,
@@ -189,4 +188,16 @@ button,
   color: var(--text-bright);
   border-color: color-mix(in srgb, var(--phosphor-dim) 55%, var(--border));
   box-shadow: var(--shadow-panel);
+}
+
+/* .btn's surface background above must not swallow the primary accent. */
+.btn.btn-primary {
+  background: var(--phosphor);
+  border-color: var(--phosphor);
+  color: var(--accent-foreground);
+}
+
+.btn.btn-primary:hover:not(:disabled) {
+  background: var(--phosphor-dim);
+  border-color: var(--phosphor-dim);
 }

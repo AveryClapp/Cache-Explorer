@@ -32,7 +32,7 @@
   }
 
   .metric-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: var(--space-2);
   }
 
@@ -266,8 +266,16 @@
 
 /* Extra small screens */
 @media (max-width: 480px) {
-  .metric-grid {
-    grid-template-columns: 1fr;
+  .metric-card {
+    padding: var(--space-2);
+  }
+
+  .metric-card .metric-value {
+    font-size: var(--text-xl);
+  }
+
+  .metric-card .metric-detail {
+    font-size: var(--text-2xs);
   }
 
   .header-right {

@@ -58,14 +58,9 @@ export function HotLinesPanel({ hotLines, baselineHotLines, diffMode, code, sele
 
   // Sort: regressions first (positive delta), then by miss count
   if (diffMode) {
-    hotLinesWithDelta.sort((a, b) => {
-      if (a.isNew && !b.isNew) return -1
-      if (!a.isNew && b.isNew) return 1
-      const deltaA = a.delta ?? 0
-      const deltaB = b.delta ?? 0
-      if (deltaA !== deltaB) return deltaB - deltaA
-      return b.misses - a.misses
-    })
+    // Regressions (new or more misses) first, largest first; then by misses.
+    const regression = (line: HotLineWithDelta) => line.isNew ? line.misses : Math.max(line.delta ?? 0, 0)
+    hotLinesWithDelta.sort((a, b) => regression(b) - regression(a) || b.misses - a.misses)
   }
 
   const filteredLines = hotLinesWithDelta.filter(h => !selectedFile || h.file === selectedFile)
@@ -129,7 +124,7 @@ export function HotLinesPanel({ hotLines, baselineHotLines, diffMode, code, sele
                   {hotLine.isNew && <span className="hotspot-badge new">NEW</span>}
                 </span>
                 <span className="hotspot-stats">
-                  {hotLine.misses.toLocaleString()} misses
+                  {hotLine.misses.toLocaleString()} {hotLine.misses === 1 ? 'miss' : 'misses'}
                   {diffMode && hotLine.delta !== undefined && hotLine.delta !== 0 && (
                     <span className={`hotspot-delta ${hotLine.delta > 0 ? 'negative' : 'positive'}`}>
                       {hotLine.delta > 0 ? '\u25B2' : '\u25BC'} {Math.abs(hotLine.delta).toLocaleString()}

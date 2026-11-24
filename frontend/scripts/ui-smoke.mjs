@@ -282,8 +282,10 @@ async function verifyLaunchSurface(url) {
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto(url, { waitUntil: 'domcontentloaded' })
   const environmentStatus = page.locator('.environment-status')
-  await assertVisible(environmentStatus.getByText('Healthy', { exact: true }), 'environment health status')
-  await assertVisible(environmentStatus.getByText('Direct', { exact: true }), 'environment sandbox status')
+  await assertVisible(environmentStatus, 'environment health status')
+  assert(await environmentStatus.getByText('Healthy', { exact: true }).count() === 0, 'healthy status should not add a label')
+  assert((await environmentStatus.getAttribute('title')).includes('Execution: Unsandboxed (local)'), 'sandbox mode should be in the status tooltip')
+  assert((await environmentStatus.getAttribute('aria-label')) === 'Environment Healthy', 'health should stay in the accessible name')
   const environmentLayout = await environmentStatus.evaluate(element => {
     const rect = element.getBoundingClientRect()
     return {

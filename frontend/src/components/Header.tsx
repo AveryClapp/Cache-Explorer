@@ -56,7 +56,7 @@ function healthLabel(health: EnvironmentHealth | null, error: string | null) {
 
 function sandboxLabel(health: EnvironmentHealth | null) {
   if (health?.sandbox === "enabled") return "Sandbox";
-  if (health?.sandbox === "disabled") return "Direct";
+  if (health?.sandbox === "disabled") return "Unsandboxed (local)";
   return "Mode ?";
 }
 
@@ -101,8 +101,7 @@ function EnvironmentStatus({
   return (
     <div className={`environment-status ${tone}`} title={title} role="status" aria-label={`Environment ${label}`}>
       <span className="environment-status-dot" />
-      <span className="environment-status-main">{label}</span>
-      <span className="environment-status-chip">{mode}</span>
+      {tone !== "healthy" && <span className="environment-status-main">{label}</span>}
       <span className="environment-status-compiler">{compiler}</span>
     </div>
   );
@@ -137,12 +136,12 @@ export function Header({
 }: HeaderProps) {
   const productLinks = [
     { area: "analyze" as const, label: "Analyze", open: onOpenAnalyze },
-    { area: "binary" as const, label: "Binary profiles", open: onOpenBinary },
-    { area: "profiles" as const, label: "Profiles", open: onExploreHardware },
-    { area: "comparisons" as const, label: "Comparisons", open: onCompareHardware },
     { area: "lab" as const, label: "Hardware Lab", open: onOpenLab },
-    { area: "workloads" as const, label: "Workloads", open: onOpenWorkloads },
+    { area: "comparisons" as const, label: "Comparisons", open: onCompareHardware },
     { area: "experiments" as const, label: "Experiments", open: onRunExperiment },
+    { area: "profiles" as const, label: "Profiles", open: onExploreHardware },
+    { area: "workloads" as const, label: "Workloads", open: onOpenWorkloads },
+    { area: "binary" as const, label: "Binary profiles", open: onOpenBinary },
   ];
 
   return (
@@ -190,20 +189,6 @@ export function Header({
           selectedCompiler={selectedCompiler}
           compilerCount={compilerCount}
         />}
-        {diffMode && baselineResult && (
-          <div className="diff-mode-badge" title="Comparing against baseline">
-            <span className="diff-mode-icon">⇄</span>
-            <span className="diff-mode-text">Diff Mode</span>
-            <button
-              className="diff-mode-exit"
-              onClick={() => onSetDiffMode(false)}
-              title="Exit diff mode"
-              aria-label="Exit diff mode"
-            >
-              ×
-            </button>
-          </div>
-        )}
       </div>
 
       <div className="header-right">
@@ -216,46 +201,38 @@ export function Header({
           {theme === "dark" ? "☀" : "☾"}
         </button>
 
-        {/* Compare button - visible when result exists */}
-        {activeProductArea !== 'binary' && result && !isLoading && (
+        {/* Baseline comparison: one control, only where results live */}
+        {activeProductArea === 'analyze' && result && !isLoading && !baselineResult && (
           <button
-            onClick={() => {
-              if (!baselineResult) {
-                onSetBaseline(result);
-              } else if (diffMode) {
-                onSetDiffMode(false);
-              } else {
-                onSetDiffMode(true);
-              }
-            }}
-            className={`btn-compare ${baselineResult ? (diffMode ? "active" : "has-baseline") : ""}`}
-            title={
-              !baselineResult
-                ? "Set current result as baseline for comparison"
-                : diffMode
-                  ? "Exit comparison mode"
-                  : "Compare with baseline"
-            }
+            onClick={() => onSetBaseline(result)}
+            className="btn-compare"
+            title="Keep this result; the next run is compared against it"
           >
-            {!baselineResult
-              ? "Set Baseline"
-              : diffMode
-                ? "Exit Compare"
-                : "Compare"}
+            Set Baseline
           </button>
         )}
-        {activeProductArea !== 'binary' && baselineResult && !diffMode && (
-          <button
-            onClick={onClearBaseline}
-            className="btn-icon btn-clear-baseline"
-            title="Clear baseline"
-            aria-label="Clear comparison baseline"
-          >
-            ×
-          </button>
+        {activeProductArea === 'analyze' && baselineResult && (
+          <div className={`compare-control${diffMode ? " active" : ""}`}>
+            <button
+              onClick={() => onSetDiffMode(!diffMode)}
+              className={`btn-compare${diffMode ? " active" : " has-baseline"}`}
+              disabled={isLoading || !result}
+              title={diffMode ? "Hide the comparison" : "Compare the current result with the baseline"}
+            >
+              {diffMode ? "Comparing to baseline" : "Compare to baseline"}
+            </button>
+            <button
+              onClick={onClearBaseline}
+              className="btn-icon btn-clear-baseline"
+              title="Clear baseline"
+              aria-label="Clear comparison baseline"
+            >
+              ×
+            </button>
+          </div>
         )}
 
-        {activeProductArea !== 'binary' && activeProductArea !== 'lab' && (isLoading ? (
+        {activeProductArea === 'analyze' && (isLoading ? (
           <button
             onClick={onCancel}
             className="btn-cancel"

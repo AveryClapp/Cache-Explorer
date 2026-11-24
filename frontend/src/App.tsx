@@ -101,6 +101,8 @@ function preloadProductArea(area: ProductArea) {
   if (area === 'lab') void loadHardwareLab()
 }
 
+const RUN_SHORTCUT_LABEL = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent) ? '⌘↵' : 'Ctrl+↵'
+
 function compactCount(value: number) {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
   if (value >= 10_000) return `${Math.round(value / 1000)}k`
@@ -367,12 +369,24 @@ function App() {
     clearBaseline: clearBaselineHook,
   } = useBaseline(files)
   const [baselineCode, setBaselineCode] = useState<string | null>(null)
+  // A fresh result while a baseline exists is a comparison: show it as one.
+  const comparedResultRef = useRef<CacheResult | null>(null)
+  useEffect(() => {
+    if (!result || !baselineResult || result === baselineResult) return
+    if (comparedResultRef.current === result) return
+    comparedResultRef.current = result
+    setDiffMode(true)
+  }, [result, baselineResult, setDiffMode])
   const [vimMode, setVimMode] = useState(false)  // Vim keybindings toggle
   const [showCommandPalette, setShowCommandPalette] = useState(false)
   const [commandQuery, setCommandQuery] = useState('')
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0)
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768)
   const [mobilePane, setMobilePane] = useState<'editor' | 'results'>('editor')
+  // On phones the results pane is hidden behind a toggle; show it when a run finishes.
+  useEffect(() => {
+    if (isMobile && (result || error)) setMobilePane('results')
+  }, [isMobile, result, error])
   const [selectedHotLineFile, setSelectedHotLineFile] = useState<string>('')  // File filter for hot lines
   const [batchResults, setBatchResults] = useState<{config: string; result: CacheResult}[]>([])
   const [batchError, setBatchError] = useState<string | null>(null)
@@ -559,6 +573,12 @@ function App() {
   const handleEditorMount = (editor: editor.IStandaloneCodeEditor, monaco: Monaco) => {
     editorRef.current = editor
     monacoRef.current = monaco
+    // Monaco swallows Cmd/Ctrl+K, so bind the command palette inside the editor too.
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK, () => {
+      setShowCommandPalette(true)
+      setCommandQuery('')
+      setSelectedCommandIndex(0)
+    })
   }
 
   useEffect(() => {
@@ -610,7 +630,7 @@ function App() {
       // Ctrl/Cmd + Enter to run
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault()
-        if (stage === 'idle' && activeProductArea !== 'binary' && activeProductArea !== 'lab') runAnalysis()
+        if (stage === 'idle' && activeProductArea === 'analyze') runAnalysis()
       }
       // Escape to close command palette
       if (e.key === 'Escape') {
@@ -1415,8 +1435,8 @@ function App() {
 
   const commands: CommandItem[] = [
     // Actions (@)
-    { id: 'run', icon: '@', label: 'Run analysis', shortcut: '⌘R', action: () => { if (!isLoading) runAnalysis() }, category: 'actions' },
-    { id: 'share', icon: '@', label: 'Share / Copy link', shortcut: '⌘S', action: () => { void handleShare() }, category: 'actions' },
+    { id: 'run', icon: '@', label: 'Run analysis', shortcut: RUN_SHORTCUT_LABEL, action: () => { if (!isLoading) runAnalysis() }, category: 'actions' },
+    { id: 'share', icon: '@', label: 'Share / Copy link', action: () => { void handleShare() }, category: 'actions' },
     { id: 'diff-baseline', icon: '@', label: 'Set as diff baseline', action: () => { if (result) { setBaselineFromHook(result, config, files); setBaselineCode(code) } }, category: 'actions' },
     { id: 'diff-toggle', icon: '@', label: diffMode ? 'Exit diff mode' : 'Enter diff mode', action: () => { if (baselineResult) setDiffMode(!diffMode) }, category: 'actions' },
     { id: 'diff-clear', icon: '@', label: 'Clear diff baseline', action: () => { clearBaselineHook(); setBaselineCode(null) }, category: 'actions' },
