@@ -6,6 +6,8 @@
 *.png binary
 *.webp binary
 *.pdf binary
+*.mp4 binary
+*.mov binary
 *.ttf binary
 *.woff binary
 *.woff2 binary
