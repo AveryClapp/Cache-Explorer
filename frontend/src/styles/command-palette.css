@@ -177,7 +177,7 @@
   height: 20px;
   background: var(--accent-subtle);
   border-radius: 50%;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 
 @keyframes toast-in {

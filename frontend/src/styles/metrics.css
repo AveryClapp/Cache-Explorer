@@ -79,7 +79,7 @@
 
 .metric-delta {
   font-family: var(--font-code);
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 600;
   margin: 6px 0;
   text-align: center;

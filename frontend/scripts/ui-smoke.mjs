@@ -211,7 +211,7 @@ async function verifyProductDeepLinks(url) {
   const startedAt = Date.now()
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto(`${url}?view=workloads`, { waitUntil: 'domcontentloaded' })
-  await assertVisible(page.getByText('Verified Workloads', { exact: true }), 'direct workload workspace')
+  await assertVisible(page.getByText('Verified workloads', { exact: true }), 'direct workload workspace')
   const visibleMs = Date.now() - startedAt
   assert(visibleMs < 5000, `workload workspace took ${visibleMs}ms to become visible`)
   assert(await page.locator('.editor-area').count() === 0, 'direct workload navigation should not mount the code editor')
@@ -221,15 +221,15 @@ async function verifyProductDeepLinks(url) {
   )
 
   await page.getByRole('navigation', { name: 'Product' }).getByRole('link', { name: 'CPU profiles', exact: true }).click()
-  await assertVisible(page.getByText('CPU Profiles', { exact: true }), 'profile workspace navigation')
+  await assertVisible(page.getByRole('heading', { name: 'CPU profiles', exact: true }), 'profile workspace navigation')
   assert(new URL(page.url()).searchParams.get('view') === 'profiles', 'profile workspace URL mismatch')
 
   await page.goBack({ waitUntil: 'domcontentloaded' })
-  await assertVisible(page.getByText('Verified Workloads', { exact: true }), 'browser back workload workspace')
+  await assertVisible(page.getByText('Verified workloads', { exact: true }), 'browser back workload workspace')
   assert(new URL(page.url()).searchParams.get('view') === 'workloads', 'browser back did not restore workload workspace')
 
   await page.goForward({ waitUntil: 'domcontentloaded' })
-  await assertVisible(page.getByText('CPU Profiles', { exact: true }), 'browser forward profile workspace')
+  await assertVisible(page.getByRole('heading', { name: 'CPU profiles', exact: true }), 'browser forward profile workspace')
   assert(new URL(page.url()).searchParams.get('view') === 'profiles', 'browser forward did not restore profile workspace')
 
   page.off('request', requestListener)
@@ -305,7 +305,7 @@ async function verifyLaunchSurface(url) {
   assert(!environmentLayout.overflow, `environment status overflows: ${JSON.stringify(environmentLayout)}`)
   await assertVisible(page.getByText('No results yet', { exact: true }), 'launch heading')
   await assertVisible(page.getByRole('button', { name: 'Share', exact: true }), 'launch share action')
-  await assertVisible(page.getByRole('button', { name: /Analyze current code/ }), 'analyze current code action')
+  await assertVisible(page.getByRole('button', { name: /Run analysis ./ }), 'empty-state run action')
 
   const desktopLayout = await layoutMetrics()
   assert(desktopLayout.linkCount === 3, `expected 3 launch links, saw ${desktopLayout.linkCount}`)
@@ -322,8 +322,8 @@ async function verifyLaunchSurface(url) {
 
   await page.getByRole('button', { name: /^CPU profiles/ }).click()
   const hardwareModal = page.locator('.hardware-explorer-modal')
-  await assertVisible(hardwareModal.getByText('CPU Profiles', { exact: true }), 'profile workspace')
-  await assertVisible(hardwareModal.getByText('Trust Snapshot', { exact: true }), 'hardware trust snapshot')
+  await assertVisible(hardwareModal.getByRole('heading', { name: 'CPU profiles', exact: true }), 'profile workspace')
+  await assertVisible(hardwareModal.getByText('Trust snapshot', { exact: true }), 'hardware trust snapshot')
   await assertVisible(hardwareModal.getByText('2/3', { exact: true }), 'hardware driven field count')
   await assertVisible(hardwareModal.getByText('Local perf smoke', { exact: true }), 'hardware validation source')
   await assertVisible(hardwareModal.getByText('teaching-l1', { exact: true }), 'hardware aliases')
@@ -623,8 +623,8 @@ async function verifyWorkloadCatalogControls(url) {
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto(url, { waitUntil: 'domcontentloaded' })
   await openHeaderTool('Workloads')
-  await assertVisible(page.getByText('Verified Workloads', { exact: true }), 'workload catalog modal')
-  await assertVisible(page.getByText('Published History', { exact: true }), 'published workload history')
+  await assertVisible(page.getByText('Verified workloads', { exact: true }), 'workload catalog modal')
+  await assertVisible(page.getByText('Published history', { exact: true }), 'published workload history')
   await assertVisible(page.getByText('passing', { exact: true }), 'history passing status')
   await assertVisible(page.getByText('2 runs', { exact: true }), 'history run count')
   await assertVisible(page.getByText('Largest duration changes', { exact: true }), 'history duration delta label')
@@ -649,13 +649,13 @@ async function verifyWorkloadCatalogControls(url) {
   assert(await page.getByText('1 / 3', { exact: true }).isVisible(), 'search should narrow workload count')
   assert(await workloadName('conv2d-intel14').count() === 0, 'search should hide unmatched workloads')
 
-  await page.getByLabel('Filter workloads by hardware target').selectOption('zen4')
+  await page.getByLabel('Filter workloads by CPU profile').selectOption('zen4')
   await assertVisible(page.getByText('No matching workloads', { exact: true }), 'filtered empty state')
 
   await page.getByRole('button', { name: 'Clear filters' }).click()
   await assertVisible(page.getByText('3 / 3', { exact: true }), 'cleared workload result count')
 
-  await page.getByLabel('Filter workloads by hardware target').selectOption('zen4')
+  await page.getByLabel('Filter workloads by CPU profile').selectOption('zen4')
   await assertVisible(workloadName('hash-probe-zen4'), 'target-filtered workload row')
   assert(await page.getByText('1 / 3', { exact: true }).isVisible(), 'target filter should narrow workload count')
 
@@ -686,7 +686,7 @@ async function verifyWorkloadCatalogControls(url) {
   await assertVisible(experimentModal.getByText('Compare code variants', { exact: true }), 'workload experiment modal')
   await assertVisible(experimentModal.getByText('Variant set prefetch-stream-intel', { exact: true }), 'workload variant source label')
   assert(await experimentModal.locator('textarea').inputValue() === 'prefetch-off\nprefetch-stream', 'workload variants should populate experiment textarea')
-  await assertVisible(experimentModal.getByText('intel14', { exact: true }), 'workload hardware chip')
+  await assertVisible(experimentModal.getByText('Intel 14th Gen', { exact: true }), 'workload hardware chip')
 
   await experimentModal.getByRole('button', { name: 'Run', exact: true }).click()
   await assertVisible(experimentModal.getByText('Overall', { exact: true }), 'workload experiment result')
@@ -947,7 +947,7 @@ async function verifyResultTrustPanel(url) {
 
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto(url, { waitUntil: 'domcontentloaded' })
-  await page.getByRole('button', { name: 'Execute' }).click()
+  await page.getByRole('button', { name: 'Run analysis', exact: true }).click()
 
   const panel = page.locator('.result-provenance-panel')
   await assertVisible(panel.getByText('Run details', { exact: true }), 'evidence and fidelity panel')
@@ -975,7 +975,7 @@ async function verifyLegacyResultTrustPanel(url) {
 
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto(url, { waitUntil: 'domcontentloaded' })
-  await page.getByRole('button', { name: 'Execute' }).click()
+  await page.getByRole('button', { name: 'Run analysis', exact: true }).click()
 
   const panel = page.locator('.result-provenance-panel')
   await assertVisible(panel.getByText('Run details', { exact: true }), 'legacy evidence and fidelity panel')
@@ -1008,7 +1008,7 @@ async function verifyHardwareComparison(url) {
   const modal = page.locator('.batch-modal').filter({ hasText: 'Compare across CPUs' })
   await assertVisible(modal.getByText('Compare across CPUs', { exact: true }), 'hardware comparison modal')
   await assertVisible(modal.getByText('Ready to compare', { exact: true }), 'comparison ready state')
-  await modal.getByRole('button', { name: 'Run Comparison', exact: true }).click()
+  await modal.getByRole('button', { name: 'Run comparison', exact: true }).click()
   await assertVisible(modal.getByText('Educational', { exact: true }), 'comparison educational row')
   await assertVisible(modal.getByText('Intel 14th Gen', { exact: true }), 'comparison intel row')
   await assertVisible(modal.getByText('AMD Zen 4', { exact: true }), 'comparison amd row')
@@ -1054,7 +1054,7 @@ async function verifyHardwareComparisonEmptyState(url) {
   await openHeaderTool('Hardware')
 
   const modal = page.locator('.batch-modal').filter({ hasText: 'Compare across CPUs' })
-  await modal.getByRole('button', { name: 'Run Comparison', exact: true }).click()
+  await modal.getByRole('button', { name: 'Run comparison', exact: true }).click()
   await assertVisible(modal.getByText('No hardware results', { exact: true }), 'comparison empty-state title')
   await assertVisible(modal.getByText(failureMessage, { exact: true }), 'comparison empty-state message')
   await assertVisible(modal.getByText('4 profiles requested', { exact: true }), 'comparison empty-state profile count')
@@ -1121,7 +1121,7 @@ async function verifyEditRunCompareShareReopen(url) {
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto(url, { waitUntil: 'domcontentloaded' })
   await replaceEditorText(editedCode)
-  await page.getByRole('button', { name: 'Execute' }).click()
+  await page.getByRole('button', { name: 'Run analysis', exact: true }).click()
 
   await assertVisible(page.locator('.result-provenance-panel').getByText('Run details', { exact: true }), 'edited run evidence and fidelity')
   assert(compilePayload?.code?.includes('EDIT_RUN_MARKER'), `edited compile payload missing marker: ${compilePayload?.code}`)
@@ -1129,7 +1129,7 @@ async function verifyEditRunCompareShareReopen(url) {
   await openHeaderTool('Hardware')
   const editedComparison = page.locator('.batch-modal').filter({ hasText: 'Compare across CPUs' })
   await assertVisible(editedComparison, 'edited comparison modal')
-  await editedComparison.getByRole('button', { name: 'Run Comparison', exact: true }).click()
+  await editedComparison.getByRole('button', { name: 'Run comparison', exact: true }).click()
   assert(comparePayload?.code?.includes('EDIT_RUN_MARKER'), `edited compare payload missing marker: ${comparePayload?.code}`)
   await closeModal()
 
@@ -1194,7 +1194,7 @@ async function verifySocketCloseFallback(url) {
 
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto(url, { waitUntil: 'domcontentloaded' })
-  await page.getByRole('button', { name: 'Execute' }).click()
+  await page.getByRole('button', { name: 'Run analysis', exact: true }).click()
 
   await assertVisible(page.locator('.result-provenance-panel').getByText('Run details', { exact: true }), 'fallback evidence and fidelity panel')
   assert(compilePayload?.config === 'educational', `fallback compile config mismatch: ${JSON.stringify(compilePayload)}`)
@@ -1299,7 +1299,7 @@ async function verifyShareRoundTrip(url) {
   await page.goto(`${url}?s=smoke-missing-environment`, { waitUntil: 'domcontentloaded' })
   await assertVisible(page.getByText('Educational', { exact: true }), 'fallback hardware value')
   await assertVisible(
-    page.getByText('Shared hardware profile "future-socket" is not available here; using educational.', { exact: true }),
+    page.getByText('Shared CPU profile "future-socket" is not available here; using educational.', { exact: true }),
     'missing hardware notice',
   )
   await assertVisible(
@@ -1320,7 +1320,7 @@ async function verifyShareRoundTrip(url) {
   await openHeaderTool('Hardware')
   const restoredComparison = page.locator('.batch-modal').filter({ hasText: 'Compare across CPUs' })
   await assertVisible(restoredComparison, 'restored hardware comparison modal')
-  await restoredComparison.getByRole('button', { name: 'Run Comparison', exact: true }).click()
+  await restoredComparison.getByRole('button', { name: 'Run comparison', exact: true }).click()
   assert(restoredCompareRequest?.configs?.join(',') === 'intel,amd', `restored comparison configs mismatch: ${JSON.stringify(restoredCompareRequest?.configs)}`)
   await closeModal()
 
@@ -1623,8 +1623,8 @@ async function verifyExperimentShareReopen(url) {
   let modal = page.locator('.experiment-modal')
   await assertVisible(modal.getByText('Compare code variants', { exact: true }), 'shared experiment modal')
   assert(await modal.locator('textarea').inputValue() === experimentVariants, 'shared experiment variants should restore before run')
-  await assertVisible(modal.getByText('intel', { exact: true }), 'shared experiment intel chip')
-  await assertVisible(modal.getByText('amd', { exact: true }), 'shared experiment amd chip')
+  await assertVisible(modal.getByText('Intel 12th Gen', { exact: true }), 'shared experiment intel chip')
+  await assertVisible(modal.getByText('AMD Zen 4', { exact: true }), 'shared experiment amd chip')
 
   await modal.getByRole('button', { name: 'Run', exact: true }).click()
   await assertVisible(modal.getByText('Overall', { exact: true }), 'shared experiment result')

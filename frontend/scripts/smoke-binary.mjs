@@ -18,7 +18,7 @@ try {
     await page.route('**/api/**', route => route.abort())
     await page.goto(`${base}/?view=binary`)
     await page.getByRole('heading', { name: 'Binary profiles', exact: true }).waitFor()
-    assert.equal(await page.getByRole('button', { name: 'Execute', exact: true }).count(), 0)
+    assert.equal(await page.getByRole('button', { name: 'Run analysis', exact: true }).count(), 0)
     const input = page.getByLabel('Open binary analysis JSON')
     await input.setInputFiles({ name: 'analysis.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(fixtureAnalysis())) })
     await page.getByText('Event limit reached', { exact: true }).waitFor()

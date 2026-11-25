@@ -1,4 +1,4 @@
-import { EXAMPLES } from '../constants'
+import { EXAMPLES, LANGUAGE_LABELS } from '../constants'
 
 type ExampleLangFilter = 'all' | 'c' | 'cpp' | 'zig' | 'rust'
 
@@ -66,7 +66,7 @@ export function ExamplesSidebar({
                   <span className="example-name">{ex.name}</span>
                   {langFilter === 'all' && ex.language !== 'c' && (
                     <span className={`example-lang ${ex.language}`}>
-                      {ex.language === 'cpp' ? 'C++' : ex.language === 'zig' ? 'Zig' : 'Rust'}
+                      {LANGUAGE_LABELS[ex.language]}
                     </span>
                   )}
                 </div>

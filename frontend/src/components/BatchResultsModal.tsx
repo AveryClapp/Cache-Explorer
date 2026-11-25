@@ -59,7 +59,7 @@ export function BatchResultsModal({ results, error, running, total, onRun, onExp
           </div>
           <div className="batch-modal-header-actions">
             <button className="btn-primary" onClick={onRun} disabled={running}>
-              {running ? 'Comparing...' : results.length > 0 ? 'Run Again' : 'Run Comparison'}
+              {running ? 'Comparing...' : results.length > 0 ? 'Run again' : 'Run comparison'}
             </button>
             {onExportCSV && (
               <button className="btn" onClick={onExportCSV} disabled={results.length === 0}>
@@ -84,7 +84,7 @@ export function BatchResultsModal({ results, error, running, total, onRun, onExp
             <div className={`batch-empty-state${error ? ' error' : ''}`} role={error ? 'alert' : 'status'}>
               <div className="batch-empty-title">{error ? 'No hardware results' : 'Ready to compare'}</div>
               <div className="batch-empty-desc">
-                {error || 'Run the active source across the selected hardware profiles.'}
+                {error || 'Run the active source across the selected CPU profiles.'}
               </div>
               <div className="batch-empty-meta">{total} profiles requested</div>
             </div>
@@ -97,8 +97,8 @@ export function BatchResultsModal({ results, error, running, total, onRun, onExp
                   <th>Trust</th>
                   <th>Bottleneck</th>
                   <th>Cycles</th>
-                  <th>L1D Hit</th>
-                  <th>Top Source</th>
+                  <th>L1D hit</th>
+                  <th>Top source</th>
                   <th>Events</th>
                 </tr>
               </thead>

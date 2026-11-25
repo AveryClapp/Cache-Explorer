@@ -19,7 +19,7 @@ export function ExecutionEnginePanel({ execution }: ExecutionEnginePanelProps) {
     return (
       <div className="panel execution-panel">
         <div className="panel-header">
-          <span className="panel-title">Execution Engine</span>
+          <span className="panel-title">Execution engine</span>
           <span className="execution-badge unavailable">Unavailable</span>
         </div>
         <div className="panel-content">
@@ -46,7 +46,7 @@ export function ExecutionEnginePanel({ execution }: ExecutionEnginePanelProps) {
   return (
     <div className="panel execution-panel">
       <div className="panel-header">
-        <span className="panel-title">Execution Engine</span>
+        <span className="panel-title">Execution engine</span>
         <span className="execution-badge">Estimated</span>
       </div>
       <div className="panel-content">

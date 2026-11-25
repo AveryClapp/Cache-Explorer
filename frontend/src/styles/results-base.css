@@ -40,6 +40,12 @@
   font-size: var(--text-xs);
 }
 
+@media (pointer: coarse), (max-width: 768px) {
+  .btn-small {
+    min-height: 32px;
+  }
+}
+
 .results-scroll {
   flex: 1;
   overflow-y: auto;

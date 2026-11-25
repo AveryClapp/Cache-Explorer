@@ -138,7 +138,7 @@
 .run-setup-caret {
   grid-area: caret;
   color: currentColor;
-  font-size: 8px;
+  font-size: var(--text-2xs);
   line-height: 1;
 }
 
@@ -291,7 +291,7 @@
 
 .toolbar-cache-config input {
   width: 70px;
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   font-family: var(--font-code);
   font-size: var(--text-xs);
   background: var(--surface);
@@ -326,7 +326,7 @@
 }
 
 .cache-config-group select {
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   font-family: var(--font-code);
   font-size: var(--text-xs);
   background: var(--elevated);

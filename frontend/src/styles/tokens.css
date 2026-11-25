@@ -28,14 +28,14 @@
   /* ─── Text, most to least prominent ─── */
   --text-bright: #f0f2f4;
   --text-primary: #c9ced6;
-  --text-secondary: #929aa8;
-  --text-muted: #626b79;
+  --text-secondary: #a2aab7;
+  --text-muted: #8693a6;
 
   /* ─── Signals ─── */
   --signal-excellent: #91c9a5;
   --signal-good: #b4c99a;
   --signal-warning: #d9b875;
-  --signal-critical: #e06f5f;
+  --signal-critical: #e27060;
   --signal-info: #9db7df;
 
   /* ─── Cache heat (cold → warm) ─── */
@@ -108,12 +108,12 @@
 
   --text-bright: #202226;
   --text-primary: #414750;
-  --text-secondary: #747b86;
-  --text-muted: #9a9fa8;
+  --text-secondary: #5b616a;
+  --text-muted: #696c72;
 
-  --signal-excellent: #4f8a64;
-  --signal-good: #6f8f4f;
-  --signal-warning: #9a7627;
-  --signal-critical: #b84b3f;
+  --signal-excellent: #447756;
+  --signal-good: #5a7440;
+  --signal-warning: #886822;
+  --signal-critical: #b64a3e;
   --signal-info: #486f9f;
 }

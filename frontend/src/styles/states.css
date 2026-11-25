@@ -206,7 +206,6 @@
 .error-copy:hover,
 .error-copy:focus-visible {
   background: color-mix(in srgb, var(--signal-critical) 12%, transparent);
-  outline: none;
 }
 
 .error-item {

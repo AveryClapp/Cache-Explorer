@@ -228,7 +228,7 @@
   border-radius: 999px;
   color: var(--signal-warning);
   font-family: var(--font-code);
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   line-height: 1.35;
   text-transform: uppercase;
@@ -297,7 +297,7 @@
 }
 
 .header-more-caret {
-  font-size: 9px;
+  font-size: var(--text-2xs);
   opacity: 0.7;
 }
 
@@ -500,7 +500,7 @@ button {
   color: var(--text-primary);
   border: 1px solid var(--border);
   font-weight: 500;
-  padding: 6px 12px;
+  padding: 6px var(--space-3);
   border-radius: var(--radius-md);
   cursor: pointer;
   font-family: var(--font-body);
@@ -515,7 +515,7 @@ button {
 }
 
 .btn-cancel .cancel-x {
-  font-size: 14px;
+  font-size: var(--text-md);
   font-weight: 400;
   opacity: 0.6;
 }
@@ -646,6 +646,11 @@ select:focus {
   outline: none;
 }
 
+.styled-select:focus-visible .styled-select-trigger {
+  border-color: var(--accent-dim);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
 .styled-select-trigger {
   display: flex;
   align-items: center;
@@ -680,7 +685,7 @@ select:focus {
 }
 
 .styled-select-arrow {
-  font-size: 8px;
+  font-size: var(--text-2xs);
   color: var(--text-secondary);
   transition: transform var(--duration-fast) var(--ease-out);
 }

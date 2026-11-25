@@ -791,7 +791,7 @@
 .workload-history-stats span {
   display: inline-flex;
   align-items: baseline;
-  gap: 4px;
+  gap: var(--space-1);
   padding: 2px var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -1364,8 +1364,8 @@
 }
 
 .hardware-profile-run-toggle input {
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
   accent-color: var(--accent);
 }
 

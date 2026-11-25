@@ -21,7 +21,7 @@ export function EmptyState({
         <h2 className="empty-state-title">No results yet</h2>
         <p className="empty-state-target">{targetSummary}</p>
         <button className="btn-primary empty-state-run" onClick={onRun}>
-          Analyze current code
+          Run analysis
           <kbd>{isMac ? '⌘' : 'Ctrl'} ↵</kbd>
         </button>
         <p className="empty-state-desc">

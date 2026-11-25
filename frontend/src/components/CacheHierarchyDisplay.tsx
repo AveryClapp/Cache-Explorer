@@ -55,7 +55,7 @@ export function CacheHierarchyDisplay({ result }: CacheHierarchyDisplayProps) {
       {/* L2 */}
       <div className={`cache-box ${getRateClass(l2.hitRate)}`} title={`${l2.hits.toLocaleString()} hits, ${l2.misses.toLocaleString()} misses`}>
         <span className="cache-box-rate">{formatPercent(l2.hitRate)}</span>
-        <span className="cache-box-label">L2 Cache</span>
+        <span className="cache-box-label">L2 cache</span>
       </div>
 
       <div className="cache-connector" />
@@ -63,7 +63,7 @@ export function CacheHierarchyDisplay({ result }: CacheHierarchyDisplayProps) {
       {/* L3 */}
       <div className={`cache-box ${getRateClass(l3.hitRate)}`} title={`${l3.hits.toLocaleString()} hits, ${l3.misses.toLocaleString()} misses`}>
         <span className="cache-box-rate">{formatPercent(l3.hitRate)}</span>
-        <span className="cache-box-label">L3 Cache</span>
+        <span className="cache-box-label">L3 cache</span>
       </div>
 
       <div className="cache-connector" />

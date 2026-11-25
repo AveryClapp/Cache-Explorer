@@ -51,6 +51,12 @@ for (const file of walk(srcDir)) {
         const line = css.slice(0, match.index).split('\n').length
         problems.push(`${rel}:${line}: raw color "${match[0]}"; use a token from ${TOKENS_FILE}`)
       }
+      // The html root size in base.css anchors the rem scale; everything else uses --text-*.
+      for (const match of css.matchAll(/font-size:\s*\d+(?:\.\d+)?px/g)) {
+        const line = css.slice(0, match.index).split('\n').length
+        if (rel === join('src', 'styles', 'base.css') && match[0] === 'font-size: 16px') continue
+        problems.push(`${rel}:${line}: "${match[0]}"; use a --text-* step from ${TOKENS_FILE}`)
+      }
     }
   }
 

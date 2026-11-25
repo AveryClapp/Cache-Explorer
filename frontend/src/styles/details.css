@@ -256,7 +256,7 @@
 .timing-legend-item {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .timing-dot {

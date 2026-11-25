@@ -82,15 +82,15 @@ try {
   await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded' })
   await visible(page.getByText('Hardware Explorer', { exact: true }).first(), 'product name')
   await visible(page.getByText('Preview', { exact: true }).first(), 'Preview label')
-  await visible(page.getByRole('button', { name: 'Execute', exact: true }), 'default Execute action')
+  await visible(page.getByRole('button', { name: 'Run analysis', exact: true }), 'default Run analysis action')
   const rootVisibleMs = Date.now() - rootStartedAt
 
-  await page.getByRole('button', { name: 'Execute', exact: true }).click()
+  await page.getByRole('button', { name: 'Run analysis', exact: true }).click()
   await visible(page.getByText('Run details', { exact: true }), 'default analysis result', 90000)
 
   const nav = page.getByRole('navigation', { name: 'Product' })
   await nav.getByRole('link', { name: 'CPU profiles', exact: true }).click()
-  await visible(page.getByText('CPU Profiles', { exact: true }), 'profiles workspace')
+  await visible(page.getByRole('heading', { name: 'CPU profiles', exact: true }), 'profiles workspace')
   assert(new URL(page.url()).searchParams.get('view') === 'profiles', 'Profiles did not produce a durable URL')
 
   await nav.getByRole('link', { name: 'Compare', exact: true }).click()
@@ -98,7 +98,7 @@ try {
 
   await nav.locator('.header-more > summary').click()
   await nav.getByRole('link', { name: 'Workloads', exact: true }).click()
-  await visible(page.getByText('Verified Workloads', { exact: true }), 'workload workspace')
+  await visible(page.getByText('Verified workloads', { exact: true }), 'workload workspace')
   await visible(page.getByText('conv2d-intel14', { exact: true }).first(), 'default verified workload')
 
   await nav.getByRole('link', { name: 'Compare', exact: true }).click()
@@ -118,7 +118,7 @@ try {
     if (request.resourceType() === 'script') mobileScriptRequests.push(request.url())
   })
   await mobile.goto(`${baseUrl}/?view=workloads`, { waitUntil: 'domcontentloaded' })
-  await visible(mobile.getByText('Verified Workloads', { exact: true }), 'mobile workload workspace')
+  await visible(mobile.getByText('Verified workloads', { exact: true }), 'mobile workload workspace')
   assert(await mobile.locator('.editor-area').count() === 0, 'mobile workload deep link mounted the editor')
   const mobileVisibleMs = Date.now() - mobileStartedAt
   await mobile.close()

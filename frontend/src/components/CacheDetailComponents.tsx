@@ -30,7 +30,7 @@ export function LevelDetail({ name, stats }: CacheLevelDetailProps): ReactNode {
       </div>
       {has3C && total3C > 0 && (
         <div className="level-3c">
-          <div className="level-3c-header">Miss Breakdown</div>
+          <div className="level-3c-header">Miss breakdown</div>
           <div className="level-3c-bar">
             {stats.compulsory! > 0 && (
               <div

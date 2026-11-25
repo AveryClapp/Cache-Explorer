@@ -67,7 +67,7 @@
   align-items: center;
   justify-content: center;
   font-family: var(--font-body);
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -213,7 +213,7 @@
   justify-content: flex-end;
   padding-right: 6px;
   font-family: var(--font-code);
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
   color: var(--text-muted);
   box-sizing: border-box;

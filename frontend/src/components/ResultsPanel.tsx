@@ -3,27 +3,24 @@ import type { editor } from 'monaco-editor'
 import type { CacheResult, ErrorResult, Stage } from '../types'
 import { MemoryEvidencePanel } from './MemoryEvidencePanel'
 import { TopologyPanel } from './TopologyPanel'
-import {
-  ErrorDisplay,
-  MetricCards,
-  DiffSummary,
-  BottleneckSummaryPanel,
-  CacheHierarchyViz,
-  PrefetchStatsPanel,
-  AdvancedStatsPanel,
-  ExecutionEnginePanel,
-  HardwareProfilePanel,
-  LevelDetail,
-  ResultProvenancePanel,
-  TLBDetail,
-  FalseSharingDisplay,
-  HotLinesPanel,
-  SuggestionsPanel,
-  SourceAnnotationsPanel,
-  CacheGrid,
-  LoadingState,
-  EmptyState,
-} from './index'
+import { ErrorDisplay } from './ErrorDisplay'
+import { MetricCards } from './MetricCards'
+import { DiffSummary } from './DiffSummary'
+import { BottleneckSummaryPanel } from './BottleneckSummaryPanel'
+import { CacheHierarchyViz } from './CacheHierarchyViz'
+import { PrefetchStatsPanel } from './PrefetchStatsPanel'
+import { AdvancedStatsPanel } from './AdvancedStatsPanel'
+import { ExecutionEnginePanel } from './ExecutionEnginePanel'
+import { HardwareProfilePanel } from './HardwareProfilePanel'
+import { LevelDetail, TLBDetail } from './CacheDetailComponents'
+import { ResultProvenancePanel } from './ResultProvenancePanel'
+import { FalseSharingDisplay } from './FalseSharingDisplay'
+import { HotLinesPanel } from './HotLinesPanel'
+import { SuggestionsPanel } from './SuggestionsPanel'
+import { SourceAnnotationsPanel } from './SourceAnnotationsPanel'
+import { CacheGrid } from './CacheGrid'
+import { LoadingState } from './LoadingState'
+import { EmptyState } from './EmptyState'
 
 interface ResultsPanelProps {
   result: CacheResult | null
@@ -89,7 +86,7 @@ export function ResultsPanel({
   return (
     <div className={`results-panel${isMobile && mobilePane !== 'results' ? ' mobile-hidden' : ''}`}>
       <div className="results-header">
-        <span className="results-title">Analysis Results</span>
+        <span className="results-title">Results</span>
         <div className="results-actions">
           {result && (
             <>
@@ -140,7 +137,7 @@ export function ResultsPanel({
             {result.coherence && result.coherence.falseSharingEvents > 0 && (
               <div className="panel warning">
                 <div className="panel-header">
-                  <span className="panel-title">False Sharing Detected</span>
+                  <span className="panel-title">False sharing detected</span>
                   <span className="panel-badge">{result.coherence.falseSharingEvents}</span>
                 </div>
               </div>
@@ -191,7 +188,7 @@ export function ResultsPanel({
                 {result.cacheState && (
                   <div className="panel">
                     <div className="panel-header">
-                      <span className="panel-title">L1 Cache Grid</span>
+                      <span className="panel-title">L1 cache grid</span>
                       <span className="panel-badge">Final State</span>
                     </div>
                     <CacheGrid cacheState={result.cacheState.l1d} />

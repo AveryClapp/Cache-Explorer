@@ -1,4 +1,4 @@
-import type { SelectOption } from '../types'
+import type { Language, SelectOption } from '../types'
 
 export const HARDWARE_OPTIONS: SelectOption[] = [
   { value: 'educational', label: 'Educational', group: 'Learning', desc: '1KB L1, 4KB L2, 16KB L3' },
@@ -28,7 +28,7 @@ export const OPT_LEVEL_OPTIONS: SelectOption[] = [
 
 export const PREFETCH_OPTIONS: SelectOption[] = [
   { value: 'none', label: 'None', desc: 'No hardware prefetching' },
-  { value: 'next', label: 'Next Line', desc: 'Prefetch adjacent cache line on miss' },
+  { value: 'next', label: 'Next line', desc: 'Prefetch adjacent cache line on miss' },
   { value: 'stream', label: 'Stream', desc: 'Detect sequential access patterns' },
   { value: 'stride', label: 'Stride', desc: 'Detect strided access patterns' },
   { value: 'adaptive', label: 'Adaptive', desc: 'Combines stream + stride detection' },
@@ -58,3 +58,5 @@ export const FAST_MODE_OPTIONS: SelectOption[] = [
   { value: 'false', label: 'Full (3C)', desc: 'Tracks compulsory, capacity, conflict misses' },
   { value: 'true', label: 'Fast', desc: '~3x faster, skips miss classification' },
 ]
+
+export const LANGUAGE_LABELS: Record<Language, string> = { c: 'C', cpp: 'C++', rust: 'Rust', zig: 'Zig' }

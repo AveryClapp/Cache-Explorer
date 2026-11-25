@@ -54,12 +54,11 @@ import {
 
 // Hooks
 import {
-  createFileTab,
-  getFileExtension,
   normalizeProgressMessage,
   useBaseline,
   useThrottledProgress,
 } from './hooks'
+import { createFileTab, getFileExtension } from './utils/file'
 
 // Utilities
 import { fuzzyMatch } from './utils/formatting'
@@ -715,7 +714,7 @@ function App() {
           setConfig(restoredConfig)
         } else {
           setConfig('educational')
-          addEnvironmentNotice(`Shared hardware profile "${sharedConfig}" is not available here; using educational.`)
+          addEnvironmentNotice(`Shared CPU profile "${sharedConfig}" is not available here; using educational.`)
         }
         setOptLevel(state.optLevel)
         if (state.defines) setDefines(state.defines)

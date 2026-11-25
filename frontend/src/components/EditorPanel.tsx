@@ -8,6 +8,7 @@ import 'monaco-editor/esm/vs/basic-languages/rust/rust.contribution.js'
 import { FileManager } from './FileManager'
 import type { ProjectFile } from './FileManager'
 import type { Language, Stage } from '../types'
+import { LANGUAGE_LABELS, STAGE_TEXT, hardwareLabel } from '../constants'
 
 self.MonacoEnvironment = {
   getWorker: () => new EditorWorker(),
@@ -50,16 +51,6 @@ interface EditorPanelProps {
   // Mobile
   isMobile: boolean
   mobilePane: 'editor' | 'results'
-}
-
-const stageText: Record<Stage, string> = {
-  idle: '',
-  connecting: 'Connecting...',
-  preparing: 'Preparing...',
-  compiling: 'Compiling...',
-  running: 'Running...',
-  processing: 'Simulating...',
-  done: ''
 }
 
 function formatCount(n: number): string {
@@ -112,10 +103,10 @@ export function EditorPanel({
   const progressPct = hasTotal ? clampPercent((displayProcessedEvents / totalEvents) * 100) : 0
   const statusLabel = isLoading
     ? hasTotal
-      ? `${stageText[stage] || 'Processing...'} ${formatCount(displayProcessedEvents)} / ${formatCount(totalEvents)} events (${Math.round(progressPct)}%)`
+      ? `${STAGE_TEXT[stage] || 'Simulating...'} ${formatCount(displayProcessedEvents)} / ${formatCount(totalEvents)} events (${Math.round(progressPct)}%)`
       : hasProgress
-        ? `${stageText[stage] || 'Processing...'} ${formatCount(displayProcessedEvents)} events`
-        : stageText[stage]
+        ? `${STAGE_TEXT[stage] || 'Simulating...'} ${formatCount(displayProcessedEvents)} events`
+        : STAGE_TEXT[stage]
     : 'Ready'
 
   return (
@@ -200,11 +191,11 @@ export function EditorPanel({
                 </span>
               )}
             </span>
-            <span className="status-item">{language.toUpperCase()}</span>
+            <span className="status-item">{LANGUAGE_LABELS[language]}</span>
           </div>
           <div className="status-bar-right">
             {vimMode && <span className="status-item">VIM</span>}
-            <span className="status-item">{config}</span>
+            <span className="status-item">{hardwareLabel(config)}</span>
           </div>
         </div>
       )}

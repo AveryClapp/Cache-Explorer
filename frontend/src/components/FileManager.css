@@ -34,7 +34,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 12px;
+  padding: 0 var(--space-3);
   height: 35px;
   background: var(--surface);
   border-right: 1px solid var(--border);
@@ -81,7 +81,7 @@
   width: 18px;
   height: 18px;
   border-radius: 3px;
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   color: white;
   display: flex;
@@ -93,7 +93,7 @@
 
 /* File name */
 .tab-name {
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -109,7 +109,7 @@
 /* Main file asterisk indicator */
 .tab-main-indicator {
   color: var(--accent);
-  font-size: 14px;
+  font-size: var(--text-md);
   font-weight: bold;
   line-height: 1;
   margin-left: -2px;
@@ -125,7 +125,7 @@
   border: none;
   border-radius: 3px;
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: var(--text-md);
   line-height: 1;
   cursor: pointer;
   opacity: 0;
@@ -161,7 +161,7 @@
   border: 1px solid var(--accent);
   border-radius: 3px;
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: var(--text-sm);
   padding: 2px 6px;
   outline: none;
 }
@@ -180,7 +180,7 @@
   border: none;
   border-right: 1px solid var(--border);
   color: var(--text-muted);
-  font-size: 18px;
+  font-size: var(--text-lg);
   cursor: pointer;
   transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   display: flex;
@@ -203,7 +203,7 @@
   box-shadow: var(--shadow-popover);
   z-index: 1000;
   min-width: 160px;
-  padding: 4px 0;
+  padding: var(--space-1) 0;
   animation: contextMenuFadeIn 0.1s ease-out;
   backdrop-filter: blur(8px);
 }
@@ -222,11 +222,11 @@
 .tab-context-menu button {
   display: block;
   width: 100%;
-  padding: 8px 14px;
+  padding: var(--space-2) 14px;
   background: none;
   border: none;
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-family: var(--font-body);
   text-align: left;
   cursor: pointer;
@@ -258,13 +258,13 @@
 .tab-context-menu hr {
   border: none;
   border-top: 1px solid var(--border);
-  margin: 4px 0;
+  margin: var(--space-1) 0;
 }
 
 /* Mobile responsive */
 @media (max-width: 600px) {
   .editor-tab {
-    padding: 0 8px;
+    padding: 0 var(--space-2);
     min-width: 60px;
     max-width: 120px;
   }
@@ -272,10 +272,10 @@
   .tab-icon {
     width: 14px;
     height: 14px;
-    font-size: 8px;
+    font-size: var(--text-2xs);
   }
 
   .tab-name {
-    font-size: 11px;
+    font-size: var(--text-xs);
   }
 }

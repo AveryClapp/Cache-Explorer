@@ -1,6 +1,6 @@
 import { formatPercent } from '../utils/formatting'
 import { formatTrustLabel, provenanceClass } from '../utils/provenance'
-import type { ExperimentTemplate } from '../constants'
+import { hardwareLabel, type ExperimentTemplate } from '../constants'
 import type { CacheResult, HardwareExperimentResult } from '../types'
 
 interface ExperimentResultsModalProps {
@@ -166,10 +166,10 @@ export function ExperimentResultsModal({
               />
             </label>
             <div className="experiment-field experiment-hardware-field">
-              <span>Hardware</span>
+              <span>CPU profiles</span>
               <div className="experiment-config-chips">
                 {hardwareConfigIds.map(configId => (
-                  <span className="experiment-config-chip" key={configId}>{configId}</span>
+                  <span className="experiment-config-chip" key={configId}>{hardwareLabel(configId)}</span>
                 ))}
               </div>
             </div>
@@ -225,8 +225,8 @@ export function ExperimentResultsModal({
                   <th>Bottleneck</th>
                   <th>Cycles</th>
                   <th>Delta</th>
-                  <th>L1D Hit</th>
-                  <th>Top Source</th>
+                  <th>L1D hit</th>
+                  <th>Top source</th>
                 </tr>
               </thead>
               <tbody>

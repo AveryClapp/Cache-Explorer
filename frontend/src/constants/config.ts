@@ -1,4 +1,4 @@
-import type { PrefetchPolicy, CustomCacheConfig } from '../types'
+import type { PrefetchPolicy, CustomCacheConfig, Stage } from '../types'
 
 // API Configuration
 const DEV_HOST = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : 'localhost'
@@ -41,8 +41,6 @@ export const PREFETCH_DEFAULTS: Record<string, PrefetchPolicy> = {
   custom: 'none',
 }
 
-export const PREFETCH_DEFAULTS_ENTRIES = Object.entries(PREFETCH_DEFAULTS)
-
 // Config display names
 export const CONFIG_NAMES: Record<string, string> = {
   educational: 'Educational',
@@ -62,10 +60,10 @@ export const CONFIG_NAMES: Record<string, string> = {
   custom: 'Custom'
 }
 
-export const CONFIG_NAMES_ENTRIES = Object.entries(CONFIG_NAMES)
-
-// Optimization levels
-export const OPTIMIZATION_LEVELS = ['-O0', '-O1', '-O2', '-O3', '-Os', '-Oz']
+/** Display name for a CPU profile id ("amd" → "AMD Zen 4"); unknown ids pass through. */
+export function hardwareLabel(id: string): string {
+  return CONFIG_NAMES[id] ?? id
+}
 
 // Default custom cache configuration
 export const defaultCustomConfig: CustomCacheConfig = {
@@ -79,12 +77,12 @@ export const defaultCustomConfig: CustomCacheConfig = {
 }
 
 // Stage display text
-export const STAGE_TEXT: Record<string, string> = {
+export const STAGE_TEXT: Record<Stage, string> = {
   idle: '',
   connecting: 'Connecting...',
   preparing: 'Preparing...',
   compiling: 'Compiling...',
   running: 'Running...',
-  processing: 'Processing...',
+  processing: 'Simulating...',
   done: ''
 }

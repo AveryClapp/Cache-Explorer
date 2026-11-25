@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { humanizeKey } from '../utils/formatting'
+import { hardwareLabel } from '../constants'
 import type {
   WorkloadHistoryDurationDelta,
   WorkloadHistoryResponse,
@@ -229,7 +230,7 @@ export function WorkloadCatalogModal({
       >
         <div className="batch-modal-header">
           <div className="product-surface-title">
-            <h1 className="batch-modal-title" id="verified-workloads-title">Verified Workloads</h1>
+            <h1 className="batch-modal-title" id="verified-workloads-title">Verified workloads</h1>
             <p>Load and verify reproducible CPU modeling scenarios.</p>
           </div>
           <div className="batch-modal-header-actions">
@@ -268,7 +269,7 @@ export function WorkloadCatalogModal({
             <div className="workload-history-panel">
               <div className="workload-history-heading">
                 <div>
-                  <div className="workload-history-title">Published History</div>
+                  <div className="workload-history-title">Published history</div>
                   <div className="workload-history-subtitle">
                     Latest {formatDate(history.latest?.generatedAt)}
                     {history.source && ` / ${history.source}`}
@@ -375,11 +376,11 @@ export function WorkloadCatalogModal({
                 className="workload-filter-select"
                 value={targetFilter}
                 onChange={event => setTargetFilter(event.target.value)}
-                aria-label="Filter workloads by hardware target"
+                aria-label="Filter workloads by CPU profile"
               >
-                <option value="all">All targets</option>
+                <option value="all">All CPU profiles</option>
                 {targetOptions.map(target => (
-                  <option key={target} value={target}>{target}</option>
+                  <option key={target} value={target}>{hardwareLabel(target)}</option>
                 ))}
               </select>
               <select
@@ -445,7 +446,7 @@ export function WorkloadCatalogModal({
                     </div>
                     <div className="workload-description">{workload.description}</div>
                     <div className="workload-meta">
-                      <span>{workload.config}</span>
+                      <span>{hardwareLabel(workload.config)}</span>
                       <span>{workload.optLevel || '-O0'}</span>
                       <span>{formatLimit(workload.limit)} events</span>
                       <span>{workload.variants.length} variants</span>

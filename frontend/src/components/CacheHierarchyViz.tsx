@@ -21,7 +21,7 @@ export function CacheHierarchyViz({ result, baselineResult, diffMode }: CacheHie
 
   return (
     <div className="cache-hierarchy">
-      <div className="cache-hierarchy-title">Cache Hierarchy</div>
+      <div className="cache-hierarchy-title">Cache hierarchy</div>
       <div className="cache-levels">
         <CacheHierarchyLevel
           name="L1"

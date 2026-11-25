@@ -178,7 +178,7 @@ export function HardwareExplorerModal({
       >
         <div className="batch-modal-header">
           <div className="product-surface-title">
-            <h1 className="batch-modal-title" id="hardware-explorer-title">CPU Profiles</h1>
+            <h1 className="batch-modal-title" id="hardware-explorer-title">CPU profiles</h1>
             <p>Inspect model coverage, confidence, and the profiles used for comparisons.</p>
           </div>
           <div className="hardware-explorer-actions">
@@ -188,7 +188,7 @@ export function HardwareExplorerModal({
               onClick={onCompareRunSet}
               disabled={loading || runConfigIds.length === 0}
             >
-              Compare Set
+              Compare set
             </button>
             <button
               className="btn"
@@ -216,7 +216,7 @@ export function HardwareExplorerModal({
               onClick={() => selected && onApply(selected.id)}
               disabled={loading || !selected || selected.id === activeId}
             >
-              Use Profile
+              Use profile
             </button>
             <button className="btn" onClick={onRefresh} disabled={loading}>Refresh</button>
           </div>
@@ -232,7 +232,7 @@ export function HardwareExplorerModal({
                   className="hardware-profile-row-main"
                   onClick={() => onSelect(profile.id)}
                   aria-pressed={profile.id === selected?.id}
-                  aria-label={`Select hardware profile ${profile.displayName}`}
+                  aria-label={`Select CPU profile ${profile.displayName}`}
                 >
                   <span className="hardware-profile-row-heading">
                     <span className="hardware-profile-row-name">{profile.displayName}</span>
@@ -248,7 +248,7 @@ export function HardwareExplorerModal({
                     aria-label={`Include ${profile.displayName} in compare and experiment runs`}
                     onChange={() => onToggleRunConfig(profile.id)}
                   />
-                  <span>Run</span>
+                  <span>Include</span>
                 </label>
               </div>
             ))}
@@ -267,7 +267,7 @@ export function HardwareExplorerModal({
                 {selectedTrust && (
                   <div className="hardware-trust-snapshot" aria-label="Hardware trust snapshot">
                     <div className="hardware-trust-heading">
-                      <span className="profile-detail-title">Trust Snapshot</span>
+                      <span className="profile-detail-title">Trust snapshot</span>
                       <span className={`profile-confidence ${selected.modelConfidence}`}>
                         {formatToken(selected.modelConfidence)}
                       </span>
@@ -318,7 +318,7 @@ export function HardwareExplorerModal({
                   <div className="hardware-run-set-matrix">
                     <div className="hardware-run-set-header">
                       <div>
-                        <div className="profile-detail-title">Run Set Diff</div>
+                        <div className="profile-detail-title">Run set diff</div>
                         <div className="hardware-run-set-baseline">
                           Compared against {selected.displayName}
                         </div>

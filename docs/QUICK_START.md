@@ -192,7 +192,7 @@ Simulate different prefetching strategies:
 3. Select language (C or C++)
 4. Choose optimization level (-O0, -O1, -O2, -O3)
 5. Select hardware preset (Intel, AMD, Apple, Educational)
-6. Click "Execute"
+6. Click "Run analysis"
 7. View results:
    - Cache hit rates per level
    - Hottest source lines

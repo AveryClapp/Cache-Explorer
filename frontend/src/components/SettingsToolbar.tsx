@@ -136,8 +136,9 @@ export function SettingsToolbar({
             <span className="toolbar-advanced-label">Target</span>
             <div className="toolbar-run-controls">
               <div className="toolbar-group">
-                <label>Hardware</label>
+                <label>CPU profile</label>
                 <StyledSelect
+                  label="CPU profile"
                   value={config}
                   options={HARDWARE_OPTIONS}
                   onChange={onConfigChange}
@@ -147,6 +148,7 @@ export function SettingsToolbar({
               <div className="toolbar-group">
                 <label>Opt</label>
                 <StyledSelect
+                  label="Optimization level"
                   value={optLevel}
                   options={OPT_LEVEL_OPTIONS}
                   onChange={onOptLevelChange}
@@ -161,6 +163,7 @@ export function SettingsToolbar({
               <div className="toolbar-group">
                 <label>Prefetch</label>
                 <StyledSelect
+                  label="Prefetch policy"
                   value={prefetchPolicy}
                   options={PREFETCH_OPTIONS}
                   onChange={onPrefetchChange}
@@ -170,6 +173,7 @@ export function SettingsToolbar({
               <div className="toolbar-group">
                 <label title="Fast mode disables 3C miss classification for ~3x speedup">Mode</label>
                 <StyledSelect
+                  label="Simulation mode"
                   value={String(fastMode)}
                   options={FAST_MODE_OPTIONS}
                   onChange={(v) => onFastModeChange(v === 'true')}
@@ -191,6 +195,7 @@ export function SettingsToolbar({
               <div className="toolbar-group">
                 <label>Sample</label>
                 <StyledSelect
+                  label="Sample rate"
                   value={String(sampleRate)}
                   options={SAMPLE_OPTIONS}
                   onChange={(v) => onSampleRateChange(parseInt(v))}
@@ -234,6 +239,7 @@ export function SettingsToolbar({
                   </div>
                 ) : (
                   <StyledSelect
+                    label="Event limit"
                     value={limitSelectValue}
                     options={isCustomLimit
                       ? LIMIT_OPTIONS.map(o => o.value === 'custom' ? { ...o, label: formatLimit(eventLimit) } : o)
@@ -255,26 +261,26 @@ export function SettingsToolbar({
 
           {config === 'custom' && (
             <div className="toolbar-advanced-section custom-cache-section">
-              <span className="toolbar-advanced-label">Custom Cache</span>
+              <span className="toolbar-advanced-label">Custom cache</span>
               <div className="toolbar-cache-config">
                 <div className="cache-config-group">
-                  <span className="cache-config-title">Line Size</span>
-                  <select value={customConfig.lineSize} onChange={e => onCustomConfigChange({ ...customConfig, lineSize: parseInt(e.target.value) })}>
+                  <span className="cache-config-title">Line size</span>
+                  <select aria-label="Cache line size" value={customConfig.lineSize} onChange={e => onCustomConfigChange({ ...customConfig, lineSize: parseInt(e.target.value) })}>
                     <option value={32}>32 B</option>
                     <option value={64}>64 B</option>
                     <option value={128}>128 B</option>
                   </select>
                 </div>
                 <div className="cache-config-group">
-                  <span className="cache-config-title">L1 Data</span>
-                  <select value={customConfig.l1Size} onChange={e => onCustomConfigChange({ ...customConfig, l1Size: parseInt(e.target.value) })}>
+                  <span className="cache-config-title">L1 data</span>
+                  <select aria-label="L1 data size" value={customConfig.l1Size} onChange={e => onCustomConfigChange({ ...customConfig, l1Size: parseInt(e.target.value) })}>
                     <option value={8192}>8 KB</option>
                     <option value={16384}>16 KB</option>
                     <option value={32768}>32 KB</option>
                     <option value={49152}>48 KB</option>
                     <option value={65536}>64 KB</option>
                   </select>
-                  <select value={customConfig.l1Assoc} onChange={e => onCustomConfigChange({ ...customConfig, l1Assoc: parseInt(e.target.value) })}>
+                  <select aria-label="L1 data associativity" value={customConfig.l1Assoc} onChange={e => onCustomConfigChange({ ...customConfig, l1Assoc: parseInt(e.target.value) })}>
                     <option value={4}>4-way</option>
                     <option value={8}>8-way</option>
                     <option value={12}>12-way</option>
@@ -283,14 +289,14 @@ export function SettingsToolbar({
                 </div>
                 <div className="cache-config-group">
                   <span className="cache-config-title">L2</span>
-                  <select value={customConfig.l2Size} onChange={e => onCustomConfigChange({ ...customConfig, l2Size: parseInt(e.target.value) })}>
+                  <select aria-label="L2 size" value={customConfig.l2Size} onChange={e => onCustomConfigChange({ ...customConfig, l2Size: parseInt(e.target.value) })}>
                     <option value={131072}>128 KB</option>
                     <option value={262144}>256 KB</option>
                     <option value={524288}>512 KB</option>
                     <option value={1048576}>1 MB</option>
                     <option value={2097152}>2 MB</option>
                   </select>
-                  <select value={customConfig.l2Assoc} onChange={e => onCustomConfigChange({ ...customConfig, l2Assoc: parseInt(e.target.value) })}>
+                  <select aria-label="L2 associativity" value={customConfig.l2Assoc} onChange={e => onCustomConfigChange({ ...customConfig, l2Assoc: parseInt(e.target.value) })}>
                     <option value={4}>4-way</option>
                     <option value={8}>8-way</option>
                     <option value={16}>16-way</option>
@@ -298,7 +304,7 @@ export function SettingsToolbar({
                 </div>
                 <div className="cache-config-group">
                   <span className="cache-config-title">L3</span>
-                  <select value={customConfig.l3Size} onChange={e => onCustomConfigChange({ ...customConfig, l3Size: parseInt(e.target.value) })}>
+                  <select aria-label="L3 size" value={customConfig.l3Size} onChange={e => onCustomConfigChange({ ...customConfig, l3Size: parseInt(e.target.value) })}>
                     <option value={0}>None</option>
                     <option value={2097152}>2 MB</option>
                     <option value={4194304}>4 MB</option>
@@ -306,7 +312,7 @@ export function SettingsToolbar({
                     <option value={16777216}>16 MB</option>
                     <option value={33554432}>32 MB</option>
                   </select>
-                  <select value={customConfig.l3Assoc} onChange={e => onCustomConfigChange({ ...customConfig, l3Assoc: parseInt(e.target.value) })} disabled={customConfig.l3Size === 0}>
+                  <select aria-label="L3 associativity" value={customConfig.l3Assoc} onChange={e => onCustomConfigChange({ ...customConfig, l3Assoc: parseInt(e.target.value) })} disabled={customConfig.l3Size === 0}>
                     <option value={8}>8-way</option>
                     <option value={12}>12-way</option>
                     <option value={16}>16-way</option>

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { CacheResult, EnvironmentHealth, Stage } from "../types";
+import { STAGE_TEXT } from "../constants";
 import { isCompareArea, productHref, type ProductArea } from "../utils/productArea";
 
 interface HeaderProps {
@@ -27,16 +28,6 @@ interface HeaderProps {
   onRun: () => void;
   onCancel: () => void;
 }
-
-const stageText: Record<Stage, string> = {
-  idle: "",
-  connecting: "Connecting...",
-  preparing: "Preparing...",
-  compiling: "Compiling...",
-  running: "Running...",
-  processing: "Processing...",
-  done: "",
-};
 
 function healthTone(health: EnvironmentHealth | null, error: string | null) {
   if (error) return "offline";
@@ -295,12 +286,12 @@ export function Header({
             aria-label="Cancel analysis"
           >
             <span className="btn-spinner" />
-            {stageText[stage]}
+            {STAGE_TEXT[stage]}
             <span className="cancel-x">×</span>
           </button>
         ) : (
           <button onClick={onRun} className="btn-primary">
-            Execute
+            Run analysis
           </button>
         ))}
       </div>

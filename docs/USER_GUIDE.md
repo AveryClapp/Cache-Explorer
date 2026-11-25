@@ -82,7 +82,7 @@ int main() {
 - **Config**: Hardware preset (Intel, AMD, Apple, Educational)
 - **Prefetch**: Prefetching strategy (none, stream, stride, adaptive)
 
-**5. Click "Execute"** and inspect the result and provenance panels.
+**5. Click "Run analysis"** and inspect the result and provenance panels.
 
 **Web UI Features:**
 - **Dark/Light Mode**: Toggle in settings, persists across sessions

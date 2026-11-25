@@ -557,18 +557,18 @@ async function runVisualFlow(url, outputDir) {
   await assertVisible('.empty-state', 'launch surface')
   await capture(outputDir, 'desktop-launch')
 
-  await page.getByRole('button', { name: 'Execute', exact: true }).click()
+  await page.getByRole('button', { name: 'Run analysis', exact: true }).click()
   await page.getByText('Run details', { exact: true }).waitFor({ state: 'visible', timeout: 8000 })
   await capture(outputDir, 'desktop-result')
   await verifyLineMetricSelector()
 
   await openProductArea('Explore')
-  await page.getByText('CPU Profiles', { exact: true }).waitFor({ state: 'visible', timeout: 8000 })
+  await page.getByRole('heading', { name: 'CPU profiles', exact: true }).waitFor({ state: 'visible', timeout: 8000 })
   await capture(outputDir, 'hardware-explorer')
   await closeModal()
 
   await openProductArea('Workloads')
-  await page.getByText('Verified Workloads', { exact: true }).waitFor({ state: 'visible', timeout: 8000 })
+  await page.getByText('Verified workloads', { exact: true }).waitFor({ state: 'visible', timeout: 8000 })
   await page.locator('.workload-name').filter({ hasText: 'conv2d-intel14' }).waitFor({ state: 'visible', timeout: 8000 })
   await capture(outputDir, 'workload-catalog')
   await closeModal()
