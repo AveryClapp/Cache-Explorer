@@ -269,8 +269,13 @@ TraceLineResult TraceParser::parse_metadata(const std::string &line) {
 
 TraceLineResult TraceParser::parse_line(const std::string &raw_line) {
   ++line_number_;
-  if (raw_line.size() > kMaxLineBytes) return fail("record exceeds the 16384-byte safety limit");
-  if (raw_line.find('\0') != std::string::npos) return fail("record contains a NUL byte");
+  // Legacy (v1) traces share stdout with the analyzed program, so oversized or
+  // binary lines are program output, not trace records: skip them.
+  const bool strict = manifest_.version == 2;
+  if (raw_line.size() > kMaxLineBytes)
+    return strict ? fail("record exceeds the 16384-byte safety limit") : ignored();
+  if (raw_line.find('\0') != std::string::npos)
+    return strict ? fail("record contains a NUL byte") : ignored();
   const std::string line = trim(raw_line);
   if (line.empty()) return ignored();
   if (line[0] == '#') return parse_metadata(line);
@@ -297,9 +302,20 @@ TraceLineResult TraceParser::parse_line(const std::string &raw_line) {
 std::optional<TraceLineResult> TraceParser::next(std::istream &input) {
   char buffer[kMaxLineBytes + 2];
   input.getline(buffer, sizeof(buffer));
-  if (input.bad() || (input.fail() && !input.eof())) {
+  if (input.bad()) {
     ++line_number_;
-    return fail("input failed or record exceeds the 16384-byte safety limit");
+    return fail("input failed");
+  }
+  if (input.fail() && !input.eof()) {
+    if (manifest_.version == 2 || input.gcount() == 0) {
+      ++line_number_;
+      return fail("input failed or record exceeds the 16384-byte safety limit");
+    }
+    // Legacy streams: discard the rest of an oversized program-output line.
+    ++line_number_;
+    input.clear();
+    input.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+    return ignored();
   }
   if (input.gcount() == 0 && input.eof()) return std::nullopt;
   const size_t count = static_cast<size_t>(input.gcount());

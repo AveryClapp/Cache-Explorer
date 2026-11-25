@@ -1,5 +1,31 @@
 import { spawn } from 'child_process';
 
+// Detached children run in their own process group, so they no longer receive
+// the terminal's SIGINT or die with the server. Track live groups and kill them
+// when the server exits or is signalled.
+const activeProcessGroups = new Set();
+let shutdownHooksInstalled = false;
+
+function killActiveProcessGroups() {
+  for (const pid of activeProcessGroups) {
+    try { process.kill(-pid, 'SIGKILL'); } catch { /* already gone */ }
+  }
+  activeProcessGroups.clear();
+}
+
+function installShutdownHooks() {
+  if (shutdownHooksInstalled) return;
+  shutdownHooksInstalled = true;
+  process.once('exit', killActiveProcessGroups);
+  for (const signalName of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+    process.once(signalName, () => {
+      killActiveProcessGroups();
+      // The once-listener is gone; re-raise for the default termination.
+      if (process.listenerCount(signalName) === 0) process.kill(process.pid, signalName);
+    });
+  }
+}
+
 function asText(data) {
   return typeof data === 'string' ? data : data.toString();
 }
@@ -36,6 +62,13 @@ export function runManagedProcess(command, args, options = {}) {
 
     const useProcessGroup = process.platform !== 'win32';
     const proc = spawn(command, args, { detached: useProcessGroup });
+    if (useProcessGroup && proc.pid) {
+      installShutdownHooks();
+      activeProcessGroups.add(proc.pid);
+    }
+    const untrackGroup = () => {
+      if (useProcessGroup && proc.pid) activeProcessGroups.delete(proc.pid);
+    };
 
     let stdout = '';
     let stderr = '';
@@ -114,6 +147,7 @@ export function runManagedProcess(command, args, options = {}) {
     });
 
     proc.on('close', (exitCode) => {
+      untrackGroup();
       if (timeoutId) clearTimeout(timeoutId);
       if (forceKillTimer) clearTimeout(forceKillTimer);
       signal?.removeEventListener('abort', abortHandler);
@@ -139,6 +173,7 @@ export function runManagedProcess(command, args, options = {}) {
     });
 
     proc.on('error', (err) => {
+      untrackGroup();
       if (timeoutId) clearTimeout(timeoutId);
       if (forceKillTimer) clearTimeout(forceKillTimer);
       signal?.removeEventListener('abort', abortHandler);

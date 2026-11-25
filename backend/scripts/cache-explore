@@ -543,6 +543,17 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# cache-sim rejects traces above its 2M-event safety cap, so never ask the
+# runtime for more: unset, 0 or larger limits stop emitting at the cap instead.
+MAX_TRACE_EVENTS=2000000
+if [[ -n "$EVENT_LIMIT" && ! "$EVENT_LIMIT" =~ ^[0-9]+$ ]]; then
+  echo "Error: --limit must be a non-negative integer" >&2
+  exit 1
+fi
+if [[ -z "$EVENT_LIMIT" || "$EVENT_LIMIT" -eq 0 || "$EVENT_LIMIT" -gt "$MAX_TRACE_EVENTS" ]]; then
+  EVENT_LIMIT="$MAX_TRACE_EVENTS"
+fi
+
 # For backwards compatibility, set INPUT_FILE to first file
 INPUT_FILE="${INPUT_FILES[0]:-}"
 
@@ -1015,6 +1026,12 @@ EXIT_CODE=0
 for pipeline_code in "${PIPE_CODES[@]:1}"; do
   if [[ "$pipeline_code" -ne 0 ]]; then EXIT_CODE="$pipeline_code"; fi
 done
+# A program killed by a signal (crash, abort) left a truncated trace; do not
+# report that partial result as a successful analysis.
+if [[ "$EXIT_CODE" -eq 0 && "${PIPE_CODES[0]}" -ge 128 ]]; then
+  echo "Error: analyzed program terminated abnormally (status ${PIPE_CODES[0]}); trace is incomplete" >&2
+  EXIT_CODE="${PIPE_CODES[0]}"
+fi
 
 # Cleanup
 if [[ -z "$KEEP_BINARY" ]]; then

@@ -75,7 +75,7 @@ void ArgParser::print_usage(const char* prog) {
 
 PrefetchPolicy ArgParser::parse_prefetch_policy(std::string_view name) {
     if (name == "none") return PrefetchPolicy::NONE;
-    if (name == "next" || name == "nextline") return PrefetchPolicy::NEXT_LINE;
+    if (name == "next" || name == "nextline" || name == "next-line") return PrefetchPolicy::NEXT_LINE;
     if (name == "stream") return PrefetchPolicy::STREAM;
     if (name == "stride") return PrefetchPolicy::STRIDE;
     if (name == "adaptive") return PrefetchPolicy::ADAPTIVE;

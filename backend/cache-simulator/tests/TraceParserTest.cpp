@@ -195,14 +195,31 @@ void test_bounded_stream_reader() {
     assert(parser.next(exact)->kind == TraceLineKind::Ignored);
     assert(!parser.next(exact));
     std::istringstream oversized(std::string(TraceParser::kMaxLineBytes + 1, 'x') + ending);
-    assert(parser.next(oversized)->kind == TraceLineKind::Error);
+    assert(parser.next(oversized)->kind == TraceLineKind::Ignored);
+    TraceParser strict;
+    parse_v2_header(strict);
+    std::istringstream strict_oversized(std::string(TraceParser::kMaxLineBytes + 1, 'x') + ending);
+    assert(strict.next(strict_oversized)->kind == TraceLineKind::Error);
+  }
+  {
+    // Legacy streams interleave program stdout; a long output line is skipped.
+    TraceParser legacy;
+    std::istringstream input(std::string(3 * TraceParser::kMaxLineBytes, 'x') +
+                             "\nL 0x1000 4 unknown:0 T1\n");
+    assert(legacy.next(input)->kind == TraceLineKind::Ignored);
+    assert(legacy.next(input)->kind == TraceLineKind::Event);
+    assert(!legacy.next(input));
   }
   TraceParser parser;
+  parse_v2_header(parser);
   std::string record = "L 0x1000 4 unknown:0 T1";
   record.push_back('\0');
   record += "hidden\n";
   std::istringstream nul(record);
   assert(parser.next(nul)->kind == TraceLineKind::Error);
+  TraceParser legacy_nul;
+  std::istringstream legacy_nul_input(record);
+  assert(legacy_nul.next(legacy_nul_input)->kind == TraceLineKind::Ignored);
   std::istringstream broken;
   broken.setstate(std::ios::badbit);
   assert(parser.next(broken)->kind == TraceLineKind::Error);

@@ -624,7 +624,7 @@ app.post('/compile', async (req, res) => {
     }
 
     // Always pass prefetch policy explicitly (whitelist valid policies)
-    const VALID_PREFETCH_POLICIES = ['none', 'next-line', 'stream', 'stride', 'adaptive', 'intel'];
+    const VALID_PREFETCH_POLICIES = ['none', 'next', 'next-line', 'stream', 'stride', 'adaptive', 'intel'];
     const prefetchToUse = req.body.prefetch && VALID_PREFETCH_POLICIES.includes(req.body.prefetch) ? req.body.prefetch : 'none';
     args.push('--prefetch', prefetchToUse);
 
@@ -1715,7 +1715,7 @@ wss.on('connection', (ws) => {
       }
 
       // Always pass prefetch policy explicitly (whitelist valid policies)
-      const VALID_PREFETCH_POLICIES = ['none', 'next-line', 'stream', 'stride', 'adaptive', 'intel'];
+      const VALID_PREFETCH_POLICIES = ['none', 'next', 'next-line', 'stream', 'stride', 'adaptive', 'intel'];
       const prefetchToUse = prefetch && VALID_PREFETCH_POLICIES.includes(prefetch) ? prefetch : 'none';
       args.push('--prefetch', prefetchToUse);
 

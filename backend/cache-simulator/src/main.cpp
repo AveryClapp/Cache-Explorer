@@ -135,7 +135,7 @@ void output_flamegraph_svg(const std::vector<HotLineType>& hot_lines, const std:
   std::cout << "</svg>\n";
 }
 
-int main(int argc, char *argv[]) {
+static int run_simulator(int argc, char *argv[]) {
   // Parse command line arguments
   SimulatorOptions opts;
   try {
@@ -1437,4 +1437,16 @@ int main(int argc, char *argv[]) {
   }
 
   return 0;
+}
+
+int main(int argc, char *argv[]) {
+  // Simulation helpers reject unsafe inputs (for example an access spanning
+  // too many cache lines) by throwing; report them instead of aborting.
+  try {
+    return run_simulator(argc, argv);
+  } catch (const std::exception &error) {
+    std::cout << std::flush;
+    std::cerr << "Error: " << error.what() << "\n";
+    return 2;
+  }
 }

@@ -352,6 +352,11 @@ void JsonOutput::write_memory_observations(std::ostream& out, const TraceProcess
     const double service = static_cast<double>(bytes) / cfg.bandwidth_bytes_per_cycle;
     const bool available = pipeline.instructions > 0 && pipeline.total_cycles() > 0;
     const double pressure = available ? service / pipeline.total_cycles() : 0;
+    // Earlier writers leave std::fixed/setprecision(3) on the stream, which
+    // would round small pressures to 0.000. Use full precision here only.
+    const auto saved_flags = out.flags();
+    const auto saved_precision = out.precision();
+    out << std::defaultfloat << std::setprecision(10);
     out << ",\"memorySystem\":{\"available\":true,\"model\":\"estimated\",\"demandAccesses\":" << evidence.accesses
         << ",\"dramDemandFills\":" << evidence.dram_fills << ",\"dramDemandFillBytes\":" << bytes
         << ",\"assumedMlp\":" << cfg.assumed_mlp << ",\"assumedBandwidthBytesPerCycle\":" << cfg.bandwidth_bytes_per_cycle
@@ -364,6 +369,8 @@ void JsonOutput::write_memory_observations(std::ostream& out, const TraceProcess
         << ",\"caveats\":[\"Demand line fills only; excludes prefetch traffic, dirty writebacks and bus protocol overhead.\","
         << "\"Bandwidth is a hypothetical bytes/cycle service capacity, not measured GB/s.\","
         << "\"MLP assumes independent misses; dependency chains, scheduling and actual overlap are not inferred.\"]}";
+    out.flags(saved_flags);
+    out.precision(saved_precision);
     out << ",\"cacheEvidence\":{\"available\":true,\"model\":\"modeled-with-heuristics\",\"lineSize\":" << cfg.l1_data.line_size
         << ",\"omittedSourceAccesses\":" << evidence.omitted_accesses
         << ",\"coverage\":\"Top 24 of the first 512 source locations; one observed miss sample per location.\","

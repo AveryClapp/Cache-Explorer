@@ -75,10 +75,13 @@ function Comparison({ baseline, variant }: { baseline: LabRun; variant: LabRun }
 }
 
 export function HardwareLab({ files, config, payload, scenario, onChange, onOpenSource, hosted }: Props) {
+  // The parent rebuilds `payload` on every render; key on its content so the
+  // scenario is not re-parsed (up to 256 KiB of source) on each render.
+  const payloadKey = JSON.stringify(payload)
   const initial = useMemo(() => {
-    try { return { scenario: captureScenario(files, config, payload), error: '' } }
+    try { return { scenario: captureScenario(files, config, JSON.parse(payloadKey)), error: '' } }
     catch (error) { return { scenario: null, error: (error as Error).message } }
-  }, [files, config, payload])
+  }, [files, config, payloadKey])
   const current = scenario || initial.scenario
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
