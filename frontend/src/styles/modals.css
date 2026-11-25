@@ -1256,6 +1256,19 @@
   cursor: not-allowed;
 }
 
+.actions-more {
+  position: relative;
+}
+
+.actions-more > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.actions-more > summary::-webkit-details-marker {
+  display: none;
+}
+
 .hardware-run-set-count {
   color: var(--text-secondary);
   font-family: var(--font-code);

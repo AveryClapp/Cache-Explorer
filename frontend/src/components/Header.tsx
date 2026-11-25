@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useDismissableDetails } from "../hooks/useDismissableDetails";
 import type { CacheResult, EnvironmentHealth, Stage } from "../types";
 import { STAGE_TEXT } from "../constants";
 import { isCompareArea, productHref, type ProductArea } from "../utils/productArea";
@@ -100,28 +100,8 @@ function MoreMenu({
   activeProductArea: ProductArea;
   onPreload: (area: ProductArea) => void;
 }) {
-  const ref = useRef<HTMLDetailsElement>(null);
+  const ref = useDismissableDetails();
   const active = links.find((link) => link.area === activeProductArea);
-
-  useEffect(() => {
-    const close = (event: Event) => {
-      const menu = ref.current;
-      if (!menu?.open) return;
-      if (event instanceof KeyboardEvent) {
-        if (event.key !== "Escape") return;
-        menu.open = false;
-        menu.querySelector("summary")?.focus();
-        return;
-      }
-      if (!menu.contains(event.target as Node)) menu.open = false;
-    };
-    document.addEventListener("pointerdown", close);
-    document.addEventListener("keydown", close);
-    return () => {
-      document.removeEventListener("pointerdown", close);
-      document.removeEventListener("keydown", close);
-    };
-  }, []);
 
   return (
     <details ref={ref} className="header-more">
@@ -129,12 +109,12 @@ function MoreMenu({
         {active ? active.label : "More"}
         <span className="header-more-caret" aria-hidden="true">▾</span>
       </summary>
-      <div className="header-more-menu">
+      <div className="popover-menu">
         {links.map(({ area, label, open }) => (
           <a
             key={area}
             href={productHref(area)}
-            className={`header-more-item${activeProductArea === area ? " active" : ""}`}
+            className={`popover-menu-item${activeProductArea === area ? " active" : ""}`}
             aria-current={activeProductArea === area ? "page" : undefined}
             onClick={(event) => {
               event.preventDefault();

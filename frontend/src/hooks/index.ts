@@ -4,3 +4,4 @@ export {
   useThrottledProgress,
   type AnalysisProgress,
 } from './useThrottledProgress'
+export { useDismissableDetails } from './useDismissableDetails'

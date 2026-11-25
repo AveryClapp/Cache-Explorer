@@ -1,6 +1,7 @@
 import type { HardwareProfile } from '../types'
 import { exportHardwareProfilesAsCSV, exportHardwareProfilesAsJSON } from '../utils/export'
 import { HardwareProfilePanel } from './HardwareProfilePanel'
+import { useDismissableDetails } from '../hooks/useDismissableDetails'
 
 interface HardwareExplorerModalProps {
   profiles: HardwareProfile[]
@@ -139,6 +140,8 @@ export function HardwareExplorerModal({
   onOpenExperiment,
   onRefresh,
 }: HardwareExplorerModalProps) {
+  const moreRef = useDismissableDetails()
+  const closeMore = () => { if (moreRef.current) moreRef.current.open = false }
   const selected = profiles.find(profile => profile.id === selectedId) || profiles[0]
   const selectedTrust = selected ? trustSnapshot(selected) : null
   const runProfiles = runConfigIds
@@ -158,7 +161,7 @@ export function HardwareExplorerModal({
       format: (value: number) => `${value.toLocaleString()} cycles`,
     },
     {
-      label: 'Widest Core',
+      label: 'Widest core',
       best: bestProfile(diffProfiles, profile => profile.details?.executionCore.issueWidth),
       format: (value: number) => `${value}-wide`,
     },
@@ -199,26 +202,40 @@ export function HardwareExplorerModal({
             </button>
             <button
               className="btn"
-              onClick={() => selected && exportHardwareProfilesAsCSV(diffProfiles, selected)}
-              disabled={loading || !selected || diffProfiles.length === 0}
-            >
-              Export CSV
-            </button>
-            <button
-              className="btn"
-              onClick={() => selected && exportHardwareProfilesAsJSON(diffProfiles, selected)}
-              disabled={loading || !selected || diffProfiles.length === 0}
-            >
-              Export JSON
-            </button>
-            <button
-              className="btn"
               onClick={() => selected && onApply(selected.id)}
               disabled={loading || !selected || selected.id === activeId}
             >
               Use profile
             </button>
-            <button className="btn" onClick={onRefresh} disabled={loading}>Refresh</button>
+            <details ref={moreRef} className="actions-more">
+              <summary className="btn">More <span aria-hidden="true">▾</span></summary>
+              <div className="popover-menu">
+                <button
+                  type="button"
+                  className="popover-menu-item"
+                  onClick={() => { if (selected) exportHardwareProfilesAsCSV(diffProfiles, selected); closeMore() }}
+                  disabled={loading || !selected || diffProfiles.length === 0}
+                >
+                  Export CSV
+                </button>
+                <button
+                  type="button"
+                  className="popover-menu-item"
+                  onClick={() => { if (selected) exportHardwareProfilesAsJSON(diffProfiles, selected); closeMore() }}
+                  disabled={loading || !selected || diffProfiles.length === 0}
+                >
+                  Export JSON
+                </button>
+                <button
+                  type="button"
+                  className="popover-menu-item"
+                  onClick={() => { onRefresh(); closeMore() }}
+                  disabled={loading}
+                >
+                  Refresh profiles
+                </button>
+              </div>
+            </details>
           </div>
         </div>
         <div className="batch-modal-content hardware-explorer-content">
