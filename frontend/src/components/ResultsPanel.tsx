@@ -14,6 +14,7 @@ import { ExecutionEnginePanel } from './ExecutionEnginePanel'
 import { HardwareProfilePanel } from './HardwareProfilePanel'
 import { LevelDetail, TLBDetail } from './CacheDetailComponents'
 import { ResultProvenancePanel } from './ResultProvenancePanel'
+import { TraceCompletenessNotice } from './TraceCompletenessNotice'
 import { FalseSharingDisplay } from './FalseSharingDisplay'
 import { HotLinesPanel } from './HotLinesPanel'
 import { SuggestionsPanel } from './SuggestionsPanel'
@@ -108,6 +109,9 @@ export function ResultsPanel({
 
         {result && (
           <>
+            {/* Partial trace: abnormal exit or event limit */}
+            <TraceCompletenessNotice completeness={result.traceCompleteness} />
+
             {/* Diff Summary Panel */}
             {diffMode && baselineResult && (
               <DiffSummary result={result} baselineResult={baselineResult} baselineConfig={baselineConfig} />

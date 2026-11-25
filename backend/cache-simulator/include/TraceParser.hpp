@@ -33,9 +33,18 @@ struct TraceCapture {
   bool truncated = false;
 };
 
+// Trailer written by the LLVM runtime at clean shutdown:
+//   # hardware-explorer-end <emitted> <observed>
+// Its absence means the traced program terminated abnormally.
+struct TraceEnd {
+  uint64_t events_emitted = 0;
+  uint64_t events_observed = 0;
+};
+
 struct TraceManifest {
   uint32_t version = 1;
   std::optional<TraceCapture> capture;
+  std::optional<TraceEnd> end;
   std::vector<TraceImage> images;
   std::vector<TraceCodeSite> sites;
 };
@@ -66,6 +75,7 @@ public:
 
 private:
   TraceLineResult parse_metadata(const std::string &line);
+  TraceLineResult parse_end_marker(const std::string &line);
   TraceLineResult fail(const std::string &message) const;
   std::optional<TraceCodeLocation> resolve(uint32_t site_id) const;
 

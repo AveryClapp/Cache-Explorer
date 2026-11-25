@@ -145,6 +145,34 @@ void test_write_binary_attribution() {
   std::cout << "[PASS] test_write_binary_attribution\n";
 }
 
+void test_write_trace_completeness() {
+  TraceManifest manifest;
+  {
+    // No trailer: the program terminated abnormally.
+    std::ostringstream out;
+    JsonOutput::write_trace_completeness(out, manifest, 42);
+    assert(out.str() ==
+           "\"traceCompleteness\":{\"endMarker\":false,\"limitReached\":false,"
+           "\"eventsEmitted\":42,\"eventsObserved\":42}");
+  }
+  {
+    manifest.end = TraceEnd{500, 9000};
+    std::ostringstream out;
+    JsonOutput::write_trace_completeness(out, manifest, 500);
+    assert(out.str() ==
+           "\"traceCompleteness\":{\"endMarker\":true,\"limitReached\":true,"
+           "\"eventsEmitted\":500,\"eventsObserved\":9000}");
+  }
+  {
+    manifest.end = TraceEnd{7, 7};
+    std::ostringstream out;
+    JsonOutput::write_trace_completeness(out, manifest, 7);
+    assert(out.str().find("\"endMarker\":true,\"limitReached\":false") !=
+           std::string::npos);
+  }
+  std::cout << "[PASS] test_write_trace_completeness\n";
+}
+
 void test_write_execution_stats() {
   std::ostringstream out;
   BranchPredictionStats branch;
@@ -447,6 +475,7 @@ int main() {
   test_write_tlb_stats();
   test_write_timing_stats();
   test_write_binary_attribution();
+  test_write_trace_completeness();
   test_write_execution_stats();
   test_write_execution_unavailable();
   test_write_execution_subsystem_stats();
@@ -462,6 +491,6 @@ int main() {
   test_write_stream_start();
   test_write_stream_progress();
 
-  std::cout << "\n=== All 24 JsonOutput tests passed! ===\n";
+  std::cout << "\n=== All 25 JsonOutput tests passed! ===\n";
   return 0;
 }

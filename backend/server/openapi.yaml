@@ -1603,6 +1603,36 @@ components:
           description: Optimization suggestions
           items:
             type: string
+        traceCompleteness:
+          $ref: '#/components/schemas/TraceCompleteness'
+
+    TraceCompleteness:
+      type: object
+      description: >-
+        Whether the LLVM runtime trace is complete. Present only for
+        instrumented runs (cache-sim --expect-trace-end); absent for Pin,
+        binary and hand-written traces.
+      required: [endMarker, limitReached, eventsEmitted, eventsObserved]
+      properties:
+        endMarker:
+          type: boolean
+          description: >-
+            False when the program terminated abnormally (crash or signal)
+            before the runtime wrote its end-of-trace trailer; results then
+            cover only the events traced before it stopped.
+          example: true
+        limitReached:
+          type: boolean
+          description: True when the event limit cut the trace off.
+          example: false
+        eventsEmitted:
+          type: integer
+          description: Events written to the trace and simulated
+          example: 500
+        eventsObserved:
+          type: integer
+          description: Events the program generated, including those past the limit
+          example: 500
 
     CompareResult:
       type: object

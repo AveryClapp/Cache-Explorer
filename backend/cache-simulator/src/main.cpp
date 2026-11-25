@@ -525,6 +525,10 @@ static int run_simulator(int argc, char *argv[]) {
       JsonOutput::write_binary_attribution(
           std::cout, trace_parser.manifest(), processor.get_code_hotspots(), cfg);
     }
+    if (opts.expect_trace_end) {
+      std::cout << ",";
+      JsonOutput::write_trace_completeness(std::cout, trace_parser.manifest(), event_count);
+    }
 
     std::cout << "}\n" << std::flush;
     return 0;
@@ -925,6 +929,10 @@ static int run_simulator(int argc, char *argv[]) {
         std::cout << ",\n  ";
         JsonOutput::write_binary_attribution(
             std::cout, trace_parser.manifest(), processor.get_code_hotspots(), cfg);
+      }
+      if (opts.expect_trace_end) {
+        std::cout << ",\n  ";
+        JsonOutput::write_trace_completeness(std::cout, trace_parser.manifest(), events.size());
       }
 
       std::cout << ",\n  \"cacheState\": {\"l1d\": [";
@@ -1351,6 +1359,10 @@ static int run_simulator(int argc, char *argv[]) {
         std::cout << ",\n  ";
         JsonOutput::write_binary_attribution(
             std::cout, trace_parser.manifest(), processor.get_code_hotspots(), cfg);
+      }
+      if (opts.expect_trace_end) {
+        std::cout << ",\n  ";
+        JsonOutput::write_trace_completeness(std::cout, trace_parser.manifest(), events.size());
       }
 
       std::cout << ",\n  \"cacheState\": {\"l1d\": [";

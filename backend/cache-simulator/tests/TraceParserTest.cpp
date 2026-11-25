@@ -243,6 +243,64 @@ void test_image_identity_and_capture_width() {
   std::cout << "[PASS] test_image_identity_and_capture_width\n";
 }
 
+void test_trace_end_marker() {
+  {
+    // v1 (legacy runtime stream): the trailer may follow events.
+    TraceParser parser;
+    assert(!parser.manifest().end.has_value());
+    assert(parser.parse_line("L 0x1000 4 a.c:1 T1").kind == TraceLineKind::Event);
+    assert(parser.parse_line("# hardware-explorer-end 1 1").kind ==
+           TraceLineKind::Ignored);
+    assert(parser.manifest().end.has_value());
+    assert(parser.manifest().end->events_emitted == 1);
+    assert(parser.manifest().end->events_observed == 1);
+  }
+  {
+    // v1: a malformed trailer is program noise and is ignored.
+    TraceParser parser;
+    assert(parser.parse_line("# hardware-explorer-end 5").kind == TraceLineKind::Ignored);
+    assert(parser.parse_line("# hardware-explorer-end x y").kind == TraceLineKind::Ignored);
+    assert(parser.parse_line("# hardware-explorer-end 9 3").kind == TraceLineKind::Ignored);
+    assert(parser.parse_line("# hardware-explorer-end 1 2 3").kind == TraceLineKind::Ignored);
+    assert(!parser.manifest().end.has_value());
+    // The latest well-formed marker wins in v1.
+    assert(parser.parse_line("# hardware-explorer-end 2 2").kind == TraceLineKind::Ignored);
+    assert(parser.parse_line("# hardware-explorer-end 500 9000").kind == TraceLineKind::Ignored);
+    assert(parser.manifest().end->events_emitted == 500);
+    assert(parser.manifest().end->events_observed == 9000);
+  }
+  {
+    // v2: accepted after events, despite metadata ordering rules.
+    TraceParser parser;
+    parse_v2_header(parser);
+    assert(parser.parse_line("L 0x1000 4 unknown:0 T1").kind == TraceLineKind::Event);
+    assert(parser.parse_line("# hardware-explorer-end 1 4").kind == TraceLineKind::Ignored);
+    assert(parser.manifest().end->events_emitted == 1);
+    assert(parser.manifest().end->events_observed == 4);
+    // Nothing may follow it in a strict trace.
+    assert(parser.parse_line("# hardware-explorer-end 1 4").kind == TraceLineKind::Error);
+    assert(parser.parse_line("L 0x1000 4 unknown:0 T1").kind == TraceLineKind::Error);
+  }
+  {
+    // v2: a malformed trailer is an error.
+    for (const char *line : {"# hardware-explorer-end", "# hardware-explorer-end 1",
+                             "# hardware-explorer-end -1 2", "# hardware-explorer-end 1 2 3",
+                             "# hardware-explorer-end 3 2", "# hardware-explorer-end 0x1 2"}) {
+      TraceParser parser;
+      parse_v2_header(parser);
+      assert(parser.parse_line(line).kind == TraceLineKind::Error);
+      assert(!parser.manifest().end.has_value());
+    }
+  }
+  {
+    // A lookalike prefix is not the directive.
+    TraceParser parser;
+    assert(parser.parse_line("# hardware-explorer-ending 1 1").kind == TraceLineKind::Ignored);
+    assert(!parser.manifest().end.has_value());
+  }
+  std::cout << "[PASS] test_trace_end_marker\n";
+}
+
 } // namespace
 
 int main() {
@@ -254,6 +312,7 @@ int main() {
   test_v2_strict_fields_and_ranges();
   test_bounded_stream_reader();
   test_image_identity_and_capture_width();
-  std::cout << "All 8 TraceParser tests passed.\n";
+  test_trace_end_marker();
+  std::cout << "All 9 TraceParser tests passed.\n";
   return 0;
 }

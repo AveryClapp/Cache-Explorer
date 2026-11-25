@@ -53,6 +53,14 @@ int main(void) {
   assert(strstr(output, "O 0x12340 0x22340 32 address_test.c:12") != NULL);
   assert(strstr(output, "L 0x12340 4 unknown:0 T1 C0x") != NULL);
   assert(strstr(output, "S 0x22340 8 unknown:0 T1 C0x") != NULL);
+  // Clean shutdown ends the trace with the completeness trailer, last.
+  const char *trailer = strstr(output, "# hardware-explorer-end ");
+  assert(trailer != NULL);
+  unsigned long long emitted = 0, observed = 0;
+  assert(sscanf(trailer, "# hardware-explorer-end %llu %llu", &emitted,
+                &observed) == 2);
+  assert(emitted == observed && emitted >= 5);
+  assert(strchr(trailer, '\n') != NULL && strchr(trailer, '\n')[1] == '\0');
 #ifdef _WIN32
   assert(strstr(output, " B0x") != NULL);
   assert(strstr(output, " R0x") != NULL);

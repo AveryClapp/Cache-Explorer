@@ -183,6 +183,15 @@ public:
         const std::vector<CodeHotspot>& hotspots,
         const CacheHierarchyConfig& config);
 
+    /**
+     * Write "traceCompleteness" for LLVM runtime traces (--expect-trace-end).
+     * endMarker=false means the program terminated abnormally; the counts
+     * then fall back to the events actually parsed.
+     */
+    static void write_trace_completeness(std::ostream& out,
+                                         const TraceManifest& manifest,
+                                         size_t events_parsed);
+
     // ========== Optimization Suggestions ==========
 
     /**

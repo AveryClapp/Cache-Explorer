@@ -110,8 +110,36 @@ std::optional<TraceCodeLocation> TraceParser::resolve(uint32_t site_id) const {
   return TraceCodeLocation{site.image_table_id, site.rva};
 }
 
+TraceLineResult TraceParser::parse_end_marker(const std::string &line) {
+  constexpr char end_prefix[] = "# hardware-explorer-end";
+  const bool strict = manifest_.version == 2;
+
+  std::istringstream input(line.substr(sizeof(end_prefix) - 1));
+  std::string emitted_token;
+  std::string observed_token;
+  std::string trailing;
+  if (!(input >> emitted_token >> observed_token) || (input >> trailing))
+    return strict ? fail("malformed trace end marker") : ignored();
+  const auto emitted = parse_trace_u64(emitted_token, 10);
+  const auto observed = parse_trace_u64(observed_token, 10);
+  if (!emitted || !observed || *emitted > *observed)
+    return strict ? fail("invalid trace end marker counts") : ignored();
+  if (strict && manifest_.end) return fail("duplicate trace end marker");
+
+  // v1 streams share stdout with the program; the runtime writes its trailer
+  // last, so the latest well-formed marker wins.
+  manifest_.end = TraceEnd{*emitted, *observed};
+  return ignored();
+}
+
 TraceLineResult TraceParser::parse_metadata(const std::string &line) {
   constexpr char header_prefix[] = "# hardware-explorer-trace";
+  constexpr char end_prefix[] = "# hardware-explorer-end";
+
+  // The end marker is a trailer: valid in v1 and v2, and after events, so it
+  // is handled before the metadata-ordering checks below.
+  if (is_directive(line, end_prefix, sizeof(end_prefix) - 1))
+    return parse_end_marker(line);
   constexpr char capture_prefix[] = "# capture";
   constexpr char image_prefix[] = "# image";
   constexpr char site_prefix[] = "# site";
@@ -279,6 +307,9 @@ TraceLineResult TraceParser::parse_line(const std::string &raw_line) {
   const std::string line = trim(raw_line);
   if (line.empty()) return ignored();
   if (line[0] == '#') return parse_metadata(line);
+
+  if (manifest_.version == 2 && manifest_.end)
+    return fail("trace event follows the trace end marker");
 
   if (manifest_.version == 2 &&
       !valid_v2_event(line, manifest_.capture ? manifest_.capture->address_width : 64)) {

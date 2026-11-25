@@ -59,6 +59,8 @@ void ArgParser::print_usage(const char* prog) {
               << "  --stream          Stream individual events as JSON (for real-time)\n"
               << "  --flamegraph      Output SVG flamegraph of cache misses\n"
               << "  --fast            Disable 3C miss classification for ~3x faster simulation\n"
+              << "  --expect-trace-end  Trace is from the LLVM runtime; report traceCompleteness\n"
+              << "                    (end marker seen, event limit reached) in JSON output\n"
               << "  --parallel [n]    Enable parallel trace parsing with n threads (default: auto)\n"
               << "  --cache-segments  Enable segment caching for repetitive code (10-100x speedup)\n"
               << "  --segment-size n  Number of events per cached segment (default: 20)\n"
@@ -249,6 +251,8 @@ SimulatorOptions ArgParser::parse(int argc, char* argv[]) {
             opts.flamegraph_output = true;
         } else if (arg == "--fast") {
             opts.fast_mode = true;
+        } else if (arg == "--expect-trace-end") {
+            opts.expect_trace_end = true;
         } else if (arg == "--l1-size" && i + 1 < argc) {
             opts.l1_size = parse_size_value(argv[++i], "--l1-size", 1024, 16ULL * 1024 * 1024);
         } else if (arg == "--l1-assoc" && i + 1 < argc) {

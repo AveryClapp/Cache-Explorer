@@ -82,7 +82,18 @@ int main(void) {
   int ch;
   while ((ch = fgetc(output)) != EOF)
     lines += ch == '\n';
-  assert(lines == (size_t)THREADS * EVENTS_PER_THREAD);
+  // Every event plus the '# hardware-explorer-end' trailer.
+  assert(lines == (size_t)THREADS * EVENTS_PER_THREAD + 1);
+  char line[512];
+  char last[512] = {0};
+  rewind(output);
+  while (fgets(line, sizeof(line), output) != NULL)
+    memcpy(last, line, sizeof(last));
+  unsigned long long emitted = 0, observed = 0;
+  assert(sscanf(last, "# hardware-explorer-end %llu %llu", &emitted,
+                &observed) == 2);
+  assert(emitted == (unsigned long long)THREADS * EVENTS_PER_THREAD);
+  assert(observed == emitted);
   fclose(output);
   return 0;
 }

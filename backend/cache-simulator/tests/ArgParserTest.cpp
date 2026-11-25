@@ -36,8 +36,19 @@ void test_default_options() {
   // Intel preset enables prefetching by default
   assert(opts.prefetch_policy == PrefetchPolicy::ADAPTIVE);
   assert(opts.num_cores == 0);
+  assert(opts.expect_trace_end == false);
 
   std::cout << "[PASS] test_default_options\n";
+}
+
+void test_expect_trace_end_flag() {
+  ArgvBuilder builder;
+  builder.add("--json").add("--expect-trace-end");
+  auto opts = ArgParser::parse(builder.argc(), builder.argv());
+
+  assert(opts.expect_trace_end == true);
+  assert(opts.json_output == true);
+  std::cout << "[PASS] test_expect_trace_end_flag\n";
 }
 
 void test_config_flag() {
@@ -306,6 +317,7 @@ int main() {
 
   // Default and basic flags
   test_default_options();
+  test_expect_trace_end_flag();
   test_config_flag();
   test_hardware_alias();
   test_verbose_flag();

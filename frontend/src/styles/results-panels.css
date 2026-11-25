@@ -306,6 +306,49 @@
   color: var(--text-secondary);
 }
 
+/* ─── Trace Completeness Notices ─── */
+.trace-completeness-notices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.trace-completeness-notice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+}
+
+.trace-completeness-notice.warning {
+  background: color-mix(in srgb, var(--signal-warning) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--signal-warning) 22%, transparent);
+  color: var(--signal-warning);
+}
+
+.trace-completeness-notice.info {
+  background: color-mix(in srgb, var(--signal-info) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--signal-info) 22%, transparent);
+  color: var(--signal-info);
+}
+
+.trace-completeness-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4em;
+  height: 1.4em;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
 /* ─── Diff Config Warning ─── */
 .diff-config-warning {
   display: flex;

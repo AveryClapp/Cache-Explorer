@@ -541,6 +541,18 @@ export interface CacheResult {
   timing?: TimingStats
   advancedStats?: AdvancedStats
   execution?: ExecutionStats
+  traceCompleteness?: TraceCompleteness
+}
+
+// Reported only for LLVM-runtime traces (cache-sim --expect-trace-end).
+export interface TraceCompleteness {
+  // False when the program crashed or was killed before the runtime wrote
+  // its end-of-trace trailer; results cover only the events traced so far.
+  endMarker: boolean
+  // True when the event limit cut the trace off.
+  limitReached: boolean
+  eventsEmitted: number
+  eventsObserved: number
 }
 
 export interface ExperimentHitRates {

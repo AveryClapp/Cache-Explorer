@@ -716,6 +716,23 @@ void __cache_explorer_shutdown(void) {
   }
 
   __cache_explorer_flush();
+
+  // Trace-completeness trailer. Shutdown only runs on a normal return or
+  // exit(), so its absence tells cache-sim the program died from a signal.
+  // Text traces only: the raw binary format has no room for directives.
+  if (text_mode && !output_failed && output_fd >= 0) {
+    uint64_t emitted = final_count;
+    if (max_events > 0 && emitted > max_events)
+      emitted = max_events;
+    char trailer[96];
+    int len = snprintf(trailer, sizeof(trailer),
+                       "# hardware-explorer-end %llu %llu\n",
+                       (unsigned long long)emitted,
+                       (unsigned long long)final_count);
+    if (len > 0 && (size_t)len < sizeof(trailer))
+      cache_write_bytes(output_fd, trailer, (size_t)len);
+  }
+
   if (output_fd > 2) {
     cache_close_output(output_fd);
     output_fd = -1;

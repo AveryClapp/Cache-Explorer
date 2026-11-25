@@ -986,6 +986,11 @@ if [[ -n "$EVENT_LIMIT" ]]; then
   RUN_ENV="CACHE_EXPLORER_MAX_EVENTS=$EVENT_LIMIT $RUN_ENV"
 fi
 
+# The LLVM runtime ends a clean run with a '# hardware-explorer-end' trailer.
+# Its absence (signal death) or a cut-off limit is reported in the JSON as
+# traceCompleteness; the program's exit status alone cannot tell us this.
+TRACE_END_ARG="--expect-trace-end"
+
 # Build prefetch flags for cache-sim
 PREFETCH_ARG=""
 if [[ -n "$PREFETCH" ]]; then
@@ -1002,25 +1007,25 @@ fi
 set +e  # Preserve all pipeline statuses and clean up on simulator errors too.
 if [[ -n "$STREAM_OUTPUT" ]]; then
   if [[ -n "$RUN_ENV" ]]; then
-    env $RUN_ENV "$BINARY" 2>&1 | "$CACHE_SIM" --config "$CONFIG" $STREAM_OUTPUT $PREFETCH_ARG $FAST_MODE $CACHE_SEGMENTS $CUSTOM_CONFIG_ARGS
+    env $RUN_ENV "$BINARY" 2>&1 | "$CACHE_SIM" --config "$CONFIG" $STREAM_OUTPUT $PREFETCH_ARG $FAST_MODE $TRACE_END_ARG $CACHE_SEGMENTS $CUSTOM_CONFIG_ARGS
   else
-    "$BINARY" 2>&1 | "$CACHE_SIM" --config "$CONFIG" $STREAM_OUTPUT $PREFETCH_ARG $FAST_MODE $CACHE_SEGMENTS $CUSTOM_CONFIG_ARGS
+    "$BINARY" 2>&1 | "$CACHE_SIM" --config "$CONFIG" $STREAM_OUTPUT $PREFETCH_ARG $FAST_MODE $TRACE_END_ARG $CACHE_SEGMENTS $CUSTOM_CONFIG_ARGS
   fi
   PIPE_CODES=("${PIPESTATUS[@]}")
 elif [[ -n "$JSON_OUTPUT" ]]; then
   if [[ -n "$RUN_ENV" ]]; then
-    env $RUN_ENV "$BINARY" | "$CACHE_SIM" --config "$CONFIG" $VERBOSE $JSON_OUTPUT $PREFETCH_ARG $FAST_MODE $CACHE_SEGMENTS $CUSTOM_CONFIG_ARGS "${LAB_ARGS[@]}" | enrich_json_output
+    env $RUN_ENV "$BINARY" | "$CACHE_SIM" --config "$CONFIG" $VERBOSE $JSON_OUTPUT $PREFETCH_ARG $FAST_MODE $TRACE_END_ARG $CACHE_SEGMENTS $CUSTOM_CONFIG_ARGS "${LAB_ARGS[@]}" | enrich_json_output
   else
-    "$BINARY" | "$CACHE_SIM" --config "$CONFIG" $VERBOSE $JSON_OUTPUT $PREFETCH_ARG $FAST_MODE $CACHE_SEGMENTS $CUSTOM_CONFIG_ARGS "${LAB_ARGS[@]}" | enrich_json_output
+    "$BINARY" | "$CACHE_SIM" --config "$CONFIG" $VERBOSE $JSON_OUTPUT $PREFETCH_ARG $FAST_MODE $TRACE_END_ARG $CACHE_SEGMENTS $CUSTOM_CONFIG_ARGS "${LAB_ARGS[@]}" | enrich_json_output
   fi
   PIPE_CODES=("${PIPESTATUS[@]}")
 else
   # Pipe binary stdout directly to cache-sim (avoids storing trace in memory)
   # Binary stderr passes through to our stderr (server reads progress from it)
   if [[ -n "$RUN_ENV" ]]; then
-    env $RUN_ENV "$BINARY" | "$CACHE_SIM" --config "$CONFIG" $VERBOSE $JSON_OUTPUT $PREFETCH_ARG $FAST_MODE $CACHE_SEGMENTS $CUSTOM_CONFIG_ARGS "${LAB_ARGS[@]}"
+    env $RUN_ENV "$BINARY" | "$CACHE_SIM" --config "$CONFIG" $VERBOSE $JSON_OUTPUT $PREFETCH_ARG $FAST_MODE $TRACE_END_ARG $CACHE_SEGMENTS $CUSTOM_CONFIG_ARGS "${LAB_ARGS[@]}"
   else
-    "$BINARY" | "$CACHE_SIM" --config "$CONFIG" $VERBOSE $JSON_OUTPUT $PREFETCH_ARG $FAST_MODE $CACHE_SEGMENTS $CUSTOM_CONFIG_ARGS "${LAB_ARGS[@]}"
+    "$BINARY" | "$CACHE_SIM" --config "$CONFIG" $VERBOSE $JSON_OUTPUT $PREFETCH_ARG $FAST_MODE $TRACE_END_ARG $CACHE_SEGMENTS $CUSTOM_CONFIG_ARGS "${LAB_ARGS[@]}"
   fi
   PIPE_CODES=("${PIPESTATUS[@]}")
 fi

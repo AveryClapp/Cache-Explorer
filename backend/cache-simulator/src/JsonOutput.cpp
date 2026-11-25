@@ -517,6 +517,18 @@ void JsonOutput::write_hot_lines_multicore(std::ostream& out,
     out << "  ],\n";
 }
 
+void JsonOutput::write_trace_completeness(std::ostream& out,
+                                          const TraceManifest& manifest,
+                                          size_t events_parsed) {
+    const bool end_marker = manifest.end.has_value();
+    const uint64_t emitted = end_marker ? manifest.end->events_emitted : events_parsed;
+    const uint64_t observed = end_marker ? manifest.end->events_observed : events_parsed;
+    out << "\"traceCompleteness\":{\"endMarker\":" << (end_marker ? "true" : "false")
+        << ",\"limitReached\":" << (observed > emitted ? "true" : "false")
+        << ",\"eventsEmitted\":" << emitted
+        << ",\"eventsObserved\":" << observed << "}";
+}
+
 void JsonOutput::write_binary_attribution(
     std::ostream& out, const TraceManifest& manifest,
     const std::vector<CodeHotspot>& hotspots,
