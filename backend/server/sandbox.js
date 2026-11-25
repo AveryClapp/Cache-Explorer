@@ -5,25 +5,20 @@
  * - Resource limits (CPU, memory, time)
  * - Network isolation
  * - Filesystem isolation
- * - Seccomp system call filtering
+ * - Docker's maintained default seccomp system call filtering
  */
 
 import { spawn } from 'child_process';
 import { writeFile, mkdir, rm } from 'fs/promises';
 import { randomUUID } from 'crypto';
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
-import { existsSync } from 'fs';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DOCKER_DIR = join(dirname(__dirname), 'docker');
-const SECCOMP_PROFILE = join(DOCKER_DIR, 'seccomp-profile.json');
+import { join } from 'path';
+import { CONFIG } from './config.js';
 
 // Sandbox configuration
 const SANDBOX_CONFIG = {
   image: 'cache-explorer-sandbox:latest',
   // Resource limits
-  memoryLimit: '256m',           // Max memory
+  memoryLimit: '512m',           // Enough for the modeled last-level cache and LLVM
   cpuQuota: 100000,              // 1 full CPU (100000/100000)
   pidLimit: 50,                  // Max processes
   timeout: 45000,                // Max execution time (ms) - compilation + execution + simulation
@@ -33,6 +28,26 @@ const SANDBOX_CONFIG = {
   noNewPrivileges: true,
   dropCapabilities: ['ALL'],
 };
+
+function removeContainer(containerName, timeoutMs = 5000) {
+  return new Promise(resolve => {
+    const cleanup = spawn('docker', ['rm', '-f', containerName], { stdio: 'ignore' });
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutHandle);
+      resolve();
+    };
+    const timeoutHandle = setTimeout(() => {
+      cleanup.kill('SIGKILL');
+      finish();
+    }, timeoutMs);
+    timeoutHandle.unref?.();
+    cleanup.once('close', finish);
+    cleanup.once('error', finish);
+  });
+}
 
 /**
  * Check if Docker is available and the sandbox image exists
@@ -67,6 +82,7 @@ export async function checkSandboxAvailable() {
  * @param {boolean} options.fastMode - Fast mode (disables 3C classification)
  * @param {Object} options.customConfig - Custom cache parameters
  * @param {Array} options.defines - Preprocessor defines [{name, value}]
+ * @param {number} options.timeout - Requested timeout, capped by the sandbox maximum
  * @param {Function} options.onProgress - Progress callback
  * @returns {Promise<{stdout: string, stderr: string}>}
  */
@@ -82,11 +98,18 @@ export async function runInSandbox(options) {
     fastMode = false,
     customConfig,
     defines = [],
-    onProgress
+    timeout = SANDBOX_CONFIG.timeout,
+    onProgress,
+    signal,
   } = options;
+  const executionTimeout = Math.min(
+    Math.max(Number(timeout) || SANDBOX_CONFIG.timeout, 1),
+    SANDBOX_CONFIG.timeout,
+  );
 
   // Create temp directory for this execution
   const execId = randomUUID();
+  const containerName = `hardware-explorer-${execId}`;
   const tempDir = `/tmp/cache-explorer-${execId}`;
 
   // Determine file extension
@@ -105,6 +128,7 @@ export async function runInSandbox(options) {
     const dockerArgs = [
       'run',
       '--rm',                                           // Remove container after execution
+      '--name', containerName,                          // Enables reliable timeout/cancel cleanup
       '--network', 'none',                              // No network access
       '--memory', SANDBOX_CONFIG.memoryLimit,           // Memory limit
       `--cpu-quota=${SANDBOX_CONFIG.cpuQuota}`,         // CPU limit
@@ -115,11 +139,6 @@ export async function runInSandbox(options) {
       '--security-opt', 'no-new-privileges',            // No privilege escalation
       '--cap-drop', 'ALL',                              // Drop all capabilities
     ];
-
-    // Add seccomp profile if it exists
-    if (existsSync(SECCOMP_PROFILE)) {
-      dockerArgs.push('--security-opt', `seccomp=${SECCOMP_PROFILE}`);
-    }
 
     // Mount source file read-only
     dockerArgs.push('-v', `${inputFile}:/workspace/input.${ext}:ro`);
@@ -142,19 +161,58 @@ export async function runInSandbox(options) {
 
     // Run Docker container
     const result = await new Promise((resolve, reject) => {
-      const proc = spawn('docker', dockerArgs, {
-        timeout: SANDBOX_CONFIG.timeout
-      });
+      const proc = spawn('docker', dockerArgs);
 
-      let stdout = '';
-      let stderr = '';
+      const stdoutChunks = [];
+      const stderrChunks = [];
+      let outputBytes = 0;
+      let timedOut = false;
+      let aborted = false;
+      let outputExceeded = false;
+      let containerCleanup = Promise.resolve();
+      let stopRequested = false;
+      const stopContainer = () => {
+        if (stopRequested) return;
+        stopRequested = true;
+        containerCleanup = removeContainer(containerName);
+        proc.kill('SIGKILL');
+      };
+      const timeoutHandle = setTimeout(() => {
+        timedOut = true;
+        stopContainer();
+      }, executionTimeout);
+      timeoutHandle.unref?.();
+
+      const abortHandler = () => {
+        aborted = true;
+        stopContainer();
+      };
+      if (signal?.aborted) abortHandler();
+      else signal?.addEventListener('abort', abortHandler, { once: true });
+
+      const appendOutput = (chunks, data) => {
+        if (outputExceeded) return;
+        const chunk = Buffer.isBuffer(data) ? data : Buffer.from(data);
+        const available = CONFIG.memory.maxOutputBuffer - outputBytes;
+        if (chunk.length <= available) {
+          chunks.push(chunk);
+          outputBytes += chunk.length;
+          return;
+        }
+        if (available > 0) {
+          chunks.push(chunk.subarray(0, available));
+          outputBytes += available;
+        }
+        outputExceeded = true;
+        stopContainer();
+      };
 
       proc.stdout.on('data', (data) => {
-        stdout += data;
+        appendOutput(stdoutChunks, data);
       });
 
       proc.stderr.on('data', (data) => {
-        stderr += data;
+        appendOutput(stderrChunks, data);
         // Parse progress from stderr
         const chunk = data.toString();
         if (chunk.includes('Compiling') && onProgress) {
@@ -166,7 +224,28 @@ export async function runInSandbox(options) {
         }
       });
 
-      proc.on('close', (exitCode) => {
+      proc.on('close', async (exitCode) => {
+        clearTimeout(timeoutHandle);
+        signal?.removeEventListener('abort', abortHandler);
+        await containerCleanup;
+        const stdout = Buffer.concat(stdoutChunks).toString();
+        const stderr = Buffer.concat(stderrChunks).toString();
+        if (timedOut) {
+          reject({
+            stderr: 'Execution timed out',
+            exitCode: 124,
+            timeout: true
+          });
+          return;
+        }
+        if (aborted) {
+          reject({ stderr: 'Execution cancelled', exitCode: 130, cancelled: true });
+          return;
+        }
+        if (outputExceeded) {
+          reject({ stderr: 'Execution output exceeded the configured limit', exitCode: 137, resourceLimit: true });
+          return;
+        }
         if (exitCode === 0) {
           resolve({ stdout, stderr });
         } else {
@@ -175,22 +254,10 @@ export async function runInSandbox(options) {
       });
 
       proc.on('error', (err) => {
-        if (err.code === 'ETIMEDOUT') {
-          proc.kill('SIGKILL');
-          reject({
-            stderr: 'Execution timed out',
-            exitCode: 124,
-            timeout: true
-          });
-        } else {
-          reject(err);
-        }
+        clearTimeout(timeoutHandle);
+        signal?.removeEventListener('abort', abortHandler);
+        reject(err);
       });
-
-      // Set timeout manually since spawn timeout might not work on all platforms
-      setTimeout(() => {
-        proc.kill('SIGKILL');
-      }, SANDBOX_CONFIG.timeout);
     });
 
     if (onProgress) onProgress({ stage: 'done' });
@@ -198,6 +265,7 @@ export async function runInSandbox(options) {
     return result;
 
   } finally {
+    await removeContainer(containerName);
     // Cleanup temp directory
     await rm(tempDir, { recursive: true, force: true }).catch(() => {});
   }

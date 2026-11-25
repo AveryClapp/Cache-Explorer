@@ -1,6 +1,7 @@
 #include "include/BranchPredictor.hpp"
 
 #include <algorithm>
+#include <stdexcept>
 
 namespace {
 // Round up to the next power of two, with a floor of 2.
@@ -14,7 +15,10 @@ size_t round_up_pow2(size_t n) {
 }
 } // namespace
 
-BranchPredictor::BranchPredictor(size_t table_entries) {
+BranchPredictor::BranchPredictor(size_t table_entries, std::string policy) : policy_(std::move(policy)) {
+  if (table_entries > 65536) throw std::invalid_argument("Branch predictor table exceeds limit");
+  if (policy_ != "bimodal-2bit" && policy_ != "static-not-taken" && policy_ != "gshare" && policy_ != "btfnt")
+    throw std::invalid_argument("Unsupported branch predictor");
   size_t entries = round_up_pow2(table_entries);
   index_mask_ = entries - 1;
   // Initialize counters to "weakly not-taken" (1), the conventional reset
@@ -23,10 +27,12 @@ BranchPredictor::BranchPredictor(size_t table_entries) {
 }
 
 bool BranchPredictor::process(uint64_t branch_id, bool taken,
-                              std::string_view file, uint32_t line) {
-  size_t idx = static_cast<size_t>(branch_id & index_mask_);
+                              std::string_view file, uint32_t line, std::optional<bool> backward) {
+  if (policy_ == "btfnt" && !backward.has_value())
+    throw std::invalid_argument("BTFNT requires D0/D1 machine-target direction on every branch event; LLVM source traces do not provide this metadata");
+  size_t idx = static_cast<size_t>((branch_id ^ (policy_ == "gshare" ? history_ : 0)) & index_mask_);
   uint8_t counter = counters_[idx];
-  bool predicted_taken = counter >= 2;
+  bool predicted_taken = policy_ == "btfnt" ? *backward : policy_ != "static-not-taken" && counter >= 2;
   bool mispredicted = predicted_taken != taken;
 
   stats_.total++;
@@ -51,6 +57,7 @@ bool BranchPredictor::process(uint64_t branch_id, bool taken,
       counters_[idx] = counter - 1;
   }
 
+  history_ = ((history_ << 1) | (taken ? 1 : 0)) & index_mask_;
   return mispredicted;
 }
 
@@ -72,6 +79,7 @@ BranchPredictor::hot_mispredicts(size_t limit) const {
 }
 
 void BranchPredictor::reset() {
+  history_ = 0;
   std::fill(counters_.begin(), counters_.end(), static_cast<uint8_t>(1));
   stats_ = BranchPredictionStats{};
   site_stats_.clear();

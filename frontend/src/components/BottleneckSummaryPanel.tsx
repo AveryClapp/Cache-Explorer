@@ -21,8 +21,8 @@ export function BottleneckSummaryPanel({ summary }: BottleneckSummaryPanelProps)
   return (
     <div className={`panel bottleneck-panel ${summary.primaryBottleneck}`}>
       <div className="panel-header">
-        <span className="panel-title">Primary Bottleneck</span>
-        <span className={`bottleneck-confidence ${summary.confidence}`}>{summary.confidence}</span>
+        <span className="panel-title">Primary bottleneck</span>
+        <span className={`bottleneck-confidence ${summary.confidence}`}>{summary.confidence} confidence</span>
       </div>
       <div className="panel-content">
         <div className="bottleneck-summary">
@@ -37,18 +37,18 @@ export function BottleneckSummaryPanel({ summary }: BottleneckSummaryPanelProps)
         </div>
         <div className="bottleneck-detail-grid">
           <div className="bottleneck-detail-row">
-            <span>Share</span>
+            <span>Share of cycles</span>
             <span>{formatPercent(summary.bottleneckShare)}</span>
           </div>
           {topSource && (
             <div className="bottleneck-detail-row">
-              <span>Top Source</span>
+              <span>Top source</span>
               <span>{formatLocation(topSource.file, topSource.line)}</span>
             </div>
           )}
           {topSource && (
             <div className="bottleneck-detail-row">
-              <span>Source Cycles</span>
+              <span>Source cycles</span>
               <span>{topSource.cycles.toLocaleString()}</span>
             </div>
           )}

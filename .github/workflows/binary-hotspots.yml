@@ -1,0 +1,70 @@
+name: Binary hotspot workflow Preview
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/binary-hotspots.yml'
+      - 'frontend/**'
+      - 'integrations/**'
+      - 'tests/binary-hotspots/**'
+      - 'backend/cache-simulator/src/JsonOutput.cpp'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  binary-workflow:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install test-only tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-18 lld-18 ripgrep
+          python3 -m venv "$RUNNER_TEMP/binary-venv"
+          "$RUNNER_TEMP/binary-venv/bin/pip" install -r integrations/ida/requirements.txt
+          npm ci --prefix frontend
+      - name: Frontend build, schema and lint checks
+        working-directory: frontend
+        run: |
+          node scripts/test-binary-hotspots.mjs
+          npm run build
+          npm run lint
+          npm run tokens:check
+          npm run bundle:check
+      - name: Desktop and mobile local-file journey
+        working-directory: frontend
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 5193 --strictPort &
+          server_pid=$!
+          trap 'kill "$server_pid"' EXIT
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent http://127.0.0.1:5193/ >/dev/null; then break; fi
+            sleep 1
+          done
+          CACHE_EXPLORER_BROWSER="$(command -v google-chrome)" node scripts/smoke-binary.mjs
+      - name: Download checksum-pinned Ghidra
+        run: |
+          curl --fail --location --retry 3 -o "$RUNNER_TEMP/ghidra.zip" https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.1.3_build/ghidra_12.1.3_PUBLIC_20260817.zip
+          echo "93a5d11a9ad510622acaaf908c556a7b9b764d338e78a7567f3689bf5081fd54  $RUNNER_TEMP/ghidra.zip" | sha256sum --check
+          unzip -q "$RUNNER_TEMP/ghidra.zip" -d "$RUNNER_TEMP"
+      - name: Real PE32 Ghidra import, pseudocode mapping, rebase and identity tests
+        env:
+          CLANG: clang-18
+          LLD_LINK: lld-link-18
+        run: |
+          GHIDRA_INSTALL_DIR="$RUNNER_TEMP/ghidra_12.1.3_PUBLIC" PYTHON="$RUNNER_TEMP/binary-venv/bin/python" bash tests/binary-hotspots/run-ghidra.sh
+          node frontend/scripts/package-decompilers.mjs "$RUNNER_TEMP/hardware-explorer-adapters"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: hardware-explorer-decompiler-preview
+          path: ${{ runner.temp }}/hardware-explorer-adapters
+          retention-days: 14

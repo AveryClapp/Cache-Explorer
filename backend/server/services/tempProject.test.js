@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { access, mkdir, mkdtemp, readFile, rm } from 'fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, utimes } from 'fs/promises';
 import { tmpdir } from 'os';
 import { basename, join, sep } from 'path';
 
@@ -43,8 +43,11 @@ test('cleanupOrphanedTempDirs removes only old cache explorer directories', asyn
     const freshProject = await createTempProject('int main(){return 0;}', 'c', { tempRoot });
     const unrelatedDir = join(tempRoot, 'not-cache-explorer');
     await mkdir(unrelatedDir);
+    const oldTimestamp = new Date(0);
+    await utimes(oldProject.tempDir, oldTimestamp, oldTimestamp);
+    await utimes(freshProject.tempDir, oldTimestamp, oldTimestamp);
 
-    const removed = await cleanupOrphanedTempDirs({ tempRoot, maxAgeMs: -1 });
+    const removed = await cleanupOrphanedTempDirs({ tempRoot, maxAgeMs: 1 });
     assert.equal(removed, 2);
     await assert.rejects(access(oldProject.tempDir));
     await assert.rejects(access(freshProject.tempDir));

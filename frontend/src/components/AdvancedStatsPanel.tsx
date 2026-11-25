@@ -8,13 +8,13 @@ export function AdvancedStatsPanel({ stats }: AdvancedStatsPanelProps) {
   return (
     <div className="panel">
       <div className="panel-header">
-        <span className="panel-title">Advanced Instrumentation</span>
+        <span className="panel-title">Advanced instrumentation</span>
       </div>
       <div className="panel-content">
         <div className="advanced-stats-grid">
           {stats.vector && (
             <div className="advanced-stat-section">
-              <h4>Vector/SIMD Operations</h4>
+              <h4>Vector/SIMD operations</h4>
               <div className="stat-row">
                 <span>Loads:</span>
                 <span>{stats.vector.loads.toLocaleString()}</span>
@@ -41,7 +41,7 @@ export function AdvancedStatsPanel({ stats }: AdvancedStatsPanelProps) {
           )}
           {stats.atomic && (
             <div className="advanced-stat-section">
-              <h4>Atomic Operations</h4>
+              <h4>Atomic operations</h4>
               <div className="stat-row">
                 <span>Loads:</span>
                 <span>{stats.atomic.loads.toLocaleString()}</span>
@@ -66,7 +66,7 @@ export function AdvancedStatsPanel({ stats }: AdvancedStatsPanelProps) {
           )}
           {stats.memoryIntrinsics && (
             <div className="advanced-stat-section">
-              <h4>Memory Intrinsics</h4>
+              <h4>Memory intrinsics</h4>
               {stats.memoryIntrinsics.memcpyCount > 0 && (
                 <div className="stat-row">
                   <span>memcpy:</span>
@@ -89,7 +89,7 @@ export function AdvancedStatsPanel({ stats }: AdvancedStatsPanelProps) {
           )}
           {stats.softwarePrefetch && (
             <div className="advanced-stat-section">
-              <h4>Software Prefetch</h4>
+              <h4>Software prefetch</h4>
               <div className="stat-row">
                 <span>Issued:</span>
                 <span>{stats.softwarePrefetch.issued.toLocaleString()}</span>

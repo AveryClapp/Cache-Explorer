@@ -10,7 +10,7 @@ export {
   WS_URL,
   PREFETCH_DEFAULTS,
   CONFIG_NAMES,
-  OPTIMIZATION_LEVELS,
+  hardwareLabel,
   defaultCustomConfig,
   STAGE_TEXT,
 } from './config'
@@ -23,4 +23,5 @@ export {
   LIMIT_OPTIONS,
   SAMPLE_OPTIONS,
   FAST_MODE_OPTIONS,
+  LANGUAGE_LABELS,
 } from './options'

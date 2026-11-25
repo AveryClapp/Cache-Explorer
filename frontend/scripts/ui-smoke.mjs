@@ -144,8 +144,25 @@ function workloadName(id) {
 }
 
 async function openHeaderTool(name) {
-  await page.getByRole('button', { name: 'Tools', exact: true }).click()
-  await page.getByRole('menuitem', { name, exact: true }).click()
+  const routes = {
+    Hardware: { view: 'comparisons', primary: 'Compare', tab: 'Across CPUs' },
+    Experiment: { view: 'experiments', primary: 'Compare', tab: 'Code variants' },
+    Explore: { view: 'profiles', primary: 'CPU profiles' },
+    Workloads: { view: 'workloads', more: 'Workloads' },
+  }
+  const route = routes[name]
+  assert(route, `unknown header tool ${name}`)
+  const nav = page.getByRole('navigation', { name: 'Product' })
+  if (route.more) {
+    await nav.locator('.header-more > summary').click()
+    await nav.getByRole('link', { name: route.more, exact: true }).click()
+  } else {
+    await nav.getByRole('link', { name: route.primary, exact: true }).click()
+  }
+  if (route.tab) {
+    await page.getByRole('navigation', { name: 'Compare' }).getByRole('link', { name: route.tab, exact: true }).click()
+  }
+  assert(new URL(page.url()).searchParams.get('view') === route.view, `${name} navigation did not update the URL`)
 }
 
 async function openAdvancedSettings() {
@@ -159,45 +176,63 @@ async function openAdvancedSettings() {
 async function layoutMetrics() {
   return page.evaluate(() => {
     const empty = document.querySelector('.empty-state')
-    const paths = Array.from(document.querySelectorAll('.empty-state-path')).map(element => ({
+    const links = Array.from(document.querySelectorAll('.empty-state-link')).map(element => ({
       text: element.textContent?.replace(/\s+/g, ' ').trim(),
       overflow: element.scrollWidth > element.clientWidth || element.scrollHeight > element.clientHeight,
       width: Math.round(element.getBoundingClientRect().width),
       height: Math.round(element.getBoundingClientRect().height),
     }))
-    const trustItems = Array.from(document.querySelectorAll('.empty-state-trust-item')).map(element => ({
-      text: element.textContent?.replace(/\s+/g, ' ').trim(),
-      overflow: element.scrollWidth > element.clientWidth || element.scrollHeight > element.clientHeight,
-      width: Math.round(element.getBoundingClientRect().width),
-      height: Math.round(element.getBoundingClientRect().height),
-    }))
-    const evidenceItems = Array.from(document.querySelectorAll('.empty-state-evidence span')).map(element => ({
-      text: element.textContent?.replace(/\s+/g, ' ').trim(),
-      overflow: element.scrollWidth > element.clientWidth || element.scrollHeight > element.clientHeight,
-      width: Math.round(element.getBoundingClientRect().width),
-      height: Math.round(element.getBoundingClientRect().height),
-    }))
-
+    const run = document.querySelector('.empty-state-run')
     return {
       target: document.querySelector('.empty-state-target')?.textContent?.trim(),
-      pathCount: paths.length,
-      pathOverflow: paths.some(path => path.overflow),
-      trustCount: trustItems.length,
-      trustOverflow: trustItems.some(item => item.overflow),
-      evidenceCount: evidenceItems.length,
-      evidenceOverflow: evidenceItems.some(item => item.overflow),
+      linkCount: links.length,
+      linkOverflow: links.some(link => link.overflow),
+      runOverflow: run ? run.scrollWidth > run.clientWidth : true,
       emptyScrollDelta: empty ? empty.scrollHeight - empty.clientHeight : null,
-      paths,
-      trustItems,
-      evidenceItems,
+      links,
     }
   })
 }
 
 async function closeModal() {
-  const closeButton = page.locator('.batch-modal-close')
-  await assertVisible(closeButton, 'modal close button')
-  await closeButton.click()
+  const analyzeLink = page.getByRole('navigation', { name: 'Product' }).getByRole('link', { name: 'Analyze', exact: true })
+  await assertVisible(analyzeLink, 'Analyze navigation link')
+  await analyzeLink.click()
+  assert(new URL(page.url()).searchParams.get('view') === null, 'Analyze navigation did not clear the workspace URL')
+}
+
+async function verifyProductDeepLinks(url) {
+  const scriptRequests = []
+  const requestListener = request => {
+    if (request.resourceType() === 'script') scriptRequests.push(request.url())
+  }
+  page.on('request', requestListener)
+
+  const startedAt = Date.now()
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await page.goto(`${url}?view=workloads`, { waitUntil: 'domcontentloaded' })
+  await assertVisible(page.getByText('Verified workloads', { exact: true }), 'direct workload workspace')
+  const visibleMs = Date.now() - startedAt
+  assert(visibleMs < 5000, `workload workspace took ${visibleMs}ms to become visible`)
+  assert(await page.locator('.editor-area').count() === 0, 'direct workload navigation should not mount the code editor')
+  assert(
+    !scriptRequests.some(requestUrl => /EditorPanel|editor\.api|monaco-vim/.test(requestUrl)),
+    `direct workload navigation loaded editor code: ${JSON.stringify(scriptRequests)}`,
+  )
+
+  await page.getByRole('navigation', { name: 'Product' }).getByRole('link', { name: 'CPU profiles', exact: true }).click()
+  await assertVisible(page.getByRole('heading', { name: 'CPU profiles', exact: true }), 'profile workspace navigation')
+  assert(new URL(page.url()).searchParams.get('view') === 'profiles', 'profile workspace URL mismatch')
+
+  await page.goBack({ waitUntil: 'domcontentloaded' })
+  await assertVisible(page.getByText('Verified workloads', { exact: true }), 'browser back workload workspace')
+  assert(new URL(page.url()).searchParams.get('view') === 'workloads', 'browser back did not restore workload workspace')
+
+  await page.goForward({ waitUntil: 'domcontentloaded' })
+  await assertVisible(page.getByRole('heading', { name: 'CPU profiles', exact: true }), 'browser forward profile workspace')
+  assert(new URL(page.url()).searchParams.get('view') === 'profiles', 'browser forward did not restore profile workspace')
+
+  page.off('request', requestListener)
 }
 
 async function verifyLaunchSurface(url) {
@@ -256,8 +291,10 @@ async function verifyLaunchSurface(url) {
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto(url, { waitUntil: 'domcontentloaded' })
   const environmentStatus = page.locator('.environment-status')
-  await assertVisible(environmentStatus.getByText('Healthy', { exact: true }), 'environment health status')
-  await assertVisible(environmentStatus.getByText('Direct', { exact: true }), 'environment sandbox status')
+  await assertVisible(environmentStatus, 'environment health status')
+  assert(await environmentStatus.getByText('Healthy', { exact: true }).count() === 0, 'healthy status should not add a label')
+  assert((await environmentStatus.getAttribute('title')).includes('Execution: Unsandboxed (local)'), 'sandbox mode should be in the status tooltip')
+  assert((await environmentStatus.getAttribute('aria-label')) === 'Environment Healthy', 'health should stay in the accessible name')
   const environmentLayout = await environmentStatus.evaluate(element => {
     const rect = element.getBoundingClientRect()
     return {
@@ -266,24 +303,16 @@ async function verifyLaunchSurface(url) {
     }
   })
   assert(!environmentLayout.overflow, `environment status overflows: ${JSON.stringify(environmentLayout)}`)
-  await assertVisible(page.getByText('Choose a run path', { exact: true }), 'launch heading')
-  await assertVisible(page.getByText('Current target', { exact: true }), 'target label')
-  await assertVisible(page.getByText('Trust packet', { exact: true }), 'launch trust packet label')
-  await assertVisible(page.getByText('Compiler / profile / fidelity', { exact: true }), 'launch trust packet value')
-  await assertVisible(page.getByText('Model contract', { exact: true }), 'launch model-contract evidence')
-  await assertVisible(page.getByText('Repro command', { exact: true }), 'launch repro evidence')
+  await assertVisible(page.getByText('No results yet', { exact: true }), 'launch heading')
   await assertVisible(page.getByRole('button', { name: 'Share', exact: true }), 'launch share action')
-  await assertVisible(page.getByRole('button', { name: /Run buffer/ }), 'run buffer path')
+  await assertVisible(page.getByRole('button', { name: /Run analysis ./ }), 'empty-state run action')
 
   const desktopLayout = await layoutMetrics()
-  assert(desktopLayout.pathCount === 4, `expected 4 launch paths, saw ${desktopLayout.pathCount}`)
-  assert(desktopLayout.trustCount === 3, `expected 3 launch trust items, saw ${desktopLayout.trustCount}`)
-  assert(desktopLayout.evidenceCount === 3, `expected 3 launch evidence items, saw ${desktopLayout.evidenceCount}`)
+  assert(desktopLayout.linkCount === 3, `expected 3 launch links, saw ${desktopLayout.linkCount}`)
   assert(desktopLayout.target?.includes('Educational'), `unexpected target summary: ${desktopLayout.target}`)
   assert(desktopLayout.target?.includes('1M events'), `target summary should use compact limit: ${desktopLayout.target}`)
-  assert(!desktopLayout.pathOverflow, `desktop launch paths overflow: ${JSON.stringify(desktopLayout.paths)}`)
-  assert(!desktopLayout.trustOverflow, `desktop launch trust strip overflows: ${JSON.stringify(desktopLayout.trustItems)}`)
-  assert(!desktopLayout.evidenceOverflow, `desktop launch evidence overflows: ${JSON.stringify(desktopLayout.evidenceItems)}`)
+  assert(!desktopLayout.linkOverflow, `desktop launch links overflow: ${JSON.stringify(desktopLayout.links)}`)
+  assert(!desktopLayout.runOverflow, 'desktop launch run action overflows')
   assert((desktopLayout.emptyScrollDelta ?? 0) <= maxLayoutScrollDelta, `desktop launch surface scrolls by ${desktopLayout.emptyScrollDelta}px`)
 
   await page.getByRole('button', { name: /Run setup|Advanced/ }).click()
@@ -291,36 +320,58 @@ async function verifyLaunchSurface(url) {
   assert(await page.getByText('Defines:', { exact: true }).count() === 0, 'advanced settings should not expose compiler defines')
   await page.getByRole('button', { name: /Run setup/ }).click()
 
-  await page.getByRole('button', { name: /Hardware map/ }).click()
+  await page.getByRole('button', { name: /^CPU profiles/ }).click()
   const hardwareModal = page.locator('.hardware-explorer-modal')
-  await assertVisible(hardwareModal.getByText('Hardware Explorer', { exact: true }), 'hardware modal')
-  await assertVisible(hardwareModal.getByText('Trust Snapshot', { exact: true }), 'hardware trust snapshot')
+  await assertVisible(hardwareModal.getByRole('heading', { name: 'CPU profiles', exact: true }), 'profile workspace')
+  await assertVisible(hardwareModal.getByText('Trust snapshot', { exact: true }), 'hardware trust snapshot')
   await assertVisible(hardwareModal.getByText('2/3', { exact: true }), 'hardware driven field count')
   await assertVisible(hardwareModal.getByText('Local perf smoke', { exact: true }), 'hardware validation source')
   await assertVisible(hardwareModal.getByText('teaching-l1', { exact: true }), 'hardware aliases')
   await assertVisible(hardwareModal.getByText('L1 validated on local perf counters', { exact: true }), 'hardware validation caveat')
   await closeModal()
 
-  await page.getByRole('button', { name: /Experiment matrix/ }).click()
-  await assertVisible(page.getByText('Hardware Experiment', { exact: true }), 'experiment modal')
+  await page.getByRole('button', { name: /^Experiments/ }).click()
+  await assertVisible(page.getByText('Compare code variants', { exact: true }), 'experiment modal')
   await closeModal()
 
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto(url, { waitUntil: 'domcontentloaded' })
   assert(!(await page.locator('.environment-status').isVisible()), 'environment status should collapse on mobile')
   await page.getByRole('button', { name: 'Results' }).click()
-  await assertVisible(page.getByText('Choose a run path', { exact: true }), 'mobile launch heading')
+  await assertVisible(page.getByText('No results yet', { exact: true }), 'mobile launch heading')
 
   const mobileLayout = await layoutMetrics()
-  assert(mobileLayout.pathCount === 4, `expected 4 mobile launch paths, saw ${mobileLayout.pathCount}`)
-  assert(mobileLayout.trustCount === 3, `expected 3 mobile launch trust items, saw ${mobileLayout.trustCount}`)
-  assert(mobileLayout.evidenceCount === 3, `expected 3 mobile launch evidence items, saw ${mobileLayout.evidenceCount}`)
-  assert(!mobileLayout.pathOverflow, `mobile launch paths overflow: ${JSON.stringify(mobileLayout.paths)}`)
-  assert(!mobileLayout.trustOverflow, `mobile launch trust strip overflows: ${JSON.stringify(mobileLayout.trustItems)}`)
-  assert(!mobileLayout.evidenceOverflow, `mobile launch evidence overflows: ${JSON.stringify(mobileLayout.evidenceItems)}`)
+  assert(mobileLayout.linkCount === 3, `expected 3 mobile launch links, saw ${mobileLayout.linkCount}`)
+  assert(!mobileLayout.linkOverflow, `mobile launch links overflow: ${JSON.stringify(mobileLayout.links)}`)
+  assert(!mobileLayout.runOverflow, 'mobile launch run action overflows')
   assert((mobileLayout.emptyScrollDelta ?? 0) <= maxLayoutScrollDelta, `mobile launch surface scrolls by ${mobileLayout.emptyScrollDelta}px`)
 
   await page.unroute('**/profiles')
+}
+
+async function verifyShareFailurePrivacy(url) {
+  await page.route('**/shorten', async route => {
+    await route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'Share service unavailable' }),
+    })
+  })
+
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await page.goto(url, { waitUntil: 'domcontentloaded' })
+  await delay(700)
+  assert(new URL(page.url()).hash === '', 'source state should not be written to the URL fragment')
+  await page.evaluate(() => { window.__copiedText = '' })
+  await page.getByRole('button', { name: 'Share', exact: true }).click()
+  await assertVisible(
+    page.getByText('Share service unavailable. Source was not placed in the URL.', { exact: true }),
+    'share privacy failure notice',
+  )
+  assert(await page.evaluate(() => window.__copiedText) === '', 'failed share should not copy source-bearing URL state')
+  assert(new URL(page.url()).hash === '', 'failed share should not put source into the URL fragment')
+
+  await page.unroute('**/shorten')
 }
 
 async function verifyWorkloadCatalogControls(url) {
@@ -572,8 +623,8 @@ async function verifyWorkloadCatalogControls(url) {
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto(url, { waitUntil: 'domcontentloaded' })
   await openHeaderTool('Workloads')
-  await assertVisible(page.getByText('Verified Workloads', { exact: true }), 'workload catalog modal')
-  await assertVisible(page.getByText('Published History', { exact: true }), 'published workload history')
+  await assertVisible(page.getByText('Verified workloads', { exact: true }), 'workload catalog modal')
+  await assertVisible(page.getByText('Published history', { exact: true }), 'published workload history')
   await assertVisible(page.getByText('passing', { exact: true }), 'history passing status')
   await assertVisible(page.getByText('2 runs', { exact: true }), 'history run count')
   await assertVisible(page.getByText('Largest duration changes', { exact: true }), 'history duration delta label')
@@ -598,13 +649,13 @@ async function verifyWorkloadCatalogControls(url) {
   assert(await page.getByText('1 / 3', { exact: true }).isVisible(), 'search should narrow workload count')
   assert(await workloadName('conv2d-intel14').count() === 0, 'search should hide unmatched workloads')
 
-  await page.getByLabel('Filter workloads by hardware target').selectOption('zen4')
+  await page.getByLabel('Filter workloads by CPU profile').selectOption('zen4')
   await assertVisible(page.getByText('No matching workloads', { exact: true }), 'filtered empty state')
 
   await page.getByRole('button', { name: 'Clear filters' }).click()
   await assertVisible(page.getByText('3 / 3', { exact: true }), 'cleared workload result count')
 
-  await page.getByLabel('Filter workloads by hardware target').selectOption('zen4')
+  await page.getByLabel('Filter workloads by CPU profile').selectOption('zen4')
   await assertVisible(workloadName('hash-probe-zen4'), 'target-filtered workload row')
   assert(await page.getByText('1 / 3', { exact: true }).isVisible(), 'target filter should narrow workload count')
 
@@ -632,10 +683,10 @@ async function verifyWorkloadCatalogControls(url) {
   await prefetchRow.getByRole('button', { name: 'Experiment' }).click()
 
   const experimentModal = page.locator('.experiment-modal')
-  await assertVisible(experimentModal.getByText('Hardware Experiment', { exact: true }), 'workload experiment modal')
+  await assertVisible(experimentModal.getByText('Compare code variants', { exact: true }), 'workload experiment modal')
   await assertVisible(experimentModal.getByText('Variant set prefetch-stream-intel', { exact: true }), 'workload variant source label')
   assert(await experimentModal.locator('textarea').inputValue() === 'prefetch-off\nprefetch-stream', 'workload variants should populate experiment textarea')
-  await assertVisible(experimentModal.getByText('intel14', { exact: true }), 'workload hardware chip')
+  await assertVisible(experimentModal.getByText('Intel 14th Gen', { exact: true }), 'workload hardware chip')
 
   await experimentModal.getByRole('button', { name: 'Run', exact: true }).click()
   await assertVisible(experimentModal.getByText('Overall', { exact: true }), 'workload experiment result')
@@ -896,10 +947,10 @@ async function verifyResultTrustPanel(url) {
 
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto(url, { waitUntil: 'domcontentloaded' })
-  await page.getByRole('button', { name: 'Execute' }).click()
+  await page.getByRole('button', { name: 'Run analysis', exact: true }).click()
 
   const panel = page.locator('.result-provenance-panel')
-  await assertVisible(panel.getByText('Evidence & Fidelity', { exact: true }), 'evidence and fidelity panel')
+  await assertVisible(panel.getByText('Run details', { exact: true }), 'evidence and fidelity panel')
   await assertVisible(panel.getByText('Modeled', { exact: true }), 'modeled contract bucket')
   await assertVisible(panel.getByText('1 drive simulation', { exact: true }), 'modeled contract count')
   await assertVisible(panel.getByText('Estimated', { exact: true }), 'estimated contract bucket')
@@ -908,7 +959,7 @@ async function verifyResultTrustPanel(url) {
   await assertVisible(panel.getByText('1 display only', { exact: true }), 'metadata contract count')
   await assertVisible(panel.getByText('Unsupported', { exact: true }), 'unsupported contract bucket')
   await assertVisible(panel.getByText('1 not modeled', { exact: true }), 'unsupported contract count')
-  await assertVisible(panel.getByText('Local Repro Command', { exact: true }), 'local repro command')
+  await assertVisible(panel.getByText('Reproduce locally', { exact: true }), 'local repro command')
 
   await page.unroute('**/compile')
 }
@@ -924,14 +975,14 @@ async function verifyLegacyResultTrustPanel(url) {
 
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto(url, { waitUntil: 'domcontentloaded' })
-  await page.getByRole('button', { name: 'Execute' }).click()
+  await page.getByRole('button', { name: 'Run analysis', exact: true }).click()
 
   const panel = page.locator('.result-provenance-panel')
-  await assertVisible(panel.getByText('Evidence & Fidelity', { exact: true }), 'legacy evidence and fidelity panel')
+  await assertVisible(panel.getByText('Run details', { exact: true }), 'legacy evidence and fidelity panel')
   await assertVisible(panel.getByText('Legacy', { exact: true }), 'legacy fidelity chip')
   await assertVisible(panel.getByText('Provenance metadata unavailable for this result.', { exact: true }), 'legacy provenance caveat')
   await assertVisible(panel.getByText('Modeled', { exact: true }), 'legacy modeled contract bucket')
-  assert(await panel.getByText('Local Repro Command', { exact: true }).count() === 0, 'legacy result should not show repro command')
+  assert(await panel.getByText('Reproduce locally', { exact: true }).count() === 0, 'legacy result should not show repro command')
 
   await page.unroute('**/compile')
 }
@@ -954,8 +1005,10 @@ async function verifyHardwareComparison(url) {
   await page.goto(url, { waitUntil: 'domcontentloaded' })
   await openHeaderTool('Hardware')
 
-  const modal = page.locator('.batch-modal').filter({ hasText: 'Hardware Comparison' })
-  await assertVisible(modal.getByText('Hardware Comparison', { exact: true }), 'hardware comparison modal')
+  const modal = page.locator('.batch-modal').filter({ hasText: 'Compare across CPUs' })
+  await assertVisible(modal.getByText('Compare across CPUs', { exact: true }), 'hardware comparison modal')
+  await assertVisible(modal.getByText('Ready to compare', { exact: true }), 'comparison ready state')
+  await modal.getByRole('button', { name: 'Run comparison', exact: true }).click()
   await assertVisible(modal.getByText('Educational', { exact: true }), 'comparison educational row')
   await assertVisible(modal.getByText('Intel 14th Gen', { exact: true }), 'comparison intel row')
   await assertVisible(modal.getByText('AMD Zen 4', { exact: true }), 'comparison amd row')
@@ -1000,7 +1053,8 @@ async function verifyHardwareComparisonEmptyState(url) {
   await page.goto(url, { waitUntil: 'domcontentloaded' })
   await openHeaderTool('Hardware')
 
-  const modal = page.locator('.batch-modal').filter({ hasText: 'Hardware Comparison' })
+  const modal = page.locator('.batch-modal').filter({ hasText: 'Compare across CPUs' })
+  await modal.getByRole('button', { name: 'Run comparison', exact: true }).click()
   await assertVisible(modal.getByText('No hardware results', { exact: true }), 'comparison empty-state title')
   await assertVisible(modal.getByText(failureMessage, { exact: true }), 'comparison empty-state message')
   await assertVisible(modal.getByText('4 profiles requested', { exact: true }), 'comparison empty-state profile count')
@@ -1067,13 +1121,15 @@ async function verifyEditRunCompareShareReopen(url) {
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto(url, { waitUntil: 'domcontentloaded' })
   await replaceEditorText(editedCode)
-  await page.getByRole('button', { name: 'Execute' }).click()
+  await page.getByRole('button', { name: 'Run analysis', exact: true }).click()
 
-  await assertVisible(page.locator('.result-provenance-panel').getByText('Evidence & Fidelity', { exact: true }), 'edited run evidence and fidelity')
+  await assertVisible(page.locator('.result-provenance-panel').getByText('Run details', { exact: true }), 'edited run evidence and fidelity')
   assert(compilePayload?.code?.includes('EDIT_RUN_MARKER'), `edited compile payload missing marker: ${compilePayload?.code}`)
 
   await openHeaderTool('Hardware')
-  await assertVisible(page.locator('.batch-modal').filter({ hasText: 'Hardware Comparison' }), 'edited comparison modal')
+  const editedComparison = page.locator('.batch-modal').filter({ hasText: 'Compare across CPUs' })
+  await assertVisible(editedComparison, 'edited comparison modal')
+  await editedComparison.getByRole('button', { name: 'Run comparison', exact: true }).click()
   assert(comparePayload?.code?.includes('EDIT_RUN_MARKER'), `edited compare payload missing marker: ${comparePayload?.code}`)
   await closeModal()
 
@@ -1138,9 +1194,9 @@ async function verifySocketCloseFallback(url) {
 
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto(url, { waitUntil: 'domcontentloaded' })
-  await page.getByRole('button', { name: 'Execute' }).click()
+  await page.getByRole('button', { name: 'Run analysis', exact: true }).click()
 
-  await assertVisible(page.locator('.result-provenance-panel').getByText('Evidence & Fidelity', { exact: true }), 'fallback evidence and fidelity panel')
+  await assertVisible(page.locator('.result-provenance-panel').getByText('Run details', { exact: true }), 'fallback evidence and fidelity panel')
   assert(compilePayload?.config === 'educational', `fallback compile config mismatch: ${JSON.stringify(compilePayload)}`)
   assert(compilePayload?.limit === 1000000, `fallback compile limit mismatch: ${JSON.stringify(compilePayload)}`)
 
@@ -1243,7 +1299,7 @@ async function verifyShareRoundTrip(url) {
   await page.goto(`${url}?s=smoke-missing-environment`, { waitUntil: 'domcontentloaded' })
   await assertVisible(page.getByText('Educational', { exact: true }), 'fallback hardware value')
   await assertVisible(
-    page.getByText('Shared hardware profile "future-socket" is not available here; using educational.', { exact: true }),
+    page.getByText('Shared CPU profile "future-socket" is not available here; using educational.', { exact: true }),
     'missing hardware notice',
   )
   await assertVisible(
@@ -1262,7 +1318,9 @@ async function verifyShareRoundTrip(url) {
   assert(shortenedState?.runHardwareConfigIds?.join(',') === 'intel,amd', `empty-state share run set mismatch: ${JSON.stringify(shortenedState?.runHardwareConfigIds)}`)
 
   await openHeaderTool('Hardware')
-  await assertVisible(page.locator('.batch-modal').filter({ hasText: 'Hardware Comparison' }), 'restored hardware comparison modal')
+  const restoredComparison = page.locator('.batch-modal').filter({ hasText: 'Compare across CPUs' })
+  await assertVisible(restoredComparison, 'restored hardware comparison modal')
+  await restoredComparison.getByRole('button', { name: 'Run comparison', exact: true }).click()
   assert(restoredCompareRequest?.configs?.join(',') === 'intel,amd', `restored comparison configs mismatch: ${JSON.stringify(restoredCompareRequest?.configs)}`)
   await closeModal()
 
@@ -1458,11 +1516,22 @@ async function verifyExperimentResults(url) {
   })
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.goto(url, { waitUntil: 'domcontentloaded' })
+  await assertVisible(page.getByText('Hardware Explorer', { exact: true }).first(), 'Hardware Explorer product name')
+  await assertVisible(page.getByText('Preview', { exact: true }).first(), 'Preview badge')
+  for (const label of ['Analyze', 'Compare', 'CPU profiles']) {
+    await assertVisible(page.getByRole('navigation', { name: 'Product' }).getByRole('link', { name: label, exact: true }), `${label} primary navigation`)
+  }
+  await assertVisible(page.getByRole('navigation', { name: 'Product' }).locator('.header-more > summary'), 'More navigation menu')
   await openHeaderTool('Experiment')
 
   const modal = page.locator('.experiment-modal')
-  await assertVisible(modal.getByText('Hardware Experiment', { exact: true }), 'experiment modal')
-  await modal.getByRole('button', { name: 'Run', exact: true }).click()
+  await assertVisible(modal.getByText('Compare code variants', { exact: true }), 'experiment modal')
+  const runButton = modal.getByRole('button', { name: 'Run', exact: true })
+  assert(await runButton.isDisabled(), 'default experiment should require applying its matching template')
+  await assertVisible(modal.getByText(/Apply this template to load its matching source/), 'template apply guidance')
+  await modal.getByRole('button', { name: 'Apply', exact: true }).click()
+  assert(await runButton.isEnabled(), 'default experiment should enable after applying its template')
+  await runButton.click()
 
   await assertVisible(modal.getByText('Overall', { exact: true }), 'experiment overall winner label')
   await assertVisible(modal.getByText('tiled', { exact: true }).first(), 'experiment tiled winner')
@@ -1480,9 +1549,11 @@ async function verifyExperimentResults(url) {
 
   assert(experimentRequest?.variants?.includes('direct'), 'experiment request should include direct variant')
   assert(experimentRequest?.variants?.includes('tiled:RUN_TILED=1'), 'experiment request should include tiled variant')
-  assert(experimentRequest?.configs?.includes('intel'), 'experiment request should include Intel config')
-  assert(experimentRequest?.configs?.includes('amd'), 'experiment request should include AMD config')
-  assert(experimentRequest?.limit === 1000000, `experiment request should preserve default event limit, got ${experimentRequest?.limit}`)
+  assert(experimentRequest?.configs?.join(',') === 'educational,intel,amd,apple', `default experiment configs mismatch: ${JSON.stringify(experimentRequest?.configs)}`)
+  assert(experimentRequest?.code?.includes('Direct vs tiled 3x3 convolution kernel'), 'default experiment should load the Conv2D source before running')
+  assert(experimentRequest?.optLevel === '-O2', `default experiment should use -O2, got ${experimentRequest?.optLevel}`)
+  assert(experimentRequest?.prefetch === 'adaptive', `default experiment should use adaptive prefetch, got ${experimentRequest?.prefetch}`)
+  assert(experimentRequest?.limit === 100000, `default experiment should use the bounded 100K event limit, got ${experimentRequest?.limit}`)
 
   await closeModal()
   await page.unroute('**/experiment')
@@ -1550,10 +1621,10 @@ async function verifyExperimentShareReopen(url) {
   await openHeaderTool('Experiment')
 
   let modal = page.locator('.experiment-modal')
-  await assertVisible(modal.getByText('Hardware Experiment', { exact: true }), 'shared experiment modal')
+  await assertVisible(modal.getByText('Compare code variants', { exact: true }), 'shared experiment modal')
   assert(await modal.locator('textarea').inputValue() === experimentVariants, 'shared experiment variants should restore before run')
-  await assertVisible(modal.getByText('intel', { exact: true }), 'shared experiment intel chip')
-  await assertVisible(modal.getByText('amd', { exact: true }), 'shared experiment amd chip')
+  await assertVisible(modal.getByText('Intel 12th Gen', { exact: true }), 'shared experiment intel chip')
+  await assertVisible(modal.getByText('AMD Zen 4', { exact: true }), 'shared experiment amd chip')
 
   await modal.getByRole('button', { name: 'Run', exact: true }).click()
   await assertVisible(modal.getByText('Overall', { exact: true }), 'shared experiment result')
@@ -1573,7 +1644,7 @@ async function verifyExperimentShareReopen(url) {
   await page.goto(copiedUrl, { waitUntil: 'domcontentloaded' })
   await openHeaderTool('Experiment')
   modal = page.locator('.experiment-modal')
-  await assertVisible(modal.getByText('Hardware Experiment', { exact: true }), 'reopened experiment modal')
+  await assertVisible(modal.getByText('Compare code variants', { exact: true }), 'reopened experiment modal')
   assert(await modal.locator('textarea').inputValue() === experimentVariants, 'short-link experiment variants should restore')
 
   await closeModal()
@@ -1619,7 +1690,8 @@ try {
   browser = await chromium.launch({
     executablePath,
     headless: true,
-    args: ['--no-sandbox', '--disable-dev-shm-usage'],
+    chromiumSandbox: true,
+    args: ['--disable-dev-shm-usage'],
   })
   page = await browser.newPage()
   page.on('pageerror', error => {
@@ -1652,7 +1724,9 @@ try {
     }),
   }))
 
+  await runSmokeStep('product deep links and task load', () => verifyProductDeepLinks(url))
   await runSmokeStep('launch surface', () => verifyLaunchSurface(url))
+  await runSmokeStep('share failure privacy', () => verifyShareFailurePrivacy(url))
   await runSmokeStep('result trust panel', () => verifyResultTrustPanel(url))
   await runSmokeStep('legacy result trust panel', () => verifyLegacyResultTrustPanel(url))
   await runSmokeStep('hardware comparison', () => verifyHardwareComparison(url))

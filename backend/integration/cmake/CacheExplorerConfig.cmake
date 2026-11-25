@@ -17,8 +17,8 @@
 # Options:
 #   CACHE_EXPLORER_ENABLED    - ON/OFF to enable/disable profiling (default: ON)
 #   CACHE_EXPLORER_PATH       - Path to Cache Explorer installation
-#   CACHE_EXPLORER_PASS       - Path to CacheProfiler.so
-#   CACHE_EXPLORER_RUNTIME    - Path to libcache-explorer-rt.a
+#   CACHE_EXPLORER_PASS       - Path to CacheProfiler.so (non-Windows Clang)
+#   CACHE_EXPLORER_RUNTIME    - Path to the runtime static library
 #   CACHE_EXPLORER_INCLUDE_STL - Include STL in profiling (default: OFF)
 #
 
@@ -27,8 +27,10 @@ cmake_minimum_required(VERSION 3.16)
 # Find Cache Explorer installation
 if(NOT CACHE_EXPLORER_PATH)
   # Try to find from environment or common locations
-  if(DEFINED ENV{CACHE_EXPLORER_PATH})
-    set(CACHE_EXPLORER_PATH $ENV{CACHE_EXPLORER_PATH})
+  if(DEFINED ENV{HARDWARE_EXPLORER_PATH})
+    set(CACHE_EXPLORER_PATH "$ENV{HARDWARE_EXPLORER_PATH}")
+  elseif(DEFINED ENV{CACHE_EXPLORER_PATH})
+    set(CACHE_EXPLORER_PATH "$ENV{CACHE_EXPLORER_PATH}")
   elseif(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../../../")
     # Assume we're in the installation directory
     get_filename_component(CACHE_EXPLORER_PATH "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
@@ -37,19 +39,48 @@ if(NOT CACHE_EXPLORER_PATH)
   endif()
 endif()
 
-# Find the LLVM pass
-if(NOT CACHE_EXPLORER_PASS)
-  set(CACHE_EXPLORER_PASS "${CACHE_EXPLORER_PATH}/llvm-pass/build/CacheProfiler.so")
+set(CACHE_EXPLORER_CLANG_CL OFF)
+if((CMAKE_C_COMPILER_ID MATCHES "Clang" AND
+    CMAKE_C_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC") OR
+   (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND
+    CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC"))
+  set(CACHE_EXPLORER_CLANG_CL ON)
 endif()
 
-if(NOT EXISTS "${CACHE_EXPLORER_PASS}")
-  message(FATAL_ERROR "Cache Explorer LLVM pass not found: ${CACHE_EXPLORER_PASS}
-    Please build Cache Explorer first: cd ${CACHE_EXPLORER_PATH}/llvm-pass && ./build.sh")
+# Non-Windows Clang uses the project LLVM pass. Stock Windows LLVM builds do
+# not support loadable pass plugins, so clang-cl uses built-in
+# SanitizerCoverage load/store callbacks instead.
+if(NOT CACHE_EXPLORER_CLANG_CL)
+  if(NOT CACHE_EXPLORER_PASS)
+    if(DEFINED ENV{HARDWARE_EXPLORER_PASS})
+      set(CACHE_EXPLORER_PASS "$ENV{HARDWARE_EXPLORER_PASS}")
+    elseif(DEFINED ENV{CACHE_EXPLORER_PASS})
+      set(CACHE_EXPLORER_PASS "$ENV{CACHE_EXPLORER_PASS}")
+    else()
+      set(CACHE_EXPLORER_PASS "${CACHE_EXPLORER_PATH}/llvm-pass/build/CacheProfiler.so")
+    endif()
+  endif()
+
+  if(NOT EXISTS "${CACHE_EXPLORER_PASS}")
+    message(FATAL_ERROR "Cache Explorer LLVM pass not found: ${CACHE_EXPLORER_PASS}
+      Please build Cache Explorer first: cd ${CACHE_EXPLORER_PATH}/llvm-pass && ./build.sh")
+  endif()
 endif()
 
 # Find the runtime library
 if(NOT CACHE_EXPLORER_RUNTIME)
-  set(CACHE_EXPLORER_RUNTIME "${CACHE_EXPLORER_PATH}/runtime/build/libcache-explorer-rt.a")
+  if(DEFINED ENV{HARDWARE_EXPLORER_RUNTIME})
+    set(CACHE_EXPLORER_RUNTIME "$ENV{HARDWARE_EXPLORER_RUNTIME}")
+  elseif(DEFINED ENV{CACHE_EXPLORER_RUNTIME})
+    set(CACHE_EXPLORER_RUNTIME "$ENV{CACHE_EXPLORER_RUNTIME}")
+  elseif(WIN32)
+    set(CACHE_EXPLORER_RUNTIME "${CACHE_EXPLORER_PATH}/runtime/build/cache-explorer-rt.lib")
+    if(EXISTS "${CACHE_EXPLORER_PATH}/runtime/build/Release/cache-explorer-rt.lib")
+      set(CACHE_EXPLORER_RUNTIME "${CACHE_EXPLORER_PATH}/runtime/build/Release/cache-explorer-rt.lib")
+    endif()
+  else()
+    set(CACHE_EXPLORER_RUNTIME "${CACHE_EXPLORER_PATH}/runtime/build/libcache-explorer-rt.a")
+  endif()
 endif()
 
 if(NOT EXISTS "${CACHE_EXPLORER_RUNTIME}")
@@ -71,7 +102,11 @@ set(CacheExplorer_FOUND TRUE)
 
 message(STATUS "Cache Explorer found:")
 message(STATUS "  Path: ${CACHE_EXPLORER_PATH}")
-message(STATUS "  Pass: ${CACHE_EXPLORER_PASS}")
+if(CACHE_EXPLORER_CLANG_CL)
+  message(STATUS "  Instrumentation: clang-cl SanitizerCoverage")
+else()
+  message(STATUS "  Pass: ${CACHE_EXPLORER_PASS}")
+endif()
 message(STATUS "  Runtime: ${CACHE_EXPLORER_RUNTIME}")
 message(STATUS "  Enabled: ${CACHE_EXPLORER_ENABLED}")
 
@@ -89,16 +124,21 @@ function(cache_explorer_enable_target target)
 
   message(STATUS "Enabling cache profiling for target: ${target}")
 
-  # Add compiler flags for LLVM pass
-  target_compile_options(${target} PRIVATE
-    -fpass-plugin=${CACHE_EXPLORER_PASS}
-    -g  # Debug info for source attribution
-  )
-
-  # Disable O0 optnone for better instrumentation
-  get_target_property(OPT_LEVEL ${target} COMPILE_OPTIONS)
-  if(OPT_LEVEL MATCHES "-O0")
-    target_compile_options(${target} PRIVATE -Xclang -disable-O0-optnone)
+  # Retain debug information for source attribution. clang-cl uses Clang's
+  # built-in memory callbacks because stock Windows LLVM cannot load pass DLLs.
+  if(CACHE_EXPLORER_CLANG_CL)
+    target_compile_options(${target} PRIVATE
+      /clang:-fsanitize-coverage=trace-pc,trace-loads,trace-stores,no-prune
+      /clang:-fno-sanitize-link-runtime
+      /Z7
+    )
+  else()
+    target_compile_options(${target} PRIVATE
+      "-fpass-plugin=${CACHE_EXPLORER_PASS}"
+      -g
+      -Xclang
+      -disable-O0-optnone
+    )
   endif()
 
   # Include STL if requested
@@ -108,6 +148,14 @@ function(cache_explorer_enable_target target)
 
   # Link runtime library
   target_link_libraries(${target} PRIVATE ${CACHE_EXPLORER_RUNTIME})
+  if(CACHE_EXPLORER_CLANG_CL)
+    # SanitizerCoverage embeds a request for Clang's UBSan runtime in COFF
+    # objects. Hardware Explorer supplies the required callbacks itself, and
+    # 32-bit compiler-rt is not included in standard LLVM Windows installs.
+    target_link_options(${target} PRIVATE
+      /NODEFAULTLIB:clang_rt.ubsan_standalone.lib
+    )
+  endif()
 
   # Add include path for runtime header
   target_include_directories(${target} PRIVATE "${CACHE_EXPLORER_PATH}/runtime")
@@ -124,8 +172,24 @@ function(cache_explorer_enable_project)
   endif()
 
   # Set global compile/link flags
-  add_compile_options(-fpass-plugin=${CACHE_EXPLORER_PASS} -g)
+  if(CACHE_EXPLORER_CLANG_CL)
+    add_compile_options(
+      /clang:-fsanitize-coverage=trace-pc,trace-loads,trace-stores,no-prune
+      /clang:-fno-sanitize-link-runtime
+      /Z7
+    )
+  else()
+    add_compile_options(
+      "-fpass-plugin=${CACHE_EXPLORER_PASS}"
+      -g
+      -Xclang
+      -disable-O0-optnone
+    )
+  endif()
   add_link_options(${CACHE_EXPLORER_RUNTIME})
+  if(CACHE_EXPLORER_CLANG_CL)
+    add_link_options(/NODEFAULTLIB:clang_rt.ubsan_standalone.lib)
+  endif()
 
   if(CACHE_EXPLORER_INCLUDE_STL)
     add_compile_definitions(CACHE_EXPLORER_INCLUDE_STL=1)

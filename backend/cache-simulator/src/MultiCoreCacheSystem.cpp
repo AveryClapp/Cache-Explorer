@@ -1,5 +1,6 @@
 #include "include/MultiCoreCacheSystem.hpp"
 #include <iostream>
+#include <utility>
 
 MultiCoreCacheSystem::MultiCoreCacheSystem(int cores, const CacheConfig &l1_cfg,
                                            const CacheConfig &l2_cfg,
@@ -29,6 +30,8 @@ int MultiCoreCacheSystem::get_core_for_thread(uint32_t thread_id) {
   if (it != thread_to_core.end()) {
     return it->second;
   }
+  if (thread_to_core.size() >= max_tracked_threads)
+    return static_cast<int>(thread_id % static_cast<uint32_t>(num_cores));
   int core = next_core % num_cores;
   thread_to_core[thread_id] = core;
   next_core++;
@@ -72,7 +75,10 @@ void MultiCoreCacheSystem::issue_prefetches(int core, uint64_t miss_addr,
     l1_caches[core]->install_with_state(line_addr, pf_state);
 
     // Track this address as prefetched for usefulness measurement
-    prefetched_addresses_per_core[core].insert(line_addr);
+    auto &tracked_prefetches = prefetched_addresses_per_core[core];
+    if (tracked_prefetches.size() >= max_prefetched_lines_per_core)
+      tracked_prefetches.clear();
+    tracked_prefetches.insert(line_addr);
   }
 }
 
@@ -82,21 +88,33 @@ void MultiCoreCacheSystem::track_access_for_false_sharing(
   uint64_t line_addr = get_line_address(addr);
   uint32_t byte_offset = addr & (line_size - 1);
 
-  auto &accesses = line_accesses[line_addr];
-  accesses.push_back({thread_id, byte_offset, is_write, std::string(file), line});
-
-  std::unordered_set<uint32_t> threads_seen;
-  std::unordered_set<uint32_t> offsets_seen;
-  bool has_write = false;
-
-  for (const auto &a : accesses) {
-    threads_seen.insert(a.thread_id);
-    offsets_seen.insert(a.byte_offset);
-    if (a.is_write)
-      has_write = true;
+  auto existing = line_accesses.find(line_addr);
+  if (existing == line_accesses.end()) {
+    if (line_accesses.size() >= max_tracked_lines)
+      return;
+    existing = line_accesses.emplace(line_addr, LineHistory{}).first;
   }
 
-  if (threads_seen.size() > 1 && offsets_seen.size() > 1 && has_write) {
+  auto &history = existing->second;
+  LineAccess sample{thread_id, byte_offset, is_write, std::string(file), line};
+  history.total_accesses++;
+  if (!history.initialized) {
+    history.first_thread = thread_id;
+    history.first_offset = byte_offset;
+    history.initialized = true;
+  } else {
+    history.multiple_threads |= thread_id != history.first_thread;
+    history.multiple_offsets |= byte_offset != history.first_offset;
+  }
+  history.has_write |= is_write;
+
+  if (history.samples.size() < max_samples_per_line) {
+    history.samples.push_back(std::move(sample));
+  } else if (thread_id != history.first_thread || byte_offset != history.first_offset) {
+    history.samples.back() = std::move(sample);
+  }
+
+  if (history.multiple_threads && history.multiple_offsets && history.has_write) {
     if (false_sharing_lines.insert(line_addr).second) {
       false_sharing_count++;
     }
@@ -247,7 +265,8 @@ MultiCoreCacheSystem::get_false_sharing_reports() const {
 
     auto it = line_accesses.find(line_addr);
     if (it != line_accesses.end()) {
-      for (const auto &a : it->second) {
+      report.total_accesses = it->second.total_accesses;
+      for (const auto &a : it->second.samples) {
         report.accesses.push_back({line_addr, a.file, a.line, a.thread_id,
                                    a.is_write, a.byte_offset});
       }

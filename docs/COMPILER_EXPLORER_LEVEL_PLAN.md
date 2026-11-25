@@ -1,6 +1,6 @@
-# Compiler Explorer-Level Plan
+# Hardware Explorer Preview Product Plan
 
-Cache Explorer reaches Compiler Explorer-level when a user can paste or share code,
+Hardware Explorer reaches the intended product standard when a user can paste or share code,
 choose a target model, run analysis, and trust that another person can reproduce
 the same result with the same settings and caveats.
 

@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react'
+import { humanizeKey } from '../utils/formatting'
+import { hardwareLabel } from '../constants'
 import type {
   WorkloadHistoryDurationDelta,
   WorkloadHistoryResponse,
@@ -25,7 +27,6 @@ interface WorkloadCatalogModalProps {
   onRefreshHistory: () => void
   onIncludeStressChange: (includeStress: boolean) => void
   onLoadWorkload: (workload: WorkloadSnapshot) => void
-  onClose: () => void
 }
 
 function formatLimit(limit: number | undefined) {
@@ -68,10 +69,6 @@ function formatDate(value: string | undefined) {
     hour: '2-digit',
     minute: '2-digit',
   })
-}
-
-function shortDigest(value: string | undefined) {
-  return value ? value.slice(0, 12) : ''
 }
 
 function isStressWorkload(workload: WorkloadSnapshot) {
@@ -188,7 +185,6 @@ export function WorkloadCatalogModal({
   onRefreshHistory,
   onIncludeStressChange,
   onLoadWorkload,
-  onClose,
 }: WorkloadCatalogModalProps) {
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<WorkloadStatusFilter>('all')
@@ -197,7 +193,10 @@ export function WorkloadCatalogModal({
   const hasWorkloads = workloads.length > 0
   const historyAvailable = history?.available && history.latest
   const normalizedQuery = query.trim().toLowerCase()
-  const durationDeltas = history?.durationDeltas || []
+  const durationDeltas = useMemo(
+    () => history?.durationDeltas || [],
+    [history?.durationDeltas],
+  )
   const deltaByWorkload = useMemo(() => (
     new Map(durationDeltas.map(delta => [delta.id, delta]))
   ), [durationDeltas])
@@ -223,16 +222,17 @@ export function WorkloadCatalogModal({
   }
 
   return (
-    <div className="batch-modal-overlay" onClick={() => !verifying && onClose()}>
+    <section className="batch-modal-overlay product-surface-overlay" aria-labelledby="verified-workloads-title">
       <div
-        className="batch-modal workload-modal"
-        onClick={event => event.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
+        className="batch-modal workload-modal product-surface-panel"
+        role="region"
         aria-labelledby="verified-workloads-title"
       >
         <div className="batch-modal-header">
-          <span className="batch-modal-title" id="verified-workloads-title">Verified Workloads</span>
+          <div className="product-surface-title">
+            <h1 className="batch-modal-title" id="verified-workloads-title">Verified workloads</h1>
+            <p>Load and verify reproducible CPU modeling scenarios.</p>
+          </div>
           <div className="batch-modal-header-actions">
             {verification && (
               <span className={`workload-summary-chip ${verification.ok ? 'ok' : 'fail'}`}>
@@ -254,7 +254,6 @@ export function WorkloadCatalogModal({
             >
               {historyLoading ? 'History...' : 'History'}
             </button>
-            <button className="batch-modal-close" onClick={onClose} aria-label="Close verified workloads">×</button>
           </div>
         </div>
         <div className="batch-modal-content workload-modal-content">
@@ -270,7 +269,7 @@ export function WorkloadCatalogModal({
             <div className="workload-history-panel">
               <div className="workload-history-heading">
                 <div>
-                  <div className="workload-history-title">Published History</div>
+                  <div className="workload-history-title">Published history</div>
                   <div className="workload-history-subtitle">
                     Latest {formatDate(history.latest?.generatedAt)}
                     {history.source && ` / ${history.source}`}
@@ -320,17 +319,12 @@ export function WorkloadCatalogModal({
                     {(history.failures || []).slice(0, 3).map(failure => (
                       <span className="workload-history-pill fail" key={`${failure.workload}-${failure.metric}-${failure.relationship}`}>
                         <span>{failure.workload}</span>
-                        <strong>{failure.metric} {failure.relationship}</strong>
+                        <strong title={failure.metric}>{humanizeKey(failure.metric)} {failure.relationship}</strong>
                       </span>
                     ))}
                   </div>
                 </div>
               )}
-            </div>
-          )}
-          {!historyLoading && history?.available === false && (
-            <div className="workload-history-empty">
-              <span>{history.message || 'Published workload history is not configured.'}</span>
             </div>
           )}
           {!historyLoading && history?.available === true && !history.latest && (
@@ -382,11 +376,11 @@ export function WorkloadCatalogModal({
                 className="workload-filter-select"
                 value={targetFilter}
                 onChange={event => setTargetFilter(event.target.value)}
-                aria-label="Filter workloads by hardware target"
+                aria-label="Filter workloads by CPU profile"
               >
-                <option value="all">All targets</option>
+                <option value="all">All CPU profiles</option>
                 {targetOptions.map(target => (
-                  <option key={target} value={target}>{target}</option>
+                  <option key={target} value={target}>{hardwareLabel(target)}</option>
                 ))}
               </select>
               <select
@@ -452,18 +446,12 @@ export function WorkloadCatalogModal({
                     </div>
                     <div className="workload-description">{workload.description}</div>
                     <div className="workload-meta">
-                      <span>{workload.config}</span>
+                      <span>{hardwareLabel(workload.config)}</span>
                       <span>{workload.optLevel || '-O0'}</span>
                       <span>{formatLimit(workload.limit)} events</span>
                       <span>{workload.variants.length} variants</span>
                       {isStressWorkload(workload) && (
                         <span className="workload-tag stress">stress</span>
-                      )}
-                      {workload.identity?.manifestSha256 && (
-                        <span title={workload.identity.manifestSha256}>manifest {shortDigest(workload.identity.manifestSha256)}</span>
-                      )}
-                      {workload.identity?.sourceFiles[workload.example]?.sha256 && (
-                        <span title={workload.identity.sourceFiles[workload.example].sha256}>source {shortDigest(workload.identity.sourceFiles[workload.example].sha256)}</span>
                       )}
                     </div>
                     <div className="workload-variants">
@@ -493,9 +481,9 @@ export function WorkloadCatalogModal({
                           <span
                             className={`workload-check ${observed ? (observed.passed ? 'ok' : 'fail') : ''}`}
                             key={`${check.metric}-${check.relationship}`}
-                            title={observed?.error}
+                            title={observed?.error || check.metric}
                           >
-                            {check.metric} {check.relationship}
+                            {humanizeKey(check.metric)} {check.relationship}
                             {observed && ` (${formatValue(observed.leftValue)} vs ${formatValue(observed.rightValue)})`}
                           </span>
                         )
@@ -539,6 +527,6 @@ export function WorkloadCatalogModal({
           </div>}
         </div>
       </div>
-    </div>
+    </section>
   )
 }

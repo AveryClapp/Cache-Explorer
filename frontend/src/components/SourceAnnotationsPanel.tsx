@@ -21,7 +21,7 @@ export function SourceAnnotationsPanel({ annotations }: SourceAnnotationsPanelPr
   return (
     <div className="panel source-annotations-panel">
       <div className="panel-header">
-        <span className="panel-title">Source Annotations</span>
+        <span className="panel-title">Source annotations</span>
         <span className="panel-badge">{visible.length}</span>
       </div>
       <div className="panel-content">

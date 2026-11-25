@@ -9,7 +9,7 @@ usage() {
   echo "Usage: cache-explore run [options] <binary> [args...]"
   echo ""
   echo "Run an instrumented binary and analyze its cache behavior."
-  echo "The binary must be compiled with Cache Explorer instrumentation."
+  echo "The binary must be compiled with Hardware Explorer instrumentation."
   echo ""
   echo "Options:"
   echo "  --config <name>   Cache config (default: intel)"
@@ -98,7 +98,7 @@ if [[ -n "$PREFETCH" ]]; then
 fi
 
 if [[ -z "$JSON_OUTPUT" ]]; then
-  echo "=== Cache Explorer ===" >&2
+  echo "=== Hardware Explorer Preview ===" >&2
   echo "Binary: $BINARY" >&2
   echo "Config: $CONFIG" >&2
   echo "" >&2

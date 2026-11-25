@@ -228,6 +228,20 @@ inline std::optional<TraceEvent> parse_trace_event_fast(const char *begin,
     event.thread_id = tid;
   }
 
+  // Parse optional binary-attribution and future extension fields.
+  while (p < end) {
+    while (p < end && *p == ' ')
+      p++;
+    if (p >= end || *p == '\n' || *p == '\r')
+      break;
+
+    const char *token_start = p;
+    while (p < end && *p != ' ' && *p != '\n' && *p != '\r')
+      p++;
+    if (!parse_trace_extension(std::string(token_start, p), event))
+      return std::nullopt;
+  }
+
   return event;
 }
 

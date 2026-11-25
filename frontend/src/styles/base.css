@@ -5,110 +5,6 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ══════════════════════════════════════════════════════════════════════════
-   FONTS - UI uses system sans; code/data keeps one mono family.
-   ══════════════════════════════════════════════════════════════════════════ */
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
-
-/* ══════════════════════════════════════════════════════════════════════════
-   CSS CUSTOM PROPERTIES
-   ══════════════════════════════════════════════════════════════════════════ */
-:root {
-  /* ─── Core Palette (Graphite Dark) ─── */
-  --void: #191a1d;
-  --panel: #212329;
-  --surface: #282b32;
-  --elevated: #333740;
-  --bg-panel: var(--panel);
-  --bg-elevated: var(--elevated);
-  --bg-hover: var(--surface);
-  --border: #3e434d;
-  --border-glow: #555d6b;
-  --border-active: var(--phosphor-dim);
-  --border-bright: var(--border-glow);
-  --border-light: var(--border-glow);
-
-  /* ─── Accent Blue (Actions / Selection) ─── */
-  --phosphor: #9db7df;
-  --phosphor-dim: #7898c5;
-  --phosphor-glow: rgba(157, 183, 223, 0.18);
-  --phosphor-subtle: rgba(157, 183, 223, 0.12);
-  --accent: var(--phosphor);
-  --accent-foreground: #14171d;
-
-  /* ─── Text Hierarchy ─── */
-  --text-bright: #f0f2f4;
-  --text-primary: #c9ced6;
-  --text-secondary: #929aa8;
-  --text-muted: #626b79;
-  --text-dim: var(--text-muted);
-
-  /* ─── Semantic Signals ─── */
-  --signal-excellent: #91c9a5;
-  --signal-good: #b4c99a;
-  --signal-success: #91c9a5;
-  --success: var(--signal-success);
-  --signal-warning: #d9b875;
-  --signal-critical: #e06f5f;
-  --signal-info: #9db7df;
-
-  /* ─── Cache Heat Spectrum ─── */
-  --heat-cold: #243146;
-  --heat-cool: #31465a;
-  --heat-warm: #6a5738;
-  --heat-hot: #7a4439;
-  --heat-critical: #a83b35;
-
-  /* ─── Typography ─── */
-  --font-display: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-body: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-code: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --font-mono: var(--font-code);
-
-  /* ─── Type Scale ─── */
-  --text-2xs: 0.625rem;   /* 10px */
-  --text-xs: 0.6875rem;   /* 11px */
-  --text-sm: 0.75rem;     /* 12px */
-  --text-base: 0.8125rem; /* 13px */
-  --text-md: 0.875rem;    /* 14px */
-  --text-lg: 1rem;        /* 16px */
-  --text-xl: 1.25rem;     /* 20px */
-  --text-2xl: 1.5rem;     /* 24px */
-  --text-3xl: 2rem;       /* 32px */
-
-  /* ─── Spacing ─── */
-  --space-1: 0.25rem;
-  --space-2: 0.5rem;
-  --space-3: 0.75rem;
-  --space-4: 1rem;
-  --space-5: 1.25rem;
-  --space-6: 1.5rem;
-  --space-8: 2rem;
-  --space-10: 2.5rem;
-  --space-12: 3rem;
-
-  /* ─── Radii ─── */
-  --radius-sm: 3px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-
-  /* ─── Shadows (Minimal) ─── */
-  --shadow-glow: none;
-  --shadow-panel: 0 14px 36px rgba(0, 0, 0, 0.28);
-  --shadow-inset: none;
-
-  /* ─── Transitions ─── */
-  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --duration-fast: 150ms;
-  --duration-normal: 250ms;
-
-  /* ─── Layout ─── */
-  --header-height: 52px;
-  --toolbar-height: 40px;
-  --sidebar-width: 264px;
-  --results-width: 420px;
-}
-
-/* ══════════════════════════════════════════════════════════════════════════
    RESET & BASE
    ══════════════════════════════════════════════════════════════════════════ */
 *, *::before, *::after {
@@ -133,9 +29,47 @@ body {
   overflow: hidden;
 }
 
-/* ─── Scanline overlay disabled for minimal look ─── */
-body::before {
-  display: none;
+a {
+  color: inherit;
+}
+
+.app :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+:where(a, button, select) {
+  touch-action: manipulation;
+}
+
+.skip-link {
+  position: fixed;
+  inset-block-start: var(--space-2);
+  inset-inline-start: var(--space-2);
+  z-index: 2000;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--text-bright);
+  color: var(--void);
+  font-weight: 650;
+  text-decoration: none;
+  transform: translateY(calc(-100% - var(--space-4)));
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -156,5 +90,5 @@ body::before {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--border-glow);
+  background: var(--border-strong);
 }

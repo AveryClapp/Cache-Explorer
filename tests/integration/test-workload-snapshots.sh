@@ -78,6 +78,22 @@ else
   exit 1
 fi
 
+echo -n "Test: false-sharing smoke uses the scheduling-stable signal... "
+if echo "$OUTPUT" | jq -e '
+  any(.workloads[]; .id == "false-sharing-smoke-intel"
+    and (.checks | length) == 1
+    and .checks[0].metric == "coherence.falseSharingEvents"
+    and .checks[0].leftVariant == "packed"
+    and .checks[0].rightVariant == "padded"
+    and .checks[0].passed == true)
+' > /dev/null; then
+  echo "PASS"
+else
+  echo "FAIL"
+  echo "$OUTPUT" | jq .
+  exit 1
+fi
+
 echo -n "Test: image blur stencil workload remains covered... "
 if echo "$OUTPUT" | jq -e '
   any(.workloads[]; .id == "image-blur-stencil-intel"
@@ -163,7 +179,7 @@ fi
 
 echo -n "Test: workload history artifact can render an HTML report... "
 if "$CACHE_EXPLORE" workloads --history-summary "$HISTORY_FILE" --html > "$HISTORY_REPORT_FILE" \
-  && grep -q "Cache Explorer Workload History" "$HISTORY_REPORT_FILE" \
+  && grep -q "Hardware Explorer Preview Workload History" "$HISTORY_REPORT_FILE" \
   && grep -q "Per-Workload Trend" "$HISTORY_REPORT_FILE"; then
   echo "PASS"
 else

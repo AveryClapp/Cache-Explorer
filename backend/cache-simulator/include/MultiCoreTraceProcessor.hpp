@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "AdvancedStats.hpp"
+#include "CodeHotspot.hpp"
 #include "MemoryAccess.hpp"
 #include "MultiCoreCacheSystem.hpp"
 #include "TraceEvent.hpp"
@@ -27,6 +28,7 @@ private:
   std::unordered_map<std::string, MultiCoreSourceStats> source_stats;
   std::unordered_set<uint32_t> seen_threads;
   std::function<void(const EventResult &)> event_callback;
+  CodeHotspotTracker code_hotspots;
 
   // Advanced instrumentation statistics
   SoftwarePrefetchStats sw_prefetch_stats;
@@ -57,6 +59,8 @@ public:
 
   // Get the hottest source lines by miss count
   [[nodiscard]] std::vector<MultiCoreSourceStats> get_hot_lines(size_t limit = 10) const;
+  [[nodiscard]] std::vector<CodeHotspot>
+  get_code_hotspots(size_t limit = 100) const;
 
   // Get false sharing reports from the cache system
   [[nodiscard]] std::vector<FalseSharingReport> get_false_sharing_reports() const;

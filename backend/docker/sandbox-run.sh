@@ -182,8 +182,11 @@ if ! timeout 10s "$BINARY" > /tmp/trace-$$ 2>&1; then
   exit 1
 fi
 
-# Process trace through cache simulator
-cat /tmp/trace-$$ | "$CACHE_SIM" --config "$CONFIG" $JSON_OUTPUT
+# Process trace through cache simulator. The C/C++/Rust runtime ends a clean
+# run with a completeness trailer; Zig's _start skips the shutdown hook.
+TRACE_END_ARG=""
+[[ "$PIPELINE" != "zig" ]] && TRACE_END_ARG="--expect-trace-end"
+cat /tmp/trace-$$ | "$CACHE_SIM" --config "$CONFIG" $JSON_OUTPUT $TRACE_END_ARG
 
 # Cleanup
 rm -f "$BINARY" /tmp/trace-$$

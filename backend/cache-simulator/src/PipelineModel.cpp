@@ -8,7 +8,9 @@ int PipelineModel::exposed_data_penalty(int access_latency) const {
   if (penalty <= 0)
     return 0;
   // The OoO window hides up to rob_drain cycles of it.
-  return std::max(0, penalty - cfg_.hideable_cycles());
+  int exposed = std::max(0, penalty - cfg_.hideable_cycles());
+  const int overlap = std::max(1, cfg_.assumed_mlp);
+  return (exposed + overlap - 1) / overlap;
 }
 
 uint64_t PipelineModel::on_data_access(bool l1_hit, bool l2_hit, bool l3_hit) {

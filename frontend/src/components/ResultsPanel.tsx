@@ -1,26 +1,27 @@
+import type { LineMetric } from '../utils/lineMetrics'
 import type { editor } from 'monaco-editor'
 import type { CacheResult, ErrorResult, Stage } from '../types'
-import {
-  ErrorDisplay,
-  MetricCards,
-  DiffSummary,
-  BottleneckSummaryPanel,
-  CacheHierarchyViz,
-  PrefetchStatsPanel,
-  AdvancedStatsPanel,
-  ExecutionEnginePanel,
-  HardwareProfilePanel,
-  LevelDetail,
-  ResultProvenancePanel,
-  TLBDetail,
-  FalseSharingDisplay,
-  HotLinesPanel,
-  SuggestionsPanel,
-  SourceAnnotationsPanel,
-  CacheGrid,
-  LoadingState,
-  EmptyState,
-} from './index'
+import { MemoryEvidencePanel } from './MemoryEvidencePanel'
+import { TopologyPanel } from './TopologyPanel'
+import { ErrorDisplay } from './ErrorDisplay'
+import { MetricCards } from './MetricCards'
+import { DiffSummary } from './DiffSummary'
+import { BottleneckSummaryPanel } from './BottleneckSummaryPanel'
+import { CacheHierarchyViz } from './CacheHierarchyViz'
+import { PrefetchStatsPanel } from './PrefetchStatsPanel'
+import { AdvancedStatsPanel } from './AdvancedStatsPanel'
+import { ExecutionEnginePanel } from './ExecutionEnginePanel'
+import { HardwareProfilePanel } from './HardwareProfilePanel'
+import { LevelDetail, TLBDetail } from './CacheDetailComponents'
+import { ResultProvenancePanel } from './ResultProvenancePanel'
+import { TraceCompletenessNotice } from './TraceCompletenessNotice'
+import { FalseSharingDisplay } from './FalseSharingDisplay'
+import { HotLinesPanel } from './HotLinesPanel'
+import { SuggestionsPanel } from './SuggestionsPanel'
+import { SourceAnnotationsPanel } from './SourceAnnotationsPanel'
+import { CacheGrid } from './CacheGrid'
+import { LoadingState } from './LoadingState'
+import { EmptyState } from './EmptyState'
 
 interface ResultsPanelProps {
   result: CacheResult | null
@@ -36,6 +37,8 @@ interface ResultsPanelProps {
   code: string
   selectedHotLineFile: string
   onHotLineFileChange: (file: string) => void
+  lineMetric: LineMetric
+  onLineMetricChange: (metric: LineMetric) => void
   editorRef: React.RefObject<editor.IStandaloneCodeEditor | null>
   copied: boolean
   onShare: () => void
@@ -64,6 +67,8 @@ export function ResultsPanel({
   code,
   selectedHotLineFile,
   onHotLineFileChange,
+  lineMetric,
+  onLineMetricChange,
   editorRef,
   copied,
   onShare,
@@ -82,7 +87,7 @@ export function ResultsPanel({
   return (
     <div className={`results-panel${isMobile && mobilePane !== 'results' ? ' mobile-hidden' : ''}`}>
       <div className="results-header">
-        <span className="results-title">Analysis Results</span>
+        <span className="results-title">Results</span>
         <div className="results-actions">
           {result && (
             <>
@@ -104,6 +109,9 @@ export function ResultsPanel({
 
         {result && (
           <>
+            {/* Partial trace: abnormal exit or event limit */}
+            <TraceCompletenessNotice completeness={result.traceCompleteness} />
+
             {/* Diff Summary Panel */}
             {diffMode && baselineResult && (
               <DiffSummary result={result} baselineResult={baselineResult} baselineConfig={baselineConfig} />
@@ -112,63 +120,28 @@ export function ResultsPanel({
             {/* Metric Cards */}
             <MetricCards result={result} baselineResult={baselineResult} diffMode={diffMode} />
 
-            {/* Result Fidelity */}
-            <ResultProvenancePanel result={result} />
-
             {/* Hardware Bottleneck Summary */}
             {result.summary && <BottleneckSummaryPanel summary={result.summary} />}
 
-            {/* Hardware Profile */}
-            {result.profile && <HardwareProfilePanel profile={result.profile} cacheConfig={result.cacheConfig} />}
+            {/* Source lines with the most misses: the primary answer */}
+            <HotLinesPanel
+              hotLines={result.hotLines}
+              baselineHotLines={diffMode && baselineResult ? baselineResult.hotLines : undefined}
+              diffMode={diffMode}
+              code={code}
+              selectedFile={selectedHotLineFile}
+              onFileChange={onHotLineFileChange}
+              metric={lineMetric}
+              onMetricChange={onLineMetricChange}
+              editorRef={editorRef}
+            />
 
-            {/* Cache Hierarchy Visualization */}
-            <CacheHierarchyViz result={result} baselineResult={baselineResult} diffMode={diffMode} />
-
-            {/* Prefetch Stats */}
-            {result.prefetch && <PrefetchStatsPanel stats={result.prefetch} />}
-
-            {/* Advanced Stats */}
-            {result.advancedStats && <AdvancedStatsPanel stats={result.advancedStats} />}
-
-            {/* Execution Engine */}
-            {execution && <ExecutionEnginePanel execution={execution} />}
-
-            {/* Source Annotations */}
-            {result.sourceAnnotations && <SourceAnnotationsPanel annotations={result.sourceAnnotations} />}
-
-            {/* Toggle Buttons */}
-            <div className="toggle-buttons" style={{ margin: 'var(--space-4) 0' }}>
-              <button
-                className={`btn ${showDetails ? 'active' : ''}`}
-                onClick={onToggleDetails}
-                aria-expanded={showDetails}
-                aria-controls="result-detail-sections"
-              >
-                {showDetails ? '▼ Details' : '▶ Details'}
-              </button>
-            </div>
-
-            {showDetails && (
-              <div id="result-detail-sections">
-                <div className="details-grid">
-                  <LevelDetail name="L1 Data" stats={result.levels.l1d || result.levels.l1!} />
-                  {result.levels.l1i && <LevelDetail name="L1 Instruction" stats={result.levels.l1i} />}
-                  <LevelDetail name="L2" stats={result.levels.l2} />
-                  {(result.cacheConfig?.l3?.sizeKB ?? 0) > 0 && <LevelDetail name="L3" stats={result.levels.l3} />}
-                </div>
-                {result.tlb && (
-                  <div className="tlb-grid">
-                    <TLBDetail name="Data TLB" stats={result.tlb.dtlb} />
-                    <TLBDetail name="Instruction TLB" stats={result.tlb.itlb} />
-                  </div>
-                )}
-              </div>
-            )}
+            {result.suggestions && <SuggestionsPanel suggestions={result.suggestions} />}
 
             {result.coherence && result.coherence.falseSharingEvents > 0 && (
               <div className="panel warning">
                 <div className="panel-header">
-                  <span className="panel-title">False Sharing Detected</span>
+                  <span className="panel-title">False sharing detected</span>
                   <span className="panel-badge">{result.coherence.falseSharingEvents}</span>
                 </div>
               </div>
@@ -181,27 +154,55 @@ export function ResultsPanel({
               />
             )}
 
-            <HotLinesPanel
-              hotLines={result.hotLines}
-              baselineHotLines={diffMode && baselineResult ? baselineResult.hotLines : undefined}
-              diffMode={diffMode}
-              code={code}
-              selectedFile={selectedHotLineFile}
-              onFileChange={onHotLineFileChange}
-              editorRef={editorRef}
-            />
+            {/* Cache Hierarchy Visualization */}
+            <CacheHierarchyViz result={result} baselineResult={baselineResult} diffMode={diffMode} />
 
-            {result.suggestions && <SuggestionsPanel suggestions={result.suggestions} />}
+            <button
+              type="button"
+              className="btn results-more-toggle"
+              onClick={onToggleDetails}
+              aria-expanded={showDetails}
+              aria-controls="result-detail-sections"
+            >
+              {showDetails ? 'Hide detail' : 'More detail'}
+              <span className="results-more-hint">CPU model, execution engine, per-level stats</span>
+            </button>
 
-            {result.cacheState && (
-              <div className="panel">
-                <div className="panel-header">
-                  <span className="panel-title">L1 Cache Grid</span>
-                  <span className="panel-badge">Final State</span>
+            {showDetails && (
+              <div id="result-detail-sections" className="result-detail-sections">
+                {execution && <ExecutionEnginePanel execution={execution} />}
+                {result.sourceAnnotations && <SourceAnnotationsPanel annotations={result.sourceAnnotations} />}
+                <MemoryEvidencePanel result={result} />
+                {result.prefetch && <PrefetchStatsPanel stats={result.prefetch} />}
+                {result.advancedStats && <AdvancedStatsPanel stats={result.advancedStats} />}
+                <TopologyPanel topology={result.subsystems?.topology} />
+                <div className="details-grid">
+                  <LevelDetail name="L1 Data" stats={result.levels.l1d || result.levels.l1!} />
+                  {result.levels.l1i && <LevelDetail name="L1 Instruction" stats={result.levels.l1i} />}
+                  <LevelDetail name="L2" stats={result.levels.l2} />
+                  {(result.cacheConfig?.l3?.sizeKB ?? 0) > 0 && <LevelDetail name="L3" stats={result.levels.l3} />}
                 </div>
-                <CacheGrid cacheState={result.cacheState.l1d} />
+                {result.tlb && (
+                  <div className="tlb-grid">
+                    <TLBDetail name="Data TLB" stats={result.tlb.dtlb} />
+                    <TLBDetail name="Instruction TLB" stats={result.tlb.itlb} />
+                  </div>
+                )}
+                {result.profile && <HardwareProfilePanel profile={result.profile} cacheConfig={result.cacheConfig} />}
+                {result.cacheState && (
+                  <div className="panel">
+                    <div className="panel-header">
+                      <span className="panel-title">L1 cache grid</span>
+                      <span className="panel-badge">Final State</span>
+                    </div>
+                    <CacheGrid cacheState={result.cacheState.l1d} />
+                  </div>
+                )}
               </div>
             )}
+
+            {/* How this result was produced */}
+            <ResultProvenancePanel result={result} />
           </>
         )}
 

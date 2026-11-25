@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <string>
 #include <string_view>
 #include <unordered_map>
 #include <unordered_set>
@@ -9,13 +10,15 @@
 #include "AdvancedStats.hpp"
 #include "BranchPredictor.hpp"
 #include "CacheSystem.hpp"
+#include "CodeHotspot.hpp"
 #include "MemoryAccess.hpp"
+#include "MemoryEvidence.hpp"
 #include "PipelineModel.hpp"
 #include "TraceEvent.hpp"
 
-// Struct key for source location lookup - avoids string allocation in hot path
+// Own the filename so map keys stay valid across event and map lifetimes.
 struct SourceKey {
-  std::string_view file;
+  std::string file;
   uint32_t line;
 
   bool operator==(const SourceKey &other) const {
@@ -25,7 +28,7 @@ struct SourceKey {
 
 struct SourceKeyHash {
   size_t operator()(const SourceKey &k) const {
-    size_t h = std::hash<std::string_view>{}(k.file);
+    size_t h = std::hash<std::string>{}(k.file);
     h ^= std::hash<uint32_t>{}(k.line) + 0x9e3779b9 + (h << 6) + (h >> 2);
     return h;
   }
@@ -36,6 +39,7 @@ struct SourceStats {
   uint32_t line;
   uint64_t hits = 0;
   uint64_t misses = 0;
+  uint64_t memory_misses = 0;  // accesses that missed every cache level
   uint64_t instructions = 0;
   uint64_t memory_stall_cycles = 0;
   uint64_t frontend_stall_cycles = 0;
@@ -60,6 +64,7 @@ struct SourceAnnotation {
   uint64_t misses = 0;
   uint64_t branch_mispredictions = 0;
   double share = 0.0;
+  uint64_t total_source_stall_cycles = 0;
 };
 
 struct BottleneckSummary {
@@ -77,6 +82,8 @@ private:
   CacheSystem cache;
   BranchPredictor branch_predictor;
   PipelineModel pipeline;
+  CodeHotspotTracker code_hotspots;
+  MemoryEvidence memory_evidence;
   std::unordered_map<SourceKey, SourceStats, SourceKeyHash> source_stats;
   std::function<void(const EventResult &)> event_callback;
 
@@ -90,9 +97,8 @@ private:
   std::unordered_set<uint64_t> prefetched_addresses;
 
   // Helper to process a single cache line access
-  void process_line_access(uint64_t line_addr, bool is_write, bool is_icache,
-                           std::string_view file, uint32_t line,
-                           uint32_t event_size);
+  void process_line_access(const TraceEvent &event, uint64_t line_addr,
+                           bool is_write, bool is_icache, uint32_t instructions = 0);
   SourceStats *find_or_create_source_stats(std::string_view file,
                                            uint32_t line);
 
@@ -110,8 +116,16 @@ public:
   void process(const TraceEvent &event);
 
   [[nodiscard]] HierarchyStats get_stats() const;
+  const MemoryEvidence& get_memory_evidence() const { return memory_evidence; }
 
   [[nodiscard]] std::vector<SourceStats> get_hot_lines(size_t limit = 10) const;
+  // Top lines by each per-line metric (L1 misses, memory misses, stall
+  // cycles, branch mispredictions), merged and ordered by L1 misses, so a
+  // client can rank by any one of them.
+  [[nodiscard]] std::vector<SourceStats>
+  get_reported_lines(size_t per_metric = 10) const;
+  [[nodiscard]] std::vector<CodeHotspot>
+  get_code_hotspots(size_t limit = 100) const;
 
   void reset();
 

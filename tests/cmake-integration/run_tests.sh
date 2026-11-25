@@ -71,7 +71,11 @@ fi
 # Test 2: Instrumented binary produces valid cache-sim JSON
 TEST_NAME="Trace: binary produces valid JSON"
 echo -n "Test: $TEST_NAME... "
-OUTPUT=$("$BUILD_DIR/cache-matrix" 2>&1 | "$SIM_PATH" --json 2>/dev/null)
+# Keep this fixture representative of the product's bounded default journey. The
+# sample matrix intentionally emits millions of accesses when left unlimited,
+# which now trips the simulator's defensive stream cap before JSON is written.
+OUTPUT=$(CACHE_EXPLORER_MAX_EVENTS=100000 "$BUILD_DIR/cache-matrix" 2>&1 \
+  | "$SIM_PATH" --json 2>/dev/null)
 if echo "$OUTPUT" | jq -e '.levels.l1d.hitRate' > /dev/null 2>&1 \
    && echo "$OUTPUT" | jq -e '.events > 0' > /dev/null 2>&1; then
   pass

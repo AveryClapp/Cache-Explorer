@@ -58,3 +58,23 @@ export function fuzzyMatch(query: string, text: string): boolean {
   }
   return qIdx === q.length
 }
+
+const KEY_WORDS: Record<string, string> = {
+  l1: 'L1', l1d: 'L1D', l1i: 'L1I', l2: 'L2', l3: 'L3', tlb: 'TLB', dtlb: 'DTLB', itlb: 'ITLB',
+  mlp: 'MLP', simd: 'SIMD', numa: 'NUMA', ipc: 'IPC', mpki: 'MPKI', dram: 'DRAM',
+}
+const DROPPED_SEGMENTS = new Set(['levels', 'advancedStats', 'subsystems', 'summary', 'timing'])
+
+// Turns data keys like "levels.l2.hitRate" or "memoryDemandPressure" into
+// "L2 hit rate" / "Memory demand pressure" for display.
+export function humanizeKey(key: string): string {
+  const words = key
+    .split('.')
+    .filter((segment, index, all) => !(DROPPED_SEGMENTS.has(segment) && index < all.length - 1))
+    .flatMap(segment => segment.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[-_]/g, ' ').split(' '))
+    .filter(Boolean)
+    .map(word => KEY_WORDS[word.toLowerCase()] ?? word.toLowerCase())
+  if (words.length === 0) return key
+  const text = words.join(' ')
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}

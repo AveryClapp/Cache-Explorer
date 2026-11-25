@@ -1,0 +1,39 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   ANIMATIONS - Entrance
+   ══════════════════════════════════════════════════════════════════════════ */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.metric-card {
+  animation: none;
+}
+
+.metric-card:nth-child(1) { animation-delay: 0.05s; }
+.metric-card:nth-child(2) { animation-delay: 0.1s; }
+.metric-card:nth-child(3) { animation-delay: 0.15s; }
+
+.cache-level {
+  animation: fadeInUp 0.4s var(--ease-out) backwards;
+}
+
+.cache-level:nth-child(1) { animation-delay: 0.1s; }
+.cache-level:nth-child(2) { animation-delay: 0.15s; }
+.cache-level:nth-child(3) { animation-delay: 0.2s; }
+.cache-level:nth-child(4) { animation-delay: 0.25s; }
+
+.panel {
+  animation: fadeIn 0.3s var(--ease-out) backwards;
+}

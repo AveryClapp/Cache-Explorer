@@ -13,7 +13,7 @@ export function SuggestionsPanel({ suggestions }: SuggestionsPanelProps) {
   return (
     <div className="panel">
       <div className="panel-header">
-        <span className="panel-title">Optimization Suggestions</span>
+        <span className="panel-title">Optimization suggestions</span>
         <span className="panel-badge">{suggestions.length}</span>
       </div>
       <div className="suggestions">

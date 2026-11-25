@@ -36,8 +36,19 @@ void test_default_options() {
   // Intel preset enables prefetching by default
   assert(opts.prefetch_policy == PrefetchPolicy::ADAPTIVE);
   assert(opts.num_cores == 0);
+  assert(opts.expect_trace_end == false);
 
   std::cout << "[PASS] test_default_options\n";
+}
+
+void test_expect_trace_end_flag() {
+  ArgvBuilder builder;
+  builder.add("--json").add("--expect-trace-end");
+  auto opts = ArgParser::parse(builder.argc(), builder.argv());
+
+  assert(opts.expect_trace_end == true);
+  assert(opts.json_output == true);
+  std::cout << "[PASS] test_expect_trace_end_flag\n";
 }
 
 void test_config_flag() {
@@ -101,6 +112,34 @@ void test_cores_flag() {
 
   assert(opts.num_cores == 4);
   std::cout << "[PASS] test_cores_flag\n";
+}
+
+void test_invalid_numeric_flags_are_rejected() {
+  {
+    ArgvBuilder builder;
+    builder.add("--cores").add("not-a-number");
+    bool rejected = false;
+    try { (void)ArgParser::parse(builder.argc(), builder.argv()); }
+    catch (const std::invalid_argument&) { rejected = true; }
+    assert(rejected);
+  }
+  {
+    ArgvBuilder builder;
+    builder.add("--l1-line").add("63");
+    bool rejected = false;
+    try { (void)ArgParser::parse(builder.argc(), builder.argv()); }
+    catch (const std::invalid_argument&) { rejected = true; }
+    assert(rejected);
+  }
+  {
+    ArgvBuilder builder;
+    builder.add("--l3-size").add("1073741824");
+    bool rejected = false;
+    try { (void)ArgParser::parse(builder.argc(), builder.argv()); }
+    catch (const std::out_of_range&) { rejected = true; }
+    assert(rejected);
+  }
+  std::cout << "[PASS] test_invalid_numeric_flags_are_rejected\n";
 }
 
 void test_prefetch_policy_none() {
@@ -278,6 +317,7 @@ int main() {
 
   // Default and basic flags
   test_default_options();
+  test_expect_trace_end_flag();
   test_config_flag();
   test_hardware_alias();
   test_verbose_flag();
@@ -285,6 +325,7 @@ int main() {
   test_stream_flag();
   test_help_flag();
   test_cores_flag();
+  test_invalid_numeric_flags_are_rejected();
   test_flamegraph_flag();
 
   // Prefetch parsing

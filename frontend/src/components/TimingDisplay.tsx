@@ -23,7 +23,7 @@ export function TimingDisplay({ timing, baselineTiming, diffMode }: TimingDispla
   return (
     <div className="timing-display">
       <div className="timing-header">
-        <span className="timing-label">Timing</span>
+        <span className="timing-label">Memory access latency</span>
         <span className="timing-value">
           {totalCycles.toLocaleString()}
           {cyclesDelta && (
@@ -32,7 +32,7 @@ export function TimingDisplay({ timing, baselineTiming, diffMode }: TimingDispla
             </span>
           )}
         </span>
-        <span className="timing-unit">cycles ({avgLatency.toFixed(1)} avg)</span>
+        <span className="timing-unit" title="Latency of every access added up, before out-of-order overlap. Not the estimated run time.">cycles summed, {avgLatency.toFixed(1)} per access</span>
       </div>
       <div className="timing-bar">
         {l1Pct > 0 && <div className="timing-segment l1" style={{ width: `${l1Pct}%` }} title={`L1: ${breakdown.l1HitCycles.toLocaleString()} cycles`} />}

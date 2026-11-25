@@ -2,6 +2,7 @@
 
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "../profiles/CacheConfig.hpp"
 #include "Prefetcher.hpp"
@@ -31,6 +32,11 @@ struct SimulatorOptions {
     bool cache_segments = false;  // Enable segment caching for repetitive code
     size_t segment_size = 20;  // Number of events per cached segment
     bool show_help = false;
+    bool check_config = false;
+    // Trace comes from the LLVM runtime, which ends a clean run with a
+    // '# hardware-explorer-end' trailer; report traceCompleteness in JSON.
+    bool expect_trace_end = false;
+    std::vector<std::string> lab;
     bool prefetch_policy_set = false;
     bool prefetch_degree_set = false;
 

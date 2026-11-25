@@ -1,6 +1,7 @@
 #include "include/TraceProcessor.hpp"
 #include <algorithm>
 #include <sstream>
+#include <unordered_set>
 
 namespace {
 
@@ -27,23 +28,22 @@ SourceStats *TraceProcessor::find_or_create_source_stats(std::string_view file,
   if (file.empty())
     return nullptr;
 
-  SourceKey key{file, line};
+  SourceKey key{std::string(file), line};
   auto it = source_stats.find(key);
   if (it == source_stats.end()) {
-    SourceStats stats;
-    stats.file = std::string(file);
-    stats.line = line;
-    auto [inserted_it, _] =
-        source_stats.emplace(SourceKey{stats.file, line}, std::move(stats));
+    SourceStats stats{.file = key.file, .line = line};
+    auto [inserted_it, _] = source_stats.emplace(std::move(key), std::move(stats));
     it = inserted_it;
   }
   return &it->second;
 }
 
-void TraceProcessor::process_line_access(uint64_t line_addr, bool is_write,
-                                         bool is_icache, std::string_view file,
-                                         uint32_t line, uint32_t event_size) {
+void TraceProcessor::process_line_access(const TraceEvent &event,
+                                         uint64_t line_addr, bool is_write,
+                                         bool is_icache, uint32_t instructions) {
   SystemAccessResult result;
+  const auto before = cache.get_l1d().get_stats();
+  const auto useful_before = cache.get_prefetch_stats().prefetches_useful;
   if (is_icache) {
     result = cache.fetch(line_addr);
   } else if (is_write) {
@@ -51,6 +51,8 @@ void TraceProcessor::process_line_access(uint64_t line_addr, bool is_write,
   } else {
     result = cache.read(line_addr);
   }
+  if (!is_icache) memory_evidence.record(event, line_addr, result, before,
+      cache.get_l1d().get_stats(), cache.get_prefetch_stats().prefetches_useful > useful_before);
 
   // Track prefetch usefulness
   if (!is_write && prefetched_addresses.count(line_addr)) {
@@ -58,19 +60,20 @@ void TraceProcessor::process_line_access(uint64_t line_addr, bool is_write,
     prefetched_addresses.erase(line_addr);
   }
 
-  SourceStats *source = find_or_create_source_stats(file, line);
+  SourceStats *source = find_or_create_source_stats(event.file, event.line);
   if (source != nullptr) {
     if (result.l1_hit)
       source->hits++;
     else
       source->misses++;
+    if (!result.l1_hit && !result.l2_hit && !result.l3_hit)
+      source->memory_misses++;
   }
 
   // Feed the OoO pipeline model: instruction fetches supply the dynamic
   // instruction count and front-end stalls; data accesses supply back-end
   // memory stalls.
   if (is_icache) {
-    uint32_t instructions = event_size / 4;
     uint64_t stall =
         pipeline.on_inst_fetch(result.l1_hit, result.l2_hit, result.l3_hit,
                                instructions);
@@ -86,19 +89,24 @@ void TraceProcessor::process_line_access(uint64_t line_addr, bool is_write,
     }
   }
 
+  code_hotspots.record(event, is_write, result.l1_hit, result.l2_hit,
+                       result.l3_hit);
+
   if (event_callback) {
     event_callback({result.l1_hit, result.l2_hit, result.l3_hit, line_addr,
-                    event_size, std::string(file), line});
+                    event.size, event.file, event.line});
   }
 }
 
 TraceProcessor::TraceProcessor(const CacheHierarchyConfig &cfg)
     : cache(cfg),
+      branch_predictor(1024, cfg.branch_predictor),
       pipeline(PipelineConfig{
           .issue_width = cfg.issue_width,
           .rob_size = cfg.rob_size,
           .branch_mispredict_penalty = cfg.branch_mispredict_penalty,
-          .latency = cfg.latency}) {}
+          .latency = cfg.latency,
+          .assumed_mlp = cfg.assumed_mlp}), memory_evidence(cfg) {}
 
 void TraceProcessor::set_event_callback(
     std::function<void(const EventResult &)> cb) {
@@ -129,7 +137,7 @@ void TraceProcessor::process(const TraceEvent &event) {
   if (event.is_branch) {
     bool mispredicted = branch_predictor.process(event.branch_id,
                                                  event.branch_taken,
-                                                 event.file, event.line);
+                                                 event.file, event.line, event.branch_backward);
     uint64_t stall = pipeline.on_branch(mispredicted);
     if (SourceStats *source =
             find_or_create_source_stats(event.file, event.line)) {
@@ -170,16 +178,14 @@ void TraceProcessor::process(const TraceEvent &event) {
     auto src_lines = split_access_to_cache_lines(
         {event.src_address, event.size, false}, line_size);
     for (const auto &line_access : src_lines) {
-      process_line_access(line_access.line_address, false, false, event.file,
-                          event.line, event.size);
+      process_line_access(event, line_access.line_address, false, false);
     }
 
     // Process dest writes
     auto dst_lines = split_access_to_cache_lines(
         {event.address, event.size, true}, line_size);
     for (const auto &line_access : dst_lines) {
-      process_line_access(line_access.line_address, true, false, event.file,
-                          event.line, event.size);
+      process_line_access(event, line_access.line_address, true, false);
     }
     return;
   }
@@ -192,8 +198,7 @@ void TraceProcessor::process(const TraceEvent &event) {
     auto lines =
         split_access_to_cache_lines({event.address, event.size, true}, line_size);
     for (const auto &line_access : lines) {
-      process_line_access(line_access.line_address, true, false, event.file,
-                          event.line, event.size);
+      process_line_access(event, line_access.line_address, true, false);
     }
     return;
   }
@@ -231,9 +236,13 @@ void TraceProcessor::process(const TraceEvent &event) {
     vector_stats.cross_line_accesses++;
   }
 
+  // A block's dynamic instruction count is independent of cache-line size.
+  // Charge fetch stalls for every touched line, but count the block only once.
+  bool first_line = true;
   for (const auto &line_access : lines) {
-    process_line_access(line_access.line_address, event.is_write,
-                        event.is_icache, event.file, event.line, event.size);
+    process_line_access(event, line_access.line_address, event.is_write,
+                        event.is_icache, first_line && event.is_icache ? event.size / 4 : 0);
+    first_line = false;
   }
 }
 
@@ -251,9 +260,50 @@ std::vector<SourceStats> TraceProcessor::get_hot_lines(size_t limit) const {
   return sorted;
 }
 
+std::vector<SourceStats>
+TraceProcessor::get_reported_lines(size_t per_metric) const {
+  std::vector<const SourceStats *> all;
+  all.reserve(source_stats.size());
+  for (const auto &[key, stats] : source_stats) all.push_back(&stats);
+
+  std::unordered_set<const SourceStats *> picked;
+  auto take_top = [&](auto metric) {
+    std::vector<const SourceStats *> ranked;
+    for (const auto *stats : all)
+      if (metric(*stats) > 0) ranked.push_back(stats);
+    const size_t n = std::min(per_metric, ranked.size());
+    std::partial_sort(ranked.begin(), ranked.begin() + n, ranked.end(),
+                      [&](const auto *a, const auto *b) {
+                        return metric(*a) > metric(*b);
+                      });
+    for (size_t i = 0; i < n; i++) picked.insert(ranked[i]);
+  };
+  take_top([](const SourceStats &s) { return s.misses; });
+  take_top([](const SourceStats &s) { return s.memory_misses; });
+  take_top([](const SourceStats &s) { return s.total_stall_cycles(); });
+  take_top([](const SourceStats &s) { return s.branch_mispredictions; });
+
+  std::vector<SourceStats> lines;
+  lines.reserve(picked.size());
+  for (const auto *stats : picked) lines.push_back(*stats);
+  std::sort(lines.begin(), lines.end(), [](const auto &a, const auto &b) {
+    if (a.misses != b.misses) return a.misses > b.misses;
+    if (a.file != b.file) return a.file < b.file;
+    return a.line < b.line;
+  });
+  return lines;
+}
+
+std::vector<CodeHotspot>
+TraceProcessor::get_code_hotspots(size_t limit) const {
+  return code_hotspots.hottest(limit);
+}
+
 void TraceProcessor::reset() {
+  memory_evidence.reset();
   cache.reset_stats();
   source_stats.clear();
+  code_hotspots.reset();
   sw_prefetch_stats = {};
   vector_stats = {};
   atomic_stats = {};
@@ -321,6 +371,7 @@ TraceProcessor::get_source_annotations(size_t limit) const {
           .misses = stats.misses,
           .branch_mispredictions = 0,
           .share = s,
+          .total_source_stall_cycles = stats.total_stall_cycles(),
       });
     }
     if (stats.frontend_stall_cycles > 0) {
@@ -337,6 +388,7 @@ TraceProcessor::get_source_annotations(size_t limit) const {
           .misses = stats.misses,
           .branch_mispredictions = 0,
           .share = s,
+          .total_source_stall_cycles = stats.total_stall_cycles(),
       });
     }
     if (stats.branch_stall_cycles > 0) {
@@ -353,6 +405,7 @@ TraceProcessor::get_source_annotations(size_t limit) const {
           .misses = 0,
           .branch_mispredictions = stats.branch_mispredictions,
           .share = s,
+          .total_source_stall_cycles = stats.total_stall_cycles(),
       });
     }
   }

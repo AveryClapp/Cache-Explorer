@@ -24,7 +24,13 @@ struct TLBConfig {
     size_t page_size = 4096;    // Page size in bytes (4KB default)
 
     [[nodiscard]] constexpr size_t num_sets() const noexcept {
-        return entries / associativity;
+        return associativity ? entries / associativity : 0;
+    }
+    [[nodiscard]] constexpr bool is_valid() const noexcept {
+        return entries > 0 && entries <= 65536 && associativity > 0 &&
+            associativity <= entries && entries % associativity == 0 &&
+            page_size >= 4096 && page_size <= 1073741824 &&
+            (page_size & (page_size - 1)) == 0;
     }
 };
 

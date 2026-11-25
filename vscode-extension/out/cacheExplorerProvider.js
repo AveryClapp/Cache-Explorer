@@ -35,6 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CacheExplorerProvider = void 0;
 const vscode = __importStar(require("vscode"));
+const node_crypto_1 = require("node:crypto");
 class CacheExplorerProvider {
     constructor(_extensionUri) {
         this._extensionUri = _extensionUri;
@@ -61,22 +62,25 @@ class CacheExplorerProvider {
             this._view.webview.postMessage({ type: 'updateResults', results });
         }
     }
-    _goToLine(file, line) {
+    _goToLine(_file, line) {
         const editor = vscode.window.activeTextEditor;
-        if (editor) {
-            const position = new vscode.Position(line - 1, 0);
+        if (editor && Number.isSafeInteger(line) && line > 0) {
+            const lineIndex = Math.min(line - 1, Math.max(0, editor.document.lineCount - 1));
+            const position = new vscode.Position(lineIndex, 0);
             editor.selection = new vscode.Selection(position, position);
             editor.revealRange(new vscode.Range(position, position));
         }
     }
     _getHtmlForWebview() {
+        const nonce = (0, node_crypto_1.randomBytes)(18).toString('base64');
         return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cache Explorer Results</title>
-  <style>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
+  <title>Hardware Explorer Results</title>
+  <style nonce="${nonce}">
     body {
       font-family: var(--vscode-font-family);
       font-size: var(--vscode-font-size);
@@ -140,6 +144,11 @@ class CacheExplorerProvider {
       cursor: pointer;
       display: flex;
       justify-content: space-between;
+      width: 100%;
+      border: 0;
+      color: inherit;
+      font: inherit;
+      text-align: left;
     }
 
     .hot-line:hover {
@@ -159,6 +168,11 @@ class CacheExplorerProvider {
       margin: 4px 0;
       border-radius: 4px;
       border-left: 3px solid;
+      width: 100%;
+      color: inherit;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
     }
 
     .suggestion.high {
@@ -187,11 +201,11 @@ class CacheExplorerProvider {
   <div id="content">
     <div class="no-results">
       <p>No results yet.</p>
-      <p>Use <strong>Cache Explorer: Profile Current File</strong> to analyze your code.</p>
+      <p>Use <strong>Hardware Explorer: Profile Current File</strong> to analyze your code.</p>
     </div>
   </div>
 
-  <script>
+  <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
 
     window.addEventListener('message', event => {
@@ -203,9 +217,10 @@ class CacheExplorerProvider {
 
     function renderResults(results) {
       const content = document.getElementById('content');
+      content.replaceChildren();
 
       if (!results || !results.levels) {
-        content.innerHTML = '<div class="no-results">No results available</div>';
+        content.append(element('div', 'no-results', 'No results available'));
         return;
       }
 
@@ -213,69 +228,84 @@ class CacheExplorerProvider {
       const l2 = results.levels.l2 || {};
       const l3 = results.levels.l3 || {};
 
-      let html = \`
-        <div class="section">
-          <div class="section-title">Cache Statistics</div>
-          <div class="stats-grid">
-            <div class="stat-box">
-              <div class="stat-label">L1 Hit Rate</div>
-              <div class="stat-value hit-rate">\${(l1d.hitRate || 0).toFixed(1)}%</div>
-            </div>
-            <div class="stat-box">
-              <div class="stat-label">L2 Hit Rate</div>
-              <div class="stat-value hit-rate">\${(l2.hitRate || 0).toFixed(1)}%</div>
-            </div>
-            <div class="stat-box">
-              <div class="stat-label">L1 Misses</div>
-              <div class="stat-value miss-rate">\${(l1d.misses || 0).toLocaleString()}</div>
-            </div>
-            <div class="stat-box">
-              <div class="stat-label">Total Events</div>
-              <div class="stat-value">\${(results.totalEvents || 0).toLocaleString()}</div>
-            </div>
-          </div>
-        </div>
-      \`;
+      const statsSection = section('Cache Statistics');
+      const statsGrid = element('div', 'stats-grid');
+      statsGrid.append(
+        stat('L1 Hit Rate', percent(l1d.hitRate), 'hit-rate'),
+        stat('L2 Hit Rate', percent(l2.hitRate), 'hit-rate'),
+        stat('L1 Misses', count(l1d.misses), 'miss-rate'),
+        stat('Total Events', count(results.totalEvents)),
+      );
+      statsSection.append(statsGrid);
+      content.append(statsSection);
 
-      if (results.hotLines && results.hotLines.length > 0) {
-        html += \`
-          <div class="section">
-            <div class="section-title">Hot Lines</div>
-            <div class="hot-lines">
-        \`;
-
+      if (Array.isArray(results.hotLines) && results.hotLines.length > 0) {
+        const hotSection = section('Hot Lines');
+        const hotLines = element('div', 'hot-lines');
         for (const line of results.hotLines.slice(0, 10)) {
-          html += \`
-            <div class="hot-line" onclick="goToLine('\${line.file}', \${line.line})">
-              <span class="hot-line-location">Line \${line.line}</span>
-              <span class="hot-line-stats">\${line.misses} misses (\${line.missRate.toFixed(1)}%)</span>
-            </div>
-          \`;
+          const button = element('button', 'hot-line');
+          button.type = 'button';
+          button.append(
+            element('span', 'hot-line-location', \`Line \${safeLine(line.line)}\`),
+            element('span', 'hot-line-stats', \`\${count(line.misses)} misses (\${percent(line.missRate)})\`),
+          );
+          button.addEventListener('click', () => goToLine(line.file, line.line));
+          hotLines.append(button);
         }
-
-        html += '</div></div>';
+        hotSection.append(hotLines);
+        content.append(hotSection);
       }
 
-      if (results.suggestions && results.suggestions.length > 0) {
-        html += \`
-          <div class="section">
-            <div class="section-title">Suggestions</div>
-        \`;
-
+      if (Array.isArray(results.suggestions) && results.suggestions.length > 0) {
+        const suggestionSection = section('Suggestions');
         for (const suggestion of results.suggestions.slice(0, 5)) {
-          html += \`
-            <div class="suggestion \${suggestion.severity}" onclick="goToLine('\${suggestion.file}', \${suggestion.line})">
-              <strong>\${suggestion.type}</strong> at line \${suggestion.line}<br>
-              \${suggestion.message}
-              \${suggestion.fix ? \`<br><em>Fix: \${suggestion.fix}</em>\` : ''}
-            </div>
-          \`;
+          const severity = ['high', 'medium', 'low'].includes(suggestion.severity) ? suggestion.severity : 'low';
+          const item = element('button', \`suggestion \${severity}\`);
+          item.type = 'button';
+          const heading = element('strong', '', String(suggestion.type || 'Suggestion'));
+          item.append(heading, document.createTextNode(\` at line \${safeLine(suggestion.line)}\`));
+          item.append(element('div', '', String(suggestion.message || '')));
+          if (suggestion.fix) item.append(element('em', '', \`Fix: \${String(suggestion.fix)}\`));
+          item.addEventListener('click', () => goToLine(suggestion.file, suggestion.line));
+          suggestionSection.append(item);
         }
-
-        html += '</div>';
+        content.append(suggestionSection);
       }
+    }
 
-      content.innerHTML = html;
+    function element(tag, className = '', text = '') {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text) node.textContent = text;
+      return node;
+    }
+
+    function section(title) {
+      const node = element('section', 'section');
+      node.append(element('div', 'section-title', title));
+      return node;
+    }
+
+    function stat(label, value, tone = '') {
+      const node = element('div', 'stat-box');
+      node.append(element('div', 'stat-label', label), element('div', \`stat-value \${tone}\`.trim(), value));
+      return node;
+    }
+
+    function number(value) {
+      return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+    }
+
+    function count(value) {
+      return number(value).toLocaleString();
+    }
+
+    function percent(value) {
+      return \`\${number(value).toFixed(1)}%\`;
+    }
+
+    function safeLine(value) {
+      return Number.isSafeInteger(value) && value > 0 ? value : 1;
     }
 
     function goToLine(file, line) {

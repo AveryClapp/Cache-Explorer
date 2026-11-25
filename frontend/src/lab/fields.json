@@ -1,0 +1,18 @@
+[
+  {"key":"l1d.sizeKB","label":"L1 data capacity (KiB)","group":"Cache","min":1,"max":16384,"initial":"64"},
+  {"key":"l1d.associativity","label":"L1 data associativity","group":"Cache","min":1,"max":1024,"initial":"8"},
+  {"key":"cache.lineSize","label":"Cache line size (bytes)","group":"Cache","min":16,"max":4096,"initial":"64"},
+  {"key":"prefetch.policy","label":"Prefetch policy","group":"Cache","values":["none","next","stream","stride","adaptive","intel"],"initial":"stride"},
+  {"key":"tlb.pageSize","label":"Page size (bytes)","group":"Translation","min":4096,"max":1073741824,"initial":"2097152"},
+  {"key":"dtlb.entries","label":"Data TLB entries","group":"Translation","min":1,"max":65536,"initial":"128"},
+  {"key":"dtlb.associativity","label":"Data TLB associativity","group":"Translation","min":1,"max":1024,"initial":"4"},
+  {"key":"itlb.entries","label":"Instruction TLB entries","group":"Translation","min":1,"max":65536,"initial":"128"},
+  {"key":"itlb.associativity","label":"Instruction TLB associativity","group":"Translation","min":1,"max":1024,"initial":"4"},
+  {"key":"tlb.missPenaltyCycles","label":"TLB miss penalty (cycles)","group":"Translation","min":1,"max":100000,"initial":"30"},
+  {"key":"memory.dramCycles","label":"DRAM latency (cycles)","group":"Memory","min":1,"max":100000,"initial":"100"},
+  {"key":"memory.assumedMlp","label":"Assumed independent memory accesses","group":"Memory","min":1,"max":64,"initial":"4"},
+  {"key":"memory.bandwidthBytesPerCycle","label":"Assumed DRAM capacity (bytes/cycle)","group":"Memory","min":1,"max":1024,"initial":"8"},
+  {"key":"execution.robSize","label":"Reorder window (instructions)","group":"Execution","min":1,"max":8192,"initial":"256"},
+  {"key":"execution.issueWidth","label":"Issue width (instructions/cycle)","group":"Execution","min":1,"max":32,"initial":"4"},
+  {"key":"branch.predictor","label":"Branch predictor","group":"Execution","values":["bimodal-2bit","static-not-taken","gshare"],"initial":"gshare"}
+]

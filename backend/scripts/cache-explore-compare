@@ -189,7 +189,7 @@ if [[ "$OPT_LEVEL" == "-O0" ]]; then
 fi
 
 if [[ -z "$JSON_OUTPUT" ]]; then
-  echo "=== Cache Explorer Compare ===" >&2
+  echo "=== Hardware Explorer Preview Comparison ===" >&2
   echo "Source: $INPUT_FILE" >&2
   echo "Configs: $CONFIGS" >&2
   echo "" >&2
@@ -233,7 +233,8 @@ IFS=',' read -ra CONFIG_ARRAY <<< "$CONFIGS"
 
 RESULT_DIR=$(mktemp -d /tmp/cache-explore-compare-results.XXXXXX)
 RESULT_ARGS=()
-SIM_COMMON_ARGS=(--json)
+# The LLVM runtime trace ends with a completeness trailer; report it.
+SIM_COMMON_ARGS=(--json --expect-trace-end)
 
 if [[ -n "$PREFETCH" ]]; then
   SIM_COMMON_ARGS+=(--prefetch "$PREFETCH")

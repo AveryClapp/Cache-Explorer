@@ -1,13 +1,14 @@
 openapi: 3.0.3
 info:
-  title: Cache Explorer API
+  title: Hardware Explorer Preview API
   version: 1.0.0
   description: |
-    Cache Explorer is a visual cache profiler that shows how code interacts with CPU cache hierarchies.
-    This API provides endpoints for compiling and profiling C/C++/Rust code, sharing code snippets,
-    and monitoring server health.
+    Hardware Explorer is a Preview, local-first CPU performance modeling workbench for source code.
+    It is not a GPU, storage, or network model, and its cycle estimates are not cycle-accurate simulation.
+    This API provides endpoints for compiling and profiling supported source code, comparing directional
+    CPU profiles, sharing local analysis state, and monitoring server health.
   contact:
-    name: Cache Explorer
+    name: Hardware Explorer
   license:
     name: MIT
 
@@ -1592,7 +1593,9 @@ components:
             $ref: '#/components/schemas/CacheEvent'
         hotLines:
           type: array
-          description: Source lines with most cache activity
+          description: >-
+            Top source lines by each per-line metric (L1 misses, memory misses,
+            stall cycles, branch mispredictions), ordered by L1 misses
           items:
             $ref: '#/components/schemas/HotLine'
         suggestions:
@@ -1600,6 +1603,36 @@ components:
           description: Optimization suggestions
           items:
             type: string
+        traceCompleteness:
+          $ref: '#/components/schemas/TraceCompleteness'
+
+    TraceCompleteness:
+      type: object
+      description: >-
+        Whether the LLVM runtime trace is complete. Present only for
+        instrumented runs (cache-sim --expect-trace-end); absent for Pin,
+        binary and hand-written traces.
+      required: [endMarker, limitReached, eventsEmitted, eventsObserved]
+      properties:
+        endMarker:
+          type: boolean
+          description: >-
+            False when the program terminated abnormally (crash or signal)
+            before the runtime wrote its end-of-trace trailer; results then
+            cover only the events traced before it stopped.
+          example: true
+        limitReached:
+          type: boolean
+          description: True when the event limit cut the trace off.
+          example: false
+        eventsEmitted:
+          type: integer
+          description: Events written to the trace and simulated
+          example: 500
+        eventsObserved:
+          type: integer
+          description: Events the program generated, including those past the limit
+          example: 500
 
     CompareResult:
       type: object
@@ -1866,15 +1899,36 @@ components:
           type: string
           description: Source file name
           example: main.c
-        accesses:
+        hits:
           type: integer
-          description: Number of accesses from this line
-          example: 500
-        hitRate:
+          description: L1 hits from this line
+          example: 460
+        misses:
+          type: integer
+          description: L1 misses from this line
+          example: 40
+        missRate:
           type: number
           format: float
-          description: Hit rate for this line
-          example: 0.92
+          description: L1 miss rate for this line
+          example: 0.08
+        memoryMisses:
+          type: integer
+          description: Accesses from this line that missed every cache level
+          example: 12
+        stallCycles:
+          type: integer
+          description: >-
+            Estimated stall cycles charged to this line (memory, front end and
+            branch). Absent when the execution model is off (cache segments).
+          example: 4800
+        branchMispredictions:
+          type: integer
+          description: Branch mispredictions at this line. Absent when the execution model is off.
+          example: 3
+        threads:
+          type: integer
+          description: Threads that touched this line (multi-core runs only)
 
     CompileError:
       type: object

@@ -1,0 +1,119 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   DESIGN TOKENS
+
+   The only place colors, type, spacing and motion values are defined.
+   Every other stylesheet refers to these; `npm run tokens:check` enforces it.
+   Dark is the default; [data-theme="light"] swaps the color tokens only.
+   ══════════════════════════════════════════════════════════════════════════ */
+:root {
+  color-scheme: dark;
+
+  /* ─── Surfaces, back to front ─── */
+  --void: #191a1d;
+  --panel: #212329;
+  --surface: #282b32;
+  --elevated: #333740;
+
+  /* ─── Borders ─── */
+  --border: #3e434d;
+  --border-strong: #555d6b;
+
+  /* ─── Accent (actions, selection, focus) ─── */
+  --accent: #9db7df;
+  --accent-dim: #7898c5;
+  --accent-glow: rgba(157, 183, 223, 0.18);
+  --accent-subtle: rgba(157, 183, 223, 0.12);
+  --accent-foreground: #14171d;
+
+  /* ─── Text, most to least prominent ─── */
+  --text-bright: #f0f2f4;
+  --text-primary: #c9ced6;
+  --text-secondary: #a2aab7;
+  --text-muted: #8693a6;
+
+  /* ─── Signals ─── */
+  --signal-excellent: #91c9a5;
+  --signal-good: #b4c99a;
+  --signal-warning: #d9b875;
+  --signal-critical: #e27060;
+  --signal-info: #9db7df;
+
+  /* ─── Cache heat (cold → warm) ─── */
+  --heat-cold: #243146;
+  --heat-warm: #6a5738;
+
+  /* ─── Elevation ─── */
+  --backdrop: rgba(0, 0, 0, 0.6);
+  --shadow-panel: 0 14px 36px rgba(0, 0, 0, 0.28);
+  --shadow-popover: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --shadow-dialog: 0 20px 60px rgba(0, 0, 0, 0.5);
+  --shadow-raised: 0 4px 12px rgba(0, 0, 0, 0.15);
+
+  /* ─── Typography ─── */
+  --font-body: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-code: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+
+  --text-2xs: 0.625rem;   /* 10px */
+  --text-xs: 0.6875rem;   /* 11px */
+  --text-sm: 0.75rem;     /* 12px */
+  --text-base: 0.8125rem; /* 13px */
+  --text-md: 0.875rem;    /* 14px */
+  --text-lg: 1rem;        /* 16px */
+  --text-xl: 1.25rem;     /* 20px */
+  --text-2xl: 1.5rem;     /* 24px */
+  --text-3xl: 2rem;       /* 32px */
+
+  /* ─── Spacing ─── */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+
+  /* ─── Radii ─── */
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  /* ─── Motion ─── */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+
+  /* ─── Layout ─── */
+  --header-height: 52px;
+  --toolbar-height: 40px;
+  --sidebar-width: 264px;
+  --results-width: 420px;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  --void: #f6f5f2;
+  --panel: #ffffff;
+  --surface: #f0efeb;
+  --elevated: #e5e3dd;
+
+  --border: #d5d2ca;
+  --border-strong: #bdb8ad;
+
+  --accent: #486f9f;
+  --accent-dim: #34577f;
+  --accent-glow: rgba(72, 111, 159, 0.12);
+  --accent-subtle: rgba(72, 111, 159, 0.08);
+  --accent-foreground: #ffffff;
+
+  --text-bright: #202226;
+  --text-primary: #414750;
+  --text-secondary: #5b616a;
+  --text-muted: #696c72;
+
+  --signal-excellent: #447756;
+  --signal-good: #5a7440;
+  --signal-warning: #886822;
+  --signal-critical: #b64a3e;
+  --signal-info: #486f9f;
+}

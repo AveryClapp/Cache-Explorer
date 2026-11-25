@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: docker/Dockerfile.frontend
     ports:
-      - "8080:80"
+      - "127.0.0.1:8080:80"
     depends_on:
       backend:
         condition: service_healthy
@@ -21,9 +21,12 @@ services:
       context: .
       dockerfile: docker/Dockerfile.backend
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
     environment:
       - NODE_ENV=production
+      - HOST=0.0.0.0
+      # Required only for the private Compose bridge; host publishing remains loopback-only.
+      - HARDWARE_EXPLORER_ALLOW_NON_LOOPBACK_DIRECT=1
       - PORT=3001
     # Security: limit resources
     deploy:

@@ -3,7 +3,7 @@
 function usage() {
   console.log(`Usage: cache-explore profiles [options] [profile-id]
 
-List hardware profiles modeled by Cache Explorer.
+List CPU profiles modeled by Hardware Explorer Preview.
 
 Options:
   --json       Output JSON

@@ -16,7 +16,7 @@ interface CommandPaletteProps {
   onQueryChange: (query: string) => void
   onSelect: (cmd: CommandItem) => void
   onClose: () => void
-  onNavigate: (delta: number) => void
+  onSelectIndex: (index: number) => void
   inputRef: React.RefObject<HTMLInputElement | null>
   commands: CommandItem[]
 }
@@ -45,7 +45,7 @@ export function CommandPalette({
   onQueryChange,
   onSelect,
   onClose,
-  onNavigate,
+  onSelectIndex,
   inputRef,
   commands
 }: CommandPaletteProps) {
@@ -90,10 +90,10 @@ export function CommandPalette({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      onNavigate(1)
+      onSelectIndex(Math.min(flatFiltered.length - 1, selectedIndex + 1))
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
-      onNavigate(-1)
+      onSelectIndex(Math.max(0, selectedIndex - 1))
     } else if (e.key === 'Enter' && flatFiltered[selectedIndex]) {
       e.preventDefault()
       onSelect(flatFiltered[selectedIndex])
@@ -110,69 +110,70 @@ export function CommandPalette({
     onQueryChange('')
   }
 
+  const optionId = (index: number) => `command-option-${index}`
+
+  const renderItem = (cmd: (typeof flatFiltered)[number], index: number) => (
+    <div
+      key={cmd.id}
+      id={optionId(index)}
+      role="option"
+      aria-selected={index === selectedIndex}
+      className={`command-item ${index === selectedIndex ? 'selected' : ''}`}
+      onClick={() => onSelect(cmd)}
+      onMouseEnter={() => onSelectIndex(index)}
+    >
+      <span className="command-item-label">{cmd.label}</span>
+      {cmd.shortcut && <span className="command-item-shortcut">{cmd.shortcut}</span>}
+    </div>
+  )
+
   // Render grouped or flat list
   const renderCommands = () => {
     if (showGrouped) {
       let globalIndex = 0
       return groupedCommands.map(group => (
-        <div key={group.category} className="command-group">
-          <div className="command-group-header">{CATEGORY_LABELS[group.category]}</div>
+        <div key={group.category} className="command-group" role="group" aria-labelledby={`command-group-${group.category}`}>
+          <div className="command-group-header" id={`command-group-${group.category}`}>{CATEGORY_LABELS[group.category]}</div>
           {group.items.map(cmd => {
             const idx = globalIndex++
-            return (
-              <div
-                key={cmd.id}
-                className={`command-item ${idx === selectedIndex ? 'selected' : ''}`}
-                onClick={() => onSelect(cmd)}
-                onMouseEnter={() => onNavigate(idx - selectedIndex)}
-              >
-                <span className="command-item-icon">{cmd.icon}</span>
-                <span className="command-item-label">{cmd.label}</span>
-                {cmd.shortcut && <span className="command-item-shortcut">{cmd.shortcut}</span>}
-              </div>
-            )
+            return renderItem(cmd, idx)
           })}
         </div>
       ))
     }
-    return flatFiltered.map((cmd, i) => (
-      <div
-        key={cmd.id}
-        className={`command-item ${i === selectedIndex ? 'selected' : ''}`}
-        onClick={() => onSelect(cmd)}
-        onMouseEnter={() => onNavigate(i - selectedIndex)}
-      >
-        <span className="command-item-icon">{cmd.icon}</span>
-        <span className="command-item-label">{cmd.label}</span>
-        {cmd.shortcut && <span className="command-item-shortcut">{cmd.shortcut}</span>}
-      </div>
-    ))
+    return flatFiltered.map((cmd, i) => renderItem(cmd, i))
   }
 
   return (
     <div className="command-palette-overlay" onClick={onClose}>
-      <div className="command-palette" onClick={e => e.stopPropagation()}>
+      <div className="command-palette" role="dialog" aria-modal="true" aria-label="Command palette" onClick={e => e.stopPropagation()}>
         <div className="command-input-wrapper">
           {activePrefix ? (
-            <span className="command-filter-badge" onClick={clearPrefix}>
+            <button type="button" className="command-filter-badge" onClick={clearPrefix} aria-label={`Clear ${CATEGORY_LABELS[activeCategory!].toLowerCase()} filter`}>
               {CATEGORY_LABELS[activeCategory!]} {activePrefix}
-              <span className="badge-clear">×</span>
-            </span>
+              <span className="badge-clear" aria-hidden="true">×</span>
+            </button>
           ) : (
-            <span className="command-icon">/</span>
+            <span className="command-icon" aria-hidden="true">/</span>
           )}
           <input
             ref={inputRef}
             type="text"
             className="command-input"
-            placeholder={activePrefix ? `Search ${CATEGORY_LABELS[activeCategory!].toLowerCase()}...` : '> examples  : settings  @ actions  * config'}
+            role="combobox"
+            aria-label="Search commands"
+            aria-expanded="true"
+            aria-controls="command-list"
+            aria-autocomplete="list"
+            aria-activedescendant={flatFiltered.length > 0 ? optionId(selectedIndex) : undefined}
+            placeholder={activePrefix ? `Search ${CATEGORY_LABELS[activeCategory!].toLowerCase()}...` : 'Search commands and examples'}
             value={query}
             onChange={e => onQueryChange(e.target.value)}
             onKeyDown={handleKeyDown}
             autoFocus
           />
         </div>
-        <div className="command-list">
+        <div className="command-list" id="command-list" role="listbox" aria-label="Commands">
           {renderCommands()}
           {flatFiltered.length === 0 && (
             <div className="command-empty">No matching commands</div>

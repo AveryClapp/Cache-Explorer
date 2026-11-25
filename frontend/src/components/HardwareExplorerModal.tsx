@@ -1,6 +1,7 @@
 import type { HardwareProfile } from '../types'
 import { exportHardwareProfilesAsCSV, exportHardwareProfilesAsJSON } from '../utils/export'
 import { HardwareProfilePanel } from './HardwareProfilePanel'
+import { useDismissableDetails } from '../hooks/useDismissableDetails'
 
 interface HardwareExplorerModalProps {
   profiles: HardwareProfile[]
@@ -15,7 +16,6 @@ interface HardwareExplorerModalProps {
   onCompareRunSet: () => void
   onOpenExperiment: () => void
   onRefresh: () => void
-  onClose: () => void
 }
 
 function formatSize(sizeKB: number) {
@@ -139,8 +139,9 @@ export function HardwareExplorerModal({
   onCompareRunSet,
   onOpenExperiment,
   onRefresh,
-  onClose,
 }: HardwareExplorerModalProps) {
+  const moreRef = useDismissableDetails()
+  const closeMore = () => { if (moreRef.current) moreRef.current.open = false }
   const selected = profiles.find(profile => profile.id === selectedId) || profiles[0]
   const selectedTrust = selected ? trustSnapshot(selected) : null
   const runProfiles = runConfigIds
@@ -160,7 +161,7 @@ export function HardwareExplorerModal({
       format: (value: number) => `${value.toLocaleString()} cycles`,
     },
     {
-      label: 'Widest Core',
+      label: 'Widest core',
       best: bestProfile(diffProfiles, profile => profile.details?.executionCore.issueWidth),
       format: (value: number) => `${value}-wide`,
     },
@@ -172,16 +173,17 @@ export function HardwareExplorerModal({
   ].filter(item => item.best)
 
   return (
-    <div className="batch-modal-overlay" onClick={() => !loading && onClose()}>
+    <section className="batch-modal-overlay product-surface-overlay" aria-labelledby="hardware-explorer-title">
       <div
-        className="batch-modal hardware-explorer-modal"
-        onClick={event => event.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
+        className="batch-modal hardware-explorer-modal product-surface-panel"
+        role="region"
         aria-labelledby="hardware-explorer-title"
       >
         <div className="batch-modal-header">
-          <span className="batch-modal-title" id="hardware-explorer-title">Hardware Explorer</span>
+          <div className="product-surface-title">
+            <h1 className="batch-modal-title" id="hardware-explorer-title">CPU profiles</h1>
+            <p>Inspect model coverage, confidence, and the profiles used for comparisons.</p>
+          </div>
           <div className="hardware-explorer-actions">
             <span className="hardware-run-set-count">{runConfigIds.length} selected</span>
             <button
@@ -189,7 +191,7 @@ export function HardwareExplorerModal({
               onClick={onCompareRunSet}
               disabled={loading || runConfigIds.length === 0}
             >
-              Compare Set
+              Compare set
             </button>
             <button
               className="btn"
@@ -200,27 +202,40 @@ export function HardwareExplorerModal({
             </button>
             <button
               className="btn"
-              onClick={() => selected && exportHardwareProfilesAsCSV(diffProfiles, selected)}
-              disabled={loading || !selected || diffProfiles.length === 0}
-            >
-              Export CSV
-            </button>
-            <button
-              className="btn"
-              onClick={() => selected && exportHardwareProfilesAsJSON(diffProfiles, selected)}
-              disabled={loading || !selected || diffProfiles.length === 0}
-            >
-              Export JSON
-            </button>
-            <button
-              className="btn"
               onClick={() => selected && onApply(selected.id)}
               disabled={loading || !selected || selected.id === activeId}
             >
-              Use Profile
+              Use profile
             </button>
-            <button className="btn" onClick={onRefresh} disabled={loading}>Refresh</button>
-            <button className="batch-modal-close" onClick={onClose} aria-label="Close hardware explorer">×</button>
+            <details ref={moreRef} className="actions-more">
+              <summary className="btn">More <span aria-hidden="true">▾</span></summary>
+              <div className="popover-menu">
+                <button
+                  type="button"
+                  className="popover-menu-item"
+                  onClick={() => { if (selected) exportHardwareProfilesAsCSV(diffProfiles, selected); closeMore() }}
+                  disabled={loading || !selected || diffProfiles.length === 0}
+                >
+                  Export CSV
+                </button>
+                <button
+                  type="button"
+                  className="popover-menu-item"
+                  onClick={() => { if (selected) exportHardwareProfilesAsJSON(diffProfiles, selected); closeMore() }}
+                  disabled={loading || !selected || diffProfiles.length === 0}
+                >
+                  Export JSON
+                </button>
+                <button
+                  type="button"
+                  className="popover-menu-item"
+                  onClick={() => { onRefresh(); closeMore() }}
+                  disabled={loading}
+                >
+                  Refresh profiles
+                </button>
+              </div>
+            </details>
           </div>
         </div>
         <div className="batch-modal-content hardware-explorer-content">
@@ -234,7 +249,7 @@ export function HardwareExplorerModal({
                   className="hardware-profile-row-main"
                   onClick={() => onSelect(profile.id)}
                   aria-pressed={profile.id === selected?.id}
-                  aria-label={`Select hardware profile ${profile.displayName}`}
+                  aria-label={`Select CPU profile ${profile.displayName}`}
                 >
                   <span className="hardware-profile-row-heading">
                     <span className="hardware-profile-row-name">{profile.displayName}</span>
@@ -250,7 +265,7 @@ export function HardwareExplorerModal({
                     aria-label={`Include ${profile.displayName} in compare and experiment runs`}
                     onChange={() => onToggleRunConfig(profile.id)}
                   />
-                  <span>Run</span>
+                  <span>Include</span>
                 </label>
               </div>
             ))}
@@ -269,7 +284,7 @@ export function HardwareExplorerModal({
                 {selectedTrust && (
                   <div className="hardware-trust-snapshot" aria-label="Hardware trust snapshot">
                     <div className="hardware-trust-heading">
-                      <span className="profile-detail-title">Trust Snapshot</span>
+                      <span className="profile-detail-title">Trust snapshot</span>
                       <span className={`profile-confidence ${selected.modelConfidence}`}>
                         {formatToken(selected.modelConfidence)}
                       </span>
@@ -320,7 +335,7 @@ export function HardwareExplorerModal({
                   <div className="hardware-run-set-matrix">
                     <div className="hardware-run-set-header">
                       <div>
-                        <div className="profile-detail-title">Run Set Diff</div>
+                        <div className="profile-detail-title">Run set diff</div>
                         <div className="hardware-run-set-baseline">
                           Compared against {selected.displayName}
                         </div>
@@ -386,6 +401,6 @@ export function HardwareExplorerModal({
           </div>
         </div>
       </div>
-    </div>
+    </section>
   )
 }

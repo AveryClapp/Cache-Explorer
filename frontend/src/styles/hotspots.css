@@ -10,12 +10,12 @@
   border-radius: var(--radius-md);
   margin-bottom: var(--space-2);
   cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
+  transition: background-color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
 }
 
 .hotspot:hover {
   background: var(--surface);
-  border-color: var(--phosphor-dim);
+  border-color: var(--accent-dim);
 }
 
 .hotspot:last-child {
@@ -36,7 +36,7 @@
 }
 
 .hotspot-stats {
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-size: var(--text-xs);
   color: var(--text-secondary);
 }
@@ -73,8 +73,8 @@
 
 /* ─── Hot Line Comparison Styles ─── */
 .hotspot-delta {
-  margin-left: 8px;
-  font-size: 11px;
+  margin-left: var(--space-2);
+  font-size: var(--text-xs);
   font-weight: 600;
 }
 
@@ -87,7 +87,7 @@
 }
 
 .hotspot-rate {
-  margin-left: 4px;
+  margin-left: var(--space-1);
   opacity: 0.7;
 }
 
@@ -95,13 +95,13 @@
   margin-left: 6px;
   padding: 1px 6px;
   border-radius: 3px;
-  font-size: 9px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   text-transform: uppercase;
 }
 
 .hotspot-badge.new {
-  background: rgba(220, 220, 170, 0.2);
+  background: color-mix(in srgb, var(--signal-warning) 20%, transparent);
   color: var(--signal-warning);
 }
 
@@ -143,7 +143,7 @@
 }
 
 .hotspot-resolved {
-  background: rgba(76, 175, 80, 0.05);
+  background: color-mix(in srgb, var(--signal-excellent) 5%, transparent);
   border-left: 3px solid var(--signal-good);
 }
 
@@ -153,8 +153,44 @@
 }
 
 /* ─── Toggle Buttons ─── */
-.toggle-buttons {
-  display: flex;
+
+/* Hot lines: metric selector and file filter */
+.hotlines-panel .panel-header {
+  justify-content: flex-start;
   gap: var(--space-2);
-  margin: var(--space-4) 0;
+}
+
+.hotline-metric {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-inline-start: auto;
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+}
+
+.hotline-metric select,
+.file-filter select {
+  padding: 2px var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--text-xs);
+}
+
+.file-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-block-end: 1px solid var(--border);
+  font-size: var(--text-xs);
+}
+
+.hotspots-empty {
+  padding: var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
 }

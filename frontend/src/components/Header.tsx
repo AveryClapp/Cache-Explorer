@@ -1,7 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useDismissableDetails } from "../hooks/useDismissableDetails";
 import type { CacheResult, EnvironmentHealth, Stage } from "../types";
+import { STAGE_TEXT } from "../constants";
+import { isCompareArea, productHref, type ProductArea } from "../utils/productArea";
 
 interface HeaderProps {
+  activeProductArea: ProductArea;
+  compareArea: ProductArea;
   theme: "dark" | "light";
   diffMode: boolean;
   baselineResult: CacheResult | null;
@@ -16,23 +20,14 @@ interface HeaderProps {
   onSetDiffMode: (mode: boolean) => void;
   onSetBaseline: (result: CacheResult) => void;
   onClearBaseline: () => void;
-  onCompareHardware: () => void;
+  onOpenAnalyze: () => void;
+  onNavigate: (area: ProductArea) => void;
   onExploreHardware: () => void;
   onOpenWorkloads: () => void;
-  onRunExperiment: () => void;
+  onPreloadProductArea: (area: ProductArea) => void;
   onRun: () => void;
   onCancel: () => void;
 }
-
-const stageText: Record<Stage, string> = {
-  idle: "",
-  connecting: "Connecting...",
-  preparing: "Preparing...",
-  compiling: "Compiling...",
-  running: "Running...",
-  processing: "Processing...",
-  done: "",
-};
 
 function healthTone(health: EnvironmentHealth | null, error: string | null) {
   if (error) return "offline";
@@ -52,7 +47,7 @@ function healthLabel(health: EnvironmentHealth | null, error: string | null) {
 
 function sandboxLabel(health: EnvironmentHealth | null) {
   if (health?.sandbox === "enabled") return "Sandbox";
-  if (health?.sandbox === "disabled") return "Direct";
+  if (health?.sandbox === "disabled") return "Unsandboxed (local)";
   return "Mode ?";
 }
 
@@ -90,14 +85,56 @@ function EnvironmentStatus({
   return (
     <div className={`environment-status ${tone}`} title={title} role="status" aria-label={`Environment ${label}`}>
       <span className="environment-status-dot" />
-      <span className="environment-status-main">{label}</span>
-      <span className="environment-status-chip">{mode}</span>
+      {tone !== "healthy" && <span className="environment-status-main">{label}</span>}
       <span className="environment-status-compiler">{compiler}</span>
     </div>
   );
 }
 
+function MoreMenu({
+  links,
+  activeProductArea,
+  onPreload,
+}: {
+  links: { area: ProductArea; label: string; open: () => void }[];
+  activeProductArea: ProductArea;
+  onPreload: (area: ProductArea) => void;
+}) {
+  const ref = useDismissableDetails();
+  const active = links.find((link) => link.area === activeProductArea);
+
+  return (
+    <details ref={ref} className="header-more">
+      <summary className={`header-nav-item${active ? " active" : ""}`}>
+        {active ? active.label : "More"}
+        <span className="header-more-caret" aria-hidden="true">▾</span>
+      </summary>
+      <div className="popover-menu">
+        {links.map(({ area, label, open }) => (
+          <a
+            key={area}
+            href={productHref(area)}
+            className={`popover-menu-item${activeProductArea === area ? " active" : ""}`}
+            aria-current={activeProductArea === area ? "page" : undefined}
+            onClick={(event) => {
+              event.preventDefault();
+              if (ref.current) ref.current.open = false;
+              open();
+            }}
+            onPointerEnter={() => onPreload(area)}
+            onFocus={() => onPreload(area)}
+          >
+            {label}
+          </a>
+        ))}
+      </div>
+    </details>
+  );
+}
+
 export function Header({
+  activeProductArea,
+  compareArea,
   theme,
   diffMode,
   baselineResult,
@@ -112,42 +149,25 @@ export function Header({
   onSetDiffMode,
   onSetBaseline,
   onClearBaseline,
-  onCompareHardware,
+  onOpenAnalyze,
+  onNavigate,
   onExploreHardware,
   onOpenWorkloads,
-  onRunExperiment,
+  onPreloadProductArea,
   onRun,
   onCancel,
 }: HeaderProps) {
-  const [toolsOpen, setToolsOpen] = useState(false);
-  const toolsMenuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!toolsOpen) return;
-
-    const handlePointerDown = (event: MouseEvent) => {
-      if (toolsMenuRef.current && !toolsMenuRef.current.contains(event.target as Node)) {
-        setToolsOpen(false);
-      }
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setToolsOpen(false);
-    };
-
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [toolsOpen]);
-
-  const runToolAction = (action: () => void) => {
-    setToolsOpen(false);
-    action();
-  };
+  // Compare groups the cross-CPU, code-variant and what-if views; its link
+  // returns to whichever of them was used last.
+  const productLinks = [
+    { area: "analyze" as ProductArea, label: "Analyze", open: onOpenAnalyze, active: activeProductArea === "analyze" },
+    { area: compareArea, label: "Compare", open: () => onNavigate(compareArea), active: isCompareArea(activeProductArea) },
+    { area: "profiles" as ProductArea, label: "CPU profiles", open: onExploreHardware, active: activeProductArea === "profiles" },
+  ];
+  const moreLinks = [
+    { area: "workloads" as ProductArea, label: "Workloads", open: onOpenWorkloads },
+    { area: "binary" as ProductArea, label: "Binary profiles", open: () => onNavigate("binary") },
+  ];
 
   return (
     <header className="header">
@@ -158,31 +178,43 @@ export function Header({
             <div className="logo-layer l2"></div>
             <div className="logo-layer l1"></div>
           </div>
-          <span className="logo-title">Cache Explorer</span>
+          <span className="logo-copy">
+            <span className="logo-title-row">
+              <span className="logo-title">Hardware Explorer</span>
+              <span className="preview-badge">Preview</span>
+            </span>
+          </span>
         </div>
       </div>
 
+      <nav className="header-nav" aria-label="Product">
+        {productLinks.map(({ area, label, open, active }) => (
+          <a
+            key={label}
+            href={productHref(area)}
+            className={`header-nav-item${active ? " active" : ""}`}
+            onClick={(event) => {
+              event.preventDefault();
+              open();
+            }}
+            onPointerEnter={() => onPreloadProductArea(area)}
+            onFocus={() => onPreloadProductArea(area)}
+            aria-current={active ? "page" : undefined}
+          >
+            {label}
+          </a>
+        ))}
+        <MoreMenu links={moreLinks} activeProductArea={activeProductArea} onPreload={onPreloadProductArea} />
+      </nav>
+
       <div className="header-center">
+        {activeProductArea !== 'binary' &&
         <EnvironmentStatus
           health={environmentHealth}
           error={environmentHealthError}
           selectedCompiler={selectedCompiler}
           compilerCount={compilerCount}
-        />
-        {diffMode && baselineResult && (
-          <div className="diff-mode-badge" title="Comparing against baseline">
-            <span className="diff-mode-icon">⇄</span>
-            <span className="diff-mode-text">Diff Mode</span>
-            <button
-              className="diff-mode-exit"
-              onClick={() => onSetDiffMode(false)}
-              title="Exit diff mode"
-              aria-label="Exit diff mode"
-            >
-              ×
-            </button>
-          </div>
-        )}
+        />}
       </div>
 
       <div className="header-right">
@@ -195,108 +227,38 @@ export function Header({
           {theme === "dark" ? "☀" : "☾"}
         </button>
 
-        {!isLoading && (
-          <div className="header-tools" ref={toolsMenuRef}>
+        {/* Baseline comparison: one control, only where results live */}
+        {activeProductArea === 'analyze' && result && !isLoading && !baselineResult && (
+          <button
+            onClick={() => onSetBaseline(result)}
+            className="btn-compare"
+            title="Keep this result; the next run is compared against it"
+          >
+            Set Baseline
+          </button>
+        )}
+        {activeProductArea === 'analyze' && baselineResult && (
+          <div className={`compare-control${diffMode ? " active" : ""}`}>
             <button
-              type="button"
-              className={`btn-tools${toolsOpen ? " active" : ""}`}
-              onClick={() => setToolsOpen(open => !open)}
-              title="Open hardware, workload, and experiment tools"
-              aria-label="Tools"
-              aria-haspopup="menu"
-              aria-expanded={toolsOpen}
-              aria-controls="header-tools-menu"
+              onClick={() => onSetDiffMode(!diffMode)}
+              className={`btn-compare${diffMode ? " active" : " has-baseline"}`}
+              disabled={isLoading || !result}
+              title={diffMode ? "Hide the comparison" : "Compare the current result with the baseline"}
             >
-              Tools
-              <span className="btn-tools-caret" aria-hidden="true">{toolsOpen ? "▲" : "▼"}</span>
+              {diffMode ? "Comparing to baseline" : "Compare to baseline"}
             </button>
-            {toolsOpen && (
-              <div className="header-tools-menu" id="header-tools-menu" role="menu">
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="header-tool-item"
-                  onClick={() => runToolAction(onCompareHardware)}
-                  aria-label="Hardware"
-                >
-                  <span className="header-tool-name">Hardware</span>
-                  <span className="header-tool-desc">Compare the selected run set.</span>
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="header-tool-item"
-                  onClick={() => runToolAction(onOpenWorkloads)}
-                  aria-label="Workloads"
-                >
-                  <span className="header-tool-name">Workloads</span>
-                  <span className="header-tool-desc">Load verified, snapshot-backed cases.</span>
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="header-tool-item"
-                  onClick={() => runToolAction(onExploreHardware)}
-                  aria-label="Explore"
-                >
-                  <span className="header-tool-name">Explore</span>
-                  <span className="header-tool-desc">Inspect profiles, contracts, and caveats.</span>
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="header-tool-item"
-                  onClick={() => runToolAction(onRunExperiment)}
-                  aria-label="Experiment"
-                >
-                  <span className="header-tool-name">Experiment</span>
-                  <span className="header-tool-desc">Compare variants across hardware.</span>
-                </button>
-              </div>
-            )}
+            <button
+              onClick={onClearBaseline}
+              className="btn-icon btn-clear-baseline"
+              title="Clear baseline"
+              aria-label="Clear comparison baseline"
+            >
+              ×
+            </button>
           </div>
         )}
 
-        {/* Compare button - visible when result exists */}
-        {result && !isLoading && (
-          <button
-            onClick={() => {
-              if (!baselineResult) {
-                onSetBaseline(result);
-              } else if (diffMode) {
-                onSetDiffMode(false);
-              } else {
-                onSetDiffMode(true);
-              }
-            }}
-            className={`btn-compare ${baselineResult ? (diffMode ? "active" : "has-baseline") : ""}`}
-            title={
-              !baselineResult
-                ? "Set current result as baseline for comparison"
-                : diffMode
-                  ? "Exit comparison mode"
-                  : "Compare with baseline"
-            }
-          >
-            {!baselineResult
-              ? "Set Baseline"
-              : diffMode
-                ? "Exit Compare"
-                : "Compare"}
-          </button>
-        )}
-        {baselineResult && !diffMode && (
-          <button
-            onClick={onClearBaseline}
-            className="btn-icon btn-clear-baseline"
-            title="Clear baseline"
-            aria-label="Clear comparison baseline"
-          >
-            ×
-          </button>
-        )}
-
-        {isLoading ? (
+        {activeProductArea === 'analyze' && (isLoading ? (
           <button
             onClick={onCancel}
             className="btn-cancel"
@@ -304,14 +266,14 @@ export function Header({
             aria-label="Cancel analysis"
           >
             <span className="btn-spinner" />
-            {stageText[stage]}
+            {STAGE_TEXT[stage]}
             <span className="cancel-x">×</span>
           </button>
         ) : (
           <button onClick={onRun} className="btn-primary">
-            Execute
+            Run analysis
           </button>
-        )}
+        ))}
       </div>
     </header>
   );

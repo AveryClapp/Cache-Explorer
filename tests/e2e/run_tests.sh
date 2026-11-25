@@ -1060,6 +1060,37 @@ test_fast_mode() {
   fi
 }
 
+test_nonzero_program_exit() {
+  local test_name="nonzero_program_exit"
+  if ! should_run "$test_name"; then return; fi
+
+  local test_dir="/tmp/cache-test-exit-status-$$"
+  mkdir -p "$test_dir"
+  cat > "$test_dir/main.c" << 'EOF'
+int main(void) {
+    static int data[1024];
+    int sum = 0;
+    for (int i = 0; i < 1024; i++) sum += data[i] + i;
+    return sum > 0 ? 42 : 0;
+}
+EOF
+
+  # A program's own exit status is not an analysis failure.
+  local output
+  if ! output=$("$CACHE_EXPLORE" "$test_dir/main.c" --json 2>/dev/null); then
+    fail "$test_name" "Analysis failed because the analyzed program returned nonzero"
+    rm -rf "$test_dir"
+    return
+  fi
+  rm -rf "$test_dir"
+
+  if echo "$output" | grep -q '"l1d"'; then
+    pass "$test_name"
+  else
+    fail "$test_name" "No L1d results for a program that returned nonzero"
+  fi
+}
+
 # ==============================================================================
 # Main
 # ==============================================================================
@@ -1092,6 +1123,7 @@ test_memcpy_tracking
 test_atomic_tracking
 test_vector_operations
 test_fast_mode
+test_nonzero_program_exit
 
 # Summary
 echo ""

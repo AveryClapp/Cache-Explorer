@@ -25,7 +25,10 @@ function downloadJSON(filename: string, payload: unknown) {
 
 function csvCell(value: unknown) {
   if (value === null || value === undefined) return ''
-  const text = String(value)
+  let text = String(value)
+  if (typeof value === 'string' && /^[=+\-@\t\r]/.test(text)) {
+    text = `'${text}`
+  }
   return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
 }
 

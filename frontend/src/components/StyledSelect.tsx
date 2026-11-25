@@ -6,6 +6,8 @@ interface StyledSelectProps {
   options: SelectOption[]
   onChange: (value: string) => void
   placeholder?: string
+  /** Accessible name; the visible toolbar labels are not linked to this widget. */
+  label?: string
 }
 
 export function StyledSelect({
@@ -13,6 +15,7 @@ export function StyledSelect({
   options,
   onChange,
   placeholder = 'Select...',
+  label,
 }: StyledSelectProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
@@ -132,11 +135,11 @@ export function StyledSelect({
       role="combobox"
       aria-expanded={isOpen}
       aria-haspopup="listbox"
-      aria-label={placeholder}
+      aria-label={label ?? placeholder}
     >
       <div className="styled-select-trigger" onClick={() => setIsOpen(!isOpen)}>
         <span className="styled-select-value">{selectedOption?.label || placeholder}</span>
-        <span className="styled-select-arrow">{isOpen ? '▲' : '▼'}</span>
+        <span className="styled-select-arrow" aria-hidden="true">▼</span>
       </div>
       {isOpen && (
         <div ref={listRef} className="styled-select-dropdown" role="listbox">

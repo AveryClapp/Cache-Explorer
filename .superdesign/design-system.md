@@ -7,8 +7,9 @@ Cache Explorer is an engineering workbench for modeling cache and hardware behav
 ## Visual Direction
 
 - Use a quiet graphite workspace, not a neon lab-console theme.
-- Primary accent: muted blue via `--phosphor`, used for focus, selected rows, and primary actions.
-- Supporting signal colors: sage for modeled/success, olive for good, amber for caution, softened red for critical.
+- Tokens: every color, type size, space, radius, shadow and motion value lives in `frontend/src/styles/tokens.css`, with the light theme under `[data-theme="light"]` in the same file. Other stylesheets only reference tokens; `npm run tokens:check` fails on raw colors elsewhere and on unused tokens.
+- Primary accent: muted blue via `--accent` (`--accent-dim`, `--accent-subtle`, `--accent-glow`), used for focus, selected rows, and primary actions.
+- Supporting signal colors: sage (`--signal-excellent`) for modeled/success, olive (`--signal-good`) for good, amber (`--signal-warning`) for caution, softened red (`--signal-critical`) for critical, blue (`--signal-info`) for neutral information. Tinted chips mix the signal with `transparent` via `color-mix` rather than using new colors.
 - Surfaces: `--void`, `--panel`, `--surface`, and `--elevated` should feel layered but not black-on-black.
 - Typography: system sans for UI chrome; JetBrains Mono only for code, values, and reproducible command text.
 - Radii stay compact but less severe: 3px, 6px, 8px.
