@@ -18,9 +18,11 @@ function installShutdownHooks() {
   shutdownHooksInstalled = true;
   process.once('exit', killActiveProcessGroups);
   for (const signalName of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+    // The server's own handlers drain in-flight requests and then exit, which
+    // the 'exit' hook covers. Only take over signals nobody else handles.
+    if (process.listenerCount(signalName) > 0) continue;
     process.once(signalName, () => {
       killActiveProcessGroups();
-      // The once-listener is gone; re-raise for the default termination.
       if (process.listenerCount(signalName) === 0) process.kill(process.pid, signalName);
     });
   }

@@ -61,7 +61,6 @@ import {
 import { createFileTab, getFileExtension } from './utils/file'
 
 // Utilities
-import { fuzzyMatch } from './utils/formatting'
 import { decodeState } from './utils/state'
 import { matchesEditorFile } from './utils/sourcePath'
 import {
@@ -1512,12 +1511,6 @@ function App() {
     setShowCommandPalette(false)
   }, [])
 
-  const handleCommandNavigate = (delta: number) => {
-    const filtered = commandQuery
-      ? commands.filter(cmd => fuzzyMatch(commandQuery, cmd.label) || fuzzyMatch(commandQuery, cmd.category || ''))
-      : commands
-    setSelectedCommandIndex(prev => Math.max(0, Math.min(filtered.length - 1, prev + delta)))
-  }
 
   const openAnalyzeWorkspace = () => {
     navigateProductArea('analyze')
@@ -1534,10 +1527,10 @@ function App() {
             isOpen={showCommandPalette}
             query={commandQuery}
             selectedIndex={selectedCommandIndex}
-            onQueryChange={setCommandQuery}
+            onQueryChange={query => { setCommandQuery(query); setSelectedCommandIndex(0) }}
             onSelect={handleCommandSelect}
             onClose={() => setShowCommandPalette(false)}
-            onNavigate={handleCommandNavigate}
+            onSelectIndex={setSelectedCommandIndex}
             inputRef={commandInputRef}
             commands={commands}
           />

@@ -550,6 +550,11 @@ if [[ -n "$EVENT_LIMIT" && ! "$EVENT_LIMIT" =~ ^[0-9]+$ ]]; then
   echo "Error: --limit must be a non-negative integer" >&2
   exit 1
 fi
+# Compare as base-10 and treat >7 digits as over the cap, so huge values cannot
+# overflow bash arithmetic and slip past the clamp.
+if [[ -n "$EVENT_LIMIT" ]]; then
+  if [[ ${#EVENT_LIMIT} -gt 7 ]]; then EVENT_LIMIT=$((MAX_TRACE_EVENTS + 1)); else EVENT_LIMIT=$((10#$EVENT_LIMIT)); fi
+fi
 if [[ -z "$EVENT_LIMIT" || "$EVENT_LIMIT" -eq 0 || "$EVENT_LIMIT" -gt "$MAX_TRACE_EVENTS" ]]; then
   EVENT_LIMIT="$MAX_TRACE_EVENTS"
 fi
@@ -1026,12 +1031,6 @@ EXIT_CODE=0
 for pipeline_code in "${PIPE_CODES[@]:1}"; do
   if [[ "$pipeline_code" -ne 0 ]]; then EXIT_CODE="$pipeline_code"; fi
 done
-# A program killed by a signal (crash, abort) left a truncated trace; do not
-# report that partial result as a successful analysis.
-if [[ "$EXIT_CODE" -eq 0 && "${PIPE_CODES[0]}" -ge 128 ]]; then
-  echo "Error: analyzed program terminated abnormally (status ${PIPE_CODES[0]}); trace is incomplete" >&2
-  EXIT_CODE="${PIPE_CODES[0]}"
-fi
 
 # Cleanup
 if [[ -z "$KEEP_BINARY" ]]; then

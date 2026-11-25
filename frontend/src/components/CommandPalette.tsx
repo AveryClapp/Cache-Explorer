@@ -16,7 +16,7 @@ interface CommandPaletteProps {
   onQueryChange: (query: string) => void
   onSelect: (cmd: CommandItem) => void
   onClose: () => void
-  onNavigate: (delta: number) => void
+  onSelectIndex: (index: number) => void
   inputRef: React.RefObject<HTMLInputElement | null>
   commands: CommandItem[]
 }
@@ -45,7 +45,7 @@ export function CommandPalette({
   onQueryChange,
   onSelect,
   onClose,
-  onNavigate,
+  onSelectIndex,
   inputRef,
   commands
 }: CommandPaletteProps) {
@@ -90,10 +90,10 @@ export function CommandPalette({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      onNavigate(1)
+      onSelectIndex(Math.min(flatFiltered.length - 1, selectedIndex + 1))
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
-      onNavigate(-1)
+      onSelectIndex(Math.max(0, selectedIndex - 1))
     } else if (e.key === 'Enter' && flatFiltered[selectedIndex]) {
       e.preventDefault()
       onSelect(flatFiltered[selectedIndex])
@@ -120,7 +120,7 @@ export function CommandPalette({
       aria-selected={index === selectedIndex}
       className={`command-item ${index === selectedIndex ? 'selected' : ''}`}
       onClick={() => onSelect(cmd)}
-      onMouseEnter={() => onNavigate(index - selectedIndex)}
+      onMouseEnter={() => onSelectIndex(index)}
     >
       <span className="command-item-label">{cmd.label}</span>
       {cmd.shortcut && <span className="command-item-shortcut">{cmd.shortcut}</span>}

@@ -479,7 +479,7 @@ button {
   transform: scale(0.98);
 }
 
-/* Primary "Execute" Button */
+/* Primary action button */
 .btn-primary {
   background: var(--accent);
   color: var(--accent-foreground);
