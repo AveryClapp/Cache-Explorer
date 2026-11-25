@@ -243,6 +243,10 @@ export function createShortUrl(data) {
 
   try {
     stmt.run(code, dataStr, now, now);
+    if (shareUsage) {
+      shareUsage.entries += 1;
+      shareUsage.bytes += Buffer.byteLength(dataStr);
+    }
     return code;
   } catch (e) {
     // Collision - try again (extremely rare)
@@ -253,9 +257,19 @@ export function createShortUrl(data) {
   }
 }
 
+// Upper bound on stored shares since the last full prune. Inserts add to it and
+// deletes only shrink the real usage, so while it stays under the caps (and age
+// expiry is recent) the full-table scan below can be skipped safely.
+let shareUsage = null;
+const SHARE_PRUNE_INTERVAL_MS = 60 * 1000;
+
 export function pruneShortUrls(maxEntries = 10000, maxAgeDays = 30,
                                maxTotalBytes = 64 * 1024 * 1024) {
   if (!ensureDb()) return { deleted: 0 };
+  if (shareUsage && Date.now() - shareUsage.at < SHARE_PRUNE_INTERVAL_MS &&
+      shareUsage.entries <= maxEntries && shareUsage.bytes <= maxTotalBytes) {
+    return { deleted: 0 };
+  }
 
   const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
   const expired = db.prepare('DELETE FROM short_urls WHERE created_at < ?').run(cutoff).changes;
@@ -277,6 +291,7 @@ export function pruneShortUrls(maxEntries = 10000, maxAgeDays = 30,
     FROM short_urls
   `).get()?.bytes || 0;
   let overBudget = 0;
+  let bytesRemoved = 0;
   if (totalBytes > maxTotalBytes) {
     let bytesToRemove = totalBytes - maxTotalBytes;
     const candidates = db.prepare(`
@@ -290,10 +305,16 @@ export function pruneShortUrls(maxEntries = 10000, maxAgeDays = 30,
         if (bytesToRemove <= 0) break;
         overBudget += remove.run(candidate.code).changes;
         bytesToRemove -= candidate.bytes;
+        bytesRemoved += candidate.bytes;
       }
     });
     pruneToBudget();
   }
+  shareUsage = {
+    at: Date.now(),
+    entries: Math.max(0, count - overflow - overBudget),
+    bytes: Math.max(0, totalBytes - bytesRemoved),
+  };
   return { deleted: expired + overflow + overBudget };
 }
 
@@ -384,6 +405,7 @@ export function closeDb() {
     db.close();
     db = null;
   }
+  shareUsage = null;
 }
 
 export default {
